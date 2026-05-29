@@ -5836,7 +5836,7 @@ function App(){
     setUser(u);svSess(u);
     window._vteUser=u;
     /* Pull lần đầu nếu user không có quyền edit */
-    if(window._fbInitialPull&&!ROLE_PERMS[u.role]?.editRateCard){
+    if(window._fbInitialPull&&!PERMISSIONS[u.role]?.editRateCard){
       window._fbInitialPull();
     }
   };
@@ -5845,7 +5845,7 @@ function App(){
     /* Expose user cho Firebase auto-sync module */
     window._vteUser=user||null;
     /* Initial pull khi app load với session đã có */
-    if(user&&window._fbInitialPull&&!ROLE_PERMS[user.role]?.editRateCard){
+    if(user&&window._fbInitialPull&&!PERMISSIONS[user.role]?.editRateCard){
       window._fbInitialPull();
     }
   },[user]);
