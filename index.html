@@ -152,6 +152,24 @@ window.fbOnNCC=function(cb){
   return onSnapshot(_NCC_DOC,s=>{cb(s.exists()?s.data():null);});
 };
 
+/* ══ Quote History Firestore sync ══ */
+const _HIST_DOC=doc(_db,"viettours","quote_history");
+window.fbOnQuoteHistory=function(cb){return onSnapshot(_HIST_DOC,s=>{cb(s.exists()?s.data().quotes||[]:[]); });};
+window.fbSaveQuote=async function(entry){
+  const snap=await getDoc(_HIST_DOC);
+  const quotes=snap.exists()?(snap.data().quotes||[]):[];
+  const idx=quotes.findIndex(q=>q.id===entry.id);
+  if(idx>=0){quotes[idx]={...quotes[idx],...entry,updatedAt:new Date().toISOString()};}
+  else{quotes.unshift({...entry,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}
+  await setDoc(_HIST_DOC,{quotes:quotes.slice(0,500)});
+};
+window.fbDeleteQuote=async function(id){
+  const snap=await getDoc(_HIST_DOC);
+  if(!snap.exists())return;
+  const quotes=(snap.data().quotes||[]).filter(q=>q.id!==id);
+  await setDoc(_HIST_DOC,{quotes});
+};
+
 window._fbReady=true;
 console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
 </script>
@@ -5292,6 +5310,7 @@ function MainApp({user,onLogout}){
   const[showRateSync,setShowRateSync]=useState(false);
   const[showExportDD,setShowExportDD]=useState(false);
   const[showRateDD,setShowRateDD]=useState(false);
+  const[showSaveHist,setShowSaveHist]=useState(false);
   const fileInputRef=useRef(null);
   const quoteRef=useRef(null);
 
@@ -5411,6 +5430,7 @@ function MainApp({user,onLogout}){
     {id:"dashboard",label:"📈 Dashboard biên lợi"},
     {id:"quote",label:"📄 Báo giá khách hàng"},
     {id:"payment",label:"🧾 Quản lý thanh toán"},
+    ...(hasPerm(user,"viewHistory")?[{id:"history",label:"🕐 Lịch sử báo giá"}]:[]),
     ...(hasPerm(user,"manageNCC")?[{id:"ncc",label:"🏢 Nhà Cung Cấp"}]:[]),
   ];
 
@@ -5431,6 +5451,7 @@ function MainApp({user,onLogout}){
       {showContract&&<ContractManagerModal info={info} pax={pax} roundedPPax={roundedPPax} user={user} onClose={()=>setShowContract(false)}/>}
       {showUserMgmt&&<UserManagementModal currentUser={user} onClose={()=>setShowUserMgmt(false)}/>}
       {showRateSync&&<RateCardSyncModal user={user} onClose={()=>setShowRateSync(false)}/>}
+      {showSaveHist&&<SaveQuoteModal info={info} template={template} pax={pax} totalCost={totalCost} user={user} onSave={()=>setShowSaveHist(false)} onClose={()=>setShowSaveHist(false)}/>}
       <input type="file" ref={fileInputRef} accept=".json,application/json" onChange={handleImportQuote} style={{display:"none"}}/>
 
       <div style={{background:"linear-gradient(135deg,rgba(20,160,140,0.95),rgba(13,122,106,0.95))",borderBottom:"1px solid rgba(255,255,255,0.2)",padding:"16px 28px",color:"#fff",boxShadow:"0 4px 20px rgba(20,80,100,0.15)"}}>
@@ -5475,6 +5496,7 @@ function MainApp({user,onLogout}){
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 {hasPerm(user,"syncRateCard")&&<button onClick={()=>setShowRateSync(true)} title="Đồng bộ Master Rate Card giữa các máy" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>🗂️ Master RC</button>}
+                {hasPerm(user,"viewHistory")&&<button onClick={()=>setShowSaveHist(true)} title="Lưu báo giá hiện tại vào lịch sử Cloud" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>💾 Lưu lịch sử</button>}
                 {hasPerm(user,"exportQuote")&&<button onClick={handleExportQuote} title="Xuất báo giá ra file JSON để gửi cho người khác" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>📤 Xuất</button>}
                 {hasPerm(user,"importQuote")&&<button onClick={()=>fileInputRef.current?.click()} title="Nhập báo giá từ file JSON" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>📥 Nhập</button>}
                 {hasPerm(user,"manageUsers")&&<button onClick={()=>setShowUserMgmt(true)} title="Quản lý tài khoản (CEO)" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>👤 Tài khoản</button>}
@@ -5556,8 +5578,220 @@ function MainApp({user,onLogout}){
         {view==="dashboard"&&<DashboardView {...viewProps}/>}
         {view==="quote"&&<QuoteView {...viewProps}/>}
         {view==="payment"&&<PaymentView {...viewProps}/>}
+        {view==="history"&&hasPerm(user,"viewHistory")&&<QuoteHistoryView user={user}/>}
         {view==="ncc"&&hasPerm(user,"manageNCC")&&<NCCView user={user}/>}
       </div>
+    </div>
+  );
+}
+
+/* ═══ QUOTE HISTORY ════════════════════════════════════ */
+function SaveQuoteModal({info,template,pax,totalCost,user,existingId,onSave,onClose}){
+  const [qName,setQName]=useState(info?.name||"");
+  const [customer,setCustomer]=useState("");
+  const [saving,setSaving]=useState(false);
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"9px 13px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  const handleSave=async()=>{
+    if(!qName.trim()){alert("Vui lòng nhập tên báo giá");return;}
+    setSaving(true);
+    const u=user;
+    const entry={
+      id:existingId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+      name:qName.trim(),
+      customer:customer.trim(),
+      template:template||"domestic",
+      dest:info?.dest||"",
+      pax:pax||1,
+      days:info?.days||1,
+      nights:info?.nights||0,
+      totalCost:totalCost||0,
+      savedBy:u.name+" ("+u.role+")",
+    };
+    try{
+      await window.fbSaveQuote(entry);
+      onSave(entry);
+    }catch(e){alert("❌ Lỗi lưu: "+e.message);}
+    finally{setSaving(false);}
+  };
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:460}}>
+        <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",padding:"20px 26px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:17,fontWeight:800}}>💾 {existingId?"Cập nhật":"Lưu"} báo giá vào lịch sử</div>
+            <div style={{fontSize:12,opacity:0.85,marginTop:2}}>Lưu trữ cloud · đồng bộ toàn bộ tài khoản</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:8,color:"#fff",width:34,height:34,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{padding:"22px 26px",display:"flex",flexDirection:"column",gap:14}}>
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Tên báo giá *</label>
+            <input style={inp} value={qName} onChange={e=>setQName(e.target.value)} placeholder="VD: Đà Lạt 3N2Đ – 40pax..."/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Tên khách hàng</label>
+            <input style={inp} value={customer} onChange={e=>setCustomer(e.target.value)} placeholder="Tên công ty hoặc cá nhân..."/>
+          </div>
+          {/* Info tóm tắt */}
+          <div style={{background:"rgba(168,230,221,0.18)",border:"1px solid rgba(20,150,140,0.18)",borderRadius:10,padding:"12px 14px",fontSize:12,color:"rgba(15,58,74,0.7)",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            <span>🗺️ Điểm đến: <strong>{info?.dest||"—"}</strong></span>
+            <span>👥 Pax: <strong>{pax}</strong></span>
+            <span>📅 {info?.days}N{info?.nights}Đ</span>
+            <span>🌐 <strong>{template==="intl"?"Nước ngoài":"Trong nước"}</strong></span>
+          </div>
+          <div style={{display:"flex",gap:10,paddingTop:4}}>
+            <button onClick={onClose} style={{flex:1,background:"#fff",border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,padding:12,cursor:"pointer",fontWeight:600,fontSize:13,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
+            <button onClick={handleSave} disabled={saving} style={{flex:2,background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:10,padding:12,cursor:saving?"not-allowed":"pointer",fontWeight:800,fontSize:14,fontFamily:"inherit",opacity:saving?0.7:1}}>
+              {saving?"⏳ Đang lưu...":"💾 Lưu lịch sử"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuoteHistoryView({user,onLoadQuote}){
+  const [quotes,setQuotes]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [search,setSearch]=useState("");
+  const [filterType,setFilterType]=useState("");
+  const [delConfirm,setDelConfirm]=useState(null);
+  const [deleting,setDeleting]=useState(null);
+
+  useEffect(()=>{
+    if(!window.fbOnQuoteHistory)return;
+    const unsub=window.fbOnQuoteHistory(list=>{setQuotes(list);setLoading(false);});
+    return()=>unsub&&unsub();
+  },[]);
+
+  const handleDelete=async(id)=>{
+    setDeleting(id);
+    try{await window.fbDeleteQuote(id);setDelConfirm(null);}
+    catch(e){alert("❌ Lỗi xoá: "+e.message);}
+    finally{setDeleting(null);}
+  };
+
+  const canDelete=hasPerm(user,"exportQuote");
+
+  const filtered=quotes.filter(q=>{
+    const ql=search.toLowerCase();
+    if(filterType==="domestic"&&q.template!=="domestic")return false;
+    if(filterType==="intl"&&q.template!=="intl")return false;
+    if(!ql)return true;
+    return(
+      q.name?.toLowerCase().includes(ql)||
+      q.customer?.toLowerCase().includes(ql)||
+      q.dest?.toLowerCase().includes(ql)||
+      q.savedBy?.toLowerCase().includes(ql)
+    );
+  });
+
+  const fmtDt=s=>{if(!s)return"—";try{return new Date(s).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(e){return s;}};
+
+  return(
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{fontSize:20,fontWeight:800,color:"#0f3a4a"}}>🕐 Lịch sử Báo giá</div>
+          <div style={{fontSize:12,color:"rgba(15,58,74,0.5)",marginTop:3}}>
+            {loading?"Đang tải...":`${quotes.length} báo giá · Đồng bộ real-time từ Cloud`}
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Filter */}
+      <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:200,position:"relative"}}>
+          <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:14,opacity:0.4}}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm tên báo giá, khách hàng, điểm đến..."
+            style={{width:"100%",padding:"9px 12px 9px 32px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}/>
+        </div>
+        <select value={filterType} onChange={e=>setFilterType(e.target.value)}
+          style={{padding:"9px 14px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",color:"#0f3a4a",background:"#fff",outline:"none"}}>
+          <option value="">Tất cả loại</option>
+          <option value="domestic">🇻🇳 Trong nước</option>
+          <option value="intl">✈️ Nước ngoài</option>
+        </select>
+        {(search||filterType)&&<button onClick={()=>{setSearch("");setFilterType("");}} style={{padding:"9px 14px",background:"rgba(220,50,80,0.08)",border:"1px solid rgba(220,50,80,0.2)",borderRadius:10,fontSize:12,fontWeight:600,color:"#dc3250",cursor:"pointer",fontFamily:"inherit"}}>✕ Xoá lọc</button>}
+      </div>
+
+      {/* Loading */}
+      {loading&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.4)"}}>⏳ Đang tải lịch sử từ Cloud...</div>}
+
+      {/* Empty */}
+      {!loading&&filtered.length===0&&(
+        <div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.35)"}}>
+          <div style={{fontSize:40,marginBottom:12}}>🕐</div>
+          <div style={{fontSize:15,fontWeight:600}}>{quotes.length===0?"Chưa có báo giá nào được lưu":"Không tìm thấy báo giá phù hợp"}</div>
+          <div style={{fontSize:12,marginTop:6,opacity:0.8}}>Bấm nút <strong>💾 Lưu lịch sử</strong> trên thanh công cụ để lưu báo giá hiện tại</div>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading&&filtered.length>0&&(
+        <div style={{background:"#fff",borderRadius:14,border:"1px solid rgba(20,150,140,0.15)",overflow:"hidden",boxShadow:"0 2px 8px rgba(15,58,74,0.06)"}}>
+          {/* Table header */}
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 120px 160px 160px 80px",gap:0,background:"rgba(168,230,221,0.2)",borderBottom:"1px solid rgba(20,150,140,0.15)",padding:"10px 16px"}}>
+            {["Tên báo giá","Khách hàng","Loại","Thiết lập","Điều chỉnh",""].map((h,i)=>(
+              <div key={i} style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:0.8,textTransform:"uppercase"}}>{h}</div>
+            ))}
+          </div>
+          {/* Rows */}
+          {filtered.map((q,i)=>(
+            <div key={q.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 120px 160px 160px 80px",gap:0,padding:"12px 16px",borderBottom:i<filtered.length-1?"1px solid rgba(20,150,140,0.08)":"none",alignItems:"center",transition:"background .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(168,230,221,0.08)"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              {/* Tên báo giá */}
+              <div>
+                <div style={{fontWeight:700,fontSize:14,color:"#0f3a4a",marginBottom:2}}>{q.name}</div>
+                <div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{q.dest&&`📍 ${q.dest} · `}{q.days}N{q.nights}Đ · {q.pax} pax</div>
+                <div style={{fontSize:11,color:"rgba(15,58,74,0.35)",marginTop:1}}>by {q.savedBy?.split("(")[0].trim()}</div>
+              </div>
+              {/* Khách hàng */}
+              <div style={{fontSize:13,color:"#0f3a4a",fontWeight:600}}>{q.customer||<span style={{color:"rgba(15,58,74,0.3)",fontStyle:"italic",fontWeight:400}}>—</span>}</div>
+              {/* Loại */}
+              <div>
+                <span style={{
+                  background:q.template==="intl"?"rgba(41,128,185,0.1)":"rgba(39,174,96,0.1)",
+                  color:q.template==="intl"?"#2980b9":"#27ae60",
+                  border:`1px solid ${q.template==="intl"?"rgba(41,128,185,0.3)":"rgba(39,174,96,0.3)"}`,
+                  borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700
+                }}>{q.template==="intl"?"✈️ Quốc tế":"🇻🇳 Nội địa"}</span>
+              </div>
+              {/* Thiết lập */}
+              <div style={{fontSize:12,color:"rgba(15,58,74,0.6)"}}>{fmtDt(q.createdAt)}</div>
+              {/* Điều chỉnh */}
+              <div style={{fontSize:12,color:q.updatedAt!==q.createdAt?"#8e44ad":"rgba(15,58,74,0.4)"}}>
+                {q.updatedAt!==q.createdAt?fmtDt(q.updatedAt):<span style={{fontStyle:"italic"}}>Chưa chỉnh</span>}
+              </div>
+              {/* Actions */}
+              <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
+                {canDelete&&(
+                  <button onClick={()=>setDelConfirm(q)} title="Xoá" disabled={deleting===q.id}
+                    style={{background:"rgba(220,50,80,0.08)",border:"none",borderRadius:7,padding:"5px 9px",fontSize:13,cursor:"pointer",color:"#dc3250",fontFamily:"inherit"}}>🗑️</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Confirm xoá */}
+      {delConfirm&&(
+        <div className="modal-bg" onClick={()=>setDelConfirm(null)}>
+          <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:400,padding:"28px 30px",textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
+            <div style={{fontSize:17,fontWeight:800,color:"#0f3a4a",marginBottom:8}}>Xoá báo giá này?</div>
+            <div style={{fontSize:13,color:"rgba(15,58,74,0.6)",marginBottom:20}}>Xoá <strong>"{delConfirm.name}"</strong> khỏi lịch sử.<br/>Hành động này không thể hoàn tác.</div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setDelConfirm(null)} style={{flex:1,padding:12,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Huỷ</button>
+              <button onClick={()=>handleDelete(delConfirm.id)} disabled={!!deleting} style={{flex:1,padding:12,border:"none",borderRadius:10,background:"linear-gradient(135deg,#dc3250,#e74c3c)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>🗑️ Xoá</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
