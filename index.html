@@ -12,32 +12,25 @@
 <script crossorigin src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script crossorigin src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script crossorigin src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getFirestore,doc,setDoc,getDoc,onSnapshot}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 const _fbConfig={
   apiKey:"AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw",
   authDomain:"viettours-cost-calculator.firebaseapp.com",
   projectId:"viettours-cost-calculator",
   storageBucket:"viettours-cost-calculator.firebasestorage.app",
   messagingSenderId:"304145851784",
-  appId:"1:304145851784:web:e4977ff4e343ab74e4c63d",
-  measurementId:"G-1TP7XHHFEE"
+  appId:"1:304145851784:web:e4977ff4e343ab74e4c63d"
 };
-firebase.initializeApp(_fbConfig);
-const _db=firebase.firestore();
-const RC_DOC=_db.collection("viettours").doc("master_rate_card");
-
-async function fbPushMasterRC(payload){
-  await RC_DOC.set(payload);
-}
-async function fbPullMasterRC(){
-  const snap=await RC_DOC.get();
-  return snap.exists?snap.data():null;
-}
-function fbOnMasterRC(cb){
-  return RC_DOC.onSnapshot(snap=>{cb(snap.exists?snap.data():null);});
-}
+const _fbApp=initializeApp(_fbConfig);
+const _db=getFirestore(_fbApp,"viettours");
+const _RC_DOC=doc(_db,"viettours","master_rate_card");
+window.fbPushMasterRC=async function(payload){await setDoc(_RC_DOC,payload);};
+window.fbPullMasterRC=async function(){const s=await getDoc(_RC_DOC);return s.exists()?s.data():null;};
+window.fbOnMasterRC=function(cb){return onSnapshot(_RC_DOC,s=>{cb(s.exists()?s.data():null);});};
+window._fbReady=true;
+console.log("✅ Firebase Firestore connected to database: viettours");
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
