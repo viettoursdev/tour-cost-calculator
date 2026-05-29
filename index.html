@@ -767,10 +767,10 @@ const CATS=[
   {id:"hotel",icon:"🏨",label:"Khách sạn",labelEn:"Hotel",color:"#f5a623",rateCard:"hotel"},
   {id:"transport",icon:"🚌",label:"Vận chuyển",labelEn:"Transportation",color:"#9b59b6",rateCard:"transport"},
   {id:"meal",icon:"🍽️",label:"Ăn uống",labelEn:"Meals",color:"#14a08c"},
-  {id:"sight",icon:"🎡",label:"Tham quan",labelEn:"Sightseeing",color:"#e74c3c"},
+  {id:"sight",icon:"🎟️",label:"Tham quan",labelEn:"Sightseeing",color:"#e74c3c"},
   {id:"meeting",icon:"📊",label:"Meeting / Hội nghị",labelEn:"Meeting / Conference",color:"#34495e",rateCard:"meeting",domesticOnly:true},
   {id:"teambuild",icon:"🎯",label:"Team Building",labelEn:"Team Building",color:"#27ae60",rateCard:"teambuild",domesticOnly:true},
-  {id:"gala",icon:"🎭",label:"Gala Dinner",labelEn:"Gala Dinner",color:"#c0392b",rateCard:"gala"},
+  {id:"gala",icon:"🎆",label:"Gala Dinner",labelEn:"Gala Dinner",color:"#c0392b",rateCard:"gala"},
   {id:"logistics",icon:"📦",label:"Logistics & Sản xuất",labelEn:"Logistics & Production",color:"#e67e22",rateCard:"logistics"},
   {id:"staff",icon:"👥",label:"Nhân sự",labelEn:"Staff",color:"#dc3250",rateCard:"staff"},
   {id:"insurance",icon:"🛡️",label:"Bảo hiểm",labelEn:"Insurance",color:"#16a085",rateCard:"insurance"},
@@ -853,6 +853,13 @@ function calcVND(item,rates,pax){
 }
 const fmt=n=>Math.round(n).toLocaleString("vi-VN")+" ₫";
 const fmtRange=(a,b)=>a.toLocaleString("vi-VN")+" – "+b.toLocaleString("vi-VN")+" ₫";
+const calcEndDate=(startDate,days)=>{
+  if(!startDate)return null;
+  const d=new Date(startDate);
+  d.setDate(d.getDate()+Math.max(0,days-1));
+  return d;
+};
+const fmtDate=(d,en)=>d?(typeof d==="string"?new Date(d):d).toLocaleDateString(en?"en-GB":"vi-VN"):"";
 
 /* ═══ INLINE EDIT NUMBER ═══════════════════════════════ */
 function EN({value,onChange,min=0,step=1,suffix="",width=80,style={}}){
@@ -1249,7 +1256,7 @@ function RateCardModal({type,template,onClose,onPick}){
     setData(clone(newDefault));
   },[selectorId,usesSelector,type,template]);
   
-  const titles={transport:"🚌 Xe vận chuyển",staff:"👥 Nhân sự (HDV / Trưởng đoàn)",insurance:"🛡️ Bảo hiểm du lịch",dmc:"🌐 DMC Package – Đối tác địa phương",logistics:"📦 Logistics & Sản xuất",gala:"🎭 Gala Dinner",teambuild:"🎯 Team Building",meeting:"📊 Meeting / Hội nghị"};
+  const titles={transport:"🚌 Xe vận chuyển",staff:"👥 Nhân sự (HDV / Trưởng đoàn)",insurance:"🛡️ Bảo hiểm du lịch",dmc:"🌐 DMC Package – Đối tác địa phương",logistics:"📦 Logistics & Sản xuất",gala:"🎆 Gala Dinner",teambuild:"🎯 Team Building",meeting:"📊 Meeting / Hội nghị"};
   const currentLoc=(selectorList.find(c=>c.id===selectorId)||{}).label||"";
   
   const saveData=(newData)=>{
@@ -1961,6 +1968,12 @@ function exportPDFVector(info,pax,items,rates,catEnabled,roundedPPax,vat,user,ac
   pdf.setFontSize(10);pdf.setTextColor(255,224,130);pdf.setFont(FONT,"normal");
   pdf.text(`${info.dest||""} · ${info.days} ngày ${info.nights} đêm · ${pax} khách`,pageW/2,y+22,{align:"center"});
   y+=34;
+  if(info.startDate){
+    pdf.setFontSize(9);pdf.setTextColor(...dark);
+    pdf.setFont(FONT,"normal");
+    pdf.text(`Khởi hành: ${fmtDate(info.startDate)}  →  Kết thúc: ${fmtDate(calcEndDate(info.startDate,info.days))}`,pageW/2,y,{align:"center"});
+    y+=7;
+  }
   
   // Price highlight box
   pdf.setFillColor(255,248,225);
@@ -2155,18 +2168,28 @@ function exportInvoice(info,pax,items,rates,catEnabled,roundedPPax,vat,user,acti
   pdf.text(`${T("Điểm đến","Destination")}: ${info.dest||""}`,pageW/2+5,y);y+=4.5;
   pdf.text(`${T("Điện thoại","Phone")}: ${customer.phone||"-"}`,mX,y);
   pdf.text(`${T("Thời gian","Duration")}: ${info.days}${T("N","D")} ${info.nights}${T("Đ","N")}`,pageW/2+5,y);y+=4.5;
+  if(info.startDate){
+    pdf.text(`${T("Khởi hành","Departure")}: ${fmtDate(info.startDate,EN)} → ${fmtDate(calcEndDate(info.startDate,info.days),EN)}`,pageW/2+5,y);y+=4.5;
+  }
   pdf.text(`Email: ${customer.email||"-"}`,mX,y);
   pdf.text(`${T("Số khách","Pax")}: ${pax}`,pageW/2+5,y);y+=8;
   
   // ═══ Items table ═══
+  // Column positions (A4 content area: mX=15 to pageW-mX=195)
+  const colNo=mX+2;        // No (left)
+  const colDesc=mX+10;     // Description (left)
+  const colUnit=mX+82;     // Unit (left)
+  const colQty=mX+112;     // Qty (right-align)
+  const colPrice=mX+150;   // Unit Price (right-align)
+  const colAmount=pageW-mX-2; // Amount (right-align)
   pdf.setFillColor(...teal);pdf.rect(mX,y,pageW-mX*2,8,"F");
   pdf.setFontSize(8);pdf.setTextColor(255,255,255);setF("bold");
-  pdf.text(T("STT","No"),mX+2,y+5.5);
-  pdf.text(T("DIỄN GIẢI / DESCRIPTION","DESCRIPTION"),mX+11,y+5.5);
-  pdf.text(T("ĐVT","Unit"),mX+103,y+5.5);
-  pdf.text(T("SL","Qty"),mX+121,y+5.5);
-  pdf.text(T("ĐƠN GIÁ","Unit Price"),mX+140,y+5.5,{align:"right"});
-  pdf.text(T("THÀNH TIỀN","Amount"),pageW-mX-2,y+5.5,{align:"right"});
+  pdf.text(T("STT","No"),colNo,y+5.5);
+  pdf.text(T("DIỄN GIẢI / DESCRIPTION","DESCRIPTION"),colDesc,y+5.5);
+  pdf.text(T("ĐVT","Unit"),colUnit,y+5.5);
+  pdf.text(T("SL","Qty"),colQty,y+5.5,{align:"right"});
+  pdf.text(T("ĐƠN GIÁ","Unit Price"),colPrice,y+5.5,{align:"right"});
+  pdf.text(T("THÀNH TIỀN","Amount"),colAmount,y+5.5,{align:"right"});
   y+=8;
   
   let stt=0,grandSubtotal=0;
@@ -2182,17 +2205,18 @@ function exportInvoice(info,pax,items,rates,catEnabled,roundedPPax,vat,user,acti
       const unitVND=(rates[it.cur]||1)*it.price*it.times;
       if(stt%2===0){pdf.setFillColor(...lightgray);pdf.rect(mX,y,pageW-mX*2,7,"F");}
       pdf.setTextColor(...dark);setF("normal");
-      pdf.text(String(stt),mX+2,y+4.8);
-      const nm=pdf.splitTextToSize(it.name,86);
-      pdf.text(nm[0],mX+11,y+4.8);
-      pdf.text(it.unit||"",mX+103,y+4.8);
-      pdf.text(String(qty),mX+121,y+4.8);
+      pdf.text(String(stt),colNo,y+4.8);
+      const nm=pdf.splitTextToSize(it.name,colUnit-colDesc-3);
+      pdf.text(nm[0],colDesc,y+4.8);
+      pdf.text(it.unit||"",colUnit,y+4.8);
+      pdf.text(String(qty),colQty,y+4.8,{align:"right"});
       if(it.foc){
         pdf.setTextColor(39,174,96);setF("bold");
-        pdf.text("FOC",pageW-mX-2,y+4.8,{align:"right"});
+        pdf.text("FOC",colAmount,y+4.8,{align:"right"});
+        setF("normal");
       }else{
-        pdf.text(fmtV(unitVND),mX+140,y+4.8,{align:"right"});
-        pdf.text(fmtV(vnd),pageW-mX-2,y+4.8,{align:"right"});
+        pdf.text(fmtV(unitVND),colPrice,y+4.8,{align:"right"});
+        pdf.text(fmtV(vnd),colAmount,y+4.8,{align:"right"});
       }
       y+=7;
     });
@@ -2587,7 +2611,8 @@ function QuoteView(props){
         <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",borderRadius:16,padding:"28px 32px",marginBottom:18,textAlign:"center",color:"#fff",boxShadow:"0 8px 24px rgba(20,160,140,0.3)"}}>
           <div style={{background:"#fff",color:"#0d7a6a",borderRadius:7,padding:"4px 16px",fontSize:11,fontWeight:800,letterSpacing:2,textTransform:"uppercase",display:"inline-block",marginBottom:12}}>Báo giá Tour</div>
           <div style={{fontSize:22,fontWeight:900,marginBottom:4}}>{info.name}</div>
-          <div style={{color:"#ffe082",fontSize:15,fontWeight:600,marginBottom:14}}>{info.dest} · {info.days} ngày {info.nights} đêm</div>
+          <div style={{color:"#ffe082",fontSize:15,fontWeight:600,marginBottom:6}}>{info.dest} · {info.days} ngày {info.nights} đêm</div>
+          {info.startDate&&<div style={{color:"rgba(255,255,255,0.85)",fontSize:13,marginBottom:14}}>🚀 Khởi hành: {fmtDate(info.startDate)} → Kết thúc: {fmtDate(calcEndDate(info.startDate,info.days))}</div>}
           <div style={{display:"flex",justifyContent:"center",gap:24,fontSize:13,flexWrap:"wrap",color:"rgba(255,255,255,0.85)"}}>
             <span>👥 {pax} khách</span>
             <span>📅 {new Date().toLocaleDateString("vi-VN")}</span>
@@ -2783,6 +2808,588 @@ function InvoiceModal({info,pax,items,rates,catEnabled,roundedPPax,vat,user,acti
   );
 }
 
+
+/* ═══ PAYMENT MANAGEMENT VIEW – Quản lý thanh toán & công nợ ═══ */
+function PaymentView(props){
+  const {items,catEnabled,pax,rates,activeCATS,info,user}=props;
+  
+  // Storage keys based on tour
+  const tourKey=(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_");
+  const STORAGE_KEY="vte_payments_"+tourKey;
+  const STORAGE_CUSTOM="vte_pay_custom_"+tourKey;
+  
+  // Build cost items from bảng chi phí (giá vốn đầu vào)
+  const sourceItems=React.useMemo(()=>{
+    const list=[];
+    activeCATS.forEach(cat=>{
+      if(!catEnabled[cat.id])return;
+      (items[cat.id]||[]).forEach(it=>{
+        if(it.enabled===false||it.foc===true)return;
+        const vnd=calcVND(it,rates,pax);
+        if(vnd<=0)return;
+        list.push({
+          key:cat.id+"_"+it.id,
+          catId:cat.id,catLabel:cat.label,catIcon:cat.icon,catColor:cat.color,
+          name:it.name,sourceAmount:vnd,custom:false,
+        });
+      });
+    });
+    return list;
+  },[items,catEnabled,rates,pax,activeCATS]);
+  
+  // Payment state: {[costKey]: {supplier, tracked, customAmount, installments:[...], note}}
+  const [payments,setPayments]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");}catch(e){return {};}
+  });
+  // Custom items (chi phí tự tạo ngoài bảng chi phí)
+  const [customItems,setCustomItems]=useState(()=>{
+    try{return JSON.parse(localStorage.getItem(STORAGE_CUSTOM)||"[]");}catch(e){return [];}
+  });
+  // Reload when tour changes
+  useEffect(()=>{
+    try{setPayments(JSON.parse(localStorage.getItem("vte_payments_"+tourKey)||"{}"));}catch(e){setPayments({});}
+    try{setCustomItems(JSON.parse(localStorage.getItem("vte_pay_custom_"+tourKey)||"[]"));}catch(e){setCustomItems([]);}
+  },[tourKey]);
+  
+  const savePayments=(next)=>{setPayments(next);try{localStorage.setItem(STORAGE_KEY,JSON.stringify(next));}catch(e){}};
+  const saveCustom=(next)=>{setCustomItems(next);try{localStorage.setItem(STORAGE_CUSTOM,JSON.stringify(next));}catch(e){}};
+  
+  const [expanded,setExpanded]=useState(null);
+  const [reqModal,setReqModal]=useState(null);
+  const [trackModal,setTrackModal]=useState(false);
+  const [showAddCustom,setShowAddCustom]=useState(false);
+  
+  // Combine source items + custom items into full list
+  const allItems=React.useMemo(()=>{
+    const out=sourceItems.map(si=>{
+      const rec=payments[si.key]||{};
+      return {
+        ...si,
+        tracked:rec.tracked!==false, // default true
+        amount:rec.customAmount!=null?+rec.customAmount:si.sourceAmount,
+        isOverridden:rec.customAmount!=null&&+rec.customAmount!==si.sourceAmount,
+      };
+    });
+    // Add custom items
+    customItems.forEach(ct=>{
+      const rec=payments[ct.key]||{};
+      out.push({
+        ...ct,
+        tracked:rec.tracked!==false,
+        amount:+ct.amount||0,
+        sourceAmount:+ct.amount||0,
+        custom:true,
+        isOverridden:false,
+      });
+    });
+    return out;
+  },[sourceItems,payments,customItems]);
+  
+  // Only tracked items are shown in main list & summary
+  const trackedItems=allItems.filter(i=>i.tracked);
+  
+  const getPayRec=(ci)=>({supplier:"",installments:[],note:"",...(payments[ci.key]||{})});
+  const updatePayRec=(key,rec)=>savePayments({...payments,[key]:rec});
+  
+  const toggleTrack=(key)=>{
+    const rec=payments[key]||{};
+    updatePayRec(key,{...rec,tracked:rec.tracked===false?true:false});
+  };
+  const setCustomAmount=(key,val)=>{
+    const rec=payments[key]||{};
+    updatePayRec(key,{...rec,customAmount:val});
+  };
+  const resetAmount=(key)=>{
+    const rec=payments[key]||{};
+    const{customAmount,...rest}=rec;
+    updatePayRec(key,rest);
+  };
+  
+  const addInstallment=(ci)=>{
+    const rec=getPayRec(ci);
+    const paidSum=rec.installments.reduce((s,i)=>s+(+i.amount||0),0);
+    const remaining=Math.max(0,ci.amount-paidSum);
+    const newInst={label:`Đợt ${rec.installments.length+1}`,amount:remaining,status:"unpaid",paidDate:""};
+    updatePayRec(ci.key,{...rec,installments:[...rec.installments,newInst]});
+  };
+  const updInstallment=(key,idx,field,val)=>{
+    const rec=payments[key];if(!rec)return;
+    const insts=[...(rec.installments||[])];
+    insts[idx]={...insts[idx],[field]:val};
+    updatePayRec(key,{...rec,installments:insts});
+  };
+  const delInstallment=(key,idx)=>{
+    const rec=payments[key];if(!rec||!rec.installments)return;
+    updatePayRec(key,{...rec,installments:rec.installments.filter((_,i)=>i!==idx)});
+  };
+  
+  // Custom item handlers
+  const handleAddCustom=(form)=>{
+    const newItem={
+      key:"custom_"+Date.now(),
+      catId:form.catId,catLabel:form.catLabel,catIcon:form.catIcon,catColor:form.catColor,
+      name:form.name,amount:form.amount,
+    };
+    saveCustom([...customItems,newItem]);
+    setShowAddCustom(false);
+  };
+  const handleDelCustom=(key)=>{
+    if(!confirm("Xoá khoản chi phí tự tạo này?"))return;
+    saveCustom(customItems.filter(c=>c.key!==key));
+    // Also clean its payment record
+    const{[key]:_,...rest}=payments;
+    savePayments(rest);
+  };
+  const handleEditCustomAmount=(key,val)=>{
+    saveCustom(customItems.map(c=>c.key===key?{...c,amount:val}:c));
+  };
+  
+  // Totals (only tracked items)
+  const totalCost=trackedItems.reduce((s,ci)=>s+ci.amount,0);
+  let totalPaid=0,totalScheduled=0;
+  trackedItems.forEach(ci=>{
+    const rec=getPayRec(ci);
+    rec.installments.forEach(inst=>{
+      const amt=+inst.amount||0;
+      totalScheduled+=amt;
+      if(inst.status==="paid")totalPaid+=amt;
+    });
+  });
+  const totalRemaining=totalCost-totalPaid;
+  const untracked=allItems.filter(i=>!i.tracked).length;
+  
+  // Group tracked items by category
+  const byCategory={};
+  trackedItems.forEach(ci=>{
+    if(!byCategory[ci.catId])byCategory[ci.catId]={label:ci.catLabel,icon:ci.catIcon,color:ci.catColor,items:[]};
+    byCategory[ci.catId].items.push(ci);
+  });
+
+  return(
+    <div className="fade-in">
+      {/* Action buttons */}
+      <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+        <button onClick={()=>setTrackModal(true)} className="btn" style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",color:"#0d7a6a"}}>
+          ⚙️ Quản lý hạng mục {untracked>0?`(${untracked} đang ẩn)`:""}
+        </button>
+        <button onClick={()=>setShowAddCustom(true)} className="btn" style={{background:"linear-gradient(135deg,#f5a623,#e67e22)",border:"none",color:"#fff"}}>
+          ➕ Thêm chi phí tự tạo
+        </button>
+      </div>
+      
+      {/* Summary cards */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:14,marginBottom:24}}>
+        <div style={{background:"linear-gradient(135deg,#0f1c2d,#16314a)",borderRadius:14,padding:"18px 20px",color:"#fff"}}>
+          <div style={{fontSize:12,opacity:0.7,marginBottom:6}}>💰 Tổng chi phí quản lý</div>
+          <div style={{fontSize:22,fontWeight:800}}>{fmt(totalCost)}</div>
+          <div style={{fontSize:11,opacity:0.6,marginTop:4}}>{trackedItems.length} khoản đang theo dõi</div>
+        </div>
+        <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",borderRadius:14,padding:"18px 20px",color:"#fff"}}>
+          <div style={{fontSize:12,opacity:0.85,marginBottom:6}}>✅ Đã thanh toán</div>
+          <div style={{fontSize:22,fontWeight:800}}>{fmt(totalPaid)}</div>
+          <div style={{fontSize:11,opacity:0.75,marginTop:4}}>{totalCost>0?Math.round(totalPaid/totalCost*100):0}% tổng chi phí</div>
+        </div>
+        <div style={{background:"linear-gradient(135deg,#dc3250,#c0392b)",borderRadius:14,padding:"18px 20px",color:"#fff"}}>
+          <div style={{fontSize:12,opacity:0.85,marginBottom:6}}>⚠️ Công nợ còn thiếu</div>
+          <div style={{fontSize:22,fontWeight:800}}>{fmt(totalRemaining)}</div>
+          <div style={{fontSize:11,opacity:0.75,marginTop:4}}>{totalCost>0?Math.round(totalRemaining/totalCost*100):0}% chưa trả</div>
+        </div>
+        <div style={{background:"linear-gradient(135deg,#f5a623,#e67e22)",borderRadius:14,padding:"18px 20px",color:"#fff"}}>
+          <div style={{fontSize:12,opacity:0.85,marginBottom:6}}>📅 Đã lên lịch TT</div>
+          <div style={{fontSize:22,fontWeight:800}}>{fmt(totalScheduled)}</div>
+          <div style={{fontSize:11,opacity:0.75,marginTop:4}}>Tổng các đợt đã tạo</div>
+        </div>
+      </div>
+      
+      {trackedItems.length===0&&(
+        <div style={{textAlign:"center",padding:"60px 20px",color:"rgba(15,58,74,0.4)"}}>
+          <div style={{fontSize:40,marginBottom:12}}>📋</div>
+          <div style={{fontSize:15,fontWeight:600}}>Chưa có khoản nào được theo dõi</div>
+          <div style={{fontSize:13,marginTop:6}}>Bấm "⚙️ Quản lý hạng mục" để chọn khoản cần quản lý, hoặc "➕ Thêm chi phí tự tạo"</div>
+        </div>
+      )}
+      
+      {/* Cost items grouped by category */}
+      {Object.entries(byCategory).map(([catId,grp])=>(
+        <div key={catId} style={{marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <span style={{fontSize:18}}>{grp.icon}</span>
+            <span style={{color:grp.color,fontWeight:800,fontSize:15}}>{grp.label}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {grp.items.map(ci=>{
+              const rec=getPayRec(ci);
+              const paidSum=rec.installments.filter(i=>i.status==="paid").reduce((s,i)=>s+(+i.amount||0),0);
+              const remaining=ci.amount-paidSum;
+              const isOpen=expanded===ci.key;
+              const pct=ci.amount>0?Math.round(paidSum/ci.amount*100):0;
+              return(
+                <div key={ci.key} style={{background:"#fff",border:`1px solid ${isOpen?grp.color:"rgba(20,150,140,0.15)"}`,borderRadius:12,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+                  {/* Item header */}
+                  <div style={{padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12}} onClick={()=>setExpanded(isOpen?null:ci.key)}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{color:"#0f3a4a",fontWeight:700,fontSize:14}}>{ci.name}</span>
+                        {ci.custom&&<span style={{background:"rgba(245,166,35,0.15)",color:"#d18a13",fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:4}}>Tự tạo</span>}
+                        {ci.isOverridden&&<span style={{background:"rgba(155,89,182,0.15)",color:"#8e44ad",fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:4}}>Đã chỉnh giá</span>}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:4}}>
+                        <input placeholder="+ Tên nhà cung cấp..." value={rec.supplier} onClick={e=>e.stopPropagation()}
+                          onChange={e=>updatePayRec(ci.key,{...rec,supplier:e.target.value})}
+                          style={{background:"rgba(20,150,140,0.06)",border:"1px solid rgba(20,150,140,0.15)",borderRadius:6,padding:"3px 9px",fontSize:12,outline:"none",fontFamily:"inherit",color:"#0d7a6a",width:200,maxWidth:"40vw"}}/>
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",minWidth:140}} onClick={e=>e.stopPropagation()}>
+                      {/* Editable amount */}
+                      {ci.custom?(
+                        <EN value={ci.amount} onChange={v=>handleEditCustomAmount(ci.key,v)} min={0} width={140} style={{color:"#0f3a4a",fontWeight:800,fontSize:15,textAlign:"right"}} suffix=" ₫"/>
+                      ):(
+                        <EN value={ci.amount} onChange={v=>setCustomAmount(ci.key,v)} min={0} width={140} style={{color:ci.isOverridden?"#8e44ad":"#0f3a4a",fontWeight:800,fontSize:15,textAlign:"right"}} suffix=" ₫"/>
+                      )}
+                      <div style={{fontSize:11,marginTop:2,color:remaining<=0?"#27ae60":paidSum>0?"#f5a623":"rgba(15,58,74,0.4)"}}>
+                        {remaining<=0?"✅ Đã trả đủ":paidSum>0?`Còn thiếu ${fmt(remaining)}`:"Chưa thanh toán"}
+                      </div>
+                      {ci.isOverridden&&<button onClick={()=>resetAmount(ci.key)} style={{background:"none",border:"none",color:"#8e44ad",fontSize:10,cursor:"pointer",marginTop:2,fontFamily:"inherit",textDecoration:"underline"}}>↺ Về giá vốn ({fmt(ci.sourceAmount)})</button>}
+                    </div>
+                    {/* Progress ring */}
+                    <div style={{width:42,height:42,borderRadius:"50%",background:`conic-gradient(${grp.color} ${pct*3.6}deg, rgba(20,150,140,0.1) 0deg)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <div style={{width:32,height:32,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:grp.color}}>{pct}%</div>
+                    </div>
+                    {ci.custom&&<button onClick={e=>{e.stopPropagation();handleDelCustom(ci.key);}} style={{background:"rgba(220,50,80,0.08)",border:"1px solid rgba(220,50,80,0.2)",color:"#dc3250",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✕</button>}
+                    <span style={{color:grp.color,fontSize:16}}>{isOpen?"▴":"▾"}</span>
+                  </div>
+                  
+                  {/* Expanded: installments */}
+                  {isOpen&&(
+                    <div style={{padding:"0 16px 16px",borderTop:"1px solid rgba(20,150,140,0.1)"}}>
+                      {rec.installments.length>0&&(
+                        <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:8}}>
+                          {rec.installments.map((inst,idx)=>(
+                            <div key={idx} style={{background:inst.status==="paid"?"rgba(39,174,96,0.07)":"rgba(245,166,35,0.06)",border:`1px solid ${inst.status==="paid"?"rgba(39,174,96,0.25)":"rgba(245,166,35,0.25)"}`,borderRadius:9,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                              <input value={inst.label} onChange={e=>updInstallment(ci.key,idx,"label",e.target.value)}
+                                style={{background:"#fff",border:"1px solid rgba(20,150,140,0.2)",borderRadius:6,padding:"5px 9px",fontSize:12,outline:"none",fontFamily:"inherit",color:"#0f3a4a",width:110}}/>
+                              <EN value={inst.amount} onChange={v=>updInstallment(ci.key,idx,"amount",v)} min={0} width={110} style={{color:"#0f3a4a",fontWeight:700,fontSize:13}} suffix=" ₫"/>
+                              <button onClick={()=>updInstallment(ci.key,idx,"status",inst.status==="paid"?"unpaid":"paid")}
+                                style={{background:inst.status==="paid"?"#27ae60":"rgba(15,58,74,0.08)",color:inst.status==="paid"?"#fff":"rgba(15,58,74,0.6)",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>
+                                {inst.status==="paid"?"✅ Đã TT":"⏳ Chưa TT"}
+                              </button>
+                              {inst.status==="paid"&&(
+                                <input type="date" value={inst.paidDate||""} onChange={e=>updInstallment(ci.key,idx,"paidDate",e.target.value)}
+                                  style={{background:"#fff",border:"1px solid rgba(20,150,140,0.2)",borderRadius:6,padding:"4px 8px",fontSize:12,outline:"none",fontFamily:"inherit",color:"#0d7a6a"}}/>
+                              )}
+                              <div style={{flex:1}}/>
+                              <button onClick={()=>setReqModal({ci,inst,idx})} title="Xuất phiếu đề nghị thanh toán"
+                                style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",color:"#0d7a6a",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>📄 Phiếu ĐN</button>
+                              <button onClick={()=>delInstallment(ci.key,idx)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={()=>addInstallment(ci)} style={{marginTop:10,width:"100%",background:"rgba(20,150,140,0.06)",border:`1px dashed ${grp.color}`,borderRadius:8,padding:"9px",cursor:"pointer",color:grp.color,fontWeight:700,fontSize:13,fontFamily:"inherit"}}>
+                        ➕ Thêm đợt thanh toán {rec.installments.length===0?"(cọc / toàn bộ)":""}
+                      </button>
+                      <input placeholder="Ghi chú (số TK, điều kiện...)" value={rec.note} onChange={e=>updatePayRec(ci.key,{...rec,note:e.target.value})}
+                        style={{marginTop:8,width:"100%",background:"rgba(20,150,140,0.04)",border:"1px solid rgba(20,150,140,0.12)",borderRadius:7,padding:"7px 11px",fontSize:12,outline:"none",fontFamily:"inherit",color:"#0f3a4a",boxSizing:"border-box"}}/>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      
+      {trackModal&&<TrackItemsModal allItems={allItems} onToggle={toggleTrack} onClose={()=>setTrackModal(false)}/>}
+      {showAddCustom&&<AddCustomCostModal activeCATS={activeCATS} onAdd={handleAddCustom} onClose={()=>setShowAddCustom(false)}/>}
+      {reqModal&&<PaymentRequestModal data={reqModal} info={info} user={user} onClose={()=>setReqModal(null)}/>}
+    </div>
+  );
+}
+
+/* ═══ TRACK ITEMS MODAL – Chọn hạng mục theo dõi ═══ */
+function TrackItemsModal({allItems,onToggle,onClose}){
+  // Group by category
+  const byCat={};
+  allItems.forEach(it=>{
+    if(!byCat[it.catId])byCat[it.catId]={label:it.catLabel,icon:it.catIcon,color:it.catColor,items:[]};
+    byCat[it.catId].items.push(it);
+  });
+  const trackedCount=allItems.filter(i=>i.tracked).length;
+  
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:700}}>
+        <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",padding:"20px 26px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800}}>⚙️ Quản lý hạng mục theo dõi</div>
+            <div style={{fontSize:12,opacity:0.75,marginTop:2}}>Chọn các khoản chi phí cần quản lý thanh toán · {trackedCount}/{allItems.length} đang theo dõi</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,color:"#fff",width:32,height:32,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{padding:"18px 22px",maxHeight:"60vh",overflowY:"auto"}}>
+          {allItems.length===0&&<div style={{textAlign:"center",padding:30,color:"rgba(15,58,74,0.4)"}}>Chưa có chi phí nào. Hãy nhập trong tab "Bảng chi phí" trước.</div>}
+          {Object.entries(byCat).map(([catId,grp])=>{
+            const catTracked=grp.items.filter(i=>i.tracked).length;
+            const allOn=catTracked===grp.items.length;
+            return(
+              <div key={catId} style={{marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:16}}>{grp.icon}</span>
+                  <span style={{color:grp.color,fontWeight:800,fontSize:14,flex:1}}>{grp.label}</span>
+                  <span style={{color:"rgba(15,58,74,0.5)",fontSize:11}}>{catTracked}/{grp.items.length}</span>
+                  <button onClick={()=>{grp.items.forEach(i=>{if(allOn?i.tracked:!i.tracked)onToggle(i.key);});}} style={{background:allOn?"rgba(220,50,80,0.08)":"rgba(20,150,140,0.08)",border:`1px solid ${allOn?"rgba(220,50,80,0.3)":"rgba(20,150,140,0.3)"}`,color:allOn?"#dc3250":"#0d7a6a",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{allOn?"Bỏ tất cả":"Chọn tất cả"}</button>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {grp.items.map(it=>(
+                    <label key={it.key} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:it.tracked?"rgba(168,230,221,0.18)":"rgba(15,58,74,0.03)",border:`1px solid ${it.tracked?"rgba(20,150,140,0.2)":"rgba(15,58,74,0.06)"}`,borderRadius:8,cursor:"pointer",transition:"all .15s"}}>
+                      <input type="checkbox" checked={it.tracked} onChange={()=>onToggle(it.key)}
+                        style={{width:18,height:18,accentColor:grp.color,cursor:"pointer"}}/>
+                      <span style={{flex:1,color:it.tracked?"#0f3a4a":"rgba(15,58,74,0.5)",fontSize:13,fontWeight:it.tracked?600:400}}>
+                        {it.name}{it.custom&&<span style={{marginLeft:8,background:"rgba(245,166,35,0.15)",color:"#d18a13",fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:4}}>Tự tạo</span>}
+                      </span>
+                      <span style={{color:it.tracked?grp.color:"rgba(15,58,74,0.4)",fontWeight:700,fontSize:13}}>{fmt(it.amount)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{padding:"14px 22px",borderTop:"1px solid rgba(20,150,140,0.1)",textAlign:"center"}}>
+          <button onClick={onClose} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:10,padding:"10px 28px",cursor:"pointer",fontWeight:700,fontSize:14,fontFamily:"inherit"}}>Xong</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ ADD CUSTOM COST MODAL – Thêm chi phí tự tạo ═══ */
+function AddCustomCostModal({activeCATS,onAdd,onClose}){
+  const [form,setForm]=useState({
+    catId:activeCATS[0]?.id||"hotel",
+    name:"",amount:0,
+  });
+  const cat=activeCATS.find(c=>c.id===form.catId)||activeCATS[0];
+  
+  const handleSubmit=()=>{
+    if(!form.name.trim()){alert("Vui lòng nhập tên khoản chi phí");return;}
+    if(!form.amount||form.amount<=0){alert("Vui lòng nhập số tiền > 0");return;}
+    onAdd({
+      catId:cat.id,catLabel:cat.label,catIcon:cat.icon,catColor:cat.color,
+      name:form.name.trim(),amount:+form.amount,
+    });
+  };
+  
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:500}}>
+        <div style={{background:"linear-gradient(135deg,#f5a623,#e67e22)",color:"#fff",padding:"20px 26px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800}}>➕ Thêm chi phí tự tạo</div>
+            <div style={{fontSize:12,opacity:0.85,marginTop:2}}>Khoản chi ngoài bảng giá vốn (chỉ hiện trong tab Thanh toán)</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:8,color:"#fff",width:32,height:32,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{padding:"22px 26px",display:"grid",gap:14}}>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>HẠNG MỤC / CATEGORY</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {activeCATS.map(c=>(
+                <button key={c.id} onClick={()=>setForm(p=>({...p,catId:c.id}))} style={{
+                  background:form.catId===c.id?c.color:"#fff",
+                  border:`1.5px solid ${form.catId===c.id?"transparent":"rgba(20,150,140,0.2)"}`,
+                  color:form.catId===c.id?"#fff":"rgba(15,58,74,0.6)",
+                  borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:form.catId===c.id?700:500,fontFamily:"inherit"
+                }}>{c.icon} {c.label}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>TÊN KHOẢN CHI PHÍ *</div>
+            <input autoFocus value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="VD: Chi phí phát sinh ngoài kế hoạch, Tip cho HDV..."
+              className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+          </div>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>SỐ TIỀN (VND) *</div>
+            <input type="number" value={form.amount||""} onChange={e=>setForm(p=>({...p,amount:+e.target.value}))} placeholder="VD: 5000000"
+              className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:6}}>
+            <button onClick={onClose} style={{flex:1,background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:11,padding:13,cursor:"pointer",fontWeight:600,fontSize:14,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
+            <button onClick={handleSubmit} style={{flex:2,background:"linear-gradient(135deg,#f5a623,#e67e22)",color:"#fff",border:"none",borderRadius:11,padding:13,cursor:"pointer",fontWeight:800,fontSize:14,fontFamily:"inherit"}}>➕ Thêm khoản</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ PAYMENT REQUEST MODAL – Phiếu đề nghị thanh toán ═══ */
+function PaymentRequestModal({data,info,user,onClose}){
+  const {ci,inst}=data;
+  const [form,setForm]=useState({
+    supplier:"",
+    content:`Thanh toán ${inst.label.toLowerCase()} cho hạng mục: ${ci.name}`,
+    amount:+inst.amount||0,
+    approver:"",
+    requester:user.name,
+    note:"",
+  });
+  
+  // Load supplier from payment record if exists
+  useEffect(()=>{
+    try{
+      const tourKey=(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_");
+      const pays=JSON.parse(localStorage.getItem("vte_payments_"+tourKey)||"{}");
+      const rec=pays[ci.key];
+      if(rec&&rec.supplier)setForm(f=>({...f,supplier:rec.supplier}));
+    }catch(e){}
+  },[]);
+  
+  const handleExport=()=>{
+    exportPaymentRequest(form,ci,info,user);
+    onClose();
+  };
+  
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:540}}>
+        <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",padding:"20px 26px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800}}>📄 Phiếu đề nghị thanh toán</div>
+            <div style={{fontSize:12,opacity:0.75,marginTop:2}}>Payment Request · {ci.catLabel}</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,color:"#fff",width:32,height:32,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{padding:"22px 26px",display:"grid",gap:14}}>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NHÀ CUNG CẤP / NGƯỜI NHẬN</div>
+            <input value={form.supplier} onChange={e=>setForm(p=>({...p,supplier:e.target.value}))} placeholder="Tên NCC / đơn vị nhận tiền"
+              className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+          </div>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NỘI DUNG ĐỀ NGHỊ</div>
+            <textarea value={form.content} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={2}
+              style={{width:"100%",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,padding:"10px 13px",fontSize:13,outline:"none",fontFamily:"inherit",color:"#0f3a4a",resize:"vertical",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>SỐ TIỀN (VND)</div>
+              <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:+e.target.value}))}
+                className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+            </div>
+            <div>
+              <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT</div>
+              <input value={form.approver} onChange={e=>setForm(p=>({...p,approver:e.target.value}))} placeholder="Tên người duyệt"
+                className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+            </div>
+          </div>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>GHI CHÚ (số TK, hình thức TT...)</div>
+            <input value={form.note} onChange={e=>setForm(p=>({...p,note:e.target.value}))} placeholder="VD: CK qua VCB - 0123456789 - Nguyễn Văn A"
+              className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+          </div>
+          <div style={{background:"rgba(168,230,221,0.2)",borderRadius:10,padding:14,fontSize:13,color:"rgba(15,58,74,0.7)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span>Hạng mục:</span><strong>{ci.name}</strong></div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span>Tổng chi phí khoản:</span><strong>{fmt(ci.amount)}</strong></div>
+            <div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:"1px solid rgba(20,150,140,0.2)"}}><span style={{fontWeight:700,color:"#0d7a6a"}}>Số tiền đề nghị:</span><strong style={{color:"#dc3250",fontSize:15}}>{fmt(form.amount)}</strong></div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={onClose} style={{flex:1,background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:11,padding:13,cursor:"pointer",fontWeight:600,fontSize:14,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
+            <button onClick={handleExport} style={{flex:2,background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:11,padding:13,cursor:"pointer",fontWeight:800,fontSize:14,fontFamily:"inherit"}}>📄 Xuất phiếu PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══ EXPORT PAYMENT REQUEST PDF ═══ */
+function exportPaymentRequest(form,ci,info,user){
+  if(!window.jspdf){alert("Đang tải thư viện PDF, thử lại sau 3 giây.");return;}
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const hasFont=loadVNFont(pdf);
+  const FONT=hasFont?"DejaVu":"helvetica";
+  const pageW=210,pageH=297,mX=18;
+  let y=18;
+  const teal=[20,160,140],dark=[15,58,74],gray=[120,130,140],red=[220,50,80];
+  const fmtV=n=>Math.round(n).toLocaleString("vi-VN");
+  const setFont=(s)=>pdf.setFont(FONT,s);
+  
+  const now=new Date();
+  const reqNo=`PTT-${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}-${String(now.getHours())}${String(now.getMinutes()).padStart(2,"0")}`;
+  
+  pdf.setFillColor(...teal);pdf.rect(0,0,pageW,4,"F");
+  // Logo
+  try{pdf.addImage(VTE_LOGO,"PNG",mX,y,36,21,undefined,"FAST");}catch(e){}
+  pdf.setFontSize(13);pdf.setTextColor(...teal);setFont("bold");
+  pdf.text("VIETTOURS INCENTIVES & EVENTS",mX+40,y+8);
+  pdf.setFontSize(8);pdf.setTextColor(...gray);setFont("normal");
+  pdf.text("Công ty TNHH Du lịch và Sự kiện Việt · MST: 0302650371",mX+40,y+13);
+  y+=28;
+  
+  // Title
+  pdf.setFontSize(18);pdf.setTextColor(...dark);setFont("bold");
+  pdf.text("PHIẾU ĐỀ NGHỊ THANH TOÁN",pageW/2,y,{align:"center"});
+  y+=6;
+  pdf.setFontSize(10);pdf.setTextColor(...gray);setFont("normal");
+  pdf.text("PAYMENT REQUEST",pageW/2,y,{align:"center"});
+  y+=6;
+  pdf.setFontSize(9);pdf.setTextColor(...dark);
+  pdf.text(`Số / No: ${reqNo}`,pageW/2,y,{align:"center"});
+  pdf.text(`Ngày / Date: ${now.toLocaleDateString("vi-VN")}`,pageW/2,y+5,{align:"center"});
+  y+=14;
+  
+  pdf.setDrawColor(...teal);pdf.setLineWidth(0.5);pdf.line(mX,y,pageW-mX,y);y+=10;
+  
+  // Body fields
+  const field=(label,val,big)=>{
+    pdf.setFontSize(9);pdf.setTextColor(...teal);setFont("bold");
+    pdf.text(label,mX,y);y+=5;
+    pdf.setFontSize(big?13:10);pdf.setTextColor(...(big?red:dark));setFont(big?"bold":"normal");
+    const lines=pdf.splitTextToSize(val||"-",pageW-mX*2);
+    pdf.text(lines,mX,y);y+=lines.length*(big?7:5)+5;
+  };
+  
+  field("DỰ ÁN / TOUR:",`${info.name||""}${info.dest?" – "+info.dest:""}`);
+  field("NHÀ CUNG CẤP / NGƯỜI NHẬN:",form.supplier);
+  field("NỘI DUNG ĐỀ NGHỊ / CONTENT:",form.content);
+  field("HẠNG MỤC CHI PHÍ / CATEGORY:",`${ci.catLabel} · ${ci.name}`);
+  field("SỐ TIỀN ĐỀ NGHỊ / AMOUNT:",fmtV(form.amount)+" ₫",true);
+  pdf.setFontSize(9);pdf.setTextColor(...gray);setFont("normal");
+  pdf.text(`Bằng chữ: ${numberToVietWords(form.amount)} đồng.`,mX,y);y+=8;
+  if(form.note){field("GHI CHÚ / NOTE:",form.note);}
+  
+  y+=8;
+  pdf.setDrawColor(...gray);pdf.setLineWidth(0.2);pdf.line(mX,y,pageW-mX,y);y+=14;
+  
+  // Signatures - 3 columns
+  const sigW=(pageW-mX*2)/3;
+  pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
+  pdf.text("NGƯỜI ĐỀ NGHỊ",mX+sigW/2,y,{align:"center"});
+  pdf.text("NGƯỜI DUYỆT",mX+sigW+sigW/2,y,{align:"center"});
+  pdf.text("KẾ TOÁN",mX+sigW*2+sigW/2,y,{align:"center"});
+  y+=4;
+  pdf.setFontSize(7.5);pdf.setTextColor(...gray);setFont("normal");
+  pdf.text("(Requester)",mX+sigW/2,y,{align:"center"});
+  pdf.text("(Approver)",mX+sigW+sigW/2,y,{align:"center"});
+  pdf.text("(Accountant)",mX+sigW*2+sigW/2,y,{align:"center"});
+  y+=22;
+  pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
+  pdf.text(form.requester||user.name,mX+sigW/2,y,{align:"center"});
+  pdf.text(form.approver||"",mX+sigW+sigW/2,y,{align:"center"});
+  
+  // Footer
+  pdf.setFillColor(...teal);pdf.rect(0,pageH-4,pageW,4,"F");
+  pdf.setFontSize(7.5);pdf.setTextColor(...teal);setFont("bold");
+  pdf.text("Viettours Incentives & Events",mX,pageH-8);
+  pdf.setTextColor(...gray);setFont("normal");
+  pdf.text(reqNo,pageW-mX,pageH-8,{align:"right"});
+  
+  pdf.save(`PhieuDeNghiTT_${reqNo}.pdf`);
+}
+
 function MainApp({user,onLogout}){
   const[template,setTemplate]=useState(null);
   const[info,setInfo]=useState({name:"",dest:"",days:1,nights:0});
@@ -2864,6 +3471,7 @@ function MainApp({user,onLogout}){
     {id:"summary",label:"💰 Tổng kết & Định giá"},
     {id:"dashboard",label:"📈 Dashboard biên lợi"},
     {id:"quote",label:"📄 Báo giá khách hàng"},
+    {id:"payment",label:"🧾 Quản lý thanh toán"},
   ];
 
   const viewProps={
@@ -2896,6 +3504,8 @@ function MainApp({user,onLogout}){
               <div style={{display:"flex",gap:16,color:"rgba(255,255,255,0.85)",fontSize:13,flexWrap:"wrap",alignItems:"center"}}>
                 <span>🗓️ <EN value={info.days} onChange={v=>setInfo(p=>({...p,days:v,nights:Math.max(0,v-1)}))} min={1} width={32} style={{color:"#fff",fontWeight:700}} suffix=" ngày"/></span>
                 <span>👥 <EN value={pax} onChange={setPax} min={1} width={40} style={{color:"#fff",fontWeight:700}} suffix=" khách"/></span>
+                <span style={{display:"flex",alignItems:"center",gap:5}}>🚀 <input type="date" value={info.startDate||""} onChange={e=>setInfo(p=>({...p,startDate:e.target.value}))} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:7,padding:"3px 8px",color:"#fff",fontSize:12,fontFamily:"inherit",outline:"none",colorScheme:"dark"}}/></span>
+                {info.startDate&&<span style={{color:"#ffe082",fontSize:12}}>→ {(()=>{const d=new Date(info.startDate);d.setDate(d.getDate()+Math.max(0,info.days-1));return d.toLocaleDateString("vi-VN");})()}</span>}
                 <button onClick={()=>setTemplate(null)} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"3px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↺ Đổi template</button>
               </div>
             </div>
@@ -2955,6 +3565,7 @@ function MainApp({user,onLogout}){
         {view==="summary"&&<SummaryView {...viewProps}/>}
         {view==="dashboard"&&<DashboardView {...viewProps}/>}
         {view==="quote"&&<QuoteView {...viewProps}/>}
+        {view==="payment"&&<PaymentView {...viewProps}/>}
       </div>
     </div>
   );
