@@ -5630,20 +5630,41 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,onSave,onCl
   const handleSave=async()=>{
     if(!qName.trim()){alert("Vui lòng nhập tên báo giá");return;}
     setSaving(true);
-    const entry={
-      id:existingId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-      name:qName.trim(),
-      customer:customer.trim(),
-      template:template||"domestic",
-      dest:info?.dest||"",
-      pax:pax||1,
-      days:info?.days||1,
-      nights:info?.nights||0,
-      totalCost:totalCost||0,
-      savedBy:user.name+" ("+user.role+")",
-    };
-    try{await window.fbSaveQuote(entry);onSave(entry);}
-    catch(e){alert("❌ Lỗi lưu: "+e.message);}
+    const trimmedCustomer=customer.trim();
+    try{
+      /* Lưu báo giá */
+      const entry={
+        id:existingId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+        name:qName.trim(),
+        customer:trimmedCustomer,
+        template:template||"domestic",
+        dest:info?.dest||"",
+        pax:pax||1,
+        days:info?.days||1,
+        nights:info?.nights||0,
+        totalCost:totalCost||0,
+        savedBy:user.name+" ("+user.role+")",
+      };
+      await window.fbSaveQuote(entry);
+
+      /* Tự động thêm vào danh sách khách hàng nếu chưa có */
+      if(trimmedCustomer&&window.fbPushCustomers){
+        const exists=customerList.some(c=>c.name?.toLowerCase()===trimmedCustomer.toLowerCase());
+        if(!exists){
+          const newCustomer={
+            id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+            name:trimmedCustomer,
+            type:"company",
+            contacts:[{name:"",phone:"",email:"",position:""}],
+            note:"",
+            createdAt:new Date().toISOString(),
+            createdBy:user.name,
+          };
+          await window.fbPushCustomers([...customerList,newCustomer]);
+        }
+      }
+      onSave(entry);
+    }catch(e){alert("❌ Lỗi lưu: "+e.message);}
     finally{setSaving(false);}
   };
 
