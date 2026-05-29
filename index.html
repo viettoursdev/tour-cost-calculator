@@ -5600,11 +5600,36 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,onSave,onCl
   const [qName,setQName]=useState(info?.name||"");
   const [customer,setCustomer]=useState("");
   const [saving,setSaving]=useState(false);
+  const [customerList,setCustomerList]=useState([]);
+  const [cusSearch,setCusSearch]=useState("");
+  const [showDrop,setShowDrop]=useState(false);
+  const cusRef=useRef(null);
+
+  /* Load danh sách khách hàng từ Firestore */
+  useEffect(()=>{
+    if(!window.fbOnCustomers)return;
+    const unsub=window.fbOnCustomers(list=>{setCustomerList(list||[]);});
+    return()=>unsub&&unsub();
+  },[]);
+
+  /* Click outside để đóng dropdown */
+  useEffect(()=>{
+    const handler=(e)=>{if(cusRef.current&&!cusRef.current.contains(e.target))setShowDrop(false);};
+    document.addEventListener("mousedown",handler);
+    return()=>document.removeEventListener("mousedown",handler);
+  },[]);
+
+  const suggestions=cusSearch
+    ?customerList.filter(c=>c.name?.toLowerCase().includes(cusSearch.toLowerCase()))
+    :customerList;
+
+  const selectCustomer=(c)=>{setCustomer(c.name);setCusSearch(c.name);setShowDrop(false);};
+
   const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"9px 13px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+
   const handleSave=async()=>{
     if(!qName.trim()){alert("Vui lòng nhập tên báo giá");return;}
     setSaving(true);
-    const u=user;
     const entry={
       id:existingId||Date.now().toString(36)+Math.random().toString(36).slice(2,5),
       name:qName.trim(),
@@ -5615,14 +5640,13 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,onSave,onCl
       days:info?.days||1,
       nights:info?.nights||0,
       totalCost:totalCost||0,
-      savedBy:u.name+" ("+u.role+")",
+      savedBy:user.name+" ("+user.role+")",
     };
-    try{
-      await window.fbSaveQuote(entry);
-      onSave(entry);
-    }catch(e){alert("❌ Lỗi lưu: "+e.message);}
+    try{await window.fbSaveQuote(entry);onSave(entry);}
+    catch(e){alert("❌ Lỗi lưu: "+e.message);}
     finally{setSaving(false);}
   };
+
   return(
     <div className="modal-bg" onClick={onClose}>
       <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:460}}>
@@ -5634,13 +5658,46 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,onSave,onCl
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:8,color:"#fff",width:34,height:34,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
         </div>
         <div style={{padding:"22px 26px",display:"flex",flexDirection:"column",gap:14}}>
+          {/* Tên báo giá */}
           <div>
             <label style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Tên báo giá *</label>
             <input style={inp} value={qName} onChange={e=>setQName(e.target.value)} placeholder="VD: Đà Lạt 3N2Đ – 40pax..."/>
           </div>
+          {/* Tên khách hàng – linked dropdown */}
           <div>
-            <label style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Tên khách hàng</label>
-            <input style={inp} value={customer} onChange={e=>setCustomer(e.target.value)} placeholder="Tên công ty hoặc cá nhân..."/>
+            <label style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>
+              Tên khách hàng
+              {customerList.length>0&&<span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"rgba(15,58,74,0.4)",marginLeft:6}}>({customerList.length} trong danh sách)</span>}
+            </label>
+            <div ref={cusRef} style={{position:"relative"}}>
+              <input
+                style={{...inp,paddingRight:32}}
+                value={cusSearch}
+                onChange={e=>{setCusSearch(e.target.value);setCustomer(e.target.value);setShowDrop(true);}}
+                onFocus={()=>setShowDrop(true)}
+                placeholder={customerList.length>0?"Chọn hoặc nhập tên khách hàng...":"Nhập tên công ty hoặc cá nhân..."}
+              />
+              {cusSearch&&<button onClick={()=>{setCusSearch("");setCustomer("");}} style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"rgba(15,58,74,0.35)",padding:2}}>✕</button>}
+              {/* Dropdown */}
+              {showDrop&&customerList.length>0&&(
+                <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#fff",border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(15,58,74,0.12)",zIndex:300,maxHeight:200,overflowY:"auto"}}>
+                  {suggestions.length===0
+                    ?<div style={{padding:"10px 14px",fontSize:12,color:"rgba(15,58,74,0.4)",fontStyle:"italic"}}>Không tìm thấy trong danh sách — sẽ lưu dạng nhập tay</div>
+                    :suggestions.map(c=>(
+                      <div key={c.id} onMouseDown={()=>selectCustomer(c)}
+                        style={{padding:"9px 14px",cursor:"pointer",borderBottom:"1px solid rgba(20,150,140,0.07)",transition:"background .1s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="rgba(168,230,221,0.18)"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <div style={{fontWeight:700,fontSize:13,color:"#0f3a4a",display:"flex",alignItems:"center",gap:6}}>
+                          <span>{c.type==="company"?"🏢":"👤"}</span>{c.name}
+                        </div>
+                        {c.contacts?.[0]?.phone&&<div style={{fontSize:11,color:"rgba(15,58,74,0.45)",marginTop:2}}>📞 {c.contacts[0].phone}{c.contacts[0].email?" · ✉️ "+c.contacts[0].email:""}</div>}
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+            </div>
           </div>
           {/* Info tóm tắt */}
           <div style={{background:"rgba(168,230,221,0.18)",border:"1px solid rgba(20,150,140,0.18)",borderRadius:10,padding:"12px 14px",fontSize:12,color:"rgba(15,58,74,0.7)",display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
