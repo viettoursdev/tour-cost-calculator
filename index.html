@@ -131,6 +131,27 @@ window._fbInitialPull=async function(){
   }catch(e){console.warn("Initial pull failed:",e.message);}
 };
 
+/* ══ NCC (Nhà Cung Cấp) Firestore sync ══ */
+const _NCC_DOC=doc(_db,"viettours","ncc_master");
+const _NCC_EDIT_ROLES=["CEO","Trưởng Phòng","Sales","Operations","Marketing"];
+const _canEditNCC=()=>{const u=window._vteUser;return u&&_NCC_EDIT_ROLES.includes(u.role);};
+
+window.fbPushNCC=async function(suppliers){
+  const u=window._vteUser;
+  await setDoc(_NCC_DOC,{
+    suppliers,
+    updatedAt:new Date().toISOString(),
+    updatedBy:u?(u.name+" ("+u.role+")"):"unknown"
+  });
+};
+window.fbPullNCC=async function(){
+  const s=await getDoc(_NCC_DOC);
+  return s.exists()?s.data():null;
+};
+window.fbOnNCC=function(cb){
+  return onSnapshot(_NCC_DOC,s=>{cb(s.exists()?s.data():null);});
+};
+
 window._fbReady=true;
 console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
 </script>
@@ -222,13 +243,13 @@ const DEFAULT_USERS=[
    Ngưỡng: từ Operations trở lên mới có editRateCard/exportQuote/importQuote
 */
 const PERMISSIONS={
-  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true},
-  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true},
-  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true},
-  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true},
-  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true},
-  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false},
-  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false},
+  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true},
+  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true},
+  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true},
+  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true},
+  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true},
+  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false},
+  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false},
 };
 const hasPerm=(user,key)=>{
   if(!user)return false;
@@ -5390,6 +5411,7 @@ function MainApp({user,onLogout}){
     {id:"dashboard",label:"📈 Dashboard biên lợi"},
     {id:"quote",label:"📄 Báo giá khách hàng"},
     {id:"payment",label:"🧾 Quản lý thanh toán"},
+    ...(hasPerm(user,"manageNCC")?[{id:"ncc",label:"🏢 Nhà Cung Cấp"}]:[]),
   ];
 
   const viewProps={
@@ -5534,7 +5556,275 @@ function MainApp({user,onLogout}){
         {view==="dashboard"&&<DashboardView {...viewProps}/>}
         {view==="quote"&&<QuoteView {...viewProps}/>}
         {view==="payment"&&<PaymentView {...viewProps}/>}
+        {view==="ncc"&&hasPerm(user,"manageNCC")&&<NCCView user={user}/>}
       </div>
+    </div>
+  );
+}
+
+/* ═══ NCC – Nhà Cung Cấp ══════════════════════════════ */
+const NCC_SECTORS=["Khách sạn","DMC","Hàng không","Event","Venue","Transport","Nhà hàng","Bảo hiểm","Logistics","Visa","Âm thanh – Ánh sáng","In ấn & Quà tặng","Khác"];
+const SECTOR_COLOR={
+  "Khách sạn":"#f5a623","DMC":"#8e44ad","Hàng không":"#2980b9","Event":"#e74c3c",
+  "Venue":"#16a085","Transport":"#9b59b6","Nhà hàng":"#e67e22","Bảo hiểm":"#27ae60",
+  "Logistics":"#d35400","Visa":"#2c3e50","Âm thanh – Ánh sáng":"#8e44ad","In ấn & Quà tặng":"#c0392b","Khác":"#7f8c8d"
+};
+
+function NCCModal({ncc,onSave,onClose,canEdit}){
+  const empty={id:"",name:"",sectors:[],location:"",contacts:[{name:"",phone:"",email:"",position:""}],note:""};
+  const [form,setForm]=useState(ncc||empty);
+  const setF=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const setContact=(i,k,v)=>setForm(p=>{const c=[...p.contacts];c[i]={...c[i],[k]:v};return{...p,contacts:c};});
+  const addContact=()=>setForm(p=>({...p,contacts:[...p.contacts,{name:"",phone:"",email:"",position:""}]}));
+  const delContact=(i)=>setForm(p=>({...p,contacts:p.contacts.filter((_,j)=>j!==i)}));
+  const toggleSector=(s)=>setF("sectors",form.sectors.includes(s)?form.sectors.filter(x=>x!==s):[...form.sectors,s]);
+  const handleSave=()=>{
+    if(!form.name.trim()){alert("Vui lòng nhập tên NCC");return;}
+    if(form.sectors.length===0){alert("Vui lòng chọn ít nhất 1 lĩnh vực");return;}
+    onSave({...form,id:form.id||Date.now().toString(36)+Math.random().toString(36).slice(2,6)});
+  };
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"8px 12px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:700,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",padding:"20px 26px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:800}}>{ncc?"✏️ Sửa NCC":"➕ Thêm NCC mới"}</div>
+            <div style={{fontSize:12,opacity:0.85,marginTop:2}}>Thông tin nhà cung cấp</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:8,color:"#fff",width:34,height:34,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{padding:"22px 26px",display:"flex",flexDirection:"column",gap:18}}>
+          {/* Tên NCC */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Tên NCC *</label>
+            <input style={inp} value={form.name} onChange={e=>setF("name",e.target.value)} placeholder="VD: Sheraton Saigon Hotel..." disabled={!canEdit}/>
+          </div>
+          {/* Lĩnh vực */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:8}}>Lĩnh vực dịch vụ *</label>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {NCC_SECTORS.map(s=>{
+                const active=form.sectors.includes(s);
+                const col=SECTOR_COLOR[s]||"#7f8c8d";
+                return(
+                  <button key={s} onClick={()=>canEdit&&toggleSector(s)} style={{
+                    padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:canEdit?"pointer":"default",fontFamily:"inherit",
+                    background:active?col:"rgba(0,0,0,0.04)",color:active?"#fff":col,
+                    border:`1.5px solid ${col}`,transition:"all .15s"
+                  }}>{s}</button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Địa điểm */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Địa điểm</label>
+            <input style={inp} value={form.location} onChange={e=>setF("location",e.target.value)} placeholder="VD: TP. Hồ Chí Minh, Đà Nẵng..." disabled={!canEdit}/>
+          </div>
+          {/* Contacts */}
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <label style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)",letterSpacing:1,textTransform:"uppercase"}}>Người liên hệ</label>
+              {canEdit&&<button onClick={addContact} style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",borderRadius:7,padding:"4px 12px",fontSize:12,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm contact</button>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {form.contacts.map((c,i)=>(
+                <div key={i} style={{background:"rgba(168,230,221,0.12)",border:"1px solid rgba(20,150,140,0.15)",borderRadius:10,padding:"12px 14px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#0d7a6a"}}>Contact {i+1}</span>
+                    {canEdit&&form.contacts.length>1&&<button onClick={()=>delContact(i)} style={{background:"rgba(220,50,80,0.08)",border:"none",borderRadius:6,padding:"2px 8px",fontSize:11,color:"#dc3250",cursor:"pointer",fontFamily:"inherit"}}>✕ Xoá</button>}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <input style={inp} value={c.name} onChange={e=>setContact(i,"name",e.target.value)} placeholder="Họ tên" disabled={!canEdit}/>
+                    <input style={inp} value={c.position} onChange={e=>setContact(i,"position",e.target.value)} placeholder="Chức vụ" disabled={!canEdit}/>
+                    <input style={inp} value={c.phone} onChange={e=>setContact(i,"phone",e.target.value)} placeholder="Số điện thoại" disabled={!canEdit}/>
+                    <input style={inp} value={c.email} onChange={e=>setContact(i,"email",e.target.value)} placeholder="Email" disabled={!canEdit}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Ghi chú */}
+          <div>
+            <label style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)",letterSpacing:1,textTransform:"uppercase",display:"block",marginBottom:6}}>Ghi chú</label>
+            <textarea style={{...inp,resize:"vertical",minHeight:70}} value={form.note} onChange={e=>setF("note",e.target.value)} placeholder="Ghi chú thêm về NCC..." disabled={!canEdit}/>
+          </div>
+          {canEdit&&(
+            <div style={{display:"flex",gap:10,paddingTop:4}}>
+              <button onClick={onClose} style={{flex:1,background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,padding:12,cursor:"pointer",fontWeight:600,fontSize:13,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
+              <button onClick={handleSave} style={{flex:2,background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:10,padding:12,cursor:"pointer",fontWeight:800,fontSize:14,fontFamily:"inherit"}}>💾 Lưu NCC</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NCCView({user}){
+  const canEdit=hasPerm(user,"manageNCC");
+  const [suppliers,setSuppliers]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [syncing,setSyncing]=useState(false);
+  const [lastSync,setLastSync]=useState(null);
+  const [search,setSearch]=useState("");
+  const [filterSector,setFilterSector]=useState("");
+  const [modal,setModal]=useState(null); // null | {ncc} | "new"
+  const [delConfirm,setDelConfirm]=useState(null);
+
+  /* ── Firebase real-time ── */
+  useEffect(()=>{
+    if(!window.fbOnNCC)return;
+    setLoading(true);
+    const unsub=window.fbOnNCC(data=>{
+      if(data){setSuppliers(data.suppliers||[]);setLastSync({at:data.updatedAt,by:data.updatedBy});}
+      else{setSuppliers([]);}
+      setLoading(false);
+    });
+    return()=>unsub&&unsub();
+  },[]);
+
+  const pushToCloud=async(list)=>{
+    if(!window.fbPushNCC)return;
+    setSyncing(true);
+    try{await window.fbPushNCC(list);}catch(e){alert("❌ Lỗi đồng bộ: "+e.message);}
+    finally{setSyncing(false);}
+  };
+
+  const handleSave=(form)=>{
+    let next;
+    if(form.id&&suppliers.find(s=>s.id===form.id)){
+      next=suppliers.map(s=>s.id===form.id?{...form,updatedAt:new Date().toISOString(),updatedBy:user.name}:s);
+    }else{
+      next=[...suppliers,{...form,createdAt:new Date().toISOString(),createdBy:user.name}];
+    }
+    setSuppliers(next);
+    pushToCloud(next);
+    setModal(null);
+  };
+
+  const handleDelete=(id)=>{
+    const next=suppliers.filter(s=>s.id!==id);
+    setSuppliers(next);
+    pushToCloud(next);
+    setDelConfirm(null);
+  };
+
+  /* ── Filter ── */
+  const filtered=suppliers.filter(s=>{
+    const q=search.toLowerCase();
+    if(filterSector&&!s.sectors?.includes(filterSector))return false;
+    if(!q)return true;
+    return(
+      s.name?.toLowerCase().includes(q)||
+      s.location?.toLowerCase().includes(q)||
+      s.note?.toLowerCase().includes(q)||
+      s.sectors?.some(sec=>sec.toLowerCase().includes(q))||
+      s.contacts?.some(c=>c.name?.toLowerCase().includes(q)||c.phone?.includes(q)||c.email?.toLowerCase().includes(q)||c.position?.toLowerCase().includes(q))
+    );
+  });
+
+  const cardStyle={background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid rgba(20,150,140,0.15)",boxShadow:"0 2px 8px rgba(15,58,74,0.06)",transition:"all .2s",cursor:"pointer"};
+
+  return(
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{fontSize:20,fontWeight:800,color:"#0f3a4a"}}>🏢 Danh sách Nhà Cung Cấp</div>
+          <div style={{fontSize:12,color:"rgba(15,58,74,0.5)",marginTop:3}}>
+            {loading?"Đang tải...":suppliers.length+" NCC · "}
+            {lastSync&&!loading&&<span>Sync: <strong>{lastSync.by?.split("(")[0].trim()}</strong> · {new Date(lastSync.at).toLocaleString("vi-VN")}</span>}
+            {syncing&&<span style={{color:"#8e44ad"}}>☁️ Đang đồng bộ...</span>}
+          </div>
+        </div>
+        {canEdit&&<button onClick={()=>setModal({ncc:null})} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>➕ Thêm NCC</button>}
+      </div>
+
+      {/* Search & Filter */}
+      <div style={{display:"flex",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:200,position:"relative"}}>
+          <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:14,opacity:0.4}}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm tên NCC, contact, địa điểm..."
+            style={{width:"100%",padding:"9px 12px 9px 32px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}/>
+        </div>
+        <select value={filterSector} onChange={e=>setFilterSector(e.target.value)}
+          style={{padding:"9px 14px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",color:"#0f3a4a",background:"#fff",outline:"none"}}>
+          <option value="">Tất cả lĩnh vực</option>
+          {NCC_SECTORS.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+        {(search||filterSector)&&<button onClick={()=>{setSearch("");setFilterSector("");}} style={{padding:"9px 14px",background:"rgba(220,50,80,0.08)",border:"1px solid rgba(220,50,80,0.2)",borderRadius:10,fontSize:12,fontWeight:600,color:"#dc3250",cursor:"pointer",fontFamily:"inherit"}}>✕ Xoá lọc</button>}
+      </div>
+
+      {/* Loading */}
+      {loading&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.4)",fontSize:14}}>⏳ Đang tải danh sách NCC từ Cloud...</div>}
+
+      {/* Empty */}
+      {!loading&&filtered.length===0&&(
+        <div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.35)"}}>
+          <div style={{fontSize:40,marginBottom:12}}>🏢</div>
+          <div style={{fontSize:15,fontWeight:600}}>{suppliers.length===0?"Chưa có NCC nào":"Không tìm thấy NCC phù hợp"}</div>
+          <div style={{fontSize:12,marginTop:6}}>{suppliers.length===0&&canEdit?"Bấm \"➕ Thêm NCC\" để bắt đầu":""}</div>
+        </div>
+      )}
+
+      {/* Grid */}
+      {!loading&&filtered.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+          {filtered.map(s=>(
+            <div key={s.id} style={cardStyle} onClick={()=>setModal({ncc:s})}
+              onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 20px rgba(15,58,74,0.12)";e.currentTarget.style.borderColor="rgba(20,150,140,0.35)";}}
+              onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(15,58,74,0.06)";e.currentTarget.style.borderColor="rgba(20,150,140,0.15)";}}>
+              {/* Name + actions */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a",flex:1,marginRight:8}}>{s.name}</div>
+                {canEdit&&(
+                  <div style={{display:"flex",gap:5}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>setModal({ncc:s})} title="Sửa" style={{background:"rgba(20,150,140,0.1)",border:"none",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#0d7a6a",fontFamily:"inherit"}}>✏️</button>
+                    <button onClick={()=>setDelConfirm(s)} title="Xoá" style={{background:"rgba(220,50,80,0.08)",border:"none",borderRadius:6,padding:"4px 8px",fontSize:12,cursor:"pointer",color:"#dc3250",fontFamily:"inherit"}}>🗑️</button>
+                  </div>
+                )}
+              </div>
+              {/* Sectors */}
+              <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:10}}>
+                {(s.sectors||[]).map(sec=>(
+                  <span key={sec} style={{background:SECTOR_COLOR[sec]||"#7f8c8d",color:"#fff",borderRadius:12,padding:"2px 9px",fontSize:11,fontWeight:700}}>{sec}</span>
+                ))}
+              </div>
+              {/* Location */}
+              {s.location&&<div style={{fontSize:12,color:"rgba(15,58,74,0.55)",marginBottom:8,display:"flex",alignItems:"center",gap:4}}>📍 {s.location}</div>}
+              {/* Contacts */}
+              {s.contacts?.filter(c=>c.name||c.phone||c.email).slice(0,2).map((c,i)=>(
+                <div key={i} style={{fontSize:12,color:"rgba(15,58,74,0.65)",borderTop:i===0?"1px dashed rgba(20,150,140,0.15)":"none",paddingTop:i===0?8:4,display:"flex",flexWrap:"wrap",gap:8,alignItems:"center"}}>
+                  {c.name&&<span style={{fontWeight:700}}>{c.name}{c.position&&<span style={{fontWeight:400,opacity:0.7}}> · {c.position}</span>}</span>}
+                  {c.phone&&<a href={"tel:"+c.phone} onClick={e=>e.stopPropagation()} style={{color:"#0d7a6a",textDecoration:"none"}}>📞 {c.phone}</a>}
+                  {c.email&&<a href={"mailto:"+c.email} onClick={e=>e.stopPropagation()} style={{color:"#0d7a6a",textDecoration:"none"}}>✉️ {c.email}</a>}
+                </div>
+              ))}
+              {s.contacts?.length>2&&<div style={{fontSize:11,color:"rgba(15,58,74,0.4)",marginTop:4}}>+{s.contacts.length-2} contact khác...</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal thêm/sửa */}
+      {modal&&<NCCModal ncc={modal.ncc} canEdit={canEdit} onSave={handleSave} onClose={()=>setModal(null)}/>}
+
+      {/* Confirm xoá */}
+      {delConfirm&&(
+        <div className="modal-bg" onClick={()=>setDelConfirm(null)}>
+          <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:420,padding:"28px 30px",textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
+            <div style={{fontSize:17,fontWeight:800,color:"#0f3a4a",marginBottom:8}}>Xoá NCC này?</div>
+            <div style={{fontSize:13,color:"rgba(15,58,74,0.6)",marginBottom:20}}>Bạn sắp xoá <strong>"{delConfirm.name}"</strong>.<br/>Hành động này sẽ xoá trên toàn bộ tài khoản.</div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setDelConfirm(null)} style={{flex:1,padding:12,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Huỷ</button>
+              <button onClick={()=>handleDelete(delConfirm.id)} style={{flex:1,padding:12,border:"none",borderRadius:10,background:"linear-gradient(135deg,#dc3250,#e74c3c)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>🗑️ Xoá</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
