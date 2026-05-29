@@ -15,6 +15,7 @@
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getFirestore,doc,setDoc,getDoc,onSnapshot}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 const _fbConfig={
   apiKey:"AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw",
   authDomain:"viettours-cost-calculator.firebaseapp.com",
@@ -26,11 +27,112 @@ const _fbConfig={
 const _fbApp=initializeApp(_fbConfig);
 const _db=getFirestore(_fbApp,"viettours");
 const _RC_DOC=doc(_db,"viettours","master_rate_card");
+
+/* ── Roles có quyền edit & auto-push ── */
+const _RC_EDIT_ROLES=["CEO","Trưởng Phòng","Sales","Operations","Marketing"];
+const _canAutoSync=()=>{const u=window._vteUser;return u&&_RC_EDIT_ROLES.includes(u.role);};
+
+/* ── Collect tất cả rate card từ localStorage ── */
+function _collectRC(){
+  const hotels={},otherRates={};
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);if(!k)continue;
+    if(k.startsWith("vte_hotels_v2_")){try{hotels[k.replace("vte_hotels_v2_","")]=JSON.parse(localStorage.getItem(k));}catch(e){}}
+    else if(k.startsWith("vte_rate_")||k==="vte_visa_rates"){try{otherRates[k]=JSON.parse(localStorage.getItem(k));}catch(e){}}
+  }
+  let visaRates={};try{visaRates=JSON.parse(localStorage.getItem("vte_visa_rates")||"{}");}catch(e){}
+  return{hotels,visaRates,otherRates};
+}
+
+/* ── Apply cloud data vào localStorage (không trigger push) ── */
+let _applyingFromCloud=false;
+function _applyRC(data){
+  _applyingFromCloud=true;
+  try{
+    Object.entries(data.hotels||{}).forEach(([city,arr])=>{try{localStorage.setItem("vte_hotels_v2_"+city,JSON.stringify(arr));}catch(e){}});
+    try{localStorage.setItem("vte_visa_rates",JSON.stringify(data.visaRates||{}));}catch(e){}
+    Object.entries(data.otherRates||{}).forEach(([k,v])=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}});
+  }finally{_applyingFromCloud=false;}
+}
+
+/* ── Auto-push lên Firestore (debounce 2s) ── */
+let _syncTimer=null;
+async function _autoSync(){
+  if(!_canAutoSync())return;
+  const u=window._vteUser;
+  try{
+    const d=_collectRC();
+    await setDoc(_RC_DOC,{
+      _meta:{version:"2.0",type:"viettours_ratecard_master",pushedAt:new Date().toISOString(),
+             pushedBy:u.name+" ("+u.role+")",app:"Viettours Tour Cost Calculator",autoSync:true},
+      hotels:d.hotels,visaRates:d.visaRates,otherRates:d.otherRates
+    });
+    console.log("☁️ Auto-synced rate card →",u.name);
+    /* Hiện toast thông báo */
+    const toast=document.createElement("div");
+    toast.textContent="☁️ Đã đồng bộ Rate Card lên Cloud";
+    Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#0d7a6a",color:"#fff",
+      padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",
+      fontFamily:"DM Sans,Segoe UI,sans-serif",boxShadow:"0 4px 16px rgba(0,0,0,0.18)"});
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),3000);
+  }catch(err){console.warn("⚠️ Auto-sync lỗi:",err.message);}
+}
+
+/* ── Intercept localStorage.setItem cho rate card keys ── */
+const _origSetItem=localStorage.setItem.bind(localStorage);
+localStorage.setItem=function(key,value){
+  _origSetItem(key,value);
+  if(!_applyingFromCloud&&(key.startsWith("vte_hotels_v2_")||key.startsWith("vte_rate_")||key==="vte_visa_rates")){
+    if(_syncTimer)clearTimeout(_syncTimer);
+    _syncTimer=setTimeout(_autoSync,2000);
+  }
+};
+
+/* ── Public API ── */
 window.fbPushMasterRC=async function(payload){await setDoc(_RC_DOC,payload);};
 window.fbPullMasterRC=async function(){const s=await getDoc(_RC_DOC);return s.exists()?s.data():null;};
 window.fbOnMasterRC=function(cb){return onSnapshot(_RC_DOC,s=>{cb(s.exists()?s.data():null);});};
+
+/* ── Real-time listener: nhận cập nhật từ user khác ── */
+let _lastCloudPush="";
+onSnapshot(_RC_DOC,snap=>{
+  if(!snap.exists())return;
+  const data=snap.data();
+  const pushedAt=data._meta?.pushedAt||"";
+  if(pushedAt===_lastCloudPush)return; // bỏ qua nếu không có thay đổi
+  _lastCloudPush=pushedAt;
+  const u=window._vteUser;
+  /* Nếu chính user này vừa push thì không apply lại */
+  if(u&&data._meta?.pushedBy?.startsWith(u.name))return;
+  _applyRC(data);
+  console.log("🔄 Rate card đã được cập nhật từ cloud bởi:",data._meta?.pushedBy);
+  /* Thông báo cho user */
+  const toast=document.createElement("div");
+  toast.textContent="🔄 Rate Card đã được cập nhật từ "+( data._meta?.pushedBy||"Cloud");
+  Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#8e44ad",color:"#fff",
+    padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",
+    fontFamily:"DM Sans,Segoe UI,sans-serif",boxShadow:"0 4px 16px rgba(0,0,0,0.18)"});
+  document.body.appendChild(toast);
+  setTimeout(()=>toast.remove(),4000);
+});
+
+/* ── Pull lần đầu khi mở app (nếu user không có quyền edit) ── */
+window._fbInitialPull=async function(){
+  try{
+    const data=await getDoc(_RC_DOC);
+    if(!data.exists())return;
+    const d=data.data();
+    _lastCloudPush=d._meta?.pushedAt||"";
+    if(!_canAutoSync()){
+      _applyRC(d);
+      console.log("📥 Đã pull Rate Card từ cloud lúc khởi động");
+    }
+  }catch(e){console.warn("Initial pull failed:",e.message);}
+};
+
 window._fbReady=true;
-console.log("✅ Firebase Firestore connected to database: viettours");
+console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -5440,8 +5542,23 @@ function MainApp({user,onLogout}){
 /* ═══ ROOT ═════════════════════════════════════════════ */
 function App(){
   const[user,setUser]=useState(ldSess);
-  const onLogin=(u)=>{setUser(u);svSess(u);};
-  const onLogout=()=>{setUser(null);clrSess();};
+  const onLogin=(u)=>{
+    setUser(u);svSess(u);
+    window._vteUser=u;
+    /* Pull lần đầu nếu user không có quyền edit */
+    if(window._fbInitialPull&&!ROLE_PERMS[u.role]?.editRateCard){
+      window._fbInitialPull();
+    }
+  };
+  const onLogout=()=>{setUser(null);clrSess();window._vteUser=null;};
+  useEffect(()=>{
+    /* Expose user cho Firebase auto-sync module */
+    window._vteUser=user||null;
+    /* Initial pull khi app load với session đã có */
+    if(user&&window._fbInitialPull&&!ROLE_PERMS[user.role]?.editRateCard){
+      window._fbInitialPull();
+    }
+  },[user]);
   return user?<MainApp user={user} onLogout={onLogout}/>:<LoginScreen onLogin={onLogin}/>;
 }
 
