@@ -12,6 +12,33 @@
 <script crossorigin src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script crossorigin src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script crossorigin src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const _fbConfig={
+  apiKey:"AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw",
+  authDomain:"viettours-cost-calculator.firebaseapp.com",
+  projectId:"viettours-cost-calculator",
+  storageBucket:"viettours-cost-calculator.firebasestorage.app",
+  messagingSenderId:"304145851784",
+  appId:"1:304145851784:web:e4977ff4e343ab74e4c63d",
+  measurementId:"G-1TP7XHHFEE"
+};
+firebase.initializeApp(_fbConfig);
+const _db=firebase.firestore();
+const RC_DOC=_db.collection("viettours").doc("master_rate_card");
+
+async function fbPushMasterRC(payload){
+  await RC_DOC.set(payload);
+}
+async function fbPullMasterRC(){
+  const snap=await RC_DOC.get();
+  return snap.exists?snap.data():null;
+}
+function fbOnMasterRC(cb){
+  return RC_DOC.onSnapshot(snap=>{cb(snap.exists?snap.data():null);});
+}
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100vh}
@@ -3961,85 +3988,124 @@ function UserManagementModal({currentUser,onClose}){
 
 /* ═══ RATE CARD SYNC MODAL – Đồng bộ master rate card cross-device ═══ */
 function RateCardSyncModal({user,onClose}){
-  const [tab,setTab]=useState("export");
+  const [tab,setTab]=useState("cloud");
   const fileRef=useRef(null);
   const [importPreview,setImportPreview]=useState(null);
+  const [cloudData,setCloudData]=useState(null);
+  const [cloudLoading,setCloudLoading]=useState(true);
+  const [cloudStatus,setCloudStatus]=useState(null); // {type:"success"|"error", msg}
+  const [pushing,setPushing]=useState(false);
+  const [pulling,setPulling]=useState(false);
 
-  // Gather all rate card data from localStorage
+  // Collect ALL rate card data from localStorage
   const collectMasterData=()=>{
     const hotels={};
-    // Hotel customizations stored as vte_hotels_v2_{city}
+    const otherRates={};
     for(let i=0;i<localStorage.length;i++){
       const key=localStorage.key(i);
-      if(key&&key.startsWith("vte_hotels_v2_")){
+      if(!key)continue;
+      if(key.startsWith("vte_hotels_v2_")){
         const city=key.replace("vte_hotels_v2_","");
         try{hotels[city]=JSON.parse(localStorage.getItem(key));}catch(e){}
+      } else if(key.startsWith("vte_rate_")||key==="vte_visa_rates"){
+        try{otherRates[key]=JSON.parse(localStorage.getItem(key));}catch(e){}
       }
     }
     let visaRates={};
     try{visaRates=JSON.parse(localStorage.getItem("vte_visa_rates")||"{}");}catch(e){}
-    return {hotels,visaRates};
+    return {hotels,visaRates,otherRates};
   };
 
+  const applyData=(data)=>{
+    Object.entries(data.hotels||{}).forEach(([city,arr])=>{
+      try{localStorage.setItem("vte_hotels_v2_"+city,JSON.stringify(arr));}catch(e){}
+    });
+    try{localStorage.setItem("vte_visa_rates",JSON.stringify(data.visaRates||{}));}catch(e){}
+    Object.entries(data.otherRates||{}).forEach(([key,val])=>{
+      try{localStorage.setItem(key,JSON.stringify(val));}catch(e){}
+    });
+  };
+
+  // Load cloud data on mount
+  useEffect(()=>{
+    setCloudLoading(true);
+    fbPullMasterRC().then(d=>{setCloudData(d);setCloudLoading(false);}).catch(()=>setCloudLoading(false));
+    const unsub=fbOnMasterRC(d=>{setCloudData(d);});
+    return ()=>unsub();
+  },[]);
+
+  const handlePushCloud=async()=>{
+    if(!confirm("Đẩy rate card hiện tại lên cloud?\n\n⚠ Dữ liệu cloud sẽ bị ghi đè. Tất cả tài khoản kéo về sẽ nhận bản mới này."))return;
+    setPushing(true);setCloudStatus(null);
+    try{
+      const d=collectMasterData();
+      const payload={
+        _meta:{
+          version:"2.0",
+          type:"viettours_ratecard_master",
+          pushedAt:new Date().toISOString(),
+          pushedBy:user.name+" ("+user.role+")",
+          app:"Viettours Tour Cost Calculator",
+        },
+        hotels:d.hotels,
+        visaRates:d.visaRates,
+        otherRates:d.otherRates,
+      };
+      await fbPushMasterRC(payload);
+      setCloudStatus({type:"success",msg:"✅ Đẩy lên cloud thành công! Tất cả tài khoản có thể kéo về ngay."});
+    }catch(err){
+      setCloudStatus({type:"error",msg:"❌ Lỗi: "+err.message});
+    }finally{setPushing(false);}
+  };
+
+  const handlePullCloud=async()=>{
+    if(!cloudData)return;
+    if(!confirm("Kéo rate card từ cloud về máy này?\n\n⚠ Rate card hiện tại trên máy sẽ bị ghi đè!"))return;
+    setPulling(true);setCloudStatus(null);
+    try{
+      applyData(cloudData);
+      setCloudStatus({type:"success",msg:"✅ Đồng bộ thành công! Đang tải lại..."});
+      setTimeout(()=>window.location.reload(),1200);
+    }catch(err){
+      setCloudStatus({type:"error",msg:"❌ Lỗi: "+err.message});
+      setPulling(false);
+    }
+  };
+
+  // File export/import helpers (keep old workflow)
   const handleExport=()=>{
-    const data=collectMasterData();
+    const d=collectMasterData();
     const payload={
-      _meta:{
-        version:"1.0",
-        type:"viettours_ratecard_master",
-        exportedAt:new Date().toISOString(),
-        exportedBy:user.name+" ("+user.role+")",
-        app:"Viettours Tour Cost Calculator",
-      },
-      hotels:data.hotels,
-      visaRates:data.visaRates,
+      _meta:{version:"2.0",type:"viettours_ratecard_master",exportedAt:new Date().toISOString(),exportedBy:user.name+" ("+user.role+")",app:"Viettours Tour Cost Calculator"},
+      hotels:d.hotels,visaRates:d.visaRates,otherRates:d.otherRates,
     };
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");
-    a.href=url;
+    const a=document.createElement("a");a.href=url;
     a.download=`Viettours_RateCard_Master_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click();URL.revokeObjectURL(url);
   };
-
   const handleFileSelect=(e)=>{
-    const file=e.target.files?.[0];
-    if(!file)return;
+    const file=e.target.files?.[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=ev=>{
       try{
         const data=JSON.parse(ev.target.result);
-        if(!data._meta||data._meta.type!=="viettours_ratecard_master"){
-          alert("⚠ File không phải Master Rate Card hợp lệ");return;
-        }
-        // Build preview stats
+        if(!data._meta||data._meta.type!=="viettours_ratecard_master"){alert("⚠ File không phải Master Rate Card hợp lệ");return;}
         const hotelCities=Object.keys(data.hotels||{}).length;
         const hotelCount=Object.values(data.hotels||{}).reduce((s,arr)=>s+(Array.isArray(arr)?arr.length:0),0);
         const visaCountries=Object.keys(data.visaRates||{}).length;
         setImportPreview({data,hotelCities,hotelCount,visaCountries});
-      }catch(err){
-        alert("⚠ Lỗi đọc file: "+err.message);
-      }
+      }catch(err){alert("⚠ Lỗi đọc file: "+err.message);}
     };
-    reader.readAsText(file);
-    e.target.value="";
+    reader.readAsText(file);e.target.value="";
   };
-
   const handleApplyImport=()=>{
     if(!importPreview)return;
     if(!confirm("Áp dụng master rate card này?\n\n⚠ Toàn bộ rate card hiện tại trên máy này sẽ bị ghi đè!"))return;
-    const {data}=importPreview;
-    // Apply hotels
-    Object.entries(data.hotels||{}).forEach(([city,arr])=>{
-      try{localStorage.setItem("vte_hotels_v2_"+city,JSON.stringify(arr));}catch(e){}
-    });
-    // Apply visa rates
-    try{localStorage.setItem("vte_visa_rates",JSON.stringify(data.visaRates||{}));}catch(e){}
+    applyData(importPreview.data);
     alert("✅ Đồng bộ thành công! Tải lại trang để áp dụng đầy đủ.");
-    setImportPreview(null);
-    onClose();
-    // Trigger soft reload of modals if open
+    setImportPreview(null);onClose();
     setTimeout(()=>window.location.reload(),500);
   };
 
@@ -4048,30 +4114,105 @@ function RateCardSyncModal({user,onClose}){
   const localHotelCount=Object.values(stats.hotels).reduce((s,arr)=>s+(Array.isArray(arr)?arr.length:0),0);
   const localVisaCountries=Object.keys(stats.visaRates).length;
 
+  const cloudMeta=cloudData?._meta;
+  const cloudHotelCount=cloudData?Object.values(cloudData.hotels||{}).reduce((s,a)=>s+(Array.isArray(a)?a.length:0),0):0;
+  const cloudHotelCities=cloudData?Object.keys(cloudData.hotels||{}).length:0;
+  const cloudVisaCountries=cloudData?Object.keys(cloudData.visaRates||{}).length:0;
+
+  const TABS=[{id:"cloud",label:"☁️ Cloud Sync"},{id:"export",label:"📤 Xuất file"},{id:"import",label:"📥 Nhập file"}];
+
   return(
     <div className="modal-bg" onClick={onClose}>
       <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:680}}>
         <div style={{background:"linear-gradient(135deg,#8e44ad,#9b59b6)",color:"#fff",padding:"22px 28px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontSize:19,fontWeight:800,display:"flex",alignItems:"center",gap:10}}>🗂️ Đồng bộ Master Rate Card</div>
-            <div style={{fontSize:12,opacity:0.85,marginTop:3}}>Chia sẻ rate card giữa các máy/tài khoản qua file master</div>
+            <div style={{fontSize:12,opacity:0.85,marginTop:3}}>Đồng bộ real-time qua Firebase · hoặc xuất/nhập file</div>
           </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:8,color:"#fff",width:34,height:34,cursor:"pointer",fontSize:18,fontFamily:"inherit"}}>✕</button>
         </div>
 
         <div style={{display:"flex",borderBottom:"1px solid rgba(20,150,140,0.15)",background:"rgba(168,230,221,0.1)"}}>
-          {[{id:"export",label:"📤 Xuất master"},{id:"import",label:"📥 Nhập master"}].map(t=>(
+          {TABS.map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
-              flex:1,background:"none",border:"none",
-              padding:"14px 16px",cursor:"pointer",
+              flex:1,background:"none",border:"none",padding:"13px 10px",cursor:"pointer",
               color:tab===t.id?"#8e44ad":"rgba(15,58,74,0.5)",
               borderBottom:tab===t.id?"3px solid #8e44ad":"3px solid transparent",
-              fontWeight:tab===t.id?700:500,fontSize:13,fontFamily:"inherit",
+              fontWeight:tab===t.id?700:500,fontSize:12,fontFamily:"inherit",
             }}>{t.label}</button>
           ))}
         </div>
 
         <div style={{padding:"22px 26px"}}>
+
+          {/* ── CLOUD SYNC TAB ── */}
+          {tab==="cloud"&&(
+            <div>
+              {/* Cloud status */}
+              <div style={{marginBottom:16,padding:"14px 16px",background:"rgba(168,230,221,0.2)",border:"1px solid rgba(20,150,140,0.2)",borderRadius:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{color:"rgba(15,58,74,0.6)",fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase"}}>☁️ Dữ liệu trên Cloud (Firebase)</div>
+                  <div style={{fontSize:11,color:cloudLoading?"#d18a13":cloudData?"#0d7a6a":"#dc3250",fontWeight:600}}>
+                    {cloudLoading?"⏳ Đang tải...":cloudData?"🟢 Đã kết nối":"⚪ Chưa có dữ liệu"}
+                  </div>
+                </div>
+                {cloudLoading&&<div style={{textAlign:"center",padding:"16px 0",color:"rgba(15,58,74,0.4)",fontSize:13}}>Đang tải dữ liệu cloud...</div>}
+                {!cloudLoading&&!cloudData&&<div style={{textAlign:"center",padding:"16px 0",color:"rgba(15,58,74,0.4)",fontSize:13}}>Cloud chưa có dữ liệu. Hãy đẩy lần đầu từ máy CEO/Admin.</div>}
+                {!cloudLoading&&cloudData&&(
+                  <>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
+                      <div style={{background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(20,150,140,0.1)"}}>
+                        <div style={{color:"rgba(15,58,74,0.5)",fontSize:11}}>🏨 Khách sạn</div>
+                        <div style={{color:"#0f3a4a",fontWeight:800,fontSize:18}}>{cloudHotelCount}</div>
+                        <div style={{color:"rgba(15,58,74,0.4)",fontSize:10}}>{cloudHotelCities} thành phố</div>
+                      </div>
+                      <div style={{background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(20,150,140,0.1)"}}>
+                        <div style={{color:"rgba(15,58,74,0.5)",fontSize:11}}>🛂 Visa custom</div>
+                        <div style={{color:"#0f3a4a",fontWeight:800,fontSize:18}}>{cloudVisaCountries}</div>
+                        <div style={{color:"rgba(15,58,74,0.4)",fontSize:10}}>quốc gia</div>
+                      </div>
+                      <div style={{background:"#fff",borderRadius:8,padding:"10px 12px",border:"1px solid rgba(20,150,140,0.1)"}}>
+                        <div style={{color:"rgba(15,58,74,0.5)",fontSize:11}}>📋 Rate cards</div>
+                        <div style={{color:"#0f3a4a",fontWeight:800,fontSize:18}}>{Object.keys(cloudData.otherRates||{}).length}</div>
+                        <div style={{color:"rgba(15,58,74,0.4)",fontSize:10}}>loại</div>
+                      </div>
+                    </div>
+                    {cloudMeta&&<div style={{fontSize:11,color:"rgba(15,58,74,0.55)",borderTop:"1px dashed rgba(20,150,140,0.2)",paddingTop:8}}>
+                      Cập nhật bởi: <strong>{cloudMeta.pushedBy||cloudMeta.exportedBy||"—"}</strong> · {cloudMeta.pushedAt?new Date(cloudMeta.pushedAt).toLocaleString("vi-VN"):cloudMeta.exportedAt?new Date(cloudMeta.exportedAt).toLocaleString("vi-VN"):"—"}
+                    </div>}
+                  </>
+                )}
+              </div>
+
+              {/* Local stats */}
+              <div style={{marginBottom:16,padding:"12px 16px",background:"rgba(245,166,35,0.07)",border:"1px solid rgba(245,166,35,0.2)",borderRadius:10}}>
+                <div style={{color:"rgba(15,58,74,0.6)",fontSize:11,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>💻 Dữ liệu trên máy này</div>
+                <div style={{display:"flex",gap:16,fontSize:12,color:"rgba(15,58,74,0.7)"}}>
+                  <span>🏨 {localHotelCount} khách sạn ({localHotelCities} tp)</span>
+                  <span>🛂 {localVisaCountries} visa</span>
+                  <span>📋 {Object.keys(stats.otherRates).length} rate cards</span>
+                </div>
+              </div>
+
+              {/* Status message */}
+              {cloudStatus&&<div style={{marginBottom:14,padding:"10px 14px",background:cloudStatus.type==="success"?"rgba(20,150,140,0.1)":"rgba(220,50,80,0.08)",border:`1px solid ${cloudStatus.type==="success"?"rgba(20,150,140,0.3)":"rgba(220,50,80,0.3)"}`,borderRadius:8,fontSize:13,fontWeight:600,color:cloudStatus.type==="success"?"#0d7a6a":"#dc3250"}}>
+                {cloudStatus.msg}
+              </div>}
+
+              {/* Action buttons */}
+              <div style={{display:"flex",gap:10}}>
+                {hasPerm(user,"syncRateCard")&&<button onClick={handlePushCloud} disabled={pushing} style={{flex:1,background:"linear-gradient(135deg,#8e44ad,#9b59b6)",color:"#fff",border:"none",borderRadius:10,padding:"12px 16px",cursor:pushing?"not-allowed":"pointer",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:pushing?0.7:1}}>
+                  {pushing?"⏳ Đang đẩy...":"📤 Đẩy lên Cloud"}
+                </button>}
+                <button onClick={handlePullCloud} disabled={pulling||cloudLoading||!cloudData} style={{flex:1,background:cloudData?"linear-gradient(135deg,#0d7a6a,#14a08c)":"rgba(0,0,0,0.05)",color:cloudData?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:10,padding:"12px 16px",cursor:(pulling||!cloudData)?"not-allowed":"pointer",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:pulling?0.7:1}}>
+                  {pulling?"⏳ Đang kéo...":"📥 Kéo từ Cloud"}
+                </button>
+              </div>
+              {!hasPerm(user,"syncRateCard")&&<div style={{marginTop:10,fontSize:11,color:"rgba(15,58,74,0.45)",textAlign:"center"}}>🔒 Chỉ CEO/Trưởng Phòng/Operations mới có thể đẩy lên cloud</div>}
+            </div>
+          )}
+
+          {/* ── EXPORT FILE TAB ── */}
           {tab==="export"&&(
             <div>
               <div style={{marginBottom:18,padding:"14px 16px",background:"rgba(168,230,221,0.2)",border:"1px solid rgba(20,150,140,0.2)",borderRadius:10}}>
@@ -4094,30 +4235,19 @@ function RateCardSyncModal({user,onClose}){
                   </div>
                 </div>
               </div>
-
-              <div style={{padding:"14px 16px",background:"rgba(245,166,35,0.08)",border:"1px solid rgba(245,166,35,0.25)",borderRadius:10,fontSize:12,color:"rgba(15,58,74,0.7)",lineHeight:1.7,marginBottom:18}}>
-                <strong style={{color:"#d18a13"}}>💡 Workflow đồng bộ:</strong>
-                <div style={{marginTop:6}}>
-                  1. CEO/Admin chỉnh sửa rate card trên máy mình (giá KS, visa, custom options...)<br/>
-                  2. Bấm <strong>"📤 Xuất master"</strong> → tải file <code style={{background:"rgba(0,0,0,0.05)",padding:"1px 5px",borderRadius:3}}>Viettours_RateCard_Master_*.json</code><br/>
-                  3. Gửi file cho team qua Zalo/Telegram/Email<br/>
-                  4. Team mở app trên máy họ → vào <strong>"🗂️ Master Rate Card"</strong> → <strong>"📥 Nhập master"</strong><br/>
-                  5. Toàn bộ máy đồng bộ cùng 1 nguồn dữ liệu chuẩn ✅
-                </div>
-              </div>
-
               <button onClick={handleExport} style={{width:"100%",background:"linear-gradient(135deg,#8e44ad,#9b59b6)",color:"#fff",border:"none",borderRadius:12,padding:14,cursor:"pointer",fontWeight:800,fontSize:14,fontFamily:"inherit"}}>
                 📤 Xuất file Master Rate Card
               </button>
             </div>
           )}
 
+          {/* ── IMPORT FILE TAB ── */}
           {tab==="import"&&(
             <div>
               {!importPreview&&(
                 <>
                   <div style={{padding:"14px 16px",background:"rgba(220,50,80,0.06)",border:"1px solid rgba(220,50,80,0.25)",borderRadius:10,fontSize:12,color:"rgba(15,58,74,0.75)",lineHeight:1.7,marginBottom:18}}>
-                    <strong style={{color:"#dc3250"}}>⚠ Cảnh báo:</strong> Nhập master rate card sẽ <strong>ghi đè toàn bộ</strong> rate card hiện tại trên máy này. Hãy chắc chắn file đến từ nguồn đáng tin cậy.
+                    <strong style={{color:"#dc3250"}}>⚠ Cảnh báo:</strong> Nhập master rate card sẽ <strong>ghi đè toàn bộ</strong> rate card hiện tại trên máy này.
                   </div>
                   <button onClick={()=>fileRef.current?.click()} style={{width:"100%",background:"#fff",border:"2px dashed rgba(155,89,182,0.4)",borderRadius:12,padding:"24px",cursor:"pointer",color:"#8e44ad",fontWeight:700,fontSize:14,fontFamily:"inherit"}}>
                     📂 Chọn file Master Rate Card (.json)
@@ -4128,7 +4258,7 @@ function RateCardSyncModal({user,onClose}){
               {importPreview&&(
                 <div>
                   <div style={{marginBottom:14,padding:"14px 16px",background:"rgba(168,230,221,0.2)",border:"1.5px solid rgba(20,150,140,0.3)",borderRadius:10}}>
-                    <div style={{color:"#0d7a6a",fontSize:12,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>✓ File hợp lệ - Xem trước</div>
+                    <div style={{color:"#0d7a6a",fontSize:12,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>✓ File hợp lệ – Xem trước</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                       <div style={{background:"#fff",borderRadius:8,padding:"10px 12px"}}>
                         <div style={{color:"rgba(15,58,74,0.5)",fontSize:11}}>🏨 Khách sạn</div>
