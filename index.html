@@ -5044,6 +5044,8 @@ function MainApp({user,onLogout}){
   const[showContract,setShowContract]=useState(false);
   const[showUserMgmt,setShowUserMgmt]=useState(false);
   const[showRateSync,setShowRateSync]=useState(false);
+  const[showExportDD,setShowExportDD]=useState(false);
+  const[showRateDD,setShowRateDD]=useState(false);
   const fileInputRef=useRef(null);
   const quoteRef=useRef(null);
 
@@ -5245,21 +5247,58 @@ function MainApp({user,onLogout}){
             </button>
           ))}
         </div>
-        <div style={{display:"flex",gap:8,padding:"6px 0",flexWrap:"wrap"}}>
-          <button onClick={()=>setRateModal("hotel")} className="btn" style={{background:"rgba(245,166,35,0.1)",borderColor:"rgba(245,166,35,0.4)",color:"#d18a13"}}>📋 KS</button>
-          <button onClick={()=>setRateModal("transport")} className="btn" style={{background:"rgba(155,89,182,0.1)",borderColor:"rgba(155,89,182,0.4)",color:"#9b59b6"}}>📋 Xe</button>
-          <button onClick={()=>setRateModal("staff")} className="btn" style={{background:"rgba(220,50,80,0.1)",borderColor:"rgba(220,50,80,0.4)",color:"#dc3250"}}>📋 HDV</button>
-          <button onClick={()=>setRateModal("insurance")} className="btn" style={{background:"rgba(22,160,133,0.1)",borderColor:"rgba(22,160,133,0.4)",color:"#16a085"}}>📋 BH</button>
-          {template==="intl"&&<button onClick={()=>setRateModal("dmc")} className="btn" style={{background:"rgba(142,68,173,0.1)",borderColor:"rgba(142,68,173,0.4)",color:"#8e44ad"}}>📋 DMC</button>}
-          <button onClick={()=>setRateModal("logistics")} className="btn" style={{background:"rgba(230,126,34,0.1)",borderColor:"rgba(230,126,34,0.4)",color:"#e67e22"}}>📋 Logistics</button>
-          <button onClick={()=>setRateModal("gala")} className="btn" style={{background:"rgba(192,57,43,0.1)",borderColor:"rgba(192,57,43,0.4)",color:"#c0392b"}}>📋 Gala</button>
-          {template==="domestic"&&<button onClick={()=>setRateModal("teambuild")} className="btn" style={{background:"rgba(39,174,96,0.1)",borderColor:"rgba(39,174,96,0.4)",color:"#27ae60"}}>📋 TeamBuild</button>}
-          {template==="domestic"&&<button onClick={()=>setRateModal("meeting")} className="btn" style={{background:"rgba(52,73,94,0.1)",borderColor:"rgba(52,73,94,0.4)",color:"#34495e"}}>📋 Meeting</button>}
-          {hasPerm(user,"exportQuote")&&<button onClick={()=>exportExcel(info,items,rates,pax,catEnabled,margin,vat,svcBasis,rounding,user,template)} className="btn" style={{background:"rgba(20,160,140,0.1)",borderColor:"rgba(20,160,140,0.3)",color:"#0d7a6a"}}>📥 Excel</button>}
-          {hasPerm(user,"exportQuote")&&<button id="export-pdf-img-btn" onClick={()=>{setView("quote");setTimeout(()=>exportPDFImage(quoteRef,info),400);}} className="btn" style={{background:"rgba(220,50,80,0.1)",borderColor:"rgba(220,50,80,0.4)",color:"#dc3250"}}>📄 PDF ảnh</button>}
-          {hasPerm(user,"exportQuote")&&<button onClick={()=>exportPDFVector(info,pax,items,rates,catEnabled,roundedPPax,vat,user,getCATS(template),margin,totalCost,svcBasis)} className="btn" style={{background:"rgba(155,89,182,0.1)",borderColor:"rgba(155,89,182,0.4)",color:"#9b59b6"}}>📄 PDF vector</button>}
-          {hasPerm(user,"exportQuote")&&<button onClick={()=>setShowInvoice(true)} className="btn" style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",borderColor:"transparent",color:"#fff"}}>🧾 Invoice</button>}
-          {hasPerm(user,"exportQuote")&&<button onClick={()=>setShowContract(true)} className="btn" style={{background:"linear-gradient(135deg,#16a085,#0d7a6a)",borderColor:"transparent",color:"#fff"}}>📜 Hợp đồng</button>}
+        <div style={{display:"flex",gap:8,padding:"6px 0",flexWrap:"wrap",alignItems:"center"}}>
+          {/* ── Rate Card dropdown ── */}
+          <div style={{position:"relative"}}>
+            <button onClick={()=>{setShowRateDD(s=>!s);setShowExportDD(false);}} className="btn" style={{background:"rgba(245,166,35,0.1)",borderColor:"rgba(245,166,35,0.4)",color:"#d18a13",display:"flex",alignItems:"center",gap:5}}>
+              📋 Rate Card <span style={{fontSize:10,opacity:0.7}}>{showRateDD?"▲":"▼"}</span>
+            </button>
+            {showRateDD&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"#fff",border:"1px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(15,58,74,0.15)",zIndex:200,minWidth:170,padding:"6px 0"}}
+              onMouseLeave={()=>setShowRateDD(false)}>
+              {[
+                {key:"hotel",   label:"🏨 Khách sạn",  color:"#d18a13", show:true},
+                {key:"transport",label:"🚌 Xe",         color:"#9b59b6", show:true},
+                {key:"staff",   label:"🎤 HDV",         color:"#dc3250", show:true},
+                {key:"insurance",label:"🛡️ Bảo hiểm",  color:"#16a085", show:true},
+                {key:"dmc",     label:"🌐 DMC",         color:"#8e44ad", show:template==="intl"},
+                {key:"logistics",label:"📦 Logistics",  color:"#e67e22", show:true},
+                {key:"gala",    label:"🎉 Gala",        color:"#c0392b", show:true},
+                {key:"teambuild",label:"🏕️ TeamBuild",  color:"#27ae60", show:template==="domestic"},
+                {key:"meeting", label:"💼 Meeting",     color:"#34495e", show:template==="domestic"},
+              ].filter(i=>i.show).map(i=>(
+                <button key={i.key} onClick={()=>{setRateModal(i.key);setShowRateDD(false);}}
+                  style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600,color:i.color,fontFamily:"inherit"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="rgba(20,150,140,0.07)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                  {i.label}
+                </button>
+              ))}
+            </div>}
+          </div>
+
+          {/* ── Xuất dropdown ── */}
+          {hasPerm(user,"exportQuote")&&<div style={{position:"relative"}}>
+            <button onClick={()=>{setShowExportDD(s=>!s);setShowRateDD(false);}} className="btn" style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",borderColor:"transparent",color:"#fff",display:"flex",alignItems:"center",gap:5}}>
+              📤 Xuất <span style={{fontSize:10,opacity:0.8}}>{showExportDD?"▲":"▼"}</span>
+            </button>
+            {showExportDD&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"#fff",border:"1px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(15,58,74,0.15)",zIndex:200,minWidth:170,padding:"6px 0"}}
+              onMouseLeave={()=>setShowExportDD(false)}>
+              {[
+                {label:"📥 Excel",      action:()=>{exportExcel(info,items,rates,pax,catEnabled,margin,vat,svcBasis,rounding,user,template);setShowExportDD(false);}},
+                {label:"📄 PDF ảnh",    action:()=>{setView("quote");setTimeout(()=>exportPDFImage(quoteRef,info),400);setShowExportDD(false);}},
+                {label:"📄 PDF vector", action:()=>{exportPDFVector(info,pax,items,rates,catEnabled,roundedPPax,vat,user,getCATS(template),margin,totalCost,svcBasis);setShowExportDD(false);}},
+                {label:"🧾 Invoice",    action:()=>{setShowInvoice(true);setShowExportDD(false);}},
+                {label:"📜 Hợp đồng",  action:()=>{setShowContract(true);setShowExportDD(false);}},
+              ].map(i=>(
+                <button key={i.label} onClick={i.action}
+                  style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600,color:"#0d7a6a",fontFamily:"inherit"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="rgba(20,150,140,0.07)"}
+                  onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                  {i.label}
+                </button>
+              ))}
+            </div>}
+          </div>}
           {!hasPerm(user,"exportQuote")&&<div style={{padding:"6px 12px",background:"rgba(220,50,80,0.06)",border:"1px dashed rgba(220,50,80,0.3)",borderRadius:8,color:"rgba(220,50,80,0.7)",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>🔒 Tài khoản Standard không có quyền xuất báo giá</div>}
         </div>
       </div>
