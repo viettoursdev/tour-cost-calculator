@@ -7625,16 +7625,26 @@ function NotificationBell({ user }) {
   };
   
   useEffect(() => {
-    if (!user?.u || !window.fbOnNotifications) return;
-    const unsub = window.fbOnNotifications(user.u, (notifs) => {
-      const prev = notifications;
-      // Show browser notification for new unread items
-      const newUnread = notifs.filter(n => !n.read && !prev.find(p => p.id === n.id));
-      newUnread.forEach(n => {
-        if (typeof showBrowserNotif !== 'undefined') showBrowserNotif(n.title, n.message);
-      });
-      setNotifications(notifs);
-    });
+    if (!user?.u) return;
+    let unsub = null;
+    /* Đợi Firebase module load xong rồi mới subscribe */
+    const trySubscribe = () => {
+      if (window.fbOnNotifications) {
+        unsub = window.fbOnNotifications(user.u, (notifs) => {
+          setNotifications(prev => {
+            const newUnread = notifs.filter(n => !n.read && !prev.find(p => p.id === n.id));
+            newUnread.forEach(n => {
+              if (typeof showBrowserNotif !== 'undefined') showBrowserNotif(n.title, n.message);
+            });
+            return notifs;
+          });
+        });
+      } else {
+        /* Retry sau 300ms nếu Firebase chưa sẵn sàng */
+        setTimeout(trySubscribe, 300);
+      }
+    };
+    trySubscribe();
     return () => unsub && unsub();
   }, [user?.u]);
 
