@@ -374,9 +374,24 @@ const ldUsers=()=>{
   }catch(e){}
   return DEFAULT_USERS;
 };
-/* Pull users từ Firestore và merge vào localStorage */
+/* ══ User Cloud Sync – tự động cho tất cả tài khoản ══ */
+
+/* Đợi Firebase sẵn sàng (retry tối đa 5s) */
+function waitForFirebase(ms=5000){
+  return new Promise(resolve=>{
+    if(window._fbReady)return resolve(true);
+    const t=Date.now();
+    const id=setInterval(()=>{
+      if(window._fbReady){clearInterval(id);return resolve(true);}
+      if(Date.now()-t>ms){clearInterval(id);return resolve(false);}
+    },150);
+  });
+}
+
+/* Pull & merge users từ cloud */
 async function syncUsersFromCloud(){
-  if(!window.fbPullUsers||!window.fbPushUsers)return;
+  const ready=await waitForFirebase();
+  if(!ready||!window.fbPullUsers||!window.fbPushUsers)return;
   try{
     const cloudUsers=await window.fbPullUsers();
     const local=ldUsers();
@@ -386,11 +401,11 @@ async function syncUsersFromCloud(){
         await window.fbPushUsers(local);
         console.log("✅ Migrated",local.length,"users to Firestore");
       }
-      return;
+      return local;
     }
     /* Merge: ưu tiên cloud, giữ lại user local chưa có trên cloud */
     const cloudIds=new Set(cloudUsers.map(u=>u.u));
-    const localOnly=local.filter(u=>!cloudIds.has(u.u));
+    const localOnly=local.filter(u=>!cloudIds.has(u.u)&&u.u!==DEFAULT_USERS[0]?.u);
     const merged=[...cloudUsers,...localOnly];
     /* Nếu có user local mới → push merged lên cloud */
     if(localOnly.length>0)await window.fbPushUsers(merged);
@@ -398,9 +413,18 @@ async function syncUsersFromCloud(){
     return merged;
   }catch(e){console.warn("User cloud sync failed:",e.message);}
 }
+
+/* Đồng bộ 1 user mới hoặc user đã sửa lên cloud */
+async function pushSingleUser(updatedUsers){
+  const ready=await waitForFirebase();
+  if(!ready||!window.fbPushUsers)return;
+  try{await window.fbPushUsers(updatedUsers);}
+  catch(e){console.warn("Push user failed:",e.message);}
+}
 const svUsers=(users)=>{
   try{localStorage.setItem("vte_users",JSON.stringify(users));}catch(e){}
-  if(window.fbPushUsers)window.fbPushUsers(users).catch(e=>console.warn("User sync failed:",e.message));
+  /* Tự động push lên cloud mỗi khi tạo/sửa/xoá tài khoản */
+  if(typeof pushSingleUser!=="undefined")pushSingleUser(users);
 };
 
 const ldSess=()=>{try{return JSON.parse(sessionStorage.getItem("vte_s")||"null")}catch(e){return null}};
@@ -2081,7 +2105,14 @@ function LoginScreen({onLogin}){
   const[u,setU]=useState("");
   const[p,setP]=useState("");
   const[err,setErr]=useState("");
-  const doLogin=()=>{
+  const[syncing,setSyncing]=useState(false);
+  const doLogin=async()=>{
+    /* Sync cloud trước khi kiểm tra credentials */
+    if(!syncing){
+      setSyncing(true);
+      await syncUsersFromCloud().catch(()=>{});
+      setSyncing(false);
+    }
     const found=ldUsers().find(x=>x.u===u.trim().toLowerCase()&&x.p===p);
     if(found){onLogin(found);}
     else{setErr("Sai tài khoản hoặc mật khẩu");setTimeout(()=>setErr(""),3000);}
