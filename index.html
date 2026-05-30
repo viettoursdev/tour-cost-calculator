@@ -180,7 +180,6 @@ window.fbUpdateCollaborators=async(quoteId,collaborators)=>{
 };
 
 /* ══ Quote History Firestore sync ══ */
-const _HIST_DOC=doc(_db,"viettours","quote_history");
 window.fbOnQuoteHistory=function(cb){return onSnapshot(_HIST_DOC,s=>{cb(s.exists()?s.data().quotes||[]:[]); });};
 window.fbSaveQuote=async function(entry){
   const snap=await getDoc(_HIST_DOC);
