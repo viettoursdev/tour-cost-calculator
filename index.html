@@ -6351,9 +6351,12 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
     catch(e){alert("❌ Lỗi: "+e.message);}
   };
 
-  /* Chỉ hiện quote của user hoặc được mời cộng tác */
+  /* Chỉ hiện quote của user hoặc được mời cộng tác + lọc theo template */
   const visibleQuotes=quotes.filter(q=>{
-    return q.createdByUsername===user.u||(q.collaborators||[]).includes(user.u);
+    const matchesUser=q.createdByUsername===user.u||(q.collaborators||[]).includes(user.u);
+    /* domestic → chỉ hiện domestic, intl → chỉ hiện intl; dmc dùng collection riêng nên không lọc */
+    const matchesTemplate=!template||template==="dmc"||q.template===template;
+    return matchesUser&&matchesTemplate;
   });
 
   const filtered=visibleQuotes.filter(q=>{
