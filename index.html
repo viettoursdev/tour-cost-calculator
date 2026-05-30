@@ -6043,15 +6043,37 @@ function MainApp({user,onLogout}){
             </div>
             {/* Price cards row */}
             <div style={{display:"flex",gap:10,alignItems:"stretch"}}>
-              <div style={{background:"rgba(255,255,255,0.13)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:14,padding:"12px 20px",textAlign:"right",minWidth:150}}>
-                <div style={{color:"rgba(255,255,255,0.65)",fontSize:11,fontWeight:600,letterSpacing:0.5,marginBottom:4}}>Giá vốn / khách</div>
-                <div style={{color:"#ffe082",fontWeight:800,fontSize:20}}>{pax>0?fmt(totalCost/pax):"–"}</div>
-              </div>
-              <div style={{background:"linear-gradient(135deg,#fff 0%,#fff8e1 100%)",borderRadius:14,padding:"12px 20px",textAlign:"right",minWidth:180,boxShadow:"0 6px 20px rgba(0,0,0,0.2)"}}>
-                <div style={{color:"#0d7a6a",fontSize:11,fontWeight:800,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Giá bán / khách</div>
-                <div style={{color:"#dc3250",fontWeight:900,fontSize:24,lineHeight:1}}>{fmt(roundedPPax)}</div>
-                <div style={{color:"rgba(15,58,74,0.45)",fontSize:11,marginTop:4}}>Đoàn: {fmt(roundedPPax*pax)}</div>
-              </div>
+              {template==="dmc"?(
+                <>
+                  <div style={{background:"rgba(255,255,255,0.13)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:14,padding:"12px 20px",textAlign:"right",minWidth:150}}>
+                    <div style={{color:"rgba(255,255,255,0.65)",fontSize:11,fontWeight:600,letterSpacing:0.5,marginBottom:4}}>Tổng breakdown</div>
+                    <div style={{color:"#ffe082",fontWeight:800,fontSize:20}}>
+                      {outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]
+                        ?fmtCurrency(totalCost/rates[outputCurrency],outputCurrency)
+                        :fmt(totalCost)}
+                    </div>
+                  </div>
+                  <div style={{background:"linear-gradient(135deg,#fff 0%,#fff8e1 100%)",borderRadius:14,padding:"12px 20px",textAlign:"right",minWidth:180,boxShadow:"0 6px 20px rgba(0,0,0,0.2)"}}>
+                    <div style={{color:"#8e44ad",fontSize:11,fontWeight:800,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>📊 Per pax</div>
+                    <div style={{color:"#8e44ad",fontWeight:900,fontSize:24,lineHeight:1}}>
+                      {pax>0?(outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]?fmtCurrency(totalCost/pax/rates[outputCurrency],outputCurrency):fmt(totalCost/pax)):"–"}
+                    </div>
+                    <div style={{color:"rgba(15,58,74,0.45)",fontSize:11,marginTop:4}}>{pax} khách · {outputCurrency}</div>
+                  </div>
+                </>
+              ):(
+                <>
+                  <div style={{background:"rgba(255,255,255,0.13)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:14,padding:"12px 20px",textAlign:"right",minWidth:150}}>
+                    <div style={{color:"rgba(255,255,255,0.65)",fontSize:11,fontWeight:600,letterSpacing:0.5,marginBottom:4}}>Giá vốn / khách</div>
+                    <div style={{color:"#ffe082",fontWeight:800,fontSize:20}}>{pax>0?fmt(totalCost/pax):"–"}</div>
+                  </div>
+                  <div style={{background:"linear-gradient(135deg,#fff 0%,#fff8e1 100%)",borderRadius:14,padding:"12px 20px",textAlign:"right",minWidth:180,boxShadow:"0 6px 20px rgba(0,0,0,0.2)"}}>
+                    <div style={{color:"#0d7a6a",fontSize:11,fontWeight:800,letterSpacing:1,marginBottom:4,textTransform:"uppercase"}}>Giá bán / khách</div>
+                    <div style={{color:"#dc3250",fontWeight:900,fontSize:24,lineHeight:1}}>{fmt(roundedPPax)}</div>
+                    <div style={{color:"rgba(15,58,74,0.45)",fontSize:11,marginTop:4}}>Đoàn: {fmt(roundedPPax*pax)}</div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
