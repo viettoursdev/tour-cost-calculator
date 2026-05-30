@@ -4428,7 +4428,7 @@ function PaymentRequestModal({data,info,user,onClose}){
               <span style={{fontSize:10,opacity:0.5}}>{showPicker1?"▲":"▼"}</span>
             </button>
             {showPicker1&&<div style={{position:"absolute",top:"calc(100%+4px)",left:0,right:0,background:"#fff",border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.1)",zIndex:310,padding:"8px"}}>
-              {approverList.map(a=>(<button key={a.u} onClick={()=>{setForm(p=>({...p,approver1:a.name,approver1Username:a.u}));setShowPicker1(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"8px 10px",background:form.approver1Username===a.u?"rgba(20,150,140,0.08)":"none",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:2,textAlign:"left"}}><span style={{width:28,height:28,borderRadius:"50%",background:a.color||"#14a08c",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{(a.name||a.u)[0]}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div><div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{a.role}</div></div>{form.approver1Username===a.u&&<span style={{color:"#14a08c"}}>✓</span>}</button>))}
+              {approverList.filter(a=>a.u!==form.approver2Username).map(a=>(<button key={a.u} onClick={()=>{setForm(p=>({...p,approver1:a.name,approver1Username:a.u}));setShowPicker1(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"8px 10px",background:form.approver1Username===a.u?"rgba(20,150,140,0.08)":"none",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:2,textAlign:"left"}}><span style={{width:28,height:28,borderRadius:"50%",background:a.color||"#14a08c",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{(a.name||a.u)[0]}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div><div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{a.role}</div></div>{form.approver1Username===a.u&&<span style={{color:"#14a08c"}}>✓</span>}</button>))}
             </div>}
           </div>
           {/* ── Approver 2 - optional ── */}
@@ -4549,7 +4549,10 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
     pdf.setDrawColor(...stC);pdf.setLineWidth(0.4);pdf.roundedRect(mX,y,pageW-mX*2,h,3,3,"S");
     pdf.setFontSize(8);pdf.setTextColor(...stC);setFont("bold");
     const icon=isOk?"✓ ĐÃ DUYỆT":"✗ TỪ CHỐI";
-    const personName=(stageData.approverName||( stage===1?_apv1ForStage:_apv2ForStage)||"").split("(")[0].trim();
+    /* Use intended approver name first, then actual approver */
+    const intendedName=(stage===1?form.approver1:form.approver2)||"";
+    const actualName=(stageData.approverName||"").split("(")[0].trim();
+    const personName=intendedName.split("(")[0].trim()||actualName;
     pdf.text(`${label}: ${icon}`,mX+4,y+6);
     setFont("normal");
     const at=stageData.updatedAt?new Date(stageData.updatedAt).toLocaleDateString("vi-VN"):"";
@@ -4598,8 +4601,9 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
   
   // Signatures - 3 columns: Người đề nghị | Người duyệt 1 | Người duyệt 2
   const sigW=(pageW-mX*2)/3;
-  const _apv1Name=approvalStatus?.stage1?.approverName||form.approver1||"";
-  const _apv2Name=approvalStatus?.stage2?.approverName||form.approver2||"";
+  /* Priority: form selection (intended) > actual approver from stage data */
+  const _apv1Name=(form.approver1||approvalStatus?.stage1?.approverName||"").split("(")[0].trim();
+  const _apv2Name=(form.approver2||approvalStatus?.stage2?.approverName||"").split("(")[0].trim();
   pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
   pdf.text("NGƯỜI ĐỀ NGHỊ",mX+sigW/2,y,{align:"center"});
   pdf.text("NGƯỜI DUYỆT 1",mX+sigW+sigW/2,y,{align:"center"});
