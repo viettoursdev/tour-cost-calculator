@@ -298,10 +298,23 @@ window.fbOnUsers=function(cb){return onSnapshot(_USERS_DOC,s=>{cb(s.exists()?(s.
 
 /* ══ Payment Approvals Firestore sync ══ */
 const _PA_DOC=doc(_db,"viettours","payment_approvals");
+/* Legacy compat */
 window.fbSetPaymentApproval=async(key,status,approverName)=>{
-  const snap=await getDoc(_PA_DOC);
-  const ex=snap.exists()?snap.data():{};
-  await setDoc(_PA_DOC,{...ex,[key]:{status,approverName,updatedAt:new Date().toISOString()}});
+  const snap=await getDoc(_PA_DOC);const ex=snap.exists()?snap.data():{};
+  const existing=ex[key]||{};
+  await setDoc(_PA_DOC,{...ex,[key]:{...existing,stage1:{status,approverName,note:"",updatedAt:new Date().toISOString()},finalStatus:status,currentStage:1}});
+};
+/* New staged approval */
+window.fbSetApprovalStage=async(key,stage,status,approverUsername,approverName,note)=>{
+  const snap=await getDoc(_PA_DOC);const ex=snap.exists()?snap.data():{};
+  const existing=ex[key]||{};
+  const updated={
+    ...existing,
+    [`stage${stage}`]:{status,approverUsername:approverUsername||"",approverName:approverName||"",note:note||"",updatedAt:new Date().toISOString()},
+    currentStage:stage,
+    finalStatus:status==="approved"?(stage===2?"approved":"pending_stage2"):"rejected",
+  };
+  await setDoc(_PA_DOC,{...ex,[key]:updated});
 };
 window.fbOnPaymentApprovals=(cb)=>onSnapshot(_PA_DOC,s=>cb(s.exists()?s.data():{}));
 
@@ -4299,11 +4312,13 @@ function PaymentRequestModal({data,info,user,onClose}){
     supplier:"",
     content:`Thanh toán ${inst.label.toLowerCase()} cho hạng mục: ${ci.name}`,
     amount:+inst.amount||0,
-    approver:"",
-    approverUsername:"",
+    approver1:"",approver1Username:"",
+    approver2:"",approver2Username:"",
     requester:user.name,
     note:"",
   });
+  const [showPicker1,setShowPicker1]=useState(false);
+  const [showPicker2,setShowPicker2]=useState(false);
   const [sending,setSending]=useState(false);
   const [showApproverPicker,setShowApproverPicker]=useState(false);
   
@@ -4324,10 +4339,10 @@ function PaymentRequestModal({data,info,user,onClose}){
   };
 
   const handleSendNotification=async()=>{
-    if(!form.approverUsername||!window.fbSendNotification)return;
+    if(!form.approver1Username||!window.fbSendNotification)return;
     setSending(true);
     try{
-      await window.fbSendNotification(form.approverUsername,{
+      await window.fbSendNotification(form.approver1Username,{
         type:"payment_approval",
         title:"💰 Đề nghị xác nhận thanh toán NCC",
         message:`${user.name} đề nghị duyệt: "${ci.name}" - ${form.supplier||"(NCC)"} - ${(+form.amount||0).toLocaleString("vi-VN")} đ · Tour: ${info.name||""}`,
@@ -4344,9 +4359,14 @@ function PaymentRequestModal({data,info,user,onClose}){
           ciKey:ci.key||"",
           instIdx:data.idx,
           approvalKey:`${(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_")}_${ci.key||""}_${data.idx}`,
+          approvalStage:1,
+          approver1Username:form.approver1Username,
+          approver1Name:form.approver1,
+          approver2Username:form.approver2Username||"",
+          approver2Name:form.approver2||"",
         }
       });
-      if(window.showToast)window.showToast("Đã gửi đề nghị thanh toán","approval_request","Chờ "+form.approver+" duyệt");
+      if(window.showToast)window.showToast("Đã gửi đề nghị thanh toán","approval_request",`Chờ ${form.approver1} duyệt${form.approver2?" → "+form.approver2:""}`);
       onClose();
     }catch(e){alert("❌ Lỗi gửi: "+e.message);}
     finally{setSending(false);}
@@ -4415,8 +4435,8 @@ function PaymentRequestModal({data,info,user,onClose}){
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button onClick={onClose} style={{flex:"0 0 80px",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:11,padding:12,cursor:"pointer",fontWeight:600,fontSize:13,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
             <button onClick={handleExport} style={{flex:1,background:"rgba(20,150,140,0.08)",border:"1.5px solid rgba(20,150,140,0.3)",color:"#0d7a6a",borderRadius:11,padding:12,cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit"}}>📄 Xuất PDF</button>
-            <button onClick={handleSendNotification} disabled={!form.approverUsername||sending}
-              style={{flex:1,background:form.approverUsername?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:form.approverUsername?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:11,padding:12,cursor:form.approverUsername&&!sending?"pointer":"not-allowed",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:sending?0.7:1}}>
+            <button onClick={handleSendNotification} disabled={!form.approver1Username||sending}
+              style={{flex:1,background:form.approver1Username?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:form.approver1Username?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:11,padding:12,cursor:form.approver1Username&&!sending?"pointer":"not-allowed",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:sending?0.7:1}}>
               {sending?"⏳ Đang gửi...":"📤 Gửi đề nghị"}
             </button>
           </div>
@@ -4474,6 +4494,12 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
     pdf.text(lines,mX,y);y+=lines.length*(big?7:5)+5;
   };
   
+  /* Requester name */
+  pdf.setFontSize(9);pdf.setTextColor(...teal);setFont("bold");
+  pdf.text("NGƯỜI ĐỀ NGHỊ / REQUESTER:",mX,y);y+=5;
+  pdf.setFontSize(10);pdf.setTextColor(...dark);setFont("bold");
+  pdf.text(form.requester||user.name,mX,y);y+=8;
+  pdf.setDrawColor(230,230,230);pdf.setLineWidth(0.2);pdf.line(mX,y,pageW-mX,y);y+=6;
   field("DỰ ÁN / TOUR:",`${info.name||""}${info.dest?" – "+info.dest:""}`);
   field("NHÀ CUNG CẤP / NGƯỜI NHẬN:",form.supplier);
   field("NỘI DUNG ĐỀ NGHỊ / CONTENT:",form.content);
@@ -4486,28 +4512,51 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
   y+=8;
 
   /* ── Approval Status Section ── */
+  const renderStage=(stage,stageData,label)=>{
+    if(!stageData)return;
+    const isOk=stageData.status==="approved";
+    const stC=isOk?[39,174,96]:[220,50,80];
+    const stBg=isOk?[236,252,243]:[254,242,242];
+    const h=stageData.note?24:18;
+    pdf.setFillColor(...stBg);pdf.roundedRect(mX,y,pageW-mX*2,h,3,3,"F");
+    pdf.setDrawColor(...stC);pdf.setLineWidth(0.4);pdf.roundedRect(mX,y,pageW-mX*2,h,3,3,"S");
+    pdf.setFontSize(8);pdf.setTextColor(...stC);setFont("bold");
+    const icon=isOk?"✓ ĐÃ DUYỆT":"✗ TỪ CHỐI";
+    pdf.text(`${label}: ${icon}`,mX+4,y+6);
+    pdf.setFont(FONT,"normal");
+    const at=stageData.updatedAt?new Date(stageData.updatedAt).toLocaleDateString("vi-VN"):"";
+    pdf.text(`${stageData.approverName||""}${at?" · "+at:""}`,pageW-mX-2,y+6,{align:"right"});
+    if(stageData.note){pdf.setFontSize(7.5);pdf.setTextColor(...[100,100,100]);setFont("italic");pdf.text(`Ghi chú: ${stageData.note}`,mX+4,y+14);}
+    y+=h+4;
+  };
   if(approvalStatus){
-    const stColor=approvalStatus.status==="approved"?[39,174,96]:[220,50,80];
-    const stBg=approvalStatus.status==="approved"?[236,252,243]:[254,242,242];
-    const stIcon=approvalStatus.status==="approved"?"✓ ĐÃ DUYỆT":"✗ TỪ CHỐI";
-    const stLabel=approvalStatus.status==="approved"?"APPROVED":"REJECTED";
-    pdf.setFillColor(...stBg);
-    pdf.roundedRect(mX,y,pageW-mX*2,18,3,3,"F");
-    pdf.setDrawColor(...stColor);pdf.setLineWidth(0.5);
-    pdf.roundedRect(mX,y,pageW-mX*2,18,3,3,"S");
-    pdf.setFontSize(12);pdf.setTextColor(...stColor);setFont("bold");
-    pdf.text(`${stIcon} / ${stLabel}`,pageW/2,y+7,{align:"center"});
-    pdf.setFontSize(8);pdf.setTextColor(...stColor);setFont("normal");
-    const approvedBy=approvalStatus.approverName||form.approver||"";
-    const approvedAt=approvalStatus.updatedAt?new Date(approvalStatus.updatedAt).toLocaleString("vi-VN"):"";
-    pdf.text(`${approvedBy}${approvedAt?" · "+approvedAt:""}`,pageW/2,y+13,{align:"center"});
-    y+=24;
+    const finalOk=approvalStatus.finalStatus==="approved";
+    const isPending=approvalStatus.finalStatus==="pending_stage2";
+    if(approvalStatus.stage1)renderStage(1,approvalStatus.stage1,"Duyệt 1");
+    if(approvalStatus.stage2)renderStage(2,approvalStatus.stage2,"Duyệt 2");
+    if(isPending){
+      pdf.setFillColor(255,251,235);pdf.roundedRect(mX,y,pageW-mX*2,12,3,3,"F");
+      pdf.setDrawColor(245,166,35);pdf.setLineWidth(0.4);pdf.roundedRect(mX,y,pageW-mX*2,12,3,3,"S");
+      pdf.setFontSize(8);pdf.setTextColor(180,120,0);setFont("bold");
+      pdf.text("⏳ CHỜ DUYỆT 2 / PENDING STAGE 2",pageW/2,y+7,{align:"center"});
+      y+=16;
+    }
+    if(!approvalStatus.stage1&&!isPending){
+      /* Legacy single-stage */
+      const stC=finalOk?[39,174,96]:[220,50,80];
+      const stBg=finalOk?[236,252,243]:[254,242,242];
+      pdf.setFillColor(...stBg);pdf.roundedRect(mX,y,pageW-mX*2,18,3,3,"F");
+      pdf.setDrawColor(...stC);pdf.setLineWidth(0.5);pdf.roundedRect(mX,y,pageW-mX*2,18,3,3,"S");
+      pdf.setFontSize(11);pdf.setTextColor(...stC);setFont("bold");
+      pdf.text(finalOk?"✓ ĐÃ DUYỆT / APPROVED":"✗ TỪ CHỐI / REJECTED",pageW/2,y+8,{align:"center"});
+      pdf.setFontSize(8);setFont("normal");
+      const an=approvalStatus.approverName||"";const at=approvalStatus.updatedAt?new Date(approvalStatus.updatedAt).toLocaleDateString("vi-VN"):"";
+      pdf.text(`${an}${at?" · "+at:""}`,pageW/2,y+14,{align:"center"});
+      y+=22;
+    }
   } else {
-    /* Pending status */
-    pdf.setFillColor(255,251,235);
-    pdf.roundedRect(mX,y,pageW-mX*2,14,3,3,"F");
-    pdf.setDrawColor(245,166,35);pdf.setLineWidth(0.5);
-    pdf.roundedRect(mX,y,pageW-mX*2,14,3,3,"S");
+    pdf.setFillColor(255,251,235);pdf.roundedRect(mX,y,pageW-mX*2,14,3,3,"F");
+    pdf.setDrawColor(245,166,35);pdf.setLineWidth(0.5);pdf.roundedRect(mX,y,pageW-mX*2,14,3,3,"S");
     pdf.setFontSize(9);pdf.setTextColor(180,120,0);setFont("bold");
     pdf.text("⏳ CHỜ DUYỆT / PENDING APPROVAL",pageW/2,y+8,{align:"center"});
     y+=20;
@@ -4529,8 +4578,7 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
   y+=22;
   pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
   pdf.text(form.requester||user.name,mX+sigW/2,y,{align:"center"});
-  /* Show approver name from approval record if available */
-  const _approverName=approvalStatus?.approverName||form.approver||"";
+  const _approverName=(approvalStatus?.stage2?.approverName||approvalStatus?.stage1?.approverName||approvalStatus?.approverName||form.approver1||"");
   pdf.text(_approverName,mX+sigW+sigW/2,y,{align:"center"});
   
   // Footer
@@ -7733,6 +7781,7 @@ function NotificationBell({ user }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
   const [acting, setActing] = useState(null); // notif id being approved/rejected
+  const [approvalNotes, setApprovalNotes] = useState({}); // {notifId: noteText}
   const ref = useRef(null);
   const canApprove=["CEO","Trưởng Phòng"].includes(user?.role);
 
@@ -7759,37 +7808,56 @@ function NotificationBell({ user }) {
           await window.fbPushContracts(contracts);
         }
       }
-      /* Build approvalKey từ notification data */
+      const _note=approvalNotes[n.id]||"";
+      /* Build approvalKey */
       const _aKey=n.data.approvalKey||
         (n.data.tourKey&&(n.data.ciKey||n.data.ciKey==="")
-          ?`${n.data.tourKey}_${n.data.ciKey}_${n.data.instIdx!=null?n.data.instIdx:""}`
-          :"");
-
-      /* Ghi trạng thái duyệt lên Firestore payment_approvals */
-      if(window.fbSetPaymentApproval&&_aKey){
-        await window.fbSetPaymentApproval(_aKey,approved?"approved":"rejected",user.name);
-      }
-
-      /* Gửi thông báo kết quả về người đề nghị */
+          ?`${n.data.tourKey}_${n.data.ciKey}_${n.data.instIdx!=null?n.data.instIdx:""}`:"");
+      const _stage=n.data.approvalStage||1;
       const _label=n.data.catName||n.data.paymentLabel||n.data.content||"";
       const _ref=n.data.tourName?`Tour: ${n.data.tourName}`:(n.data.contractNo?`HĐ #${n.data.contractNo}`:"");
       const _amt=(n.data.amount||0).toLocaleString("vi-VN")+" đ";
       const _sup=n.data.supplier?` · NCC: ${n.data.supplier}`:"";
-      if(window.fbSendNotification&&n.data.requestedBy){
+
+      /* Ghi staged approval status lên Firestore */
+      if(window.fbSetApprovalStage&&_aKey){
+        await window.fbSetApprovalStage(_aKey,_stage,approved?"approved":"rejected",user.u,user.name,_note);
+      }
+
+      /* Nếu stage 1 approved và có người duyệt 2 → forward sang stage 2 */
+      if(approved&&_stage===1&&n.data.approver2Username&&window.fbSendNotification){
+        await window.fbSendNotification(n.data.approver2Username,{
+          type:"payment_approval",
+          title:"💰 Đề nghị xác nhận thanh toán (Duyệt 2)",
+          message:`${user.name} đã duyệt (bước 1): "${_label}"${_sup} · ${_ref} · ${_amt}${_note?" · Ghi chú: "+_note:""}`,
+          createdBy:user.name+" ("+user.role+")",
+          data:{...n.data,approvalStage:2,stage1ApproverNote:_note,stage1ApproverName:user.name},
+        });
+        /* Thông báo người gửi biết đang ở bước 2 */
+        if(n.data.requestedBy){
+          await window.fbSendNotification(n.data.requestedBy,{
+            type:"info",title:"➡️ Đề nghị TT đang chờ duyệt bước 2",
+            message:`${user.name} đã duyệt bước 1. Đang chờ ${n.data.approver2Name} duyệt bước 2.`,
+            createdBy:user.name+" ("+user.role+")",data:{approvalKey:_aKey}
+          });
+        }
+      } else if(window.fbSendNotification&&n.data.requestedBy){
+        /* Stage 2 hoặc từ chối → thông báo kết quả cuối */
         await window.fbSendNotification(n.data.requestedBy,{
           type:approved?"payment_approved":"payment_rejected",
           title:approved?"✅ Đề nghị TT được duyệt":"❌ Đề nghị TT bị từ chối",
           message:approved
-            ?`${user.name} đã duyệt: "${_label}"${_sup} · ${_ref} · ${_amt}`
-            :`${user.name} từ chối: "${_label}"${_sup} · ${_ref}`,
+            ?`${user.name} đã duyệt: "${_label}"${_sup} · ${_ref} · ${_amt}${_note?" · Ghi chú: "+_note:""}`
+            :`${user.name} từ chối: "${_label}"${_sup} · ${_ref}${_note?" · Lý do: "+_note:""}`,
           createdBy:user.name+" ("+user.role+")",
           data:{approvalKey:_aKey||null,contractId:n.data.contractId||null}
         });
       }
-      /* Đánh dấu notification đã xử lý */
+      /* Clear note + delete notification */
+      setApprovalNotes(prev=>{const next={...prev};delete next[n.id];return next;});
       if(window.fbDeleteNotification)await window.fbDeleteNotification(user.u,n.id);
       if(window.showToast)window.showToast(
-        approved?"Đã duyệt thanh toán":"Đã từ chối thanh toán",
+        approved?(_stage===1&&n.data.approver2Username?"Đã duyệt bước 1, chuyển sang bước 2":"Đã duyệt thanh toán"):"Đã từ chối thanh toán",
         approved?"approval_done":"error",
         _label||_ref
       );
@@ -7876,15 +7944,26 @@ function NotificationBell({ user }) {
                   <div style={{ fontSize: 10, color: 'rgba(15,58,74,0.35)', marginTop: 3 }}>{fmtTime(n.createdAt)} · {n.createdBy}</div>
                   {/* Approve/Reject buttons — chỉ CEO/Trưởng Phòng */}
                   {n.type==="payment_approval"&&canApprove&&(
-                    <div style={{display:"flex",gap:6,marginTop:8}} onClick={e=>e.stopPropagation()}>
-                      <button onClick={()=>handleApproval(n,true)} disabled={acting===n.id}
-                        style={{flex:1,padding:"5px 10px",background:"linear-gradient(135deg,#27ae60,#2ecc71)",color:"#fff",border:"none",borderRadius:7,cursor:acting===n.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",opacity:acting===n.id?0.7:1}}>
-                        {acting===n.id?"⏳":"✅"} Duyệt
-                      </button>
-                      <button onClick={()=>handleApproval(n,false)} disabled={acting===n.id}
-                        style={{flex:1,padding:"5px 10px",background:"rgba(220,50,80,0.1)",color:"#dc3250",border:"1px solid rgba(220,50,80,0.3)",borderRadius:7,cursor:acting===n.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",opacity:acting===n.id?0.7:1}}>
-                        {acting===n.id?"⏳":"❌"} Từ chối
-                      </button>
+                    <div style={{marginTop:8}} onClick={e=>e.stopPropagation()}>
+                      {/* Note/comment input */}
+                      <textarea
+                        value={approvalNotes[n.id]||""}
+                        onChange={e=>setApprovalNotes(prev=>({...prev,[n.id]:e.target.value}))}
+                        placeholder="Ghi chú / ý kiến (tuỳ chọn)..."
+                        rows={2}
+                        style={{width:"100%",padding:"6px 9px",border:"1px solid rgba(20,150,140,0.2)",borderRadius:7,fontSize:11,fontFamily:"inherit",color:"#0f3a4a",resize:"none",outline:"none",boxSizing:"border-box",marginBottom:6,background:"rgba(168,230,221,0.08)"}}/>
+                      {/* Stage indicator */}
+                      {n.data?.approvalStage===2&&<div style={{fontSize:10,color:"#2980b9",fontWeight:600,marginBottom:4}}>📋 Bước duyệt 2/2 — Quyết định cuối cùng</div>}
+                      <div style={{display:"flex",gap:6}}>
+                        <button onClick={()=>handleApproval(n,true)} disabled={acting===n.id}
+                          style={{flex:1,padding:"6px 10px",background:"linear-gradient(135deg,#27ae60,#2ecc71)",color:"#fff",border:"none",borderRadius:7,cursor:acting===n.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",opacity:acting===n.id?0.7:1}}>
+                          {acting===n.id?"⏳":"✅"} Duyệt
+                        </button>
+                        <button onClick={()=>handleApproval(n,false)} disabled={acting===n.id}
+                          style={{flex:1,padding:"6px 10px",background:"rgba(220,50,80,0.1)",color:"#dc3250",border:"1px solid rgba(220,50,80,0.3)",borderRadius:7,cursor:acting===n.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",opacity:acting===n.id?0.7:1}}>
+                          {acting===n.id?"⏳":"❌"} Từ chối
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
