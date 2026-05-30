@@ -4393,34 +4393,39 @@ function PaymentRequestModal({data,info,user,onClose}){
             <textarea value={form.content} onChange={e=>setForm(p=>({...p,content:e.target.value}))} rows={2}
               style={{width:"100%",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,padding:"10px 13px",fontSize:13,outline:"none",fontFamily:"inherit",color:"#0f3a4a",resize:"vertical",boxSizing:"border-box"}}/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div>
-              <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>SỐ TIỀN (VND)</div>
-              <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:+e.target.value}))}
-                className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
-            </div>
-            <div style={{position:"relative"}}>
-              <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT</div>
-              <button onClick={()=>setShowApproverPicker(s=>!s)} style={{width:"100%",textAlign:"left",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,padding:"10px 13px",fontSize:14,cursor:"pointer",fontFamily:"inherit",color:form.approver?"#0f3a4a":"rgba(15,58,74,0.4)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span>{form.approver||"Chọn người duyệt..."}</span>
-                <span style={{fontSize:10,opacity:0.5}}>{showApproverPicker?"▲":"▼"}</span>
-              </button>
-              {showApproverPicker&&(
-                <div style={{position:"absolute",top:"calc(100%+4px)",left:0,right:0,background:"#fff",border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.1)",zIndex:300,padding:"8px"}}>
-                  {approverList.map(a=>(
-                    <button key={a.u} onClick={()=>{setForm(p=>({...p,approver:a.name,approverUsername:a.u}));setShowApproverPicker(false);}}
-                      style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"8px 10px",background:form.approverUsername===a.u?"rgba(20,150,140,0.08)":"none",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:2,textAlign:"left"}}>
-                      <span style={{width:28,height:28,borderRadius:"50%",background:a.color||"#14a08c",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{(a.name||a.u)[0]}</span>
-                      <div>
-                        <div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div>
-                        <div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{a.role}</div>
-                      </div>
-                      {form.approverUsername===a.u&&<span style={{marginLeft:"auto",color:"#14a08c"}}>✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>SỐ TIỀN (VND)</div>
+            <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:+e.target.value}))}
+              className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+          </div>
+          {/* ── Approver 1 - required ── */}
+          <div style={{position:"relative"}}>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT 1 <span style={{color:"#dc3250"}}>*</span></div>
+            <button onClick={()=>setShowPicker1(s=>!s)} style={{width:"100%",textAlign:"left",background:"#fff",border:`1.5px solid ${form.approver1Username?"rgba(20,150,140,0.35)":"rgba(20,150,140,0.2)"}`,borderRadius:10,padding:"9px 13px",fontSize:13,cursor:"pointer",fontFamily:"inherit",color:form.approver1?"#0f3a4a":"rgba(15,58,74,0.4)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{display:"flex",alignItems:"center",gap:8}}>
+                {form.approver1&&<span style={{width:24,height:24,borderRadius:"50%",background:approverList.find(a=>a.u===form.approver1Username)?.color||"#14a08c",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{(form.approver1)[0]}</span>}
+                {form.approver1||"Chọn người duyệt 1..."}
+              </span>
+              <span style={{fontSize:10,opacity:0.5}}>{showPicker1?"▲":"▼"}</span>
+            </button>
+            {showPicker1&&<div style={{position:"absolute",top:"calc(100%+4px)",left:0,right:0,background:"#fff",border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.1)",zIndex:310,padding:"8px"}}>
+              {approverList.map(a=>(<button key={a.u} onClick={()=>{setForm(p=>({...p,approver1:a.name,approver1Username:a.u}));setShowPicker1(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"8px 10px",background:form.approver1Username===a.u?"rgba(20,150,140,0.08)":"none",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:2,textAlign:"left"}}><span style={{width:28,height:28,borderRadius:"50%",background:a.color||"#14a08c",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{(a.name||a.u)[0]}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div><div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{a.role}</div></div>{form.approver1Username===a.u&&<span style={{color:"#14a08c"}}>✓</span>}</button>))}
+            </div>}
+          </div>
+          {/* ── Approver 2 - optional ── */}
+          <div style={{position:"relative"}}>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT 2 <span style={{fontSize:10,fontWeight:400,color:"rgba(15,58,74,0.35)"}}>· Tuỳ chọn — nhận sau khi người duyệt 1 chấp thuận</span></div>
+            <button onClick={()=>setShowPicker2(s=>!s)} style={{width:"100%",textAlign:"left",background:"#fff",border:`1.5px solid ${form.approver2Username?"rgba(41,128,185,0.35)":"rgba(41,128,185,0.12)"}`,borderRadius:10,padding:"9px 13px",fontSize:13,cursor:"pointer",fontFamily:"inherit",color:form.approver2?"#0f3a4a":"rgba(15,58,74,0.3)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{display:"flex",alignItems:"center",gap:8}}>
+                {form.approver2&&<span style={{width:24,height:24,borderRadius:"50%",background:approverList.find(a=>a.u===form.approver2Username)?.color||"#2980b9",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{(form.approver2)[0]}</span>}
+                {form.approver2||"Chọn người duyệt 2 (không bắt buộc)..."}
+              </span>
+              <span style={{fontSize:10,opacity:0.5}}>{showPicker2?"▲":"▼"}</span>
+            </button>
+            {showPicker2&&<div style={{position:"absolute",top:"calc(100%+4px)",left:0,right:0,background:"#fff",border:"1.5px solid rgba(41,128,185,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.1)",zIndex:310,padding:"8px"}}>
+              <button onClick={()=>{setForm(p=>({...p,approver2:"",approver2Username:""}));setShowPicker2(false);}} style={{width:"100%",padding:"7px 10px",background:"none",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.4)",fontSize:12,fontStyle:"italic",textAlign:"left"}}>✕ Không chọn</button>
+              {approverList.filter(a=>a.u!==form.approver1Username).map(a=>(<button key={a.u} onClick={()=>{setForm(p=>({...p,approver2:a.name,approver2Username:a.u}));setShowPicker2(false);}} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"8px 10px",background:form.approver2Username===a.u?"rgba(41,128,185,0.08)":"none",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:2,textAlign:"left"}}><span style={{width:28,height:28,borderRadius:"50%",background:a.color||"#2980b9",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{(a.name||a.u)[0]}</span><div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div><div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{a.role}</div></div>{form.approver2Username===a.u&&<span style={{color:"#2980b9"}}>✓</span>}</button>))}
+            </div>}
           </div>
           <div>
             <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>GHI CHÚ (số TK, hình thức TT...)</div>
