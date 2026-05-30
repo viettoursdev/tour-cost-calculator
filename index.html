@@ -376,15 +376,24 @@ const ldUsers=()=>{
 };
 /* Pull users từ Firestore và merge vào localStorage */
 async function syncUsersFromCloud(){
-  if(!window.fbPullUsers)return;
+  if(!window.fbPullUsers||!window.fbPushUsers)return;
   try{
     const cloudUsers=await window.fbPullUsers();
-    if(!cloudUsers||cloudUsers.length===0)return;
     const local=ldUsers();
-    // Merge: ưu tiên cloud, giữ lại user local chưa có trên cloud
+    if(!cloudUsers||cloudUsers.length===0){
+      /* Cloud trống → push localStorage lên (migration lần đầu) */
+      if(local&&local.length>0){
+        await window.fbPushUsers(local);
+        console.log("✅ Migrated",local.length,"users to Firestore");
+      }
+      return;
+    }
+    /* Merge: ưu tiên cloud, giữ lại user local chưa có trên cloud */
     const cloudIds=new Set(cloudUsers.map(u=>u.u));
     const localOnly=local.filter(u=>!cloudIds.has(u.u));
     const merged=[...cloudUsers,...localOnly];
+    /* Nếu có user local mới → push merged lên cloud */
+    if(localOnly.length>0)await window.fbPushUsers(merged);
     try{localStorage.setItem("vte_users",JSON.stringify(merged));}catch(e){}
     return merged;
   }catch(e){console.warn("User cloud sync failed:",e.message);}
