@@ -3867,6 +3867,17 @@ function PaymentView(props){
   const [reqModal,setReqModal]=useState(null);
   const [trackModal,setTrackModal]=useState(false);
   const [showAddCustom,setShowAddCustom]=useState(false);
+  const [approvals,setApprovals]=useState({});
+  useEffect(()=>{
+    if(!window.fbOnPaymentApprovals)return;
+    const trySubscribe=()=>{
+      if(window.fbOnPaymentApprovals){
+        const unsub=window.fbOnPaymentApprovals(setApprovals);
+        return()=>unsub&&unsub();
+      }else{setTimeout(trySubscribe,300);}
+    };
+    return trySubscribe();
+  },[]);
   
   // Combine source items + custom items into full list
   const allItems=React.useMemo(()=>{
