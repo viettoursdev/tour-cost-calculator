@@ -2195,10 +2195,16 @@ function TemplateSelector({onSelect}){
 }
 
 /* ═══ LINE ROW ═════════════════════════════════════════ */
-function LineRow({item,pax,rates,onUpd,onDel,catColor}){
+function LineRow({item,pax,rates,onUpd,onDel,catColor,outputCurrency}){
   const vnd=calcVND(item,rates,pax);
   const off=item.enabled===false;
   const u=p=>onUpd({...item,...p});
+  /* DMC: display in output currency */
+  const displayAmt=outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]
+    ?(vnd/rates[outputCurrency]):vnd;
+  const fmtDisplay=outputCurrency&&outputCurrency!=="VND"
+    ?n=>fmtCurrency(n,outputCurrency)
+    :fmt;
   return(
     <tr style={{borderBottom:"1px solid rgba(20,150,140,0.08)",opacity:off?0.4:1}}>
       <td style={{padding:"8px 10px",textAlign:"center",width:46}}>
@@ -2241,7 +2247,7 @@ function LineRow({item,pax,rates,onUpd,onDel,catColor}){
       </td>
       <td style={{padding:"9px 12px",textAlign:"right",fontWeight:700,color:off?"rgba(15,58,74,0.3)":(item.foc?"#27ae60":catColor),whiteSpace:"nowrap",fontSize:14}}>
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
-          {item.foc?<span style={{background:"#27ae60",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,letterSpacing:0.5}}>FOC</span>:<span>{fmt(vnd)}</span>}
+          {item.foc?<span style={{background:"#27ae60",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:5,letterSpacing:0.5}}>FOC</span>:<span>{fmtDisplay(displayAmt)}</span>}
           <button onClick={()=>u({foc:!item.foc})} title={item.foc?"Bỏ FOC – tính phí lại":"Đánh dấu Free of Charge"}
             style={{background:item.foc?"rgba(39,174,96,0.15)":"rgba(15,58,74,0.05)",border:`1px solid ${item.foc?"#27ae60":"rgba(15,58,74,0.15)"}`,color:item.foc?"#27ae60":"rgba(15,58,74,0.5)",borderRadius:6,padding:"1px 7px",fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit",letterSpacing:0.3}}>
             {item.foc?"✓ FOC":"FOC?"}
@@ -2256,9 +2262,11 @@ function LineRow({item,pax,rates,onUpd,onDel,catColor}){
 }
 
 /* ═══ CATEGORY BLOCK ═══════════════════════════════════ */
-function CatBlock({cat,items,enabled,pax,rates,onUpd,onAdd,onDel,onOpenRate,onToggleCat}){
+function CatBlock({cat,items,enabled,pax,rates,onUpd,onAdd,onDel,onOpenRate,onToggleCat,outputCurrency}){
   const[open,setOpen]=useState(true);
   const sub=enabled?items.reduce((s,it)=>s+calcVND(it,rates,pax),0):0;
+  const subDisplay=outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]?(sub/rates[outputCurrency]):sub;
+  const fmtSub=outputCurrency&&outputCurrency!=="VND"?n=>fmtCurrency(n,outputCurrency):fmt;
   return(
     <div className="glass" style={{borderRadius:14,marginBottom:14,overflow:"hidden",opacity:enabled?1:0.55}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"13px 18px",background:`linear-gradient(90deg,${cat.color}15,transparent)`,borderBottom:open&&enabled?"1px solid rgba(20,150,140,0.1)":"none"}}>
@@ -2300,7 +2308,7 @@ function CatBlock({cat,items,enabled,pax,rates,onUpd,onAdd,onDel,onOpenRate,onTo
               <tbody>
                 {items.map(item=>(
                   <LineRow key={item.id} item={item} pax={pax} rates={rates}
-                    onUpd={onUpd} onDel={()=>onDel(item.id)} catColor={cat.color}/>
+                    onUpd={onUpd} onDel={()=>onDel(item.id)} catColor={cat.color} outputCurrency={outputCurrency}/>
                 ))}
               </tbody>
             </table>
@@ -3205,7 +3213,7 @@ function CostView(props){
       {activeCATS.map(cat=>(
         <CatBlock key={cat.id} cat={cat} items={items[cat.id]||[]} enabled={catEnabled[cat.id]} pax={pax} rates={rates}
           onUpd={it=>updItem(cat.id,it)} onAdd={()=>addItem(cat.id)} onDel={id=>delItem(cat.id,id)}
-          onOpenRate={(k)=>setRateModal(k)} onToggleCat={()=>toggleCat(cat.id)}/>
+          onOpenRate={(k)=>setRateModal(k)} onToggleCat={()=>toggleCat(cat.id)} outputCurrency={isDMC?outputCurrency:undefined}/>
       ))}
       {/* DMC: compare panel */}
       {isDMC&&setDmcPrices&&<DMCComparePanel totalCostVND={totalCost} pax={pax} rates={rates} outputCurrency={outputCurrency} dmcPrices={dmcPrices} setDmcPrices={setDmcPrices}/>}
