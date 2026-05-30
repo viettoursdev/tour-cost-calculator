@@ -4303,9 +4303,13 @@ function PaymentRequestModal({data,info,user,onClose}){
           requestedByName:user.name,
           tourName:info.name||"",
           catName:ci.name,
-          supplier:form.supplier,
-          amount:+form.amount,
-          content:form.content,
+          supplier:form.supplier||"",
+          amount:+form.amount||0,
+          content:form.content||"",
+          tourKey:(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_"),
+          ciKey:ci.key||"",
+          instIdx:data.idx,
+          approvalKey:`${(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_")}_${ci.key||""}_${data.idx}`,
         }
       });
       const toast=document.createElement("div");
