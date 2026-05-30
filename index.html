@@ -5351,10 +5351,10 @@ function ContractManagerModal({info,pax,roundedPPax,user,onClose}){
     setContracts(next);
   };
   const handleDuplicate=(c)=>{
-    const dup={...c,id:"hd_"+Date.now(),contractNo:"",createdAt:new Date().toISOString(),partyB:{...c.partyB,name:c.partyB.name+" (bản sao)"}};
-    const next=[...contracts,dup];
-    svContracts(info,next);
-    setContracts(next);
+    /* Chỉ mở editor với dữ liệu copy, KHÔNG lưu trước.
+       Hợp đồng chỉ được tạo khi user bấm Lưu/Xuất trong editor. */
+    const dup={...c,id:"hd_"+Date.now(),contractNo:"",createdAt:new Date().toISOString(),
+      partyB:{...c.partyB,name:c.partyB.name+" (bản sao)"}};
     setEditing(dup);
   };
   
