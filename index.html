@@ -6376,8 +6376,8 @@ function PaymentPanel({contract,onUpdate,canEdit}){
                   KH: {(+p.amount||0).toLocaleString("vi-VN")} đ
                 </div>
                 {canEdit&&editAmt?.id===p.id?(
-                  <input autoFocus type="number" value={editAmt.val}
-                    onChange={e=>setEditAmt({id:p.id,val:e.target.value})}
+                  <input autoFocus type="number" value={editAmt?.val||""}
+                    onChange={e=>setEditAmt(prev=>prev?{...prev,val:e.target.value}:null)}
                     onBlur={()=>saveAmount(p.id)}
                     onKeyDown={e=>{if(e.key==="Enter")saveAmount(p.id);if(e.key==="Escape")setEditAmt(null);}}
                     style={{width:120,padding:"3px 7px",border:"1.5px solid #14a08c",borderRadius:6,fontSize:13,fontWeight:700,color:"#0d7a6a",fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
