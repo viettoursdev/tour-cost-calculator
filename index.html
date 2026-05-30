@@ -2963,7 +2963,7 @@ function numberToVietWords(num){
 
 /* ═══ COST VIEW ════════════════════════════════════════ */
 function CostView(props){
-  const {items,catEnabled,pax,rates,showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,totalCost,user,curState,loadState,activeCATS}=props;
+  const {items,catEnabled,pax,rates,showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,totalCost,user,curState,loadState,activeCATS,currentQuoteId,setCurrentQuoteId}=props;
   return(
     <div className="fade-in">
       <RatesPanel rates={rates} onChange={(c,v)=>setRates(p=>({...p,[c]:v}))} visible={showRates} onToggle={()=>setShowRates(s=>!s)}/>
@@ -5519,7 +5519,7 @@ function MainApp({user,onLogout}){
     items,catEnabled,pax,rates,totalCost,margin,setMargin,vat,setVat,svcBasis,setSvcBasis,
     rounding,setRounding,totalSC,totalVAT,sellingPPax,roundedPPax,info,user,quoteRef,
     showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,
-    curState,loadState,template,
+    curState,loadState,template,currentQuoteId,setCurrentQuoteId,
     activeCATS:getCATS(template)
   };
 
