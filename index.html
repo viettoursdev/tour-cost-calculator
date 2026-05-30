@@ -4143,7 +4143,7 @@ function PaymentView(props){
                                   style={{background:"#fff",border:"1px solid rgba(20,150,140,0.2)",borderRadius:6,padding:"4px 8px",fontSize:12,outline:"none",fontFamily:"inherit",color:"#0d7a6a"}}/>
                               )}
                               <div style={{flex:1}}/>
-                              {hasPerm(user,"exportQuote")&&<button onClick={()=>setReqModal({ci,inst,idx})} title="Xuất phiếu đề nghị thanh toán"
+                              {hasPerm(user,"exportQuote")&&<button onClick={()=>setReqModal({ci,inst,idx,approvalStatus:approvals[`${(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_")}_${ci.key}_${idx}`]})} title="Xuất phiếu đề nghị thanh toán"
                                 style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",color:"#0d7a6a",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit"}}>📄 Phiếu ĐN</button>}
                               <button onClick={()=>delInstallment(ci.key,idx)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>✕</button>
                             </div>
@@ -4317,8 +4317,9 @@ function PaymentRequestModal({data,info,user,onClose}){
     }catch(e){}
   },[]);
   
+  const approvalStatus=data?.approvalStatus||null;
   const handleExport=()=>{
-    exportPaymentRequest(form,ci,info,user);
+    exportPaymentRequest(form,ci,info,user,approvalStatus);
     onClose();
   };
 
@@ -4426,7 +4427,7 @@ function PaymentRequestModal({data,info,user,onClose}){
 }
 
 /* ═══ EXPORT PAYMENT REQUEST PDF ═══ */
-function exportPaymentRequest(form,ci,info,user){
+function exportPaymentRequest(form,ci,info,user,approvalStatus){
   if(!window.jspdf){alert("Đang tải thư viện PDF, thử lại sau 3 giây.");return;}
   const {jsPDF}=window.jspdf;
   const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
@@ -4483,6 +4484,35 @@ function exportPaymentRequest(form,ci,info,user){
   if(form.note){field("GHI CHÚ / NOTE:",form.note);}
   
   y+=8;
+
+  /* ── Approval Status Section ── */
+  if(approvalStatus){
+    const stColor=approvalStatus.status==="approved"?[39,174,96]:[220,50,80];
+    const stBg=approvalStatus.status==="approved"?[236,252,243]:[254,242,242];
+    const stIcon=approvalStatus.status==="approved"?"✓ ĐÃ DUYỆT":"✗ TỪ CHỐI";
+    const stLabel=approvalStatus.status==="approved"?"APPROVED":"REJECTED";
+    pdf.setFillColor(...stBg);
+    pdf.roundedRect(mX,y,pageW-mX*2,18,3,3,"F");
+    pdf.setDrawColor(...stColor);pdf.setLineWidth(0.5);
+    pdf.roundedRect(mX,y,pageW-mX*2,18,3,3,"S");
+    pdf.setFontSize(12);pdf.setTextColor(...stColor);setFont("bold");
+    pdf.text(`${stIcon} / ${stLabel}`,pageW/2,y+7,{align:"center"});
+    pdf.setFontSize(8);pdf.setTextColor(...stColor);setFont("normal");
+    const approvedBy=approvalStatus.approverName||form.approver||"";
+    const approvedAt=approvalStatus.updatedAt?new Date(approvalStatus.updatedAt).toLocaleString("vi-VN"):"";
+    pdf.text(`${approvedBy}${approvedAt?" · "+approvedAt:""}`,pageW/2,y+13,{align:"center"});
+    y+=24;
+  } else {
+    /* Pending status */
+    pdf.setFillColor(255,251,235);
+    pdf.roundedRect(mX,y,pageW-mX*2,14,3,3,"F");
+    pdf.setDrawColor(245,166,35);pdf.setLineWidth(0.5);
+    pdf.roundedRect(mX,y,pageW-mX*2,14,3,3,"S");
+    pdf.setFontSize(9);pdf.setTextColor(180,120,0);setFont("bold");
+    pdf.text("⏳ CHỜ DUYỆT / PENDING APPROVAL",pageW/2,y+8,{align:"center"});
+    y+=20;
+  }
+
   pdf.setDrawColor(...gray);pdf.setLineWidth(0.2);pdf.line(mX,y,pageW-mX,y);y+=14;
   
   // Signatures - 3 columns
@@ -4499,7 +4529,9 @@ function exportPaymentRequest(form,ci,info,user){
   y+=22;
   pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
   pdf.text(form.requester||user.name,mX+sigW/2,y,{align:"center"});
-  pdf.text(form.approver||"",mX+sigW+sigW/2,y,{align:"center"});
+  /* Show approver name from approval record if available */
+  const _approverName=approvalStatus?.approverName||form.approver||"";
+  pdf.text(_approverName,mX+sigW+sigW/2,y,{align:"center"});
   
   // Footer
   pdf.setFillColor(...teal);pdf.rect(0,pageH-4,pageW,4,"F");
