@@ -303,7 +303,9 @@ window.fbSendNotification = async (targetUsername, notif) => {
   const d = _notifDoc(targetUsername);
   const snap = await getDoc(d);
   const existing = snap.exists() ? (snap.data().notifications || []) : [];
-  const newNotif = { ...notif, id: Date.now().toString(36) + Math.random().toString(36).slice(2,5), read: false, createdAt: new Date().toISOString() };
+  /* Strip undefined values — Firestore rejects them */
+  const sanitize = (obj) => JSON.parse(JSON.stringify(obj, (k, v) => v === undefined ? null : v));
+  const newNotif = sanitize({ ...notif, id: Date.now().toString(36) + Math.random().toString(36).slice(2,5), read: false, createdAt: new Date().toISOString() });
   await setDoc(d, { notifications: [newNotif, ...existing].slice(0, 100) });
 };
 
@@ -7588,7 +7590,7 @@ function NotificationBell({ user }) {
     if(!n.data||acting)return;
     setActing(n.id);
     try{
-      if(window.fbGetContracts&&window.fbPushContracts){
+      if(window.fbGetContracts&&window.fbPushContracts&&n.data?.contractId){
         const contracts=await window.fbGetContracts();
         const idx=contracts.findIndex(c=>c.id===n.data.contractId);
         if(idx>=0){
