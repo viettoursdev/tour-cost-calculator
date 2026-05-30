@@ -6598,12 +6598,14 @@ function ContractView({user}){
                     <button onClick={()=>setExpanded(isExpanded?null:c.id)} style={{background:isExpanded?"rgba(20,150,140,0.15)":"rgba(20,150,140,0.08)",border:"1px solid rgba(20,150,140,0.25)",color:"#0d7a6a",borderRadius:7,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}} title="Quản lý thanh toán">
                       💰 {isExpanded?"Đóng":"Thanh toán"}
                     </button>
-                    {canEdit&&!c.hasAcceptance&&(c.contractStatus==="signed"||c.contractStatus==="active")&&(
+                    {/* Tạo BBNT: hiện khi chưa có, cho mọi trạng thái */}
+                    {canEdit&&!c.hasAcceptance&&(
                       <button onClick={()=>setAcceptanceModal(c)} style={{background:"rgba(39,174,96,0.1)",border:"1px solid rgba(39,174,96,0.25)",color:"#27ae60",borderRadius:7,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}} title="Tạo biên bản nghiệm thu">✅ Nghiệm thu</button>
                     )}
-                    {c.hasAcceptance&&(
-                      <button onClick={()=>exportAcceptanceCertPDF(c,{date:c.acceptanceDate||new Date().toISOString().slice(0,10),note:c.acceptanceNote||""},user)}
-                        style={{background:"rgba(39,174,96,0.1)",border:"1px solid rgba(39,174,96,0.3)",color:"#27ae60",borderRadius:7,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}} title="Xuất lại biên bản nghiệm thu PDF">
+                    {/* Xuất lại BBNT: hiện khi đã có, hoặc trạng thái completed */}
+                    {(c.hasAcceptance||(c.contractStatus==="completed"&&canEdit))&&(
+                      <button onClick={()=>c.hasAcceptance?exportAcceptanceCertPDF(c,{date:c.acceptanceDate||new Date().toISOString().slice(0,10),note:c.acceptanceNote||""},user):setAcceptanceModal(c)}
+                        style={{background:"rgba(39,174,96,0.12)",border:"1px solid rgba(39,174,96,0.35)",color:"#27ae60",borderRadius:7,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}} title={c.hasAcceptance?"Xuất lại biên bản nghiệm thu PDF":"Tạo biên bản nghiệm thu"}>
                         📄 BBNT
                       </button>
                     )}
