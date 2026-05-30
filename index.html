@@ -4134,16 +4134,21 @@ function PaymentView(props){
                           const _apKey=`${(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_")}_${ci.key}_${idx}`;
                           const _ap=approvals[_apKey];
                           return(
-                            <div key={idx} style={{background:inst.status==="paid"?"rgba(39,174,96,0.07)":_ap?.status==="approved"?"rgba(39,174,96,0.05)":_ap?.status==="rejected"?"rgba(220,50,80,0.05)":"rgba(245,166,35,0.06)",border:`1px solid ${inst.status==="paid"?"rgba(39,174,96,0.25)":_ap?.status==="approved"?"rgba(39,174,96,0.2)":_ap?.status==="rejected"?"rgba(220,50,80,0.2)":"rgba(245,166,35,0.25)"}`,borderRadius:9,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                              {/* Approval status badge */}
-                              {_ap&&inst.status!=="paid"&&(
-                                <span style={{fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:20,background:_ap.status==="approved"?"rgba(39,174,96,0.15)":"rgba(220,50,80,0.1)",color:_ap.status==="approved"?"#27ae60":"#dc3250",border:`1px solid ${_ap.status==="approved"?"rgba(39,174,96,0.3)":"rgba(220,50,80,0.25)"}`,whiteSpace:"nowrap"}}>
-                                  {_ap.status==="approved"?"✅ Đã duyệt":"❌ Từ chối"} · {_ap.approverName?.split("(")[0].trim()}
-                                </span>
-                              )}
-                              {!_ap&&inst.status!=="paid"&&(
-                                <span style={{fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:20,background:"rgba(245,166,35,0.1)",color:"#d18a13",border:"1px dashed rgba(245,166,35,0.4)",whiteSpace:"nowrap"}}>⏳ Chờ duyệt</span>
-                              )}
+                            <div key={idx} style={{background:inst.status==="paid"?"rgba(39,174,96,0.07)":(_ap?.finalStatus||_ap?.status)==="approved"?"rgba(39,174,96,0.05)":(_ap?.finalStatus||_ap?.status)==="rejected"?"rgba(220,50,80,0.05)":"rgba(245,166,35,0.06)",border:`1px solid ${inst.status==="paid"?"rgba(39,174,96,0.25)":(_ap?.finalStatus||_ap?.status)==="approved"?"rgba(39,174,96,0.2)":(_ap?.finalStatus||_ap?.status)==="rejected"?"rgba(220,50,80,0.2)":"rgba(245,166,35,0.25)"}`,borderRadius:9,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                              {/* Approval status badge - 3 states */}
+                              {inst.status!=="paid"&&(()=>{
+                                const fs=_ap?.finalStatus||_ap?.status||"";
+                                const isDone=fs==="approved";
+                                const isRejected=fs==="rejected";
+                                const rejectBy=_ap?.stage1?.status==="rejected"?_ap.stage1.approverName?.split("(")[0].trim():_ap?.stage2?.status==="rejected"?_ap.stage2.approverName?.split("(")[0].trim():_ap?.approverName?.split("(")[0].trim()||"";
+                                return isDone?(
+                                  <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:20,background:"rgba(39,174,96,0.12)",color:"#27ae60",border:"1px solid rgba(39,174,96,0.3)",whiteSpace:"nowrap",flexShrink:0}}>✅ Đã duyệt</span>
+                                ):isRejected?(
+                                  <span style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:20,background:"rgba(220,50,80,0.1)",color:"#dc3250",border:"1px solid rgba(220,50,80,0.25)",whiteSpace:"nowrap",flexShrink:0}}>❌ Từ chối{rejectBy?` · ${rejectBy}`:""}</span>
+                                ):(
+                                  <span style={{fontSize:10,fontWeight:600,padding:"3px 10px",borderRadius:20,background:"rgba(245,166,35,0.1)",color:"#d18a13",border:"1px dashed rgba(245,166,35,0.4)",whiteSpace:"nowrap",flexShrink:0}}>⏳ Chờ duyệt</span>
+                                );
+                              })()}
                               <input value={inst.label} onChange={e=>updInstallment(ci.key,idx,"label",e.target.value)}
                                 style={{background:"#fff",border:"1px solid rgba(20,150,140,0.2)",borderRadius:6,padding:"5px 9px",fontSize:12,outline:"none",fontFamily:"inherit",color:"#0f3a4a",width:110}}/>
                               <EN value={inst.amount} onChange={v=>updInstallment(ci.key,idx,"amount",v)} min={0} width={110} style={{color:"#0f3a4a",fontWeight:700,fontSize:13}} suffix=" ₫"/>
