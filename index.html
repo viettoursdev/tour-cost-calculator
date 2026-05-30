@@ -7727,24 +7727,39 @@ function NotificationBell({ user }) {
           await window.fbPushContracts(contracts);
         }
       }
+      /* Build approvalKey từ notification data */
+      const _aKey=n.data.approvalKey||
+        (n.data.tourKey&&(n.data.ciKey||n.data.ciKey==="")
+          ?`${n.data.tourKey}_${n.data.ciKey}_${n.data.instIdx!=null?n.data.instIdx:""}`
+          :"");
+
+      /* Ghi trạng thái duyệt lên Firestore payment_approvals */
+      if(window.fbSetPaymentApproval&&_aKey){
+        await window.fbSetPaymentApproval(_aKey,approved?"approved":"rejected",user.name);
+      }
+
       /* Gửi thông báo kết quả về người đề nghị */
+      const _label=n.data.catName||n.data.paymentLabel||n.data.content||"";
+      const _ref=n.data.tourName?`Tour: ${n.data.tourName}`:(n.data.contractNo?`HĐ #${n.data.contractNo}`:"");
+      const _amt=(n.data.amount||0).toLocaleString("vi-VN")+" đ";
+      const _sup=n.data.supplier?` · NCC: ${n.data.supplier}`:"";
       if(window.fbSendNotification&&n.data.requestedBy){
         await window.fbSendNotification(n.data.requestedBy,{
           type:approved?"payment_approved":"payment_rejected",
           title:approved?"✅ Đề nghị TT được duyệt":"❌ Đề nghị TT bị từ chối",
           message:approved
-            ?`${user.name} đã duyệt: "${n.data.paymentLabel||""}" · HĐ #${n.data.contractNo||""} · ${(n.data.amount||0).toLocaleString("vi-VN")} đ`
-            :`${user.name} từ chối: "${n.data.paymentLabel||""}" · HĐ #${n.data.contractNo||""}`,
+            ?`${user.name} đã duyệt: "${_label}"${_sup} · ${_ref} · ${_amt}`
+            :`${user.name} từ chối: "${_label}"${_sup} · ${_ref}`,
           createdBy:user.name+" ("+user.role+")",
-          data:{contractId:n.data.contractId}
+          data:{approvalKey:_aKey||null,contractId:n.data.contractId||null}
         });
       }
-      /* Đánh dấu notification này đã xử lý */
+      /* Đánh dấu notification đã xử lý */
       if(window.fbDeleteNotification)await window.fbDeleteNotification(user.u,n.id);
       if(window.showToast)window.showToast(
         approved?"Đã duyệt thanh toán":"Đã từ chối thanh toán",
         approved?"approval_done":"error",
-        n.data.catName||n.data.paymentLabel||""
+        _label||_ref
       );
     }catch(e){alert("❌ Lỗi: "+e.message);}
     finally{setActing(null);}
