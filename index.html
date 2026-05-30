@@ -305,7 +305,7 @@ window.fbSetPaymentApproval=async(key,status,approverName)=>{
   await setDoc(_PA_DOC,{...ex,[key]:{...existing,stage1:{status,approverName,note:"",updatedAt:new Date().toISOString()},finalStatus:status,currentStage:1}});
 };
 /* New staged approval */
-window.fbSetApprovalStage=async(key,stage,status,approverUsername,approverName,note)=>{
+window.fbSetApprovalStage=async(key,stage,status,approverUsername,approverName,note,intended={})=>{
   const snap=await getDoc(_PA_DOC);const ex=snap.exists()?snap.data():{};
   const existing=ex[key]||{};
   const updated={
@@ -313,6 +313,9 @@ window.fbSetApprovalStage=async(key,stage,status,approverUsername,approverName,n
     [`stage${stage}`]:{status,approverUsername:approverUsername||"",approverName:approverName||"",note:note||"",updatedAt:new Date().toISOString()},
     currentStage:stage,
     finalStatus:status==="approved"?(stage===2?"approved":"pending_stage2"):"rejected",
+    /* Lưu tên người được chỉ định ban đầu */
+    ...(intended.intendedApprover1Name?{intendedApprover1Name:intended.intendedApprover1Name}:{}),
+    ...(intended.intendedApprover2Name?{intendedApprover2Name:intended.intendedApprover2Name}:{}),
   };
   await setDoc(_PA_DOC,{...ex,[key]:updated});
 };
@@ -4342,12 +4345,13 @@ function PaymentRequestModal({data,info,user,onClose}){
   const [initialized,setInitialized]=useState(false);
   useEffect(()=>{
     if(initialized)return;setInitialized(true);
-    if(approvalStatus?.stage1?.approverUsername){
+    if(approvalStatus){
       setForm(p=>({...p,
-        approver1Username:approvalStatus.stage1.approverUsername||"",
-        approver1:approvalStatus.stage1.approverName||"",
-        approver2Username:approvalStatus.stage2?.approverUsername||"",
-        approver2:approvalStatus.stage2?.approverName||"",
+        /* Use intended names (who was DESIGNATED) not actual approver who clicked */
+        approver1:approvalStatus.intendedApprover1Name||(approvalStatus.stage1?.approverName||"").split("(")[0].trim()||p.approver1,
+        approver1Username:approvalStatus.stage1?.approverUsername||p.approver1Username,
+        approver2:approvalStatus.intendedApprover2Name||(approvalStatus.stage2?.approverName||"").split("(")[0].trim()||p.approver2,
+        approver2Username:approvalStatus.stage2?.approverUsername||p.approver2Username,
       }));
     }
   },[]);
@@ -4549,10 +4553,11 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
     pdf.setDrawColor(...stC);pdf.setLineWidth(0.4);pdf.roundedRect(mX,y,pageW-mX*2,h,3,3,"S");
     pdf.setFontSize(8);pdf.setTextColor(...stC);setFont("bold");
     const icon=isOk?"✓ ĐÃ DUYỆT":"✗ TỪ CHỐI";
-    /* Use intended approver name first, then actual approver */
-    const intendedName=(stage===1?form.approver1:form.approver2)||"";
+    /* Intended approver from Firestore > form > actual approver */
+    const intendedFromDB=(stage===1?approvalStatus?.intendedApprover1Name:approvalStatus?.intendedApprover2Name)||"";
+    const intendedFromForm=(stage===1?form.approver1:form.approver2)||"";
     const actualName=(stageData.approverName||"").split("(")[0].trim();
-    const personName=intendedName.split("(")[0].trim()||actualName;
+    const personName=intendedFromDB.split("(")[0].trim()||intendedFromForm.split("(")[0].trim()||actualName;
     pdf.text(`${label}: ${icon}`,mX+4,y+6);
     setFont("normal");
     const at=stageData.updatedAt?new Date(stageData.updatedAt).toLocaleDateString("vi-VN"):"";
@@ -4601,9 +4606,9 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
   
   // Signatures - 3 columns: Người đề nghị | Người duyệt 1 | Người duyệt 2
   const sigW=(pageW-mX*2)/3;
-  /* Priority: form selection (intended) > actual approver from stage data */
-  const _apv1Name=(form.approver1||approvalStatus?.stage1?.approverName||"").split("(")[0].trim();
-  const _apv2Name=(form.approver2||approvalStatus?.stage2?.approverName||"").split("(")[0].trim();
+  /* Priority: Firestore intended > form selection > actual stage approver */
+  const _apv1Name=(approvalStatus?.intendedApprover1Name||form.approver1||approvalStatus?.stage1?.approverName||"").split("(")[0].trim();
+  const _apv2Name=(approvalStatus?.intendedApprover2Name||form.approver2||approvalStatus?.stage2?.approverName||"").split("(")[0].trim();
   pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
   pdf.text("NGƯỜI ĐỀ NGHỊ",mX+sigW/2,y,{align:"center"});
   pdf.text("NGƯỜI DUYỆT 1",mX+sigW+sigW/2,y,{align:"center"});
@@ -7857,9 +7862,12 @@ function NotificationBell({ user }) {
       const _amt=(n.data.amount||0).toLocaleString("vi-VN")+" đ";
       const _sup=n.data.supplier?` · NCC: ${n.data.supplier}`:"";
 
-      /* Ghi staged approval status lên Firestore */
+      /* Ghi staged approval status lên Firestore (kèm tên người được chỉ định) */
       if(window.fbSetApprovalStage&&_aKey){
-        await window.fbSetApprovalStage(_aKey,_stage,approved?"approved":"rejected",user.u,user.name,_note);
+        await window.fbSetApprovalStage(_aKey,_stage,approved?"approved":"rejected",user.u,user.name,_note,{
+          intendedApprover1Name:(n.data?.approver1Name||n.data?.approver1||"").split("(")[0].trim(),
+          intendedApprover2Name:(n.data?.approver2Name||n.data?.approver2||"").split("(")[0].trim(),
+        });
       }
 
       /* Nếu stage 1 approved và có người duyệt 2 → forward sang stage 2 */
