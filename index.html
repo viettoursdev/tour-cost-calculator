@@ -361,19 +361,12 @@ function showBrowserNotif(title, body, icon) {
 function playToastSound(type){
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    const play=(freq,start,dur,vol=0.25)=>{
-      const o=ctx.createOscillator(),g=ctx.createGain();
-      o.connect(g);g.connect(ctx.destination);
-      o.type="sine";o.frequency.value=freq;
-      g.gain.setValueAtTime(vol,ctx.currentTime+start);
-      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
-      o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur);
-    };
-    if(type==="success"||type==="approved"){play(660,0,0.12);play(880,0.1,0.18);}
-    else if(type==="approval_request"){play(550,0,0.1);play(660,0.08,0.1);play(770,0.16,0.18);}
-    else if(type==="approval_done"){play(880,0,0.1);play(1100,0.08,0.2);}
-    else if(type==="error"){play(440,0,0.15);play(330,0.13,0.2);}
-    else{play(550,0,0.15);}
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.type="sine";o.frequency.value=660;
+    g.gain.setValueAtTime(0.18,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.22);
+    o.start(ctx.currentTime);o.stop(ctx.currentTime+0.22);
   }catch(e){}
 }
 window.playToastSound=playToastSound;
