@@ -4333,6 +4333,20 @@ function PaymentRequestModal({data,info,user,onClose}){
   },[]);
   
   const approvalStatus=data?.approvalStatus||null;
+  /* Pre-fill approvers from existing stage data when re-assigning */
+  const [initialized,setInitialized]=useState(false);
+  useEffect(()=>{
+    if(initialized)return;setInitialized(true);
+    if(approvalStatus?.stage1?.approverUsername){
+      setForm(p=>({...p,
+        approver1Username:approvalStatus.stage1.approverUsername||"",
+        approver1:approvalStatus.stage1.approverName||"",
+        approver2Username:approvalStatus.stage2?.approverUsername||"",
+        approver2:approvalStatus.stage2?.approverName||"",
+      }));
+    }
+  },[]);
+  const isReassign=!!(approvalStatus?.stage1||approvalStatus?.finalStatus);
   const handleExport=()=>{
     exportPaymentRequest(form,ci,info,user,approvalStatus);
     onClose();
@@ -4414,7 +4428,7 @@ function PaymentRequestModal({data,info,user,onClose}){
           </div>
           {/* ── Approver 2 - optional ── */}
           <div style={{position:"relative"}}>
-            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT 2 <span style={{fontSize:10,fontWeight:400,color:"rgba(15,58,74,0.35)"}}>· Tuỳ chọn — nhận sau khi người duyệt 1 chấp thuận</span></div>
+            <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT 2 <span style={{color:"#dc3250"}}>*</span> <span style={{fontSize:10,fontWeight:400,color:"rgba(15,58,74,0.4)"}}>· Nhận sau khi người duyệt 1 chấp thuận</span></div>
             <button onClick={()=>setShowPicker2(s=>!s)} style={{width:"100%",textAlign:"left",background:"#fff",border:`1.5px solid ${form.approver2Username?"rgba(41,128,185,0.35)":"rgba(41,128,185,0.12)"}`,borderRadius:10,padding:"9px 13px",fontSize:13,cursor:"pointer",fontFamily:"inherit",color:form.approver2?"#0f3a4a":"rgba(15,58,74,0.3)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{display:"flex",alignItems:"center",gap:8}}>
                 {form.approver2&&<span style={{width:24,height:24,borderRadius:"50%",background:approverList.find(a=>a.u===form.approver2Username)?.color||"#2980b9",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800}}>{(form.approver2)[0]}</span>}
@@ -4440,9 +4454,9 @@ function PaymentRequestModal({data,info,user,onClose}){
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button onClick={onClose} style={{flex:"0 0 80px",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:11,padding:12,cursor:"pointer",fontWeight:600,fontSize:13,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
             <button onClick={handleExport} style={{flex:1,background:"rgba(20,150,140,0.08)",border:"1.5px solid rgba(20,150,140,0.3)",color:"#0d7a6a",borderRadius:11,padding:12,cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit"}}>📄 Xuất PDF</button>
-            <button onClick={handleSendNotification} disabled={!form.approver1Username||sending}
-              style={{flex:1,background:form.approver1Username?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:form.approver1Username?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:11,padding:12,cursor:form.approver1Username&&!sending?"pointer":"not-allowed",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:sending?0.7:1}}>
-              {sending?"⏳ Đang gửi...":"📤 Gửi đề nghị"}
+            <button onClick={handleSendNotification} disabled={!form.approver1Username||!form.approver2Username||sending}
+              style={{flex:1,background:(form.approver1Username&&form.approver2Username)?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:(form.approver1Username&&form.approver2Username)?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:11,padding:12,cursor:(form.approver1Username&&form.approver2Username&&!sending)?"pointer":"not-allowed",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:sending?0.7:1}}>
+              {sending?"⏳ Đang gửi...":isReassign?"🔄 Cập nhật người duyệt":"📤 Gửi đề nghị"}
             </button>
           </div>
         </div>
