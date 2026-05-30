@@ -5857,8 +5857,7 @@ function QuoteHistoryView({user,onLoadState,currentQuoteId,onSetQuoteId}){
       if(p?.currentState){
         onLoadState(p.currentState,quote.id);
         if(onSetQuoteId)onSetQuoteId(quote.id);
-      }else{alert("❌ Chưa có dữ liệu trạng thái cho báo giá này.
-Hãy lưu lại báo giá qua nút 💾 Lưu lịch sử.");}
+      }else{alert("Chưa có dữ liệu state. Hãy lưu lại qua nút Lưu lịch sử.");}
     }catch(e){alert("❌ Lỗi tải: "+e.message);}
     finally{setLoadingId(null);}
   };
