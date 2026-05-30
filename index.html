@@ -5754,7 +5754,10 @@ function MainApp({user,onLogout}){
     setRateModal(null);
   };
 
-  const TABS=[
+  const TABS=template==="dmc"?[
+    {id:"cost",label:"📊 Bảng chi phí Breakdown"},
+    ...(hasPerm(user,"viewHistory")?[{id:"history",label:"🕐 Lịch sử Breakdown"}]:[]),
+  ]:[
     {id:"cost",label:"📊 Bảng chi phí"},
     {id:"summary",label:"💰 Tổng kết & Định giá"},
     {id:"dashboard",label:"📈 Dashboard biên lợi"},
