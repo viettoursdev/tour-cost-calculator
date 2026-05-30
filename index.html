@@ -296,6 +296,15 @@ window.fbPullUsers=async function(){
 };
 window.fbOnUsers=function(cb){return onSnapshot(_USERS_DOC,s=>{cb(s.exists()?(s.data().users||[]):null);});};
 
+/* ══ Payment Approvals Firestore sync ══ */
+const _PA_DOC=doc(_db,"viettours","payment_approvals");
+window.fbSetPaymentApproval=async(key,status,approverName)=>{
+  const snap=await getDoc(_PA_DOC);
+  const ex=snap.exists()?snap.data():{};
+  await setDoc(_PA_DOC,{...ex,[key]:{status,approverName,updatedAt:new Date().toISOString()}});
+};
+window.fbOnPaymentApprovals=(cb)=>onSnapshot(_PA_DOC,s=>cb(s.exists()?s.data():{}));
+
 /* ══ Notifications Firestore sync ══ */
 const _notifDoc = (username) => doc(_db, "user_notifications", username);
 
