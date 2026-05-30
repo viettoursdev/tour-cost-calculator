@@ -1284,10 +1284,15 @@ const CATS=[
   {id:"insurance",icon:"🛡️",label:"Bảo hiểm",labelEn:"Insurance",color:"#16a085",rateCard:"insurance"},
   {id:"visa",icon:"🛂",label:"Visa",labelEn:"Visa",color:"#1abc9c",rateCard:"visa"},
   {id:"dmc",icon:"🌐",label:"DMC – Package đối tác",labelEn:"DMC Package",color:"#8e44ad",rateCard:"dmc"},
+  {id:"service_fee",icon:"💼",label:"Phí dịch vụ",labelEn:"Service Fee",color:"#7f8c8d",dmcOnly:true},
 ];
 
 // Get categories applicable to current template
-const getCATS=(template)=>CATS.filter(c=>!c.domesticOnly||template==="domestic");
+const DMC_CAT_IDS=["hotel","transport","meal","sight","staff","service_fee"];
+const getCATS=(template)=>{
+  if(template==="dmc")return CATS.filter(c=>DMC_CAT_IDS.includes(c.id));
+  return CATS.filter(c=>(!c.domesticOnly||template==="domestic")&&!c.dmcOnly);
+};
 
 const UNITS=["/người","/người/ngày","/người/bữa","/phòng","/phòng/đêm","/xe","/xe/ngày","/suất","/chuyến","/buổi","/ngày","/vé","cả đoàn","cố định"];
 
@@ -1346,9 +1351,20 @@ const TPL_INTL=(pax)=>({
   gala:[mkItem({name:"Gala dinner tại KS",cur:"USD",price:55,unit:"/người/bữa",qtyMode:"per_pax",enabled:false,note:"Set menu Western fine dining"})],
 });
 
+const TPL_DMC=(pax)=>({
+  hotel:[mkItem({name:"Khách sạn",cur:"USD",price:0,unit:"/phòng/đêm",qtyMode:"custom",customQty:Math.ceil(pax/2),times:1,note:"Twin room"})],
+  transport:[mkItem({name:"Xe tham quan",cur:"USD",price:0,unit:"/xe/ngày",qtyMode:"custom",customQty:1,times:1,note:""})],
+  meal:[mkItem({name:"Ăn sáng",cur:"USD",price:0,unit:"/người/bữa",qtyMode:"per_pax",times:1,note:""}),
+        mkItem({name:"Ăn trưa & tối",cur:"USD",price:0,unit:"/người/bữa",qtyMode:"per_pax",times:1,note:""})],
+  sight:[mkItem({name:"Tham quan",cur:"USD",price:0,unit:"/người",qtyMode:"per_pax",times:1,note:""})],
+  staff:[mkItem({name:"HDV địa phương",cur:"USD",price:0,unit:"/người/ngày",qtyMode:"custom",customQty:1,times:1,note:""})],
+  service_fee:[mkItem({name:"Phí dịch vụ",cur:"USD",price:0,unit:"/người",qtyMode:"per_pax",times:1,note:""})],
+});
+
 const TEMPLATES={
-  domestic:{label:"Tour Nội địa",icon:"🇻🇳",desc:"Tour trong nước Việt Nam",init:TPL_DOMESTIC,sample:{name:"Tour Đà Nẵng",dest:"Đà Nẵng",days:3,nights:2}},
-  intl:{label:"Tour Nước ngoài",icon:"🌏",desc:"Outbound tour quốc tế",init:TPL_INTL,sample:{name:"Tour Nhật Bản",dest:"Nhật Bản",days:5,nights:4}},
+  domestic:{label:"Báo giá tour nội địa",icon:"🇻🇳",desc:"Tour trong nước Việt Nam",init:TPL_DOMESTIC,sample:{name:"Tour Đà Nẵng",dest:"Đà Nẵng",days:3,nights:2}},
+  intl:{label:"Báo giá tour nước ngoài",icon:"🌏",desc:"Outbound tour quốc tế",init:TPL_INTL,sample:{name:"Tour Nhật Bản",dest:"Nhật Bản",days:5,nights:4}},
+  dmc:{label:"Breakdown báo giá DMC",icon:"📋",desc:"Phân tích chi phí & so sánh với giá DMC",init:TPL_DMC,sample:{name:"DMC Package",dest:"",days:5,nights:4}},
 };
 
 /* ═══ HELPERS ═══════════════════════════════════════════ */
@@ -2158,8 +2174,8 @@ function TemplateSelector({onSelect}){
     <div className="modal-bg">
       <div className="modal-card" style={{maxWidth:680}}>
         <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",padding:"24px 28px",borderRadius:"18px 18px 0 0"}}>
-          <div style={{fontSize:20,fontWeight:800}}>🎯 Chọn loại tour</div>
-          <div style={{fontSize:13,opacity:0.75,marginTop:4}}>Bảng tính sẽ cấu hình hạng mục phù hợp</div>
+          <div style={{fontSize:20,fontWeight:800}}>🎯 Chọn yêu cầu Báo giá</div>
+          <div style={{fontSize:13,opacity:0.75,marginTop:4}}>Hệ thống sẽ cấu hình hạng mục phù hợp</div>
         </div>
         <div style={{padding:"28px 32px"}}>
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
@@ -3058,18 +3074,145 @@ function numberToVietWords(num){
 }
 
 /* ═══ COST VIEW ════════════════════════════════════════ */
+
+/* ═══ DMC BREAKDOWN ════════════════════════════════════ */
+const DMC_CURRENCIES=["USD","VND","EUR","JPY","SGD","KRW","THB","GBP","AUD","CNY"];
+
+/* Currency selector dropdown for DMC */
+function CurrencySelector({value,onChange}){
+  const [open,setOpen]=React.useState(false);
+  const ref=React.useRef(null);
+  React.useEffect(()=>{
+    const h=(e)=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);
+  },[]);
+  return(
+    <div ref={ref} style={{position:"relative",display:"inline-block"}}>
+      <button onClick={()=>setOpen(s=>!s)} style={{background:"linear-gradient(135deg,#8e44ad,#9b59b6)",color:"#fff",border:"none",borderRadius:9,padding:"6px 14px",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit",display:"flex",alignItems:"center",gap:6}}>
+        💱 {value} {open?"▲":"▼"}
+      </button>
+      {open&&<div style={{position:"absolute",top:"calc(100%+4px)",left:0,background:"#fff",border:"1px solid rgba(142,68,173,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:300,minWidth:120,padding:"6px 0"}}>
+        {DMC_CURRENCIES.map(c=>(
+          <button key={c} onMouseDown={()=>{onChange(c);setOpen(false);}} style={{display:"block",width:"100%",textAlign:"left",background:c===value?"rgba(142,68,173,0.08)":"none",border:"none",padding:"7px 16px",cursor:"pointer",fontSize:13,fontWeight:c===value?700:400,color:c===value?"#8e44ad":"#0f3a4a",fontFamily:"inherit"}}>
+            {c==="VND"?"🇻🇳":c==="USD"?"🇺🇸":c==="EUR"?"🇪🇺":c==="JPY"?"🇯🇵":c==="KRW"?"🇰🇷":c==="SGD"?"🇸🇬":c==="THB"?"🇹🇭":c==="GBP"?"🇬🇧":c==="AUD"?"🇦🇺":"🌐"} {c}
+          </button>
+        ))}
+      </div>}
+    </div>
+  );
+}
+
+/* Convert VND amount to output currency */
+function toOutputCurrency(vndAmount,outputCurrency,rates){
+  if(outputCurrency==="VND"||!rates[outputCurrency])return vndAmount;
+  return vndAmount/rates[outputCurrency];
+}
+function fmtCurrency(amount,currency){
+  if(currency==="VND")return Math.round(amount).toLocaleString("vi-VN")+" ₫";
+  if(currency==="JPY"||currency==="KRW")return Math.round(amount).toLocaleString()+" "+currency;
+  return amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")+" "+currency;
+}
+
+/* DMC Package comparison panel */
+function DMCComparePanel({totalCostVND,pax,rates,outputCurrency,dmcPrices,setDmcPrices}){
+  const GROUP_SIZES=[20,25,30,35,40];
+  const breakdownPerPax=pax>0?totalCostVND/pax:0;
+  const breakdownPerPaxOut=toOutputCurrency(breakdownPerPax,outputCurrency,rates);
+
+  return(
+    <div style={{background:"#fff",borderRadius:14,border:"1px solid rgba(142,68,173,0.2)",padding:"18px 20px",marginTop:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a"}}>📊 So sánh với giá DMC Package</div>
+        <div style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>Nhập giá DMC /pax theo từng group size</div>
+      </div>
+      {/* My breakdown cost */}
+      <div style={{background:"rgba(142,68,173,0.07)",border:"1px solid rgba(142,68,173,0.15)",borderRadius:10,padding:"12px 16px",marginBottom:14}}>
+        <div style={{fontSize:11,color:"rgba(15,58,74,0.5)",fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Chi phí Breakdown của bạn</div>
+        <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+          <div>
+            <span style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>Tổng đoàn ({pax} pax): </span>
+            <strong style={{color:"#8e44ad"}}>{fmtCurrency(toOutputCurrency(totalCostVND,outputCurrency,rates),outputCurrency)}</strong>
+          </div>
+          <div>
+            <span style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>Per pax: </span>
+            <strong style={{color:"#8e44ad"}}>{fmtCurrency(breakdownPerPaxOut,outputCurrency)}</strong>
+          </div>
+        </div>
+      </div>
+      {/* Comparison table */}
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead>
+            <tr style={{background:"rgba(142,68,173,0.06)"}}>
+              <th style={{padding:"8px 12px",textAlign:"left",color:"rgba(15,58,74,0.55)",fontWeight:700,fontSize:11,letterSpacing:0.8,borderBottom:"1px solid rgba(142,68,173,0.12)"}}>Group size</th>
+              <th style={{padding:"8px 12px",textAlign:"right",color:"rgba(15,58,74,0.55)",fontWeight:700,fontSize:11,letterSpacing:0.8,borderBottom:"1px solid rgba(142,68,173,0.12)"}}>Giá DMC /pax ({outputCurrency})</th>
+              <th style={{padding:"8px 12px",textAlign:"right",color:"rgba(15,58,74,0.55)",fontWeight:700,fontSize:11,letterSpacing:0.8,borderBottom:"1px solid rgba(142,68,173,0.12)"}}>Tổng DMC</th>
+              <th style={{padding:"8px 12px",textAlign:"right",color:"rgba(15,58,74,0.55)",fontWeight:700,fontSize:11,letterSpacing:0.8,borderBottom:"1px solid rgba(142,68,173,0.12)"}}>Breakdown /pax</th>
+              <th style={{padding:"8px 12px",textAlign:"right",color:"rgba(15,58,74,0.55)",fontWeight:700,fontSize:11,letterSpacing:0.8,borderBottom:"1px solid rgba(142,68,173,0.12)"}}>Margin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {GROUP_SIZES.map(gs=>{
+              const dmcPpax=+(dmcPrices[gs]||0);
+              const dmcTotal=dmcPpax*gs;
+              const bdTotal=toOutputCurrency(totalCostVND,outputCurrency,rates);
+              const bdPpax=gs>0?bdTotal/gs:0;
+              const margin=dmcPpax-bdPpax;
+              const marginPct=dmcPpax>0?(margin/dmcPpax*100):0;
+              const isPos=margin>=0;
+              return(
+                <tr key={gs} style={{borderBottom:"1px solid rgba(142,68,173,0.07)"}}>
+                  <td style={{padding:"9px 12px",fontWeight:700,color:"#0f3a4a"}}>{gs} pax</td>
+                  <td style={{padding:"9px 12px",textAlign:"right"}}>
+                    <input type="number" value={dmcPrices[gs]||""} onChange={e=>setDmcPrices(p=>({...p,[gs]:+e.target.value}))}
+                      placeholder="0" style={{width:110,padding:"4px 8px",border:"1.5px solid rgba(142,68,173,0.25)",borderRadius:7,fontSize:13,fontFamily:"inherit",textAlign:"right",outline:"none",color:"#0f3a4a"}}/>
+                  </td>
+                  <td style={{padding:"9px 12px",textAlign:"right",fontWeight:600,color:"#0f3a4a"}}>{dmcPpax>0?fmtCurrency(dmcTotal,outputCurrency):"—"}</td>
+                  <td style={{padding:"9px 12px",textAlign:"right",color:"#8e44ad",fontWeight:600}}>{fmtCurrency(bdPpax,outputCurrency)}</td>
+                  <td style={{padding:"9px 12px",textAlign:"right"}}>
+                    {dmcPpax>0?(
+                      <span style={{fontWeight:800,color:isPos?"#27ae60":"#e74c3c",background:isPos?"rgba(39,174,96,0.1)":"rgba(231,76,60,0.1)",padding:"3px 9px",borderRadius:8,fontSize:12}}>
+                        {isPos?"+":""}{fmtCurrency(margin,outputCurrency)} ({isPos?"+":""}{marginPct.toFixed(1)}%)
+                      </span>
+                    ):<span style={{color:"rgba(15,58,74,0.3)",fontSize:12}}>—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function CostView(props){
-  const {items,catEnabled,pax,rates,showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,totalCost,user,curState,loadState,activeCATS,currentQuoteId,setCurrentQuoteId}=props;
+  const {items,catEnabled,pax,rates,showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,totalCost,user,curState,loadState,activeCATS,currentQuoteId,setCurrentQuoteId,template,outputCurrency,setOutputCurrency,dmcPrices,setDmcPrices}=props;
+  const isDMC=template==="dmc";
   return(
     <div className="fade-in">
+      {/* DMC: currency selector + header */}
+      {isDMC&&(
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+          <div style={{fontSize:14,fontWeight:700,color:"rgba(15,58,74,0.6)"}}>📋 Breakdown chi phí DMC — nhập giá theo từng hạng mục</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>Hiển thị tổng theo:</span>
+            <CurrencySelector value={outputCurrency} onChange={setOutputCurrency}/>
+          </div>
+        </div>
+      )}
       <RatesPanel rates={rates} onChange={(c,v)=>setRates(p=>({...p,[c]:v}))} visible={showRates} onToggle={()=>setShowRates(s=>!s)}/>
       {activeCATS.map(cat=>(
         <CatBlock key={cat.id} cat={cat} items={items[cat.id]||[]} enabled={catEnabled[cat.id]} pax={pax} rates={rates}
           onUpd={it=>updItem(cat.id,it)} onAdd={()=>addItem(cat.id)} onDel={id=>delItem(cat.id,id)}
           onOpenRate={(k)=>setRateModal(k)} onToggleCat={()=>toggleCat(cat.id)}/>
       ))}
+      {/* DMC: compare panel */}
+      {isDMC&&setDmcPrices&&<DMCComparePanel totalCostVND={totalCost} pax={pax} rates={rates} outputCurrency={outputCurrency} dmcPrices={dmcPrices} setDmcPrices={setDmcPrices}/>}
       <div className="glass-strong" style={{borderRadius:14,padding:20,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
-        <div style={{color:"rgba(15,58,74,0.55)",fontSize:13}}>Tổng {activeCATS.reduce((s,c)=>s+(items[c.id]||[]).length,0)} dòng chi phí</div>
+        <div style={{color:"rgba(15,58,74,0.55)",fontSize:13}}>
+          {isDMC?`${activeCATS.reduce((s,c)=>s+(items[c.id]||[]).length,0)} dòng · Tổng: ${fmtCurrency(toOutputCurrency(totalCost,outputCurrency,rates),outputCurrency)}`:`Tổng ${activeCATS.reduce((s,c)=>s+(items[c.id]||[]).length,0)} dòng chi phí`}
+        </div>
         <div style={{textAlign:"right"}}>
           <div style={{color:"rgba(15,58,74,0.5)",fontSize:12}}>Tổng chi phí gốc cả đoàn</div>
           <div style={{color:"#0d7a6a",fontWeight:800,fontSize:22}}>{fmt(totalCost)}</div>
@@ -5484,6 +5627,8 @@ function MainApp({user,onLogout}){
   const[showRateDD,setShowRateDD]=useState(false);
   const[showSaveHist,setShowSaveHist]=useState(false);
   const[currentQuoteId,setCurrentQuoteId]=useState(null);
+  const[outputCurrency,setOutputCurrency]=useState("USD"); // DMC: currency to display totals
+  const[dmcPrices,setDmcPrices]=useState({20:0,25:0,30:0,35:0,40:0}); // DMC package prices per pax per group size
   const fileInputRef=useRef(null);
   const quoteRef=useRef(null);
 
@@ -5550,16 +5695,19 @@ function MainApp({user,onLogout}){
       setTemplate(t);
       setInfo(tpl.sample);
       setItems(tpl.init(20));
-      // VAT default: domestic 8%, intl 0%
       setVat(t==="domestic"?8:0);
       const enabled=Object.fromEntries(CATS.map(c=>[c.id,true]));
       if(t==="domestic"){enabled.visa=false;enabled.dmc=false;enabled.gala=false;}
       if(t==="intl"){
-        // Hide domestic-only categories
         CATS.forEach(c=>{if(c.domesticOnly)enabled[c.id]=false;});
         enabled.gala=false;
       }
+      if(t==="dmc"){
+        // Only enable DMC-relevant categories
+        CATS.forEach(c=>{enabled[c.id]=DMC_CAT_IDS.includes(c.id);});
+      }
       setCatEnabled(enabled);
+      setView("cost");
     }}/>;
   }
 
@@ -5615,6 +5763,7 @@ function MainApp({user,onLogout}){
     rounding,setRounding,totalSC,totalVAT,sellingPPax,roundedPPax,info,user,quoteRef,
     showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,
     curState,loadState,template,currentQuoteId,setCurrentQuoteId,
+    outputCurrency,setOutputCurrency,dmcPrices,setDmcPrices,
     activeCATS:getCATS(template)
   };
 
@@ -5702,10 +5851,10 @@ function MainApp({user,onLogout}){
                 {key:"hotel",   label:"🏨 Khách sạn",  color:"#d18a13", show:true},
                 {key:"transport",label:"🚌 Xe",         color:"#9b59b6", show:true},
                 {key:"staff",   label:"🎤 HDV",         color:"#dc3250", show:true},
-                {key:"insurance",label:"🛡️ Bảo hiểm",  color:"#16a085", show:true},
+                {key:"insurance",label:"🛡️ Bảo hiểm",  color:"#16a085", show:template!=="dmc"},
                 {key:"dmc",     label:"🌐 DMC",         color:"#8e44ad", show:template==="intl"},
-                {key:"logistics",label:"📦 Logistics",  color:"#e67e22", show:true},
-                {key:"gala",    label:"🎉 Gala",        color:"#c0392b", show:true},
+                {key:"logistics",label:"📦 Logistics",  color:"#e67e22", show:template!=="dmc"},
+                {key:"gala",    label:"🎉 Gala",        color:"#c0392b", show:template!=="dmc"},
                 {key:"teambuild",label:"🏕️ TeamBuild",  color:"#27ae60", show:template==="domestic"},
                 {key:"meeting", label:"💼 Meeting",     color:"#34495e", show:template==="domestic"},
               ].filter(i=>i.show).map(i=>(
@@ -5719,8 +5868,8 @@ function MainApp({user,onLogout}){
             </div>}
           </div>
 
-          {/* ── Xuất dropdown ── */}
-          {hasPerm(user,"exportQuote")&&<div style={{position:"relative"}}>
+          {/* ── Xuất dropdown (không dùng cho DMC) ── */}
+          {hasPerm(user,"exportQuote")&&template!=="dmc"&&<div style={{position:"relative"}}>
             <button onClick={()=>{setShowExportDD(s=>!s);setShowRateDD(false);}} className="btn" style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",borderColor:"transparent",color:"#fff",display:"flex",alignItems:"center",gap:5}}>
               📤 Xuất <span style={{fontSize:10,opacity:0.8}}>{showExportDD?"▲":"▼"}</span>
             </button>
