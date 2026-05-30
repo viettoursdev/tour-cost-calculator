@@ -3195,7 +3195,7 @@ function DMCComparePanel({totalCostVND,pax,rates,outputCurrency,dmcPrices,setDmc
 }
 
 function CostView(props){
-  const {items,catEnabled,pax,rates,showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,totalCost,user,curState,loadState,activeCATS,currentQuoteId,setCurrentQuoteId,template,outputCurrency,setOutputCurrency,dmcPrices,setDmcPrices}=props;
+  const {items,catEnabled,pax,rates,showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,totalCost,user,curState,loadState,activeCATS,currentQuoteId,setCurrentQuoteId,template,outputCurrency,setOutputCurrency,dmcPrices,setDmcPrices,dmcMargin,setDmcMargin}=props;
   const isDMC=template==="dmc";
   return(
     <div className="fade-in">
@@ -3215,8 +3215,57 @@ function CostView(props){
           onUpd={it=>updItem(cat.id,it)} onAdd={()=>addItem(cat.id)} onDel={id=>delItem(cat.id,id)}
           onOpenRate={(k)=>setRateModal(k)} onToggleCat={()=>toggleCat(cat.id)} outputCurrency={isDMC?outputCurrency:undefined}/>
       ))}
+      {/* DMC: Profit Margin & Service Charge row */}
+      {isDMC&&dmcMargin!==undefined&&(()=>{
+        const marginVND=dmcMargin.type==="percent"
+          ?Math.round(totalCost*(dmcMargin.value||0)/100)
+          :Math.round((dmcMargin.value||0)*(outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]?rates[outputCurrency]:1));
+        const marginDisplay=outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]?(marginVND/rates[outputCurrency]):marginVND;
+        const totalWithMarginVND=totalCost+marginVND;
+        const totalWithMarginDisplay=outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]?(totalWithMarginVND/rates[outputCurrency]):totalWithMarginVND;
+        return(
+          <div style={{background:"#fff",borderRadius:12,border:"1.5px solid rgba(142,68,173,0.25)",padding:"14px 18px",marginTop:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+              <div style={{fontWeight:700,fontSize:14,color:"#8e44ad",flex:1,minWidth:180}}>💼 Profit Margin & Service Charge</div>
+              {/* Toggle type */}
+              <div style={{display:"flex",gap:6}}>
+                {[{v:"percent",l:"% tổng chi phí"},{v:"fixed",l:"Số tiền cố định"}].map(opt=>(
+                  <button key={opt.v} onClick={()=>setDmcMargin(p=>({...p,type:opt.v,value:0}))}
+                    style={{padding:"5px 12px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                      background:dmcMargin.type===opt.v?"#8e44ad":"rgba(142,68,173,0.08)",
+                      color:dmcMargin.type===opt.v?"#fff":"#8e44ad",
+                      border:"1.5px solid rgba(142,68,173,0.3)"}}>
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+              {/* Value input */}
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <input type="number" min={0} step={dmcMargin.type==="percent"?0.5:1}
+                  value={dmcMargin.value||""}
+                  onChange={e=>setDmcMargin(p=>({...p,value:+e.target.value}))}
+                  placeholder="0"
+                  style={{width:90,padding:"6px 10px",border:"1.5px solid rgba(142,68,173,0.3)",borderRadius:8,fontSize:14,fontWeight:700,color:"#8e44ad",fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
+                <span style={{fontSize:13,color:"#8e44ad",fontWeight:700}}>
+                  {dmcMargin.type==="percent"?"%":outputCurrency}
+                </span>
+              </div>
+              {/* Result */}
+              <div style={{textAlign:"right",minWidth:140}}>
+                <div style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>Margin: <strong style={{color:"#8e44ad"}}>{fmtCurrency(marginDisplay,outputCurrency||"VND")}</strong></div>
+                <div style={{fontSize:13,fontWeight:800,color:"#0f3a4a",marginTop:2}}>Tổng + margin: <span style={{color:"#8e44ad"}}>{fmtCurrency(totalWithMarginDisplay,outputCurrency||"VND")}</span></div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* DMC: compare panel */}
-      {isDMC&&setDmcPrices&&<DMCComparePanel totalCostVND={totalCost} pax={pax} rates={rates} outputCurrency={outputCurrency} dmcPrices={dmcPrices} setDmcPrices={setDmcPrices}/>}
+      {isDMC&&setDmcPrices&&(()=>{
+        const marginVND2=dmcMargin?.type==="percent"
+          ?Math.round(totalCost*(dmcMargin?.value||0)/100)
+          :Math.round((dmcMargin?.value||0)*(outputCurrency&&outputCurrency!=="VND"&&rates[outputCurrency]?rates[outputCurrency]:1));
+        return <DMCComparePanel totalCostVND={totalCost+marginVND2} pax={pax} rates={rates} outputCurrency={outputCurrency} dmcPrices={dmcPrices} setDmcPrices={setDmcPrices}/>;
+      })()}
       <div className="glass-strong" style={{borderRadius:14,padding:20,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
         <div style={{color:"rgba(15,58,74,0.55)",fontSize:13}}>
           {isDMC?`${activeCATS.reduce((s,c)=>s+(items[c.id]||[]).length,0)} dòng · Tổng: ${fmtCurrency(toOutputCurrency(totalCost,outputCurrency,rates),outputCurrency)}`:`Tổng ${activeCATS.reduce((s,c)=>s+(items[c.id]||[]).length,0)} dòng chi phí`}
@@ -5637,6 +5686,7 @@ function MainApp({user,onLogout}){
   const[currentQuoteId,setCurrentQuoteId]=useState(null);
   const[outputCurrency,setOutputCurrency]=useState("USD"); // DMC: currency to display totals
   const[dmcPrices,setDmcPrices]=useState({20:0,25:0,30:0,35:0,40:0}); // DMC package prices per pax per group size
+  const[dmcMargin,setDmcMargin]=useState({type:"percent",value:0}); // DMC profit margin & service charge
   const fileInputRef=useRef(null);
   const quoteRef=useRef(null);
 
@@ -5774,7 +5824,7 @@ function MainApp({user,onLogout}){
     rounding,setRounding,totalSC,totalVAT,sellingPPax,roundedPPax,info,user,quoteRef,
     showRates,setShowRates,setRates,updItem,addItem,delItem,toggleCat,setRateModal,
     curState,loadState,template,currentQuoteId,setCurrentQuoteId,
-    outputCurrency,setOutputCurrency,dmcPrices,setDmcPrices,
+    outputCurrency,setOutputCurrency,dmcPrices,setDmcPrices,dmcMargin,setDmcMargin,
     activeCATS:getCATS(template)
   };
 
