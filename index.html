@@ -353,13 +353,14 @@ const DEFAULT_USERS=[
    Ngưỡng: từ Operations trở lên mới có editRateCard/exportQuote/importQuote
 */
 const PERMISSIONS={
-  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true},
-  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true},
-  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true},
-  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true},
-  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true},
-  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false},
-  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false},
+  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
+  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
+  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
+  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
+  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
+  "Admin":           {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:true},
+  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false},
+  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false},
 };
 const hasPerm=(user,key)=>{
   if(!user)return false;
@@ -4114,7 +4115,7 @@ function UserManagementModal({currentUser,onClose}){
   const [form,setForm]=useState({u:"",p:"",name:"",role:"Sales",color:"#14a08c"});
   const [showForm,setShowForm]=useState(false);
 
-  const ROLES=["CEO","Trưởng Phòng","Sales","Operations","Marketing","Accountant","Standard"];
+  const ROLES=["CEO","Trưởng Phòng","Sales","Operations","Marketing","Admin","Accountant","Standard"];
   const COLORS=["#dc3250","#f5a623","#14a08c","#1abc9c","#3498db","#9b59b6","#e67e22","#27ae60","#16a085","#8e44ad"];
 
   const persist=(next)=>{setUsers(next);svUsers(next);};
@@ -5605,7 +5606,7 @@ function MainApp({user,onLogout}){
     {id:"quote",label:"📄 Báo giá khách hàng"},
     {id:"payment",label:"🧾 Quản lý thanh toán"},
     ...(hasPerm(user,"viewHistory")?[{id:"history",label:"🕐 Lịch sử báo giá"}]:[]),
-    ...(hasPerm(user,"manageContracts")?[{id:"contracts",label:"📜 Hợp đồng"}]:[]),
+    ...((hasPerm(user,"manageContracts")||hasPerm(user,"viewContracts"))?[{id:"contracts",label:"📜 Hợp đồng"}]:[]),
     ...(hasPerm(user,"manageCustomers")?[{id:"customers",label:"👥 Khách hàng"}]:[]),
     ...(hasPerm(user,"manageNCC")?[{id:"ncc",label:"🏢 Nhà Cung Cấp"}]:[]),
   ];
@@ -5753,7 +5754,7 @@ function MainApp({user,onLogout}){
         {view==="quote"&&<QuoteView {...viewProps}/>}
         {view==="payment"&&<PaymentView {...viewProps}/>}
         {view==="history"&&hasPerm(user,"viewHistory")&&<QuoteHistoryView user={user} onLoadState={(s,qId)=>{loadState(s,qId);setView("cost");}} currentQuoteId={currentQuoteId} onSetQuoteId={setCurrentQuoteId}/>}
-        {view==="contracts"&&hasPerm(user,"manageContracts")&&<ContractView user={user}/>}
+        {view==="contracts"&&(hasPerm(user,"manageContracts")||hasPerm(user,"viewContracts"))&&<ContractView user={user}/>}
         {view==="customers"&&hasPerm(user,"manageCustomers")&&<CustomerView user={user}/>}
         {view==="ncc"&&hasPerm(user,"manageNCC")&&<NCCView user={user}/>}
       </div>
@@ -6391,6 +6392,7 @@ function PaymentPanel({contract,onUpdate,canEdit}){
 /* ── Contract View ── */
 function ContractView({user}){
   const canEdit=hasPerm(user,"manageContracts");
+  const viewOnly=!canEdit&&hasPerm(user,"viewContracts"); // Admin: xem được nhưng không tạo/sửa
   const [contracts,setContracts]=useState([]);
   const [loading,setLoading]=useState(true);
   const [syncing,setSyncing]=useState(false);
@@ -6467,6 +6469,10 @@ function ContractView({user}){
         </div>
       </div>
 
+      {/* View-only notice for Admin */}
+      {viewOnly&&<div style={{marginBottom:16,padding:"10px 16px",background:"rgba(41,128,185,0.08)",border:"1px solid rgba(41,128,185,0.25)",borderRadius:10,fontSize:12,color:"#2980b9",fontWeight:600,display:"flex",alignItems:"center",gap:8}}>
+        👁️ Chế độ xem — Bạn có thể xem toàn bộ hợp đồng nhưng không thể tạo hoặc điều chỉnh
+      </div>}
       {/* Summary cards */}
       {!loading&&contracts.length>0&&(
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10,marginBottom:18}}>
