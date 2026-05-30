@@ -4616,8 +4616,8 @@ const DEFAULT_EXCLUDES=[
   "Phụ thu phòng đơn.",
 ];
 const DEFAULT_PAYMENTS=[
-  {label:"Đợt 1 – Cọc giữ chỗ",percent:50,note:"Trong vòng 07 ngày sau khi ký hợp đồng và nhận hoá đơn VAT từ Bên A"},
-  {label:"Đợt 2 – Trước khởi hành",percent:50,note:"Chậm nhất 03 ngày trước ngày khởi hành"},
+  {id:"dp1",label:"Đợt 1 – Cọc giữ chỗ",percent:50,note:"Trong vòng 07 ngày sau khi ký hợp đồng và nhận hoá đơn VAT từ Bên A"},
+  {id:"dp2",label:"Đợt 2 – Trước khởi hành",percent:50,note:"Chậm nhất 03 ngày trước ngày khởi hành"},
 ];
 const DEFAULT_CANCELS=[
   {when:"Sau khi ký hợp đồng",penalty:30},
@@ -6320,7 +6320,8 @@ function AcceptanceCertModal({contract,user,onSave,onClose}){
 
 /* ── Payment Panel ── */
 function PaymentPanel({contract,onUpdate,canEdit}){
-  const [payments,setPayments]=useState(contract.payments||[]);
+  /* Đảm bảo mỗi payment có id (backward compat với data cũ không có id) */
+  const [payments,setPayments]=useState((contract.payments||[]).map((p,i)=>p.id?p:{...p,id:"p_"+i+"_"+Date.now()}));
   const [adding,setAdding]=useState(false);
   const [newP,setNewP]=useState({label:"",amount:"",dueDate:"",note:""});
   const [editAmt,setEditAmt]=useState(null); // {id, val} — inline edit số tiền
@@ -6375,7 +6376,7 @@ function PaymentPanel({contract,onUpdate,canEdit}){
                 <div style={{fontSize:12,color:"rgba(15,58,74,0.45)",marginBottom:1}}>
                   KH: {(+p.amount||0).toLocaleString("vi-VN")} đ
                 </div>
-                {canEdit&&editAmt?.id===p.id?(
+                {canEdit&&editAmt!==null&&editAmt?.id===p.id?(
                   <input autoFocus type="number" value={editAmt?.val||""}
                     onChange={e=>setEditAmt(prev=>prev?{...prev,val:e.target.value}:null)}
                     onBlur={()=>saveAmount(p.id)}
