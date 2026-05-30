@@ -187,6 +187,40 @@ window.fbUpdateCollaborators=async(quoteId,collaborators)=>{
   }
 };
 
+/* ══ DMC Breakdown History Firestore sync ══ */
+const _DMC_HIST_DOC=doc(_db,"viettours","dmc_quote_history");
+const _dmcQpDoc=(id)=>doc(_db,"dmc_quote_projects",id);
+window.fbOnDMCHistory=cb=>onSnapshot(_DMC_HIST_DOC,s=>cb(s.exists()?(s.data().quotes||[]):[]));
+window.fbSaveDMCQuote=async function(entry){
+  const snap=await getDoc(_DMC_HIST_DOC);
+  const quotes=snap.exists()?(snap.data().quotes||[]):[];
+  const u=window._vteUser;
+  const idx=quotes.findIndex(q=>q.id===entry.id);
+  if(idx>=0){quotes[idx]={...quotes[idx],...entry,updatedAt:new Date().toISOString(),updatedBy:u?(u.name+" ("+u.role+")"):"unknown"};}
+  else{quotes.unshift({...entry,createdByUsername:u?.u||"",createdByName:u?.name||"",collaborators:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:u?(u.name+" ("+u.role+")"):"unknown"});}
+  await setDoc(_DMC_HIST_DOC,{quotes:quotes.slice(0,500)});
+};
+window.fbDeleteDMCQuote=async function(id){
+  const snap=await getDoc(_DMC_HIST_DOC);if(!snap.exists())return;
+  await setDoc(_DMC_HIST_DOC,{quotes:(snap.data().quotes||[]).filter(q=>q.id!==id)});
+};
+window.fbSaveDMCQuoteState=async(quoteId,state,note)=>{
+  const snap=await getDoc(_dmcQpDoc(quoteId));
+  const ex=snap.exists()?snap.data():{versions:[],collaborators:[]};
+  const u=window._vteUser;
+  const vNo=(ex.versions?.length||0)+1;
+  const versions=[...(ex.versions||[]),{versionNo:vNo,savedAt:new Date().toISOString(),savedBy:u?(u.name+" ("+u.role+")"):"unknown",note:note||("Phiên bản "+vNo),state}].slice(-20);
+  await setDoc(_dmcQpDoc(quoteId),{...ex,versions,currentState:state,updatedAt:new Date().toISOString()});
+};
+window.fbGetDMCQuoteProject=async(quoteId)=>{const s=await getDoc(_dmcQpDoc(quoteId));return s.exists()?s.data():null;};
+window.fbOnDMCQuoteProject=(quoteId,cb)=>onSnapshot(_dmcQpDoc(quoteId),s=>cb(s.exists()?s.data():null));
+window.fbUpdateDMCCollaborators=async(quoteId,collaborators)=>{
+  const snap=await getDoc(_dmcQpDoc(quoteId));const ex=snap.exists()?snap.data():{};
+  await setDoc(_dmcQpDoc(quoteId),{...ex,collaborators});
+  const hSnap=await getDoc(_DMC_HIST_DOC);
+  if(hSnap.exists()){const qs=hSnap.data().quotes||[];const idx=qs.findIndex(q=>q.id===quoteId);if(idx>=0){qs[idx]={...qs[idx],collaborators};await setDoc(_DMC_HIST_DOC,{quotes:qs});}}
+};
+
 /* ══ Quote History Firestore sync ══ */
 window.fbOnQuoteHistory=function(cb){return onSnapshot(_HIST_DOC,s=>{cb(s.exists()?s.data().quotes||[]:[]); });};
 window.fbSaveQuote=async function(entry){
@@ -2349,7 +2383,7 @@ function RatesPanel({rates,onChange,visible,onToggle}){
 }
 
 /* ═══ HISTORY PANEL ════════════════════════════════════ */
-function HistPanel({user,cur,onLoad,currentQuoteId,onSetQuoteId}){
+function HistPanel({user,cur,onLoad,currentQuoteId,onSetQuoteId,template}){
   const[all,setAll]=useState(ldQuotes);
   const my=all[user.u]||[];
   const[saving,setSaving]=useState(false);
@@ -2361,21 +2395,21 @@ function HistPanel({user,cur,onLoad,currentQuoteId,onSetQuoteId}){
     const e={id:Date.now(),cloudId,name:name.trim(),date:new Date().toLocaleString("vi-VN"),savedBy:user.name,state:clone(cur)};
     const next={...all,[user.u]:[e,...my].slice(0,50)};
     setAll(next);svQuotes(next);setName("");setSaving(false);
-    /* Sync to Firestore cloud */
-    if(window.fbSaveQuote&&window.fbSaveQuoteState){
+    /* Sync to Firestore cloud — dùng DMC functions nếu template là dmc */
+    const _saveQ=template==="dmc"?window.fbSaveDMCQuote:window.fbSaveQuote;
+    const _saveS=template==="dmc"?window.fbSaveDMCQuoteState:window.fbSaveQuoteState;
+    if(_saveQ&&_saveS){
       try{
         if(!currentQuoteId){
-          /* Tạo mới entry trong quote_history */
-          await window.fbSaveQuote({
+          await _saveQ({
             id:cloudId,name:name.trim(),customer:"",
-            template:cur?.template||"domestic",dest:cur?.info?.dest||"",
+            template:cur?.template||template||"domestic",dest:cur?.info?.dest||"",
             pax:cur?.pax||1,days:cur?.info?.days||1,nights:cur?.info?.nights||0,
             totalCost:0,savedBy:user.name+" ("+user.role+")",
           });
           if(onSetQuoteId)onSetQuoteId(cloudId);
         }
-        /* Lưu state + version */
-        await window.fbSaveQuoteState(cloudId,cur,name.trim()+" · "+new Date().toLocaleString("vi-VN"));
+        await _saveS(cloudId,cur,name.trim()+" · "+new Date().toLocaleString("vi-VN"));
       }catch(err){console.warn("Cloud sync from HistPanel failed:",err.message);}
     }
   };
@@ -3276,7 +3310,7 @@ function CostView(props){
           <div style={{color:"rgba(15,58,74,0.45)",fontSize:12}}>{pax>0?fmt(totalCost/pax):""}/khách</div>
         </div>
       </div>
-      {hasPerm(user,"viewHistory")&&<HistPanel user={user} cur={curState} onLoad={loadState} currentQuoteId={currentQuoteId} onSetQuoteId={setCurrentQuoteId}/>}
+      {hasPerm(user,"viewHistory")&&<HistPanel user={user} cur={curState} onLoad={loadState} currentQuoteId={currentQuoteId} onSetQuoteId={setCurrentQuoteId} template={template}/>}
     </div>
   );
 }
@@ -5962,7 +5996,7 @@ function MainApp({user,onLogout}){
         {view==="dashboard"&&<DashboardView {...viewProps}/>}
         {view==="quote"&&<QuoteView {...viewProps}/>}
         {view==="payment"&&<PaymentView {...viewProps}/>}
-        {view==="history"&&hasPerm(user,"viewHistory")&&<QuoteHistoryView user={user} onLoadState={(s,qId)=>{loadState(s,qId);setView("cost");}} currentQuoteId={currentQuoteId} onSetQuoteId={setCurrentQuoteId}/>}
+        {view==="history"&&hasPerm(user,"viewHistory")&&<QuoteHistoryView user={user} template={template} onLoadState={(s,qId)=>{loadState(s,qId);setView("cost");}} currentQuoteId={currentQuoteId} onSetQuoteId={setCurrentQuoteId}/>}
         {view==="contracts"&&(hasPerm(user,"manageContracts")||hasPerm(user,"viewContracts"))&&<ContractView user={user}/>}
         {view==="customers"&&hasPerm(user,"manageCustomers")&&<CustomerView user={user}/>}
         {view==="ncc"&&hasPerm(user,"manageNCC")&&<NCCView user={user}/>}
@@ -6024,10 +6058,13 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,curState,cu
       /* Dùng currentQuoteId nếu đang cập nhật project hiện tại */
       const resolvedId=currentQuoteId||entry.id;
       const finalEntry={...entry,id:resolvedId};
-      await window.fbSaveQuote(finalEntry);
-      /* Lưu full state + version vào quote_projects/{id} */
-      if(window.fbSaveQuoteState&&curState){
-        await window.fbSaveQuoteState(resolvedId,curState,qName.trim()+" · "+new Date().toLocaleString("vi-VN"));
+      /* Dùng DMC functions nếu template là dmc */
+      const isDMCTemplate=currentQuoteId?false:(template==="dmc");
+      const saveQuoteFn=template==="dmc"?window.fbSaveDMCQuote:window.fbSaveQuote;
+      const saveStateFn=template==="dmc"?window.fbSaveDMCQuoteState:window.fbSaveQuoteState;
+      await saveQuoteFn(finalEntry);
+      if(saveStateFn&&curState){
+        await saveStateFn(resolvedId,curState,qName.trim()+" · "+new Date().toLocaleString("vi-VN"));
       }
 
       /* Tự động thêm vào danh sách khách hàng nếu chưa có */
@@ -6122,8 +6159,14 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,curState,cu
   );
 }
 
-function QuoteHistoryView({user,onLoadState,currentQuoteId,onSetQuoteId}){
+function QuoteHistoryView({user,template,onLoadState,currentQuoteId,onSetQuoteId}){
   const canDelete=hasPerm(user,"exportQuote");
+  const isDMCHistory=template==="dmc";
+  /* Use DMC-specific Firebase functions when in DMC mode */
+  const _onHistory=isDMCHistory?(window.fbOnDMCHistory||window.fbOnQuoteHistory):window.fbOnQuoteHistory;
+  const _deleteQuote=isDMCHistory?(window.fbDeleteDMCQuote||window.fbDeleteQuote):window.fbDeleteQuote;
+  const _getProject=isDMCHistory?(window.fbGetDMCQuoteProject||window.fbGetQuoteProject):window.fbGetQuoteProject;
+  const _updateCollaborators=isDMCHistory?(window.fbUpdateDMCCollaborators||window.fbUpdateCollaborators):window.fbUpdateCollaborators;
   const [quotes,setQuotes]=useState([]);
   const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
@@ -6136,8 +6179,8 @@ function QuoteHistoryView({user,onLoadState,currentQuoteId,onSetQuoteId}){
   const [allUsers]=useState(()=>ldUsers());
 
   useEffect(()=>{
-    if(!window.fbOnQuoteHistory)return;
-    const unsub=window.fbOnQuoteHistory(list=>{setQuotes(list);setLoading(false);});
+    if(!_onHistory)return;
+    const unsub=_onHistory(list=>{setQuotes(list);setLoading(false);});
     return()=>unsub&&unsub();
   },[]);
 
@@ -6153,10 +6196,10 @@ function QuoteHistoryView({user,onLoadState,currentQuoteId,onSetQuoteId}){
 
   /* Tải lại state từ cloud */
   const handleLoad=async(quote)=>{
-    if(!window.fbGetQuoteProject){alert("Firebase chưa sẵn sàng");return;}
+    if(!_getProject){alert("Firebase chưa sẵn sàng");return;}
     setLoadingId(quote.id);
     try{
-      const p=await window.fbGetQuoteProject(quote.id);
+      const p=await _getProject(quote.id);
       if(p?.currentState){
         onLoadState(p.currentState,quote.id);
         if(onSetQuoteId)onSetQuoteId(quote.id);
@@ -6181,19 +6224,19 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
     if(!found){alert("Không tìm thấy user: "+collabInput);return;}
     const p=projectData[quote.id]||{};
     const collabs=[...new Set([...(p.collaborators||[]),found.u])];
-    await window.fbUpdateCollaborators(quote.id,collabs);
+    await _updateCollaborators(quote.id,collabs);
     setProjectData(prev=>({...prev,[quote.id]:{...p,collaborators:collabs}}));
     setCollabInput("");
   };
   const handleRemoveCollab=async(quote,username)=>{
     const p=projectData[quote.id]||{};
     const collabs=(p.collaborators||[]).filter(c=>c!==username);
-    await window.fbUpdateCollaborators(quote.id,collabs);
+    await _updateCollaborators(quote.id,collabs);
     setProjectData(prev=>({...prev,[quote.id]:{...p,collaborators:collabs}}));
   };
 
   const handleDelete=async(id)=>{
-    try{await window.fbDeleteQuote(id);setDelConfirm(null);}
+    try{await _deleteQuote(id);setDelConfirm(null);}
     catch(e){alert("❌ Lỗi: "+e.message);}
   };
 
