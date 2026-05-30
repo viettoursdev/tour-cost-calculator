@@ -356,6 +356,28 @@ function showBrowserNotif(title, body, icon) {
   }
 }
 </script>
+<script>
+/* ══ Toast Sound System ══ */
+function playToastSound(type){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const play=(freq,start,dur,vol=0.25)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.type="sine";o.frequency.value=freq;
+      g.gain.setValueAtTime(vol,ctx.currentTime+start);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+      o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur);
+    };
+    if(type==="success"||type==="approved"){play(660,0,0.12);play(880,0.1,0.18);}
+    else if(type==="approval_request"){play(550,0,0.1);play(660,0.08,0.1);play(770,0.16,0.18);}
+    else if(type==="approval_done"){play(880,0,0.1);play(1100,0.08,0.2);}
+    else if(type==="error"){play(440,0,0.15);play(330,0.13,0.2);}
+    else{play(550,0,0.15);}
+  }catch(e){}
+}
+window.playToastSound=playToastSound;
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{min-height:100vh}
@@ -363,6 +385,23 @@ body{font-family:'DM Sans','Segoe UI',sans-serif;color:#0f3a4a;background:linear
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 ::-webkit-scrollbar{width:8px;height:8px}
+/* ── Toast notifications ── */
+.toast-container{position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.toast{background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 28px rgba(15,58,74,0.18);display:flex;align-items:flex-start;gap:10px;min-width:280px;max-width:380px;pointer-events:all;animation:toastIn .3s cubic-bezier(.34,1.56,.64,1) forwards;border-left:4px solid #14a08c}
+.toast.leaving{animation:toastOut .25s ease-in forwards}
+.toast-success{border-left-color:#27ae60}
+.toast-info{border-left-color:#2980b9}
+.toast-warning,.toast-approval_request{border-left-color:#f39c12}
+.toast-approval_done,.toast-approved{border-left-color:#27ae60}
+.toast-error{border-left-color:#dc3250}
+.toast-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.toast-body{flex:1;min-width:0}
+.toast-title{font-size:13px;font-weight:700;color:#0f3a4a;line-height:1.3}
+.toast-msg{font-size:11px;color:rgba(15,58,74,0.6);margin-top:2px;line-height:1.4}
+.toast-close{background:none;border:none;cursor:pointer;color:rgba(15,58,74,0.35);font-size:14px;padding:0;line-height:1;flex-shrink:0;margin-top:1px}
+.toast-close:hover{color:rgba(15,58,74,0.6)}
+@keyframes toastIn{from{opacity:0;transform:translateX(120%)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(120%)}}
 ::-webkit-scrollbar-thumb{background:rgba(20,150,140,0.35);border-radius:4px}
 .ec{cursor:pointer;border-radius:4px;padding:1px 4px;display:inline-block}
 .ec:hover{background:rgba(20,150,140,0.1)}
@@ -2911,6 +2950,7 @@ function exportPDFVector(info,pax,items,rates,catEnabled,roundedPPax,vat,user,ac
     pdf.text(`Trang ${i}/${total}`,pageW-mX,pageH-8,{align:"right"});
   }
   
+  if(window.showToast)window.showToast("Đã xuất PDF báo giá","export");
   pdf.save(`BaoGia_${(info.name||"Tour").replace(/[^a-zA-Z0-9_\u00C0-\u1EF9]/g,"_")}_vector_${new Date().toLocaleDateString("vi-VN").replace(/\//g,"-")}.pdf`);
 }
 
@@ -4312,10 +4352,7 @@ function PaymentRequestModal({data,info,user,onClose}){
           approvalKey:`${(info.name||"tour").replace(/[^a-zA-Z0-9]/g,"_")}_${ci.key||""}_${data.idx}`,
         }
       });
-      const toast=document.createElement("div");
-      toast.textContent="📤 Đã gửi đề nghị tới "+form.approver;
-      Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#f39c12",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",fontFamily:"DM Sans,Segoe UI,sans-serif"});
-      document.body.appendChild(toast);setTimeout(()=>toast.remove(),3000);
+      if(window.showToast)window.showToast("Đã gửi đề nghị thanh toán","approval_request","Chờ "+form.approver+" duyệt");
       onClose();
     }catch(e){alert("❌ Lỗi gửi: "+e.message);}
     finally{setSending(false);}
@@ -6258,6 +6295,7 @@ function SaveQuoteModal({info,template,pax,totalCost,user,existingId,curState,cu
       if(saveStateFn&&curState){
         await saveStateFn(resolvedId,curState,qName.trim()+" · "+new Date().toLocaleString("vi-VN"));
       }
+      if(window.showToast)window.showToast("Đã lưu báo giá lên Cloud","sync",qName.trim());
 
       /* Tự động thêm vào danh sách khách hàng nếu chưa có */
       if(trimmedCustomer&&window.fbPushCustomers){
@@ -6395,6 +6433,7 @@ function QuoteHistoryView({user,template,onLoadState,currentQuoteId,onSetQuoteId
       if(p?.currentState){
         onLoadState(p.currentState,quote.id);
         if(onSetQuoteId)onSetQuoteId(quote.id);
+        if(window.showToast)window.showToast("Đã tải báo giá","success",quote.name);
       }else{alert("Chưa có dữ liệu state. Hãy lưu lại qua nút Lưu lịch sử.");}
     }catch(e){alert("❌ Lỗi tải: "+e.message);}
     finally{setLoadingId(null);}
@@ -6724,7 +6763,7 @@ function exportAcceptanceCertPDF(contract,form,user){
   pdf.text((user?.name||"").toUpperCase(),mX+15,sigY+30,{align:"center"});
   pdf.text((contract.partyB?.rep||"").toUpperCase(),mX2-15,sigY+30,{align:"center"});
 
-  pdf.save(`BBNT_${(contract.contractNo||"HD").replace(/[^a-zA-Z0-9_]/g,"_")}_${(contract.partyB?.name||"").replace(/[^a-zA-Z0-9_]/g,"_").slice(0,20)}.pdf`);
+  if(window.showToast)window.showToast("Đã xuất Biên bản nghiệm thu","export",`HĐ #${contract.contractNo||""}`); pdf.save(`BBNT_${(contract.contractNo||"HD").replace(/[^a-zA-Z0-9_]/g,"_")}_${(contract.partyB?.name||"").replace(/[^a-zA-Z0-9_]/g,"_").slice(0,20)}.pdf`);
 }
 
 /* ── Acceptance Cert Modal ── */
@@ -6839,9 +6878,7 @@ function PaymentPanel({contract,onUpdate,canEdit,user}){
       const next=payments.map(x=>x.id===p.id?{...x,approvalRequested:true,approvalRequestedBy:user?.name||"",approvalRequestedAt:new Date().toISOString(),assignedTo:targetApprover.u,assignedToName:targetApprover.name}:x);
       commit(next);
       const toast=document.createElement("div");
-      toast.textContent="📤 Đã gửi đề nghị thanh toán tới "+targetApprover.name;
-      Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#f39c12",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",fontFamily:"DM Sans,Segoe UI,sans-serif"});
-      document.body.appendChild(toast);setTimeout(()=>toast.remove(),3500);
+      if(window.showToast)window.showToast("Đã gửi đề nghị thanh toán","approval_request","Chờ "+targetApprover.name+" duyệt");
     }catch(e){alert("❌ Lỗi gửi đề nghị: "+e.message);}
     finally{setRequesting(null);setSelectedApprover("");}
   };
@@ -7711,6 +7748,11 @@ function NotificationBell({ user }) {
       }
       /* Đánh dấu notification này đã xử lý */
       if(window.fbDeleteNotification)await window.fbDeleteNotification(user.u,n.id);
+      if(window.showToast)window.showToast(
+        approved?"Đã duyệt thanh toán":"Đã từ chối thanh toán",
+        approved?"approval_done":"error",
+        n.data.catName||n.data.paymentLabel||""
+      );
     }catch(e){alert("❌ Lỗi: "+e.message);}
     finally{setActing(null);}
   };
@@ -7726,6 +7768,13 @@ function NotificationBell({ user }) {
             const newUnread = notifs.filter(n => !n.read && !prev.find(p => p.id === n.id));
             newUnread.forEach(n => {
               if (typeof showBrowserNotif !== 'undefined') showBrowserNotif(n.title, n.message);
+              /* Toast for different notification types */
+              if(window.showToast){
+                if(n.type==="payment_approval")window.showToast(n.title,"approval_request",n.message.slice(0,60));
+                else if(n.type==="payment_approved")window.showToast(n.title,"approved",n.message.slice(0,60));
+                else if(n.type==="collab_invite")window.showToast(n.title,"info",n.message.slice(0,60));
+                else if(n.type==="payment_due")window.showToast(n.title,"warning",n.message.slice(0,60));
+              }
             });
             return notifs;
           });
@@ -7803,6 +7852,59 @@ function NotificationBell({ user }) {
   );
 }
 
+/* ═══ TOAST SYSTEM ══════════════════════════════════════ */
+const TOAST_CONFIG={
+  success:       {icon:"✅",title:"Thành công"},
+  info:          {icon:"ℹ️",title:"Thông tin"},
+  warning:       {icon:"⚠️",title:"Cảnh báo"},
+  error:         {icon:"❌",title:"Lỗi"},
+  approval_request:{icon:"💰",title:"Yêu cầu duyệt"},
+  approval_done: {icon:"✅",title:"Đã duyệt"},
+  approved:      {icon:"🎉",title:"Được duyệt"},
+  export:        {icon:"📄",title:"Xuất file"},
+  sync:          {icon:"☁️",title:"Đồng bộ"},
+};
+
+function ToastContainer(){
+  const [toasts,setToasts]=useState([]);
+  const [leaving,setLeaving]=useState({});
+
+  useEffect(()=>{
+    window.showToast=(message,type="success",subMsg="",duration=4000)=>{
+      const id=Date.now()+Math.random();
+      setToasts(prev=>[{id,message,type,subMsg,duration},...prev].slice(0,5));
+      if(typeof window.playToastSound!=="undefined")window.playToastSound(type);
+      setTimeout(()=>{
+        setLeaving(prev=>({...prev,[id]:true}));
+        setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),260);
+      },duration);
+    };
+  },[]);
+
+  const dismiss=(id)=>{
+    setLeaving(prev=>({...prev,[id]:true}));
+    setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),260);
+  };
+
+  return(
+    <div className="toast-container">
+      {toasts.map(t=>{
+        const cfg=TOAST_CONFIG[t.type]||TOAST_CONFIG.info;
+        return(
+          <div key={t.id} className={`toast toast-${t.type}${leaving[t.id]?" leaving":""}`}>
+            <span className="toast-icon">{cfg.icon}</span>
+            <div className="toast-body">
+              <div className="toast-title">{t.message||cfg.title}</div>
+              {t.subMsg&&<div className="toast-msg">{t.subMsg}</div>}
+            </div>
+            <button className="toast-close" onClick={()=>dismiss(t.id)}>✕</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ═══ ROOT ═════════════════════════════════════════════ */
 async function checkContractDeadlines(user) {
   if (!window.fbGetContracts || !window.fbSendNotification) return;
@@ -7870,7 +7972,12 @@ function App(){
       window._fbInitialPull();
     }
   },[user]);
-  return user?<MainApp user={user} onLogout={onLogout}/>:<LoginScreen onLogin={onLogin}/>;
+  return(
+    <>
+      <ToastContainer/>
+      {user?<MainApp user={user} onLogout={onLogout}/>:<LoginScreen onLogin={onLogin}/>}
+    </>
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
