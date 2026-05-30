@@ -6663,7 +6663,7 @@ function PaymentPanel({contract,onUpdate,canEdit,user}){
   const [approverPicker,setApproverPicker]=useState(null); // {paymentId} — đang chọn người duyệt
   const [selectedApprover,setSelectedApprover]=useState(""); // username đã chọn
   /* Danh sách user có thể duyệt */
-  const approvers=ldUsers().filter(u=>["CEO","Trưởng Phòng"].includes(u.role)&&u.u!==user?.u);
+  const approvers=ldUsers().filter(u=>["CEO","Trưởng Phòng"].includes(u.role)&&u.u!==user?.u&&u.u);
   const sendApprovalRequest=async(p,targetApprover)=>{
     if(!window.fbSendNotification||!targetApprover)return;
     setRequesting(p.id);
@@ -6747,7 +6747,7 @@ function PaymentPanel({contract,onUpdate,canEdit,user}){
               </div>
               <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:ps.color+"22",color:ps.color,whiteSpace:"nowrap"}}>{ps.label}</span>
               {/* Đề nghị TT - hiện cho mọi user có exportQuote, không hiện cho CEO/Trưởng Phòng (họ tự duyệt) */}
-              {user&&!["CEO","Trưởng Phòng"].includes(user.role)&&p.status==="pending"&&!p.approvalRequested&&(
+              {user&&p.status==="pending"&&!p.approvalRequested&&(
                 <div style={{position:"relative",flexShrink:0}}>
                   <button onClick={e=>{e.stopPropagation();setApproverPicker(ap=>ap===p.id?null:p.id);setSelectedApprover("");}}
                     disabled={requesting===p.id}
