@@ -6660,39 +6660,42 @@ function PaymentPanel({contract,onUpdate,canEdit,user}){
 
   /* Gửi đề nghị thanh toán tới CEO/Trưởng Phòng */
   const [requesting,setRequesting]=useState(null); // payment id đang gửi
-  const sendApprovalRequest=async(p)=>{
-    if(!window.fbSendNotification)return;
+  const [approverPicker,setApproverPicker]=useState(null); // {paymentId} — đang chọn người duyệt
+  const [selectedApprover,setSelectedApprover]=useState(""); // username đã chọn
+  /* Danh sách user có thể duyệt */
+  const approvers=ldUsers().filter(u=>["CEO","Trưởng Phòng"].includes(u.role)&&u.u!==user?.u);
+  const sendApprovalRequest=async(p,targetApprover)=>{
+    if(!window.fbSendNotification||!targetApprover)return;
     setRequesting(p.id);
+    setApproverPicker(null);
     try{
-      const approvers=ldUsers().filter(u=>["CEO","Trưởng Phòng"].includes(u.role)&&u.u!==user?.u);
       const contractNo=contract.contractNo||contract.id;
-      const amount=fmtCurrency?fmtCurrency(toOutputCurrency?toOutputCurrency(+p.amount,undefined,undefined):+p.amount,"VND"):((+p.amount||0).toLocaleString("vi-VN")+" đ");
-      for(const approver of approvers){
-        await window.fbSendNotification(approver.u,{
-          type:"payment_approval",
-          title:"💰 Đề nghị xác nhận thanh toán",
-          message:`${user?.name||"?"} đề nghị xác nhận: HĐ #${contractNo} · "${p.label}" · ${(+p.amount||0).toLocaleString("vi-VN")} đ`,
-          createdBy:(user?.name||"?")+" ("+(user?.role||"")+")",
-          data:{
-            contractId:contract.id,
-            contractNo,
-            paymentId:p.id,
-            paymentLabel:p.label,
-            amount:+p.amount,
-            requestedBy:user?.u||"",
-            requestedByName:user?.name||"",
-          }
-        });
-      }
-      /* Đánh dấu đã gửi đề nghị */
-      const next=payments.map(x=>x.id===p.id?{...x,approvalRequested:true,approvalRequestedBy:user?.name||"",approvalRequestedAt:new Date().toISOString()}:x);
+      await window.fbSendNotification(targetApprover.u,{
+        type:"payment_approval",
+        title:"💰 Đề nghị xác nhận thanh toán",
+        message:`${user?.name||"?"} đề nghị xác nhận: HĐ #${contractNo} · "${p.label}" · ${(+p.amount||0).toLocaleString("vi-VN")} đ`,
+        createdBy:(user?.name||"?")+" ("+(user?.role||"")+")",
+        data:{
+          contractId:contract.id,
+          contractNo,
+          paymentId:p.id,
+          paymentLabel:p.label,
+          amount:+p.amount,
+          requestedBy:user?.u||"",
+          requestedByName:user?.name||"",
+          assignedTo:targetApprover.u,
+          assignedToName:targetApprover.name,
+        }
+      });
+      /* Đánh dấu đã gửi đề nghị + ghi rõ người được chỉ định */
+      const next=payments.map(x=>x.id===p.id?{...x,approvalRequested:true,approvalRequestedBy:user?.name||"",approvalRequestedAt:new Date().toISOString(),assignedTo:targetApprover.u,assignedToName:targetApprover.name}:x);
       commit(next);
       const toast=document.createElement("div");
-      toast.textContent="📤 Đã gửi đề nghị thanh toán tới "+approvers.map(a=>a.name).join(", ");
+      toast.textContent="📤 Đã gửi đề nghị thanh toán tới "+targetApprover.name;
       Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#f39c12",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",fontFamily:"DM Sans,Segoe UI,sans-serif"});
       document.body.appendChild(toast);setTimeout(()=>toast.remove(),3500);
     }catch(e){alert("❌ Lỗi gửi đề nghị: "+e.message);}
-    finally{setRequesting(null);}
+    finally{setRequesting(null);setSelectedApprover("");}
   };
 
   return(
@@ -6745,14 +6748,45 @@ function PaymentPanel({contract,onUpdate,canEdit,user}){
               <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:ps.color+"22",color:ps.color,whiteSpace:"nowrap"}}>{ps.label}</span>
               {/* Đề nghị TT - hiện cho mọi user có exportQuote, không hiện cho CEO/Trưởng Phòng (họ tự duyệt) */}
               {user&&!["CEO","Trưởng Phòng"].includes(user.role)&&p.status==="pending"&&!p.approvalRequested&&(
-                <button onClick={e=>{e.stopPropagation();sendApprovalRequest(p);}} disabled={requesting===p.id}
-                  title="Gửi đề nghị xác nhận thanh toán tới CEO/Trưởng Phòng"
-                  style={{background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.35)",color:"#f39c12",borderRadius:6,padding:"3px 8px",cursor:requesting===p.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
-                  {requesting===p.id?"⏳":"📤"} TT
-                </button>
+                <div style={{position:"relative",flexShrink:0}}>
+                  <button onClick={e=>{e.stopPropagation();setApproverPicker(ap=>ap===p.id?null:p.id);setSelectedApprover("");}}
+                    disabled={requesting===p.id}
+                    title="Chọn người phê duyệt thanh toán"
+                    style={{background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.35)",color:"#f39c12",borderRadius:6,padding:"3px 8px",cursor:requesting===p.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                    {requesting===p.id?"⏳":"📤"} Đề nghị TT
+                  </button>
+                  {/* Approver picker dropdown */}
+                  {approverPicker===p.id&&(
+                    <div onClick={e=>e.stopPropagation()}
+                      style={{position:"absolute",bottom:"calc(100%+6px)",right:0,background:"#fff",border:"1.5px solid rgba(243,156,18,0.3)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:400,minWidth:220,padding:"10px 12px"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Chỉ định người duyệt</div>
+                      {approvers.length===0&&<div style={{fontSize:12,color:"rgba(15,58,74,0.4)",fontStyle:"italic"}}>Không có CEO/Trưởng Phòng</div>}
+                      {approvers.map(a=>(
+                        <button key={a.u} onClick={()=>setSelectedApprover(a.u)}
+                          style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",background:selectedApprover===a.u?"rgba(243,156,18,0.12)":"none",border:selectedApprover===a.u?"1.5px solid rgba(243,156,18,0.4)":"1.5px solid transparent",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:4,textAlign:"left"}}>
+                          <span style={{width:26,height:26,borderRadius:"50%",background:a.color||"#f39c12",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{(a.name||a.u)[0]}</span>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div>
+                            <div style={{fontSize:10,color:"rgba(15,58,74,0.45)"}}>{a.role}</div>
+                          </div>
+                          {selectedApprover===a.u&&<span style={{marginLeft:"auto",color:"#f39c12",fontSize:14}}>✓</span>}
+                        </button>
+                      ))}
+                      <div style={{display:"flex",gap:6,marginTop:8,borderTop:"1px solid rgba(243,156,18,0.15)",paddingTop:8}}>
+                        <button onClick={()=>{setApproverPicker(null);setSelectedApprover("");}} style={{flex:1,padding:"6px 0",background:"none",border:"1px solid rgba(0,0,0,0.1)",borderRadius:7,cursor:"pointer",fontSize:11,fontFamily:"inherit",color:"rgba(15,58,74,0.5)"}}>Huỷ</button>
+                        <button onClick={()=>{const a=approvers.find(x=>x.u===selectedApprover);if(a)sendApprovalRequest(p,a);}} disabled={!selectedApprover}
+                          style={{flex:2,padding:"6px 0",background:selectedApprover?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:selectedApprover?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:7,cursor:selectedApprover?"pointer":"not-allowed",fontSize:11,fontWeight:700,fontFamily:"inherit"}}>
+                          📤 Gửi đề nghị
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               {p.approvalRequested&&p.status==="pending"&&(
-                <span style={{fontSize:10,color:"#f39c12",fontWeight:700,background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.25)",borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>⏳ Chờ duyệt</span>
+                <span title={p.assignedToName?"Chờ "+p.assignedToName+" duyệt":""} style={{fontSize:10,color:"#f39c12",fontWeight:700,background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.25)",borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0,cursor:"default"}}>
+                  ⏳ Chờ {p.assignedToName||"duyệt"}
+                </span>
               )}
               {p.approvedBy&&<span style={{fontSize:10,color:"#27ae60",fontWeight:700,flexShrink:0}}>✅ {p.approvedBy}</span>}
               {canEdit&&<button onClick={()=>delPayment(p.id)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(220,50,80,0.45)",fontSize:13,padding:"0 2px",lineHeight:1}}>✕</button>}
