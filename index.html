@@ -6063,23 +6063,24 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
                         </div>
                       );
                     })}
-                    {/* Add collaborator — chỉ creator mới được mời */}
-                    {q.createdByUsername!==user.u&&<div style={{fontSize:12,color:"rgba(15,58,74,0.4)",fontStyle:"italic",marginTop:6}}>🔒 Chỉ người tạo báo giá mới có thể mời thêm cộng tác viên</div>}
-                    {q.createdByUsername===user.u&&<div style={{display:"flex",gap:8,marginTop:8}}>
-                      <div style={{flex:1,position:"relative"}}>
-                        <input value={collabInput} onChange={e=>setCollabInput(e.target.value)} placeholder="Tìm tên hoặc username..."
-                          style={{width:"100%",padding:"7px 12px",border:"1.5px solid rgba(41,128,185,0.25)",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}
-                          list={"collab-users-"+q.id}/>
-                        <datalist id={"collab-users-"+q.id}>
-                          {allUsers.filter(u=>(u.name||u.u)&&!(proj?.collaborators||[]).includes(u.u)).map(u=>(
-                            <option key={u.u} value={u.u}>{u.name} ({u.role})</option>
-                          ))}
-                        </datalist>
+                    {/* Add collaborator: creator mới được mời */}
+                    {q.createdByUsername===user.u?(
+                      <div style={{display:"flex",gap:8,marginTop:8}}>
+                        <div style={{flex:1,position:"relative"}}>
+                          <input value={collabInput} onChange={e=>setCollabInput(e.target.value)} placeholder="Tìm tên hoặc username..."
+                            style={{width:"100%",padding:"7px 12px",border:"1.5px solid rgba(41,128,185,0.25)",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}
+                            list={"collab-users-"+q.id}/>
+                          <datalist id={"collab-users-"+q.id}>
+                            {allUsers.filter(u=>(u.name||u.u)&&!(proj?.collaborators||[]).includes(u.u)).map(u=>(
+                              <option key={u.u} value={u.u}>{u.name} ({u.role})</option>
+                            ))}
+                          </datalist>
+                        </div>
+                        <button onClick={()=>handleAddCollab(q)} style={{padding:"7px 14px",background:"linear-gradient(135deg,#2980b9,#3498db)",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",whiteSpace:"nowrap"}}>+ Thêm</button>
                       </div>
-                      <button onClick={()=>handleAddCollab(q)} style={{padding:"7px 14px",background:"linear-gradient(135deg,#2980b9,#3498db)",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:700,fontSize:12,fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                        + Thêm
-                      </button>
-                    </div>}
+                    ):(
+                      <div style={{fontSize:12,color:"rgba(15,58,74,0.4)",fontStyle:"italic",marginTop:6}}>🔒 Chỉ người tạo báo giá mới có thể mời thêm cộng tác viên</div>
+                    )}
                   </div>
                 )}
               </div>
