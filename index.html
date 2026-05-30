@@ -7730,7 +7730,7 @@ function NotificationBell({ user }) {
       /* Gửi thông báo kết quả về người đề nghị */
       if(window.fbSendNotification&&n.data.requestedBy){
         await window.fbSendNotification(n.data.requestedBy,{
-          type:approved?"payment_approved":"payment_approval",
+          type:approved?"payment_approved":"payment_rejected",
           title:approved?"✅ Đề nghị TT được duyệt":"❌ Đề nghị TT bị từ chối",
           message:approved
             ?`${user.name} đã duyệt: "${n.data.paymentLabel||""}" · HĐ #${n.data.contractNo||""} · ${(n.data.amount||0).toLocaleString("vi-VN")} đ`
@@ -7767,6 +7767,12 @@ function NotificationBell({ user }) {
                 else if(n.type==="payment_approved")window.showToast(n.title,"approved",n.message.slice(0,60));
                 else if(n.type==="collab_invite")window.showToast(n.title,"info",n.message.slice(0,60));
                 else if(n.type==="payment_due")window.showToast(n.title,"warning",n.message.slice(0,60));
+              }
+              /* Khi nhận được kết quả duyệt, cập nhật payment_approvals */
+              if((n.type==="payment_approved"||n.type==="payment_rejected")&&n.data?.approvalKey&&window.fbSetPaymentApproval){
+                const status=n.type==="payment_approved"?"approved":"rejected";
+                const approverName=n.createdBy?.split("(")[0].trim()||"";
+                window.fbSetPaymentApproval(n.data.approvalKey,status,approverName).catch(()=>{});
               }
             });
             return notifs;
