@@ -6629,7 +6629,7 @@ function AcceptanceCertModal({contract,user,onSave,onClose}){
 }
 
 /* ── Payment Panel ── */
-function PaymentPanel({contract,onUpdate,canEdit}){
+function PaymentPanel({contract,onUpdate,canEdit,user}){
   /* Đảm bảo mỗi payment có id (backward compat với data cũ không có id) */
   const [payments,setPayments]=useState((contract.payments||[]).map((p,i)=>p.id?p:{...p,id:"p_"+i+"_"+Date.now()}));
   const [adding,setAdding]=useState(false);
@@ -6657,6 +6657,43 @@ function PaymentPanel({contract,onUpdate,canEdit}){
     commit(next);setAdding(false);setNewP({label:"",amount:"",dueDate:"",note:""});
   };
   const delPayment=(id)=>commit(payments.filter(p=>p.id!==id));
+
+  /* Gửi đề nghị thanh toán tới CEO/Trưởng Phòng */
+  const [requesting,setRequesting]=useState(null); // payment id đang gửi
+  const sendApprovalRequest=async(p)=>{
+    if(!window.fbSendNotification)return;
+    setRequesting(p.id);
+    try{
+      const approvers=ldUsers().filter(u=>["CEO","Trưởng Phòng"].includes(u.role)&&u.u!==user?.u);
+      const contractNo=contract.contractNo||contract.id;
+      const amount=fmtCurrency?fmtCurrency(toOutputCurrency?toOutputCurrency(+p.amount,undefined,undefined):+p.amount,"VND"):((+p.amount||0).toLocaleString("vi-VN")+" đ");
+      for(const approver of approvers){
+        await window.fbSendNotification(approver.u,{
+          type:"payment_approval",
+          title:"💰 Đề nghị xác nhận thanh toán",
+          message:`${user?.name||"?"} đề nghị xác nhận: HĐ #${contractNo} · "${p.label}" · ${(+p.amount||0).toLocaleString("vi-VN")} đ`,
+          createdBy:(user?.name||"?")+" ("+(user?.role||"")+")",
+          data:{
+            contractId:contract.id,
+            contractNo,
+            paymentId:p.id,
+            paymentLabel:p.label,
+            amount:+p.amount,
+            requestedBy:user?.u||"",
+            requestedByName:user?.name||"",
+          }
+        });
+      }
+      /* Đánh dấu đã gửi đề nghị */
+      const next=payments.map(x=>x.id===p.id?{...x,approvalRequested:true,approvalRequestedBy:user?.name||"",approvalRequestedAt:new Date().toISOString()}:x);
+      commit(next);
+      const toast=document.createElement("div");
+      toast.textContent="📤 Đã gửi đề nghị thanh toán tới "+approvers.map(a=>a.name).join(", ");
+      Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#f39c12",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",fontFamily:"DM Sans,Segoe UI,sans-serif"});
+      document.body.appendChild(toast);setTimeout(()=>toast.remove(),3500);
+    }catch(e){alert("❌ Lỗi gửi đề nghị: "+e.message);}
+    finally{setRequesting(null);}
+  };
 
   return(
     <div style={{padding:"14px 20px 16px",background:"rgba(168,230,221,0.07)",borderTop:"1px solid rgba(20,150,140,0.1)"}}>
@@ -6706,6 +6743,18 @@ function PaymentPanel({contract,onUpdate,canEdit}){
                 {p.paidDate&&<div style={{color:"#27ae60"}}>TT: {p.paidDate}</div>}
               </div>
               <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:ps.color+"22",color:ps.color,whiteSpace:"nowrap"}}>{ps.label}</span>
+              {/* Đề nghị TT - hiện cho mọi user có exportQuote, không hiện cho CEO/Trưởng Phòng (họ tự duyệt) */}
+              {user&&!["CEO","Trưởng Phòng"].includes(user.role)&&p.status==="pending"&&!p.approvalRequested&&(
+                <button onClick={e=>{e.stopPropagation();sendApprovalRequest(p);}} disabled={requesting===p.id}
+                  title="Gửi đề nghị xác nhận thanh toán tới CEO/Trưởng Phòng"
+                  style={{background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.35)",color:"#f39c12",borderRadius:6,padding:"3px 8px",cursor:requesting===p.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}>
+                  {requesting===p.id?"⏳":"📤"} TT
+                </button>
+              )}
+              {p.approvalRequested&&p.status==="pending"&&(
+                <span style={{fontSize:10,color:"#f39c12",fontWeight:700,background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.25)",borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0}}>⏳ Chờ duyệt</span>
+              )}
+              {p.approvedBy&&<span style={{fontSize:10,color:"#27ae60",fontWeight:700,flexShrink:0}}>✅ {p.approvedBy}</span>}
               {canEdit&&<button onClick={()=>delPayment(p.id)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(220,50,80,0.45)",fontSize:13,padding:"0 2px",lineHeight:1}}>✕</button>}
             </div>
           );
@@ -6928,7 +6977,7 @@ function ContractView({user}){
                   </div>
                 </div>
                 {/* Payment panel */}
-                {isExpanded&&<PaymentPanel contract={c} canEdit={canEdit} onUpdate={updates=>updateContract(c.id,updates)}/>}
+                {isExpanded&&<PaymentPanel contract={c} canEdit={canEdit} user={user} onUpdate={updates=>updateContract(c.id,updates)}/>}
               </div>
             );
           })}
@@ -7480,7 +7529,50 @@ function NCCView({user}){
 function NotificationBell({ user }) {
   const [notifications, setNotifications] = useState([]);
   const [open, setOpen] = useState(false);
+  const [acting, setActing] = useState(null); // notif id being approved/rejected
   const ref = useRef(null);
+  const canApprove=["CEO","Trưởng Phòng"].includes(user?.role);
+
+  /* Xử lý duyệt / từ chối đề nghị thanh toán */
+  const handleApproval=async(n,approved)=>{
+    if(!n.data||acting)return;
+    setActing(n.id);
+    try{
+      if(window.fbGetContracts&&window.fbPushContracts){
+        const contracts=await window.fbGetContracts();
+        const idx=contracts.findIndex(c=>c.id===n.data.contractId);
+        if(idx>=0){
+          const today=new Date().toISOString().slice(0,10);
+          const updPayments=(contracts[idx].payments||[]).map(p=>
+            p.id===n.data.paymentId?{...p,
+              status:approved?"paid":"pending",
+              paidDate:approved?today:null,
+              approvedBy:approved?(user.name+" ("+user.role+")"):null,
+              approvalRequested:!approved, // giữ chờ nếu từ chối
+              rejectedBy:approved?null:user.name,
+            }:p
+          );
+          contracts[idx]={...contracts[idx],payments:updPayments,updatedAt:today,updatedBy:user.name};
+          await window.fbPushContracts(contracts);
+        }
+      }
+      /* Gửi thông báo kết quả về người đề nghị */
+      if(window.fbSendNotification&&n.data.requestedBy){
+        await window.fbSendNotification(n.data.requestedBy,{
+          type:approved?"payment_approved":"payment_approval",
+          title:approved?"✅ Đề nghị TT được duyệt":"❌ Đề nghị TT bị từ chối",
+          message:approved
+            ?`${user.name} đã duyệt: "${n.data.paymentLabel||""}" · HĐ #${n.data.contractNo||""} · ${(n.data.amount||0).toLocaleString("vi-VN")} đ`
+            :`${user.name} từ chối: "${n.data.paymentLabel||""}" · HĐ #${n.data.contractNo||""}`,
+          createdBy:user.name+" ("+user.role+")",
+          data:{contractId:n.data.contractId}
+        });
+      }
+      /* Đánh dấu notification này đã xử lý */
+      if(window.fbDeleteNotification)await window.fbDeleteNotification(user.u,n.id);
+    }catch(e){alert("❌ Lỗi: "+e.message);}
+    finally{setActing(null);}
+  };
   
   useEffect(() => {
     if (!user?.u || !window.fbOnNotifications) return;
@@ -7528,15 +7620,27 @@ function NotificationBell({ user }) {
           <div style={{ maxHeight: 380, overflowY: 'auto' }}>
             {notifications.length === 0 && <div style={{ padding: '32px 16px', textAlign: 'center', color: 'rgba(15,58,74,0.4)', fontSize: 13 }}>Chưa có thông báo</div>}
             {notifications.map(n => (
-              <div key={n.id} onClick={() => window.fbMarkOneRead && window.fbMarkOneRead(user.u, n.id)}
-                style={{ padding: '11px 14px', borderBottom: '1px solid rgba(20,150,140,0.07)', background: n.read ? '#fff' : 'rgba(20,150,140,0.05)', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(20,150,140,0.08)'}
-                onMouseLeave={e => e.currentTarget.style.background = n.read ? '#fff' : 'rgba(20,150,140,0.05)'}>
+              <div key={n.id}
+                style={{ padding: '11px 14px', borderBottom: '1px solid rgba(20,150,140,0.07)', background: n.read ? '#fff' : 'rgba(20,150,140,0.05)', display: 'flex', gap: 10, alignItems: 'flex-start' }}
+                onClick={() => n.type!=="payment_approval"&&window.fbMarkOneRead&&window.fbMarkOneRead(user.u,n.id)}>
                 <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{ICONS[n.type] || '🔔'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: n.read ? 500 : 700, fontSize: 13, color: n.read ? 'rgba(15,58,74,0.7)' : '#0f3a4a', marginBottom: 2 }}>{n.title}</div>
                   <div style={{ fontSize: 11, color: 'rgba(15,58,74,0.55)', lineHeight: 1.4 }}>{n.message}</div>
                   <div style={{ fontSize: 10, color: 'rgba(15,58,74,0.35)', marginTop: 3 }}>{fmtTime(n.createdAt)} · {n.createdBy}</div>
+                  {/* Approve/Reject buttons — chỉ CEO/Trưởng Phòng */}
+                  {n.type==="payment_approval"&&canApprove&&(
+                    <div style={{display:"flex",gap:6,marginTop:8}} onClick={e=>e.stopPropagation()}>
+                      <button onClick={()=>handleApproval(n,true)} disabled={acting===n.id}
+                        style={{flex:1,padding:"5px 10px",background:"linear-gradient(135deg,#27ae60,#2ecc71)",color:"#fff",border:"none",borderRadius:7,cursor:acting===n.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",opacity:acting===n.id?0.7:1}}>
+                        {acting===n.id?"⏳":"✅"} Duyệt
+                      </button>
+                      <button onClick={()=>handleApproval(n,false)} disabled={acting===n.id}
+                        style={{flex:1,padding:"5px 10px",background:"rgba(220,50,80,0.1)",color:"#dc3250",border:"1px solid rgba(220,50,80,0.3)",borderRadius:7,cursor:acting===n.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",opacity:acting===n.id?0.7:1}}>
+                        {acting===n.id?"⏳":"❌"} Từ chối
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {!n.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: COLORS[n.type] || '#14a08c', flexShrink: 0, marginTop: 4 }}/>}
               </div>
