@@ -4536,21 +4536,29 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
   y+=8;
 
   /* ── Approval Status Section ── */
+  /* Người duyệt tương ứng: stage1 → approver1, stage2 → approver2 */
+  const _apv1ForStage=approvalStatus?.stage1?.approverName||form.approver1||"";
+  const _apv2ForStage=approvalStatus?.stage2?.approverName||form.approver2||"";
   const renderStage=(stage,stageData,label)=>{
     if(!stageData)return;
     const isOk=stageData.status==="approved";
     const stC=isOk?[39,174,96]:[220,50,80];
     const stBg=isOk?[236,252,243]:[254,242,242];
-    const h=stageData.note?24:18;
+    const h=stageData.note?26:18;
     pdf.setFillColor(...stBg);pdf.roundedRect(mX,y,pageW-mX*2,h,3,3,"F");
     pdf.setDrawColor(...stC);pdf.setLineWidth(0.4);pdf.roundedRect(mX,y,pageW-mX*2,h,3,3,"S");
     pdf.setFontSize(8);pdf.setTextColor(...stC);setFont("bold");
     const icon=isOk?"✓ ĐÃ DUYỆT":"✗ TỪ CHỐI";
+    const personName=(stageData.approverName||( stage===1?_apv1ForStage:_apv2ForStage)||"").split("(")[0].trim();
     pdf.text(`${label}: ${icon}`,mX+4,y+6);
-    pdf.setFont(FONT,"normal");
+    setFont("normal");
     const at=stageData.updatedAt?new Date(stageData.updatedAt).toLocaleDateString("vi-VN"):"";
-    pdf.text(`${stageData.approverName||""}${at?" · "+at:""}`,pageW-mX-2,y+6,{align:"right"});
-    if(stageData.note){pdf.setFontSize(7.5);pdf.setTextColor(...[100,100,100]);setFont("italic");pdf.text(`Ghi chú: ${stageData.note}`,mX+4,y+14);}
+    pdf.text(`${personName}${at?" · "+at:""}`,pageW-mX-2,y+6,{align:"right"});
+    if(stageData.note){
+      pdf.setFontSize(7.5);pdf.setTextColor(100,100,100);setFont("italic");
+      const noteLines=pdf.splitTextToSize(`Ghi chú: ${stageData.note}`,pageW-mX*2-8);
+      pdf.text(noteLines,mX+4,y+14);
+    }
     y+=h+4;
   };
   if(approvalStatus){
@@ -4588,22 +4596,24 @@ function exportPaymentRequest(form,ci,info,user,approvalStatus){
 
   pdf.setDrawColor(...gray);pdf.setLineWidth(0.2);pdf.line(mX,y,pageW-mX,y);y+=14;
   
-  // Signatures - 3 columns
+  // Signatures - 3 columns: Người đề nghị | Người duyệt 1 | Người duyệt 2
   const sigW=(pageW-mX*2)/3;
+  const _apv1Name=approvalStatus?.stage1?.approverName||form.approver1||"";
+  const _apv2Name=approvalStatus?.stage2?.approverName||form.approver2||"";
   pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
   pdf.text("NGƯỜI ĐỀ NGHỊ",mX+sigW/2,y,{align:"center"});
-  pdf.text("NGƯỜI DUYỆT",mX+sigW+sigW/2,y,{align:"center"});
-  pdf.text("KẾ TOÁN",mX+sigW*2+sigW/2,y,{align:"center"});
+  pdf.text("NGƯỜI DUYỆT 1",mX+sigW+sigW/2,y,{align:"center"});
+  pdf.text("NGƯỜI DUYỆT 2",mX+sigW*2+sigW/2,y,{align:"center"});
   y+=4;
   pdf.setFontSize(7.5);pdf.setTextColor(...gray);setFont("normal");
   pdf.text("(Requester)",mX+sigW/2,y,{align:"center"});
-  pdf.text("(Approver)",mX+sigW+sigW/2,y,{align:"center"});
-  pdf.text("(Accountant)",mX+sigW*2+sigW/2,y,{align:"center"});
+  pdf.text("(Approver 1)",mX+sigW+sigW/2,y,{align:"center"});
+  pdf.text("(Approver 2)",mX+sigW*2+sigW/2,y,{align:"center"});
   y+=22;
   pdf.setFontSize(9);pdf.setTextColor(...dark);setFont("bold");
   pdf.text(form.requester||user.name,mX+sigW/2,y,{align:"center"});
-  const _approverName=(approvalStatus?.stage2?.approverName||approvalStatus?.stage1?.approverName||approvalStatus?.approverName||form.approver1||"");
-  pdf.text(_approverName,mX+sigW+sigW/2,y,{align:"center"});
+  pdf.text(_apv1Name.split("(")[0].trim(),mX+sigW+sigW/2,y,{align:"center"});
+  pdf.text(_apv2Name.split("(")[0].trim(),mX+sigW*2+sigW/2,y,{align:"center"});
   
   // Footer
   pdf.setFillColor(...teal);pdf.rect(0,pageH-4,pageW,4,"F");
