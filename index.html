@@ -296,8 +296,54 @@ window.fbPullUsers=async function(){
 };
 window.fbOnUsers=function(cb){return onSnapshot(_USERS_DOC,s=>{cb(s.exists()?(s.data().users||[]):null);});};
 
+/* ══ Notifications Firestore sync ══ */
+const _notifDoc = (username) => doc(_db, "user_notifications", username);
+
+window.fbSendNotification = async (targetUsername, notif) => {
+  const d = _notifDoc(targetUsername);
+  const snap = await getDoc(d);
+  const existing = snap.exists() ? (snap.data().notifications || []) : [];
+  const newNotif = { ...notif, id: Date.now().toString(36) + Math.random().toString(36).slice(2,5), read: false, createdAt: new Date().toISOString() };
+  await setDoc(d, { notifications: [newNotif, ...existing].slice(0, 100) });
+};
+
+window.fbOnNotifications = (username, cb) => onSnapshot(_notifDoc(username), s => cb(s.exists() ? (s.data().notifications || []) : []));
+
+window.fbMarkAllRead = async (username) => {
+  const snap = await getDoc(_notifDoc(username));
+  if (!snap.exists()) return;
+  const notifs = (snap.data().notifications || []).map(n => ({ ...n, read: true }));
+  await setDoc(_notifDoc(username), { notifications: notifs });
+};
+
+window.fbMarkOneRead = async (username, id) => {
+  const snap = await getDoc(_notifDoc(username));
+  if (!snap.exists()) return;
+  const notifs = (snap.data().notifications || []).map(n => n.id === id ? { ...n, read: true } : n);
+  await setDoc(_notifDoc(username), { notifications: notifs });
+};
+
+window.fbDeleteNotification = async (username, id) => {
+  const snap = await getDoc(_notifDoc(username));
+  if (!snap.exists()) return;
+  const notifs = (snap.data().notifications || []).filter(n => n.id !== id);
+  await setDoc(_notifDoc(username), { notifications: notifs });
+};
+
 window._fbReady=true;
 console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
+</script>
+<script>
+function requestBrowserNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+function showBrowserNotif(title, body, icon) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: icon || '', tag: title });
+  }
+}
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -5918,6 +5964,7 @@ function MainApp({user,onLogout}){
                 {hasPerm(user,"syncRateCard")&&<button onClick={()=>setShowRateSync(true)} title="Đồng bộ Master Rate Card giữa các máy" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>🗂️ Master RC</button>}
                 {hasPerm(user,"viewHistory")&&<button onClick={()=>setShowSaveHist(true)} title="Lưu báo giá hiện tại vào lịch sử Cloud" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>💾 Lưu lịch sử</button>}
                 {hasPerm(user,"manageUsers")&&<button onClick={()=>setShowUserMgmt(true)} title="Quản lý tài khoản (CEO)" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 10px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>👤 Tài khoản</button>}
+                <NotificationBell user={user}/>
                 <button onClick={onLogout} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"4px 12px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>⏻ Đăng xuất</button>
               </div>
             </div>
@@ -6227,6 +6274,16 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
     await _updateCollaborators(quote.id,collabs);
     setProjectData(prev=>({...prev,[quote.id]:{...p,collaborators:collabs}}));
     setCollabInput("");
+    // Send notification to invited user
+    if(window.fbSendNotification) {
+      await window.fbSendNotification(found.u, {
+        type: "collab_invite",
+        title: "Bạn được mời cộng tác",
+        message: `${user.name} đã mời bạn cộng tác trên báo giá "${quote.name}"`,
+        createdBy: user.name + " (" + user.role + ")",
+        data: { quoteId: quote.id, quoteName: quote.name }
+      });
+    }
   };
   const handleRemoveCollab=async(quote,username)=>{
     const p=projectData[quote.id]||{};
@@ -7420,12 +7477,114 @@ function NCCView({user}){
   );
 }
 
+function NotificationBell({ user }) {
+  const [notifications, setNotifications] = useState([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  
+  useEffect(() => {
+    if (!user?.u || !window.fbOnNotifications) return;
+    const unsub = window.fbOnNotifications(user.u, (notifs) => {
+      const prev = notifications;
+      // Show browser notification for new unread items
+      const newUnread = notifs.filter(n => !n.read && !prev.find(p => p.id === n.id));
+      newUnread.forEach(n => {
+        if (typeof showBrowserNotif !== 'undefined') showBrowserNotif(n.title, n.message);
+      });
+      setNotifications(notifs);
+    });
+    return () => unsub && unsub();
+  }, [user?.u]);
+
+  // Close on outside click
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const unread = notifications.filter(n => !n.read).length;
+  
+  const ICONS = { collab_invite: '👥', payment_approval: '💰', payment_approved: '✅', payment_due: '⏰', acceptance_due: '📋' };
+  const COLORS = { collab_invite: '#2980b9', payment_approval: '#f39c12', payment_approved: '#27ae60', payment_due: '#e74c3c', acceptance_due: '#8e44ad' };
+  
+  const fmtTime = (s) => { try { const d = new Date(s); const now = new Date(); const diff = Math.floor((now - d) / 60000); if (diff < 1) return 'Vừa xong'; if (diff < 60) return `${diff} phút trước`; if (diff < 1440) return `${Math.floor(diff/60)} giờ trước`; return d.toLocaleDateString('vi-VN'); } catch(e) { return s; } };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button onClick={() => setOpen(s => !s)}
+        style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 9, padding: '4px 10px', color: '#fff', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}>
+        🔔
+        {unread > 0 && <span style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unread > 9 ? '9+' : unread}</span>}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 360, background: '#fff', borderRadius: 14, boxShadow: '0 12px 32px rgba(15,58,74,0.18)', border: '1px solid rgba(20,150,140,0.15)', zIndex: 500, overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid rgba(20,150,140,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#0f3a4a' }}>🔔 Thông báo {unread > 0 && <span style={{ background: '#e74c3c', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10, marginLeft: 4 }}>{unread}</span>}</div>
+            {unread > 0 && <button onClick={() => window.fbMarkAllRead && window.fbMarkAllRead(user.u)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#14a08c', fontWeight: 600, fontFamily: 'inherit' }}>Đọc tất cả</button>}
+          </div>
+          {/* List */}
+          <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+            {notifications.length === 0 && <div style={{ padding: '32px 16px', textAlign: 'center', color: 'rgba(15,58,74,0.4)', fontSize: 13 }}>Chưa có thông báo</div>}
+            {notifications.map(n => (
+              <div key={n.id} onClick={() => window.fbMarkOneRead && window.fbMarkOneRead(user.u, n.id)}
+                style={{ padding: '11px 14px', borderBottom: '1px solid rgba(20,150,140,0.07)', background: n.read ? '#fff' : 'rgba(20,150,140,0.05)', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(20,150,140,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = n.read ? '#fff' : 'rgba(20,150,140,0.05)'}>
+                <span style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>{ICONS[n.type] || '🔔'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: n.read ? 500 : 700, fontSize: 13, color: n.read ? 'rgba(15,58,74,0.7)' : '#0f3a4a', marginBottom: 2 }}>{n.title}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(15,58,74,0.55)', lineHeight: 1.4 }}>{n.message}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(15,58,74,0.35)', marginTop: 3 }}>{fmtTime(n.createdAt)} · {n.createdBy}</div>
+                </div>
+                {!n.read && <div style={{ width: 7, height: 7, borderRadius: '50%', background: COLORS[n.type] || '#14a08c', flexShrink: 0, marginTop: 4 }}/>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ═══ ROOT ═════════════════════════════════════════════ */
+async function checkContractDeadlines(user) {
+  if (!window.fbGetContracts || !window.fbSendNotification) return;
+  try {
+    const contracts = await window.fbGetContracts();
+    const today = new Date();
+    const in7days = new Date(today.getTime() + 7 * 86400000);
+    
+    for (const c of contracts) {
+      const payments = c.payments || [];
+      for (const p of payments) {
+        if (p.status !== 'pending' || !p.dueDate) continue;
+        const due = new Date(p.dueDate);
+        if (due <= in7days && due >= today) {
+          const daysLeft = Math.ceil((due - today) / 86400000);
+          await window.fbSendNotification(user.u, {
+            type: 'payment_due',
+            title: '⏰ Sắp đến hạn thanh toán',
+            message: `HĐ #${c.contractNo || c.id} - "${p.label}": ${(+p.amount||0).toLocaleString('vi-VN')} đ - còn ${daysLeft} ngày`,
+            createdBy: 'Hệ thống',
+            data: { contractId: c.id, paymentId: p.id }
+          });
+        }
+      }
+    }
+  } catch(e) { console.warn('Deadline check failed:', e.message); }
+}
+
 function App(){
   const[user,setUser]=useState(ldSess);
 
   /* Sync users từ Firestore khi app load lần đầu */
   useEffect(()=>{
+    // Request browser notification permission
+    if (typeof requestBrowserNotifPermission !== 'undefined') {
+      requestBrowserNotifPermission();
+    }
     if(syncUsersFromCloud)syncUsersFromCloud();
     /* Lắng nghe thay đổi user realtime */
     if(window.fbOnUsers){
@@ -7444,6 +7603,8 @@ function App(){
     if(window._fbInitialPull&&!PERMISSIONS[u.role]?.editRateCard){
       window._fbInitialPull();
     }
+    // Check deadlines after login
+    setTimeout(() => checkContractDeadlines(u), 3000);
   };
   const onLogout=()=>{setUser(null);clrSess();window._vteUser=null;};
   useEffect(()=>{
