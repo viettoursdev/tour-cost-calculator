@@ -2234,15 +2234,15 @@ function LineRow({item,pax,rates,onUpd,onDel,catColor,outputCurrency}){
         <EN value={item.times} onChange={v=>u({times:v})} min={1} width={48} style={{fontSize:14}}/>
       </td>
       <td style={{padding:"9px 8px",textAlign:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:4,justifyContent:"center"}}>
-          <select className="sel" value={item.qtyMode} onChange={e=>u({qtyMode:e.target.value})} style={{fontSize:11}}>
+        <div style={{display:"flex",alignItems:"center",gap:4,justifyContent:"center",flexDirection:"column"}}>
+          <select className="sel" value={item.qtyMode} onChange={e=>u({qtyMode:e.target.value,customQty:e.target.value==="per_pax"?pax:e.target.value==="per_group"?1:item.customQty})} style={{fontSize:10,padding:"1px 4px"}}>
             <option value="per_pax">×pax</option>
             <option value="per_group">đoàn</option>
             <option value="custom">tuỳ</option>
           </select>
-          {item.qtyMode==="custom"
-            ?<EN value={item.customQty} onChange={v=>u({customQty:v})} min={1} width={44} style={{fontSize:14}}/>
-            :<span style={{color:"rgba(15,58,74,0.4)",fontSize:12}}>{item.qtyMode==="per_pax"?`=${pax}`:"=1"}</span>}
+          <EN value={item.qtyMode==="per_pax"?pax:item.qtyMode==="per_group"?1:item.customQty}
+            onChange={v=>{u({qtyMode:"custom",customQty:v});}}
+            min={1} width={48} style={{fontSize:14,fontWeight:700}}/>
         </div>
       </td>
       <td style={{padding:"9px 12px",textAlign:"right",fontWeight:700,color:off?"rgba(15,58,74,0.3)":(item.foc?"#27ae60":catColor),whiteSpace:"nowrap",fontSize:14}}>
