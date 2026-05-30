@@ -252,6 +252,16 @@ window._fbSyncContracts=async(tourKey,tourContracts,info)=>{
   }catch(e){console.warn("Contract Firestore sync failed:",e.message);}
 };
 
+/* ══ User Accounts Firestore sync ══ */
+const _USERS_DOC=doc(_db,"viettours","user_accounts");
+window.fbPushUsers=async function(users){
+  await setDoc(_USERS_DOC,{users,updatedAt:new Date().toISOString()});
+};
+window.fbPullUsers=async function(){
+  const s=await getDoc(_USERS_DOC);return s.exists()?(s.data().users||[]):null;
+};
+window.fbOnUsers=function(cb){return onSnapshot(_USERS_DOC,s=>{cb(s.exists()?(s.data().users||[]):null);});};
+
 window._fbReady=true;
 console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
 </script>
@@ -364,7 +374,25 @@ const ldUsers=()=>{
   }catch(e){}
   return DEFAULT_USERS;
 };
-const svUsers=(users)=>{try{localStorage.setItem("vte_users",JSON.stringify(users));}catch(e){}};
+/* Pull users từ Firestore và merge vào localStorage */
+async function syncUsersFromCloud(){
+  if(!window.fbPullUsers)return;
+  try{
+    const cloudUsers=await window.fbPullUsers();
+    if(!cloudUsers||cloudUsers.length===0)return;
+    const local=ldUsers();
+    // Merge: ưu tiên cloud, giữ lại user local chưa có trên cloud
+    const cloudIds=new Set(cloudUsers.map(u=>u.u));
+    const localOnly=local.filter(u=>!cloudIds.has(u.u));
+    const merged=[...cloudUsers,...localOnly];
+    try{localStorage.setItem("vte_users",JSON.stringify(merged));}catch(e){}
+    return merged;
+  }catch(e){console.warn("User cloud sync failed:",e.message);}
+}
+const svUsers=(users)=>{
+  try{localStorage.setItem("vte_users",JSON.stringify(users));}catch(e){}
+  if(window.fbPushUsers)window.fbPushUsers(users).catch(e=>console.warn("User sync failed:",e.message));
+};
 
 const ldSess=()=>{try{return JSON.parse(sessionStorage.getItem("vte_s")||"null")}catch(e){return null}};
 const svSess=u=>{try{sessionStorage.setItem("vte_s",JSON.stringify(u))}catch(e){}};
@@ -7063,6 +7091,20 @@ function NCCView({user}){
 /* ═══ ROOT ═════════════════════════════════════════════ */
 function App(){
   const[user,setUser]=useState(ldSess);
+
+  /* Sync users từ Firestore khi app load lần đầu */
+  useEffect(()=>{
+    if(syncUsersFromCloud)syncUsersFromCloud();
+    /* Lắng nghe thay đổi user realtime */
+    if(window.fbOnUsers){
+      const unsub=window.fbOnUsers(cloudUsers=>{
+        if(!cloudUsers||cloudUsers.length===0)return;
+        try{localStorage.setItem("vte_users",JSON.stringify(cloudUsers));}catch(e){}
+      });
+      return()=>unsub&&unsub();
+    }
+  },[]);
+
   const onLogin=(u)=>{
     setUser(u);svSess(u);
     window._vteUser=u;
