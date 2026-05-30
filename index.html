@@ -5388,6 +5388,7 @@ function MainApp({user,onLogout}){
   const[showExportDD,setShowExportDD]=useState(false);
   const[showRateDD,setShowRateDD]=useState(false);
   const[showSaveHist,setShowSaveHist]=useState(false);
+  const[currentQuoteId,setCurrentQuoteId]=useState(null);
   const fileInputRef=useRef(null);
   const quoteRef=useRef(null);
 
@@ -5480,7 +5481,6 @@ function MainApp({user,onLogout}){
   const roundedPPax=Math.ceil(sellingPPax/rounding)*rounding;
 
   const curState={template,info,pax,rates,margin,vat,svcBasis,rounding,items,catEnabled};
-  const[currentQuoteId,setCurrentQuoteId]=useState(null);
   const loadState=(s,quoteId)=>{
     setTemplate(s.template);setInfo(s.info);setPax(s.pax);setRates(s.rates);
     setMargin(s.margin);setVat(s.vat);setSvcBasis(s.svcBasis);setRounding(s.rounding);
