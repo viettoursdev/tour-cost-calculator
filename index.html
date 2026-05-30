@@ -4225,14 +4225,19 @@ function AddCustomCostModal({activeCATS,onAdd,onClose}){
 /* ═══ PAYMENT REQUEST MODAL – Phiếu đề nghị thanh toán ═══ */
 function PaymentRequestModal({data,info,user,onClose}){
   const {ci,inst}=data;
+  const allUsers=ldUsers();
+  const approverList=allUsers.filter(u=>["CEO","Trưởng Phòng"].includes(u.role));
   const [form,setForm]=useState({
     supplier:"",
     content:`Thanh toán ${inst.label.toLowerCase()} cho hạng mục: ${ci.name}`,
     amount:+inst.amount||0,
     approver:"",
+    approverUsername:"",
     requester:user.name,
     note:"",
   });
+  const [sending,setSending]=useState(false);
+  const [showApproverPicker,setShowApproverPicker]=useState(false);
   
   // Load supplier from payment record if exists
   useEffect(()=>{
@@ -4247,6 +4252,34 @@ function PaymentRequestModal({data,info,user,onClose}){
   const handleExport=()=>{
     exportPaymentRequest(form,ci,info,user);
     onClose();
+  };
+
+  const handleSendNotification=async()=>{
+    if(!form.approverUsername||!window.fbSendNotification)return;
+    setSending(true);
+    try{
+      await window.fbSendNotification(form.approverUsername,{
+        type:"payment_approval",
+        title:"💰 Đề nghị xác nhận thanh toán NCC",
+        message:`${user.name} đề nghị duyệt: "${ci.name}" - ${form.supplier||"(NCC)"} - ${(+form.amount||0).toLocaleString("vi-VN")} đ · Tour: ${info.name||""}`,
+        createdBy:user.name+" ("+user.role+")",
+        data:{
+          requestedBy:user.u,
+          requestedByName:user.name,
+          tourName:info.name||"",
+          catName:ci.name,
+          supplier:form.supplier,
+          amount:+form.amount,
+          content:form.content,
+        }
+      });
+      const toast=document.createElement("div");
+      toast.textContent="📤 Đã gửi đề nghị tới "+form.approver;
+      Object.assign(toast.style,{position:"fixed",bottom:"24px",right:"24px",background:"#f39c12",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",zIndex:"9999",fontFamily:"DM Sans,Segoe UI,sans-serif"});
+      document.body.appendChild(toast);setTimeout(()=>toast.remove(),3000);
+      onClose();
+    }catch(e){alert("❌ Lỗi gửi: "+e.message);}
+    finally{setSending(false);}
   };
   
   return(
@@ -4276,10 +4309,27 @@ function PaymentRequestModal({data,info,user,onClose}){
               <input type="number" value={form.amount} onChange={e=>setForm(p=>({...p,amount:+e.target.value}))}
                 className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
             </div>
-            <div>
+            <div style={{position:"relative"}}>
               <div style={{color:"rgba(15,58,74,0.6)",fontSize:12,fontWeight:600,marginBottom:6}}>NGƯỜI DUYỆT</div>
-              <input value={form.approver} onChange={e=>setForm(p=>({...p,approver:e.target.value}))} placeholder="Tên người duyệt"
-                className="login-input" style={{padding:"10px 13px",fontSize:14}}/>
+              <button onClick={()=>setShowApproverPicker(s=>!s)} style={{width:"100%",textAlign:"left",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,padding:"10px 13px",fontSize:14,cursor:"pointer",fontFamily:"inherit",color:form.approver?"#0f3a4a":"rgba(15,58,74,0.4)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span>{form.approver||"Chọn người duyệt..."}</span>
+                <span style={{fontSize:10,opacity:0.5}}>{showApproverPicker?"▲":"▼"}</span>
+              </button>
+              {showApproverPicker&&(
+                <div style={{position:"absolute",top:"calc(100%+4px)",left:0,right:0,background:"#fff",border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.1)",zIndex:300,padding:"8px"}}>
+                  {approverList.map(a=>(
+                    <button key={a.u} onClick={()=>{setForm(p=>({...p,approver:a.name,approverUsername:a.u}));setShowApproverPicker(false);}}
+                      style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"8px 10px",background:form.approverUsername===a.u?"rgba(20,150,140,0.08)":"none",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:2,textAlign:"left"}}>
+                      <span style={{width:28,height:28,borderRadius:"50%",background:a.color||"#14a08c",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{(a.name||a.u)[0]}</span>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div>
+                        <div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{a.role}</div>
+                      </div>
+                      {form.approverUsername===a.u&&<span style={{marginLeft:"auto",color:"#14a08c"}}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div>
@@ -4292,9 +4342,13 @@ function PaymentRequestModal({data,info,user,onClose}){
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span>Tổng chi phí khoản:</span><strong>{fmt(ci.amount)}</strong></div>
             <div style={{display:"flex",justifyContent:"space-between",paddingTop:6,borderTop:"1px solid rgba(20,150,140,0.2)"}}><span style={{fontWeight:700,color:"#0d7a6a"}}>Số tiền đề nghị:</span><strong style={{color:"#dc3250",fontSize:15}}>{fmt(form.amount)}</strong></div>
           </div>
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={onClose} style={{flex:1,background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:11,padding:13,cursor:"pointer",fontWeight:600,fontSize:14,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
-            <button onClick={handleExport} style={{flex:2,background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:11,padding:13,cursor:"pointer",fontWeight:800,fontSize:14,fontFamily:"inherit"}}>📄 Xuất phiếu PDF</button>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={onClose} style={{flex:"0 0 80px",background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:11,padding:12,cursor:"pointer",fontWeight:600,fontSize:13,color:"rgba(15,58,74,0.6)",fontFamily:"inherit"}}>Huỷ</button>
+            <button onClick={handleExport} style={{flex:1,background:"rgba(20,150,140,0.08)",border:"1.5px solid rgba(20,150,140,0.3)",color:"#0d7a6a",borderRadius:11,padding:12,cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit"}}>📄 Xuất PDF</button>
+            <button onClick={handleSendNotification} disabled={!form.approverUsername||sending}
+              style={{flex:1,background:form.approverUsername?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:form.approverUsername?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:11,padding:12,cursor:form.approverUsername&&!sending?"pointer":"not-allowed",fontWeight:800,fontSize:13,fontFamily:"inherit",opacity:sending?0.7:1}}>
+              {sending?"⏳ Đang gửi...":"📤 Gửi đề nghị"}
+            </button>
           </div>
         </div>
       </div>
@@ -6747,48 +6801,7 @@ function PaymentPanel({contract,onUpdate,canEdit,user}){
               </div>
               <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:ps.color+"22",color:ps.color,whiteSpace:"nowrap"}}>{ps.label}</span>
               {/* Đề nghị TT - hiện cho mọi user có exportQuote, không hiện cho CEO/Trưởng Phòng (họ tự duyệt) */}
-              {user&&p.status==="pending"&&!p.approvalRequested&&(
-                <div style={{position:"relative",flexShrink:0}}>
-                  <button onClick={e=>{e.stopPropagation();setApproverPicker(ap=>ap===p.id?null:p.id);setSelectedApprover("");}}
-                    disabled={requesting===p.id}
-                    title="Chọn người phê duyệt thanh toán"
-                    style={{background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.35)",color:"#f39c12",borderRadius:6,padding:"3px 8px",cursor:requesting===p.id?"not-allowed":"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                    {requesting===p.id?"⏳":"📤"} Đề nghị TT
-                  </button>
-                  {/* Approver picker dropdown */}
-                  {approverPicker===p.id&&(
-                    <div onClick={e=>e.stopPropagation()}
-                      style={{position:"absolute",bottom:"calc(100%+6px)",right:0,background:"#fff",border:"1.5px solid rgba(243,156,18,0.3)",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",zIndex:400,minWidth:220,padding:"10px 12px"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:1,textTransform:"uppercase",marginBottom:8}}>Chỉ định người duyệt</div>
-                      {approvers.length===0&&<div style={{fontSize:12,color:"rgba(15,58,74,0.4)",fontStyle:"italic"}}>Không có CEO/Trưởng Phòng</div>}
-                      {approvers.map(a=>(
-                        <button key={a.u} onClick={()=>setSelectedApprover(a.u)}
-                          style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",background:selectedApprover===a.u?"rgba(243,156,18,0.12)":"none",border:selectedApprover===a.u?"1.5px solid rgba(243,156,18,0.4)":"1.5px solid transparent",borderRadius:8,cursor:"pointer",fontFamily:"inherit",marginBottom:4,textAlign:"left"}}>
-                          <span style={{width:26,height:26,borderRadius:"50%",background:a.color||"#f39c12",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{(a.name||a.u)[0]}</span>
-                          <div>
-                            <div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{a.name}</div>
-                            <div style={{fontSize:10,color:"rgba(15,58,74,0.45)"}}>{a.role}</div>
-                          </div>
-                          {selectedApprover===a.u&&<span style={{marginLeft:"auto",color:"#f39c12",fontSize:14}}>✓</span>}
-                        </button>
-                      ))}
-                      <div style={{display:"flex",gap:6,marginTop:8,borderTop:"1px solid rgba(243,156,18,0.15)",paddingTop:8}}>
-                        <button onClick={()=>{setApproverPicker(null);setSelectedApprover("");}} style={{flex:1,padding:"6px 0",background:"none",border:"1px solid rgba(0,0,0,0.1)",borderRadius:7,cursor:"pointer",fontSize:11,fontFamily:"inherit",color:"rgba(15,58,74,0.5)"}}>Huỷ</button>
-                        <button onClick={()=>{const a=approvers.find(x=>x.u===selectedApprover);if(a)sendApprovalRequest(p,a);}} disabled={!selectedApprover}
-                          style={{flex:2,padding:"6px 0",background:selectedApprover?"linear-gradient(135deg,#f39c12,#e67e22)":"rgba(0,0,0,0.05)",color:selectedApprover?"#fff":"rgba(15,58,74,0.3)",border:"none",borderRadius:7,cursor:selectedApprover?"pointer":"not-allowed",fontSize:11,fontWeight:700,fontFamily:"inherit"}}>
-                          📤 Gửi đề nghị
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {p.approvalRequested&&p.status==="pending"&&(
-                <span title={p.assignedToName?"Chờ "+p.assignedToName+" duyệt":""} style={{fontSize:10,color:"#f39c12",fontWeight:700,background:"rgba(243,156,18,0.1)",border:"1px solid rgba(243,156,18,0.25)",borderRadius:6,padding:"3px 8px",whiteSpace:"nowrap",flexShrink:0,cursor:"default"}}>
-                  ⏳ Chờ {p.assignedToName||"duyệt"}
-                </span>
-              )}
-              {p.approvedBy&&<span style={{fontSize:10,color:"#27ae60",fontWeight:700,flexShrink:0}}>✅ {p.approvedBy}</span>}
+
               {canEdit&&<button onClick={()=>delPayment(p.id)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(220,50,80,0.45)",fontSize:13,padding:"0 2px",lineHeight:1}}>✕</button>}
             </div>
           );
