@@ -6323,14 +6323,22 @@ function PaymentPanel({contract,onUpdate,canEdit}){
   const [payments,setPayments]=useState(contract.payments||[]);
   const [adding,setAdding]=useState(false);
   const [newP,setNewP]=useState({label:"",amount:"",dueDate:"",note:""});
+  const [editAmt,setEditAmt]=useState(null); // {id, val} — inline edit số tiền
   const total=Math.round((+contract.pricePerPax||0)*(+contract.contractPax||0));
   const totalPaid=payments.filter(p=>p.status==="paid").reduce((s,p)=>s+(+p.amount||0),0);
+  const totalReceived=payments.filter(p=>p.status==="paid"&&p.receivedAmount!=null).reduce((s,p)=>s+(+p.receivedAmount||+p.amount||0),0);
   const paidPct=total>0?Math.min(100,totalPaid/total*100):0;
 
   const commit=(next)=>{setPayments(next);onUpdate({payments:next});};
   const togglePaid=(id)=>{
     const next=payments.map(p=>p.id===id?{...p,status:p.status==="paid"?"pending":"paid",paidDate:p.status==="paid"?null:new Date().toISOString().slice(0,10)}:p);
     commit(next);
+  };
+  /* Lưu số tiền thực nhận */
+  const saveAmount=(id)=>{
+    if(!editAmt||editAmt.id!==id)return;
+    const next=payments.map(p=>p.id===id?{...p,receivedAmount:+editAmt.val||+p.amount}:p);
+    commit(next);setEditAmt(null);
   };
   const addPayment=()=>{
     if(!newP.label.trim()||!newP.amount)return;
@@ -6362,8 +6370,27 @@ function PaymentPanel({contract,onUpdate,canEdit}){
                 <span style={{fontWeight:700,fontSize:13,color:"#0f3a4a"}}>{p.label}</span>
                 {p.note&&<span style={{fontSize:11,color:"rgba(15,58,74,0.45)",marginLeft:6}}>{p.note}</span>}
               </div>
-              <div style={{fontSize:13,fontWeight:700,color:p.status==="paid"?"#27ae60":"#0f3a4a"}}>{(+p.amount||0).toLocaleString("vi-VN")} đ</div>
-              <div style={{fontSize:11,color:"rgba(15,58,74,0.4)",whiteSpace:"nowrap",textAlign:"right"}}>
+              {/* Số tiền kế hoạch + thực nhận */}
+              <div style={{textAlign:"right",minWidth:130}}>
+                <div style={{fontSize:12,color:"rgba(15,58,74,0.45)",marginBottom:1}}>
+                  KH: {(+p.amount||0).toLocaleString("vi-VN")} đ
+                </div>
+                {canEdit&&editAmt?.id===p.id?(
+                  <input autoFocus type="number" value={editAmt.val}
+                    onChange={e=>setEditAmt({id:p.id,val:e.target.value})}
+                    onBlur={()=>saveAmount(p.id)}
+                    onKeyDown={e=>{if(e.key==="Enter")saveAmount(p.id);if(e.key==="Escape")setEditAmt(null);}}
+                    style={{width:120,padding:"3px 7px",border:"1.5px solid #14a08c",borderRadius:6,fontSize:13,fontWeight:700,color:"#0d7a6a",fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
+                ):(
+                  <div onClick={()=>canEdit&&setEditAmt({id:p.id,val:String(p.receivedAmount!=null?p.receivedAmount:p.amount||"")})}
+                    title={canEdit?"Click để nhập số tiền thực nhận":""}
+                    style={{fontSize:13,fontWeight:700,color:p.status==="paid"?"#27ae60":"#0f3a4a",cursor:canEdit?"pointer":"default",borderBottom:canEdit?"1px dashed rgba(20,150,140,0.3)":"none",display:"inline-block"}}>
+                    TT: {p.receivedAmount!=null?(+p.receivedAmount).toLocaleString("vi-VN"):(+p.amount||0).toLocaleString("vi-VN")} đ
+                    {canEdit&&<span style={{fontSize:9,marginLeft:4,opacity:0.4}}>✏️</span>}
+                  </div>
+                )}
+              </div>
+              <div style={{fontSize:11,color:"rgba(15,58,74,0.4)",whiteSpace:"nowrap",textAlign:"right",minWidth:70}}>
                 {p.dueDate&&<div>Hạn: {p.dueDate}</div>}
                 {p.paidDate&&<div style={{color:"#27ae60"}}>TT: {p.paidDate}</div>}
               </div>
@@ -6572,6 +6599,12 @@ function ContractView({user}){
                     </button>
                     {canEdit&&!c.hasAcceptance&&(c.contractStatus==="signed"||c.contractStatus==="active")&&(
                       <button onClick={()=>setAcceptanceModal(c)} style={{background:"rgba(39,174,96,0.1)",border:"1px solid rgba(39,174,96,0.25)",color:"#27ae60",borderRadius:7,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}} title="Tạo biên bản nghiệm thu">✅ Nghiệm thu</button>
+                    )}
+                    {c.hasAcceptance&&(
+                      <button onClick={()=>exportAcceptanceCertPDF(c,{date:c.acceptanceDate||new Date().toISOString().slice(0,10),note:c.acceptanceNote||""},user)}
+                        style={{background:"rgba(39,174,96,0.1)",border:"1px solid rgba(39,174,96,0.3)",color:"#27ae60",borderRadius:7,padding:"6px 11px",cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"inherit"}} title="Xuất lại biên bản nghiệm thu PDF">
+                        📄 BBNT
+                      </button>
                     )}
                     {canEdit&&<select value={c.contractStatus||"draft"} onChange={e=>updateContract(c.id,{contractStatus:e.target.value})}
                       style={{padding:"5px 8px",border:"1px solid rgba(20,150,140,0.2)",borderRadius:7,fontSize:11,fontFamily:"inherit",color:"rgba(15,58,74,0.7)",background:"#fff",outline:"none",cursor:"pointer"}}>
