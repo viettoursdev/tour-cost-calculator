@@ -174,9 +174,17 @@ window.fbGetQuoteProject=async(quoteId)=>{
 };
 window.fbOnQuoteProject=(quoteId,cb)=>onSnapshot(_qpDoc(quoteId),s=>cb(s.exists()?s.data():null));
 window.fbUpdateCollaborators=async(quoteId,collaborators)=>{
+  /* Update quote_projects */
   const snap=await getDoc(_qpDoc(quoteId));
   const ex=snap.exists()?snap.data():{};
   await setDoc(_qpDoc(quoteId),{...ex,collaborators});
+  /* Also sync collaborators into quote_history entry for visibility filtering */
+  const hSnap=await getDoc(_HIST_DOC);
+  if(hSnap.exists()){
+    const qs=hSnap.data().quotes||[];
+    const idx=qs.findIndex(q=>q.id===quoteId);
+    if(idx>=0){qs[idx]={...qs[idx],collaborators};await setDoc(_HIST_DOC,{quotes:qs});}
+  }
 };
 
 /* ══ Quote History Firestore sync ══ */
@@ -184,9 +192,28 @@ window.fbOnQuoteHistory=function(cb){return onSnapshot(_HIST_DOC,s=>{cb(s.exists
 window.fbSaveQuote=async function(entry){
   const snap=await getDoc(_HIST_DOC);
   const quotes=snap.exists()?(snap.data().quotes||[]):[];
+  const u=window._vteUser;
   const idx=quotes.findIndex(q=>q.id===entry.id);
-  if(idx>=0){quotes[idx]={...quotes[idx],...entry,updatedAt:new Date().toISOString()};}
-  else{quotes.unshift({...entry,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}
+  if(idx>=0){
+    /* Update: preserve createdBy + collaborators, only update content */
+    quotes[idx]={...quotes[idx],...entry,
+      createdByUsername:quotes[idx].createdByUsername||u?.u||"",
+      createdByName:quotes[idx].createdByName||u?.name||"",
+      collaborators:quotes[idx].collaborators||[],
+      updatedAt:new Date().toISOString(),
+      updatedBy:u?(u.name+" ("+u.role+")"):"unknown",
+    };
+  }else{
+    /* Create: set creator info */
+    quotes.unshift({...entry,
+      createdByUsername:u?.u||"",
+      createdByName:u?.name||"",
+      collaborators:[],
+      createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+      updatedBy:u?(u.name+" ("+u.role+")"):"unknown",
+    });
+  }
   await setDoc(_HIST_DOC,{quotes:quotes.slice(0,500)});
 };
 window.fbDeleteQuote=async function(id){
@@ -5894,7 +5921,12 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
     catch(e){alert("❌ Lỗi: "+e.message);}
   };
 
-  const filtered=quotes.filter(q=>{
+  /* Chỉ hiện quote của user hoặc được mời cộng tác */
+  const visibleQuotes=quotes.filter(q=>{
+    return q.createdByUsername===user.u||(q.collaborators||[]).includes(user.u);
+  });
+
+  const filtered=visibleQuotes.filter(q=>{
     const ql=search.toLowerCase();
     if(filterType==="domestic"&&q.template!=="domestic")return false;
     if(filterType==="intl"&&q.template!=="intl")return false;
@@ -5911,7 +5943,7 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
         <div>
           <div style={{fontSize:20,fontWeight:800,color:"#0f3a4a"}}>🕐 Lịch sử Báo giá</div>
           <div style={{fontSize:12,color:"rgba(15,58,74,0.5)",marginTop:3}}>
-            {loading?"Đang tải...":`${quotes.length} báo giá · Đồng bộ real-time Cloud`}
+            {loading?"Đang tải...":`${visibleQuotes.length} báo giá của bạn · Tổng cloud: ${quotes.length}`}
             {currentQuoteId&&<span style={{marginLeft:8,color:"#14a08c",fontWeight:600}}>· Đang làm việc: {quotes.find(q=>q.id===currentQuoteId)?.name||currentQuoteId}</span>}
           </div>
         </div>
@@ -5962,7 +5994,11 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
                     </div>
                     <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a",marginBottom:2}}>{q.name}</div>
                     <div style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>{q.customer&&`👤 ${q.customer} · `}{q.dest&&`📍 ${q.dest} · `}{q.days}N{q.nights}Đ · {q.pax} pax</div>
-                    <div style={{fontSize:11,color:"rgba(15,58,74,0.35)",marginTop:2}}>Thiết lập: {fmtDt(q.createdAt)} · {q.updatedAt!==q.createdAt?"Sửa: "+fmtDt(q.updatedAt):""}</div>
+                    <div style={{fontSize:11,color:"rgba(15,58,74,0.45)",marginTop:2}}>
+                      👤 Tạo bởi: <strong>{q.createdByName||q.savedBy?.split("(")[0].trim()||"—"}</strong>
+                      {q.updatedBy&&q.updatedBy!==q.savedBy&&<span> · Sửa: <strong>{q.updatedBy.split("(")[0].trim()}</strong></span>}
+                    </div>
+                    <div style={{fontSize:11,color:"rgba(15,58,74,0.35)",marginTop:1}}>Tạo: {fmtDt(q.createdAt)}{q.updatedAt!==q.createdAt?" · Sửa: "+fmtDt(q.updatedAt):""}</div>
                   </div>
                   {/* Actions */}
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
@@ -5976,12 +6012,12 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
                       style={{background:isExp&&expanded.type==="versions"?"rgba(142,68,173,0.15)":"rgba(142,68,173,0.08)",border:"1px solid rgba(142,68,173,0.25)",color:"#8e44ad",borderRadius:8,padding:"7px 11px",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
                       📋 {versionCount>0?versionCount+" ver":"Versions"}
                     </button>
-                    {/* Cộng tác */}
+                    {/* Cộng tác — chỉ creator mới thấy nút mời, nhưng ai cũng thấy danh sách */}
                     <button onClick={()=>loadProject(q.id,"collab")}
                       style={{background:isExp&&expanded.type==="collab"?"rgba(41,128,185,0.15)":"rgba(41,128,185,0.08)",border:"1px solid rgba(41,128,185,0.25)",color:"#2980b9",borderRadius:8,padding:"7px 11px",cursor:"pointer",fontWeight:600,fontSize:12,fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
                       👥 {collabCount>0?collabCount+" người":"Cộng tác"}
                     </button>
-                    {canDelete&&<button onClick={()=>setDelConfirm(q)} style={{background:"rgba(220,50,80,0.07)",border:"1px solid rgba(220,50,80,0.2)",color:"#dc3250",borderRadius:8,padding:"7px 9px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>🗑️</button>}
+                    {(canDelete&&q.createdByUsername===user.u)&&<button onClick={()=>setDelConfirm(q)} style={{background:"rgba(220,50,80,0.07)",border:"1px solid rgba(220,50,80,0.2)",color:"#dc3250",borderRadius:8,padding:"7px 9px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>🗑️</button>}
                   </div>
                 </div>
 
@@ -5996,7 +6032,7 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
                         <div style={{background:"#8e44ad",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:10,fontWeight:800,flexShrink:0}}>v{v.versionNo}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontWeight:600,fontSize:13,color:"#0f3a4a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v.note}</div>
-                          <div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>{fmtDt(v.savedAt)} · {v.savedBy?.split("(")[0].trim()}</div>
+                          <div style={{fontSize:11,color:"rgba(15,58,74,0.45)"}}>✏️ {v.savedBy?.split("(")[0].trim()||"—"} · {fmtDt(v.savedAt)}</div>
                         </div>
                         {i===0&&<span style={{fontSize:10,background:"rgba(20,150,140,0.1)",color:"#0d7a6a",padding:"2px 7px",borderRadius:8,fontWeight:700,flexShrink:0}}>Mới nhất</span>}
                         <button onClick={()=>handleRestoreVersion(q,v)}
@@ -6027,8 +6063,9 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
                         </div>
                       );
                     })}
-                    {/* Add collaborator */}
-                    <div style={{display:"flex",gap:8,marginTop:8}}>
+                    {/* Add collaborator — chỉ creator mới được mời */}
+                    {q.createdByUsername!==user.u&&<div style={{fontSize:12,color:"rgba(15,58,74,0.4)",fontStyle:"italic",marginTop:6}}>🔒 Chỉ người tạo báo giá mới có thể mời thêm cộng tác viên</div>}
+                    {q.createdByUsername===user.u&&<div style={{display:"flex",gap:8,marginTop:8}}>
                       <div style={{flex:1,position:"relative"}}>
                         <input value={collabInput} onChange={e=>setCollabInput(e.target.value)} placeholder="Tìm tên hoặc username..."
                           style={{width:"100%",padding:"7px 12px",border:"1.5px solid rgba(41,128,185,0.25)",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}
