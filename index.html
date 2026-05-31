@@ -6639,17 +6639,18 @@ function ItineraryBuilder({user,onBack}){
                       <input value={seg.transport} onChange={e=>updSeg(d.id,seg.id,{transport:e.target.value})} placeholder="Phương tiện · khoảng cách · thời gian (✨ AI tự tính — sắp có)" style={{...inp,padding:"6px 10px",fontSize:12,color:"#14a08c",fontWeight:600,background:"rgba(20,150,140,0.05)",flex:1}}/>
                     </div>
                     {/* activities header */}
-                    <div style={{display:"flex",gap:7,alignItems:"center",padding:"0 0 4px 20px",fontSize:10,fontWeight:700,color:"rgba(15,58,74,0.4)",letterSpacing:0.5,textTransform:"uppercase"}}>
-                      <span style={{width:60,textAlign:"center"}}>Giờ</span>
+                    <div style={{display:"flex",gap:7,alignItems:"center",padding:"0 0 4px 0",fontSize:10,fontWeight:700,color:"rgba(15,58,74,0.4)",letterSpacing:0.5,textTransform:"uppercase"}}>
+                      <span style={{width:13,flexShrink:0}}></span>
+                      <span style={{width:64,flexShrink:0,textAlign:"center"}}>Giờ</span>
                       <span style={{flex:1}}>Hoạt động / Thuyết minh</span>
                     </div>
                     {/* activities (drag-drop) */}
                     <SortableList onReorder={(f,t)=>reorderActs(d.id,seg.id,f,t)} handle=".act-handle" deps={[seg.activities.length,d.id]} style={{display:"flex",flexDirection:"column",gap:5}}>
                       {seg.activities.map(a=>(
                         <div key={a.id} data-sid={a.id} style={{display:"flex",gap:7,alignItems:"center"}}>
-                          <span className="act-handle" style={{cursor:"grab",color:"rgba(15,58,74,0.3)",fontSize:13,userSelect:"none"}}>⋮⋮</span>
-                          <input value={a.time} onChange={e=>updAct(d.id,seg.id,a.id,{time:e.target.value})} placeholder="08:00" style={{width:60,...inp,padding:"5px 8px",fontSize:12,fontWeight:700,color:"#14a08c",textAlign:"center"}}/>
-                          <input value={a.text} onChange={e=>updAct(d.id,seg.id,a.id,{text:e.target.value})} placeholder="Nội dung hoạt động / thuyết minh..." style={{flex:1,...inp,padding:"5px 10px",fontSize:12.5}}/>
+                          <span className="act-handle" style={{cursor:"grab",color:"rgba(15,58,74,0.3)",fontSize:13,userSelect:"none",flexShrink:0}}>⋮⋮</span>
+                          <input value={a.time} onChange={e=>updAct(d.id,seg.id,a.id,{time:e.target.value})} placeholder="08:00" style={{...inp,width:64,flexShrink:0,padding:"6px 8px",fontSize:12.5,fontWeight:700,color:"#14a08c",textAlign:"center"}}/>
+                          <input value={a.text} onChange={e=>updAct(d.id,seg.id,a.id,{text:e.target.value})} placeholder="Nội dung hoạt động / thuyết minh..." style={{...inp,flex:1,width:"auto",minWidth:0,padding:"6px 11px",fontSize:13}}/>
                           <button title="AI thuyết minh điểm đến (Phase 2 - sắp có)" disabled style={{background:"rgba(142,68,173,0.08)",border:"1px solid rgba(142,68,173,0.2)",borderRadius:6,color:"rgba(142,68,173,0.5)",cursor:"not-allowed",fontSize:12,padding:"3px 7px",fontFamily:"inherit"}}>✨</button>
                           <button onClick={()=>delAct(d.id,seg.id,a.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
                         </div>
