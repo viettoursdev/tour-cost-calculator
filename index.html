@@ -7066,9 +7066,17 @@ async function exportMenuDocx(it,code){
 }
 
 /* ═══ MENU LIBRARY ════════════════════════════════════ */
-function newMenuMeal(type="Trưa"){return{id:"m"+Date.now()+Math.random().toString(36).slice(2,5),mealType:type,restaurantId:"",restaurantName:"",suggestedDishes:"",suggestedPrice:0,adjustedDishes:"",adjustedPrice:0,cur:"VND"};}
-function newMenuDay(n){return{id:"md"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",city:"",meals:[newMenuMeal("Trưa")]};}
-function newRestaurant(){return{id:"r"+Date.now()+Math.random().toString(36).slice(2,5),name:"",country:"",city:"",note:"",menus:[{id:"rm"+Date.now(),name:"Set thực đơn 1",dishes:"",price:0,cur:"VND"}]};}
+const MENU_CUR=["VND","USD","EUR","CNY","JPY","KRW","THB","SGD","TWD","HKD","AUD","MYR"];
+function StarRating({value,onChange,size=15}){
+  return(<span style={{display:"inline-flex",gap:1,alignItems:"center"}}>{[1,2,3,4,5].map(n=>(
+    <span key={n} onClick={onChange?(e)=>{e.stopPropagation();onChange(n===value?0:n);}:undefined} title={onChange?n+" sao":undefined}
+      style={{cursor:onChange?"pointer":"default",fontSize:size,color:n<=(value||0)?"#f5a623":"rgba(15,58,74,0.18)",lineHeight:1,userSelect:"none"}}>★</span>
+  ))}</span>);
+}
+function newRestMenu(name){return{id:"rm"+Date.now()+Math.random().toString(36).slice(2,5),name:name||"Set mới",dishes:"",price:0,cur:"VND",rating:0,review:""};}
+function newMenuMeal(type="Ăn trưa"){return{id:"m"+Date.now()+Math.random().toString(36).slice(2,5),mealType:type,restaurantId:"",restaurantName:"",city:"",suggestedDishes:"",suggestedPrice:0,suggestedCur:"VND",adjustedDishes:"",adjustedPrice:0,adjustedCur:"VND",cur:"VND",note:""};}
+function newMenuDay(n){return{id:"md"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",city:"",meals:[newMenuMeal("Ăn trưa")]};}
+function newRestaurant(){return{id:"r"+Date.now()+Math.random().toString(36).slice(2,5),name:"",continent:"",country:"",city:"",note:"",rating:0,review:"",menus:[newRestMenu("Set thực đơn 1")]};}
 
 function MenuApp({user,onBack}){
   const [mode,setMode]=useState("list");
@@ -7147,7 +7155,7 @@ function RestaurantLibrary({user,onBack}){
   const addR=()=>save([...list,newRestaurant()]);
   const updR=(id,patch)=>save(list.map(r=>r.id===id?{...r,...patch}:r));
   const delR=(id)=>save(list.filter(r=>r.id!==id));
-  const addMenu=(rid)=>updR(rid,{menus:[...(list.find(r=>r.id===rid).menus||[]),{id:"rm"+Date.now(),name:"Set mới",dishes:"",price:0,cur:"VND"}]});
+  const addMenu=(rid)=>updR(rid,{menus:[...(list.find(r=>r.id===rid).menus||[]),newRestMenu()]});
   const updMenu=(rid,mid,patch)=>{const r=list.find(x=>x.id===rid);updR(rid,{menus:r.menus.map(m=>m.id===mid?{...m,...patch}:m)});};
   const delMenu=(rid,mid)=>{const r=list.find(x=>x.id===rid);updR(rid,{menus:r.menus.filter(m=>m.id!==mid)});};
   const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"7px 11px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
@@ -7168,21 +7176,33 @@ function RestaurantLibrary({user,onBack}){
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           {filtered.map(r=>(
             <div key={r.id} className="glass-strong" style={{borderRadius:14,padding:18}}>
-              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 30px",gap:10,marginBottom:12,alignItems:"center"}}>
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 30px",gap:10,marginBottom:10,alignItems:"center"}}>
                 <input value={r.name} onChange={e=>updR(r.id,{name:e.target.value})} placeholder="Tên nhà hàng" style={{...inp,fontWeight:700}}/>
+                <input value={r.continent} onChange={e=>updR(r.id,{continent:e.target.value})} placeholder="Châu lục" style={inp}/>
                 <input value={r.country} onChange={e=>updR(r.id,{country:e.target.value})} placeholder="Quốc gia" style={inp}/>
                 <input value={r.city} onChange={e=>updR(r.id,{city:e.target.value})} placeholder="Thành phố" style={inp}/>
                 <button onClick={()=>delR(r.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:15}}>🗑</button>
               </div>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.5)"}}>Đánh giá chất lượng:</span>
+                <StarRating value={r.rating} onChange={v=>updR(r.id,{rating:v})} size={17}/>
+                <input value={r.review} onChange={e=>updR(r.id,{review:e.target.value})} placeholder="Lưu ý cho tour sau (phục vụ, vị trí, chất lượng...)" style={{...inp,flex:1,minWidth:200,fontSize:12,fontStyle:r.review?"normal":"italic"}}/>
+              </div>
               <div style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.5)",marginBottom:8,letterSpacing:0.5,textTransform:"uppercase"}}>Thực đơn mẫu (mỗi món 1 dòng)</div>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {(r.menus||[]).map(m=>(
-                  <div key={m.id} style={{display:"grid",gridTemplateColumns:"1.2fr 2.5fr 1fr 30px",gap:10,alignItems:"start",background:"rgba(168,230,221,0.12)",borderRadius:10,padding:"10px 12px"}}>
-                    <input value={m.name} onChange={e=>updMenu(r.id,m.id,{name:e.target.value})} placeholder="Tên set" style={{...inp,padding:"6px 9px",fontSize:12,fontWeight:600}}/>
+                  <div key={m.id} style={{display:"grid",gridTemplateColumns:"1.2fr 2.5fr 1.3fr 30px",gap:10,alignItems:"start",background:"rgba(168,230,221,0.12)",borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <input value={m.name} onChange={e=>updMenu(r.id,m.id,{name:e.target.value})} placeholder="Tên set" style={{...inp,padding:"6px 9px",fontSize:12,fontWeight:600}}/>
+                      <StarRating value={m.rating} onChange={v=>updMenu(r.id,m.id,{rating:v})} size={14}/>
+                    </div>
                     <textarea value={m.dishes} onChange={e=>updMenu(r.id,m.id,{dishes:e.target.value})} rows={3} placeholder="Gỏi cuốn&#10;Cá kho tộ&#10;Canh chua..." style={{...inp,padding:"6px 9px",fontSize:12,resize:"vertical"}}/>
-                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                      <input type="number" value={m.price} onChange={e=>updMenu(r.id,m.id,{price:+e.target.value})} placeholder="Giá" style={{...inp,padding:"6px 8px",fontSize:12,textAlign:"right"}}/>
-                      <span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>{m.cur}</span>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                        <input type="number" value={m.price} onChange={e=>updMenu(r.id,m.id,{price:+e.target.value})} placeholder="Giá" style={{...inp,padding:"6px 8px",fontSize:12,textAlign:"right"}}/>
+                        <select value={m.cur} onChange={e=>updMenu(r.id,m.id,{cur:e.target.value})} style={{...inp,padding:"6px 4px",fontSize:11,width:62}}>{MENU_CUR.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                      </div>
+                      <input value={m.review} onChange={e=>updMenu(r.id,m.id,{review:e.target.value})} placeholder="Nhận xét set" style={{...inp,padding:"5px 8px",fontSize:11,fontStyle:m.review?"normal":"italic"}}/>
                     </div>
                     <button onClick={()=>delMenu(r.id,m.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
                   </div>
@@ -7237,13 +7257,14 @@ function MenuBuilder({user,initial,onBack}){
 
   const pickRestaurant=(dayId,mid,rid)=>{
     const r=restaurants.find(x=>x.id===rid);
-    if(!r){updMeal(dayId,mid,{restaurantId:"",restaurantName:""});return;}
-    updMeal(dayId,mid,{restaurantId:rid,restaurantName:r.name});
+    if(!r){updMeal(dayId,mid,{restaurantId:"",restaurantName:"",city:"",restMenuId:""});return;}
+    updMeal(dayId,mid,{restaurantId:rid,restaurantName:r.name,city:r.city||"",restMenuId:""});
   };
   const pickRestMenu=(dayId,mid,rid,menuId)=>{
     const r=restaurants.find(x=>x.id===rid);const m=r&&r.menus.find(x=>x.id===menuId);
     if(!m)return;
-    updMeal(dayId,mid,{suggestedDishes:m.dishes||"",suggestedPrice:m.price||0,cur:m.cur||"VND",adjustedDishes:m.dishes||"",adjustedPrice:m.price||0});
+    const cur=m.cur||"VND";
+    updMeal(dayId,mid,{restMenuId:menuId,suggestedDishes:m.dishes||"",suggestedPrice:m.price||0,suggestedCur:cur,cur,adjustedDishes:m.dishes||"",adjustedPrice:m.price||0,adjustedCur:cur});
   };
   const linkQuote=(qId)=>{const q=quotes.find(x=>x.id===qId);if(!q){setIt(p=>({...p,linkedQuoteId:null,linkedQuoteName:""}));return;}setIt(p=>({...p,linkedQuoteId:q.id,linkedQuoteName:q.name||"",destination:p.destination||(q.dest||"").toUpperCase()}));};
   const linkItin=(iId)=>{const i=itins.find(x=>x.id===iId);if(!i){setIt(p=>({...p,linkedItineraryId:null,linkedItineraryName:""}));return;}setIt(p=>({...p,linkedItineraryId:i.id,linkedItineraryName:i.destination||i.title||"",destination:p.destination||(i.destination||"")}));};
@@ -7299,15 +7320,17 @@ function MenuBuilder({user,initial,onBack}){
                 <span className="mday-handle" style={{cursor:"grab",fontSize:16,opacity:0.7}}>⋮⋮</span>
                 <span style={{fontWeight:900,fontSize:14}}>NGÀY {d.dayNum}</span>
                 <input value={d.date} onChange={e=>updDay(d.id,{date:e.target.value})} placeholder="Date" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 9px",color:"#fff",fontSize:12,fontFamily:"inherit",outline:"none",width:110}}/>
-                <input value={d.city} onChange={e=>updDay(d.id,{city:e.target.value})} placeholder="Thành phố" style={{flex:1,minWidth:150,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 10px",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                <input value={d.city} onChange={e=>updDay(d.id,{city:e.target.value})} placeholder="Khu vực / TP chính (mỗi bữa lấy TP theo nhà hàng)" style={{flex:1,minWidth:150,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 10px",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
                 <button onClick={()=>delDay(d.id)} style={{background:"rgba(220,50,80,0.25)",border:"none",borderRadius:6,color:"#fff",width:26,height:26,cursor:"pointer",fontSize:13}}>🗑</button>
               </div>
               <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
                 {d.meals.map(meal=>{
                   const r=restaurants.find(x=>x.id===meal.restaurantId);
+                  const rm=r&&(r.menus||[]).find(x=>x.id===meal.restMenuId);
+                  const curSel=(field,cur)=>(<select value={cur} onChange={e=>updMeal(d.id,meal.id,{[field]:e.target.value})} style={{...inp,padding:"5px 4px",fontSize:11,width:60}}>{MENU_CUR.map(c=><option key={c} value={c}>{c}</option>)}</select>);
                   return(
                   <div key={meal.id} style={{border:"1px solid rgba(20,150,140,0.15)",borderRadius:10,padding:"12px 14px",background:"rgba(168,230,221,0.06)"}}>
-                    <div style={{display:"grid",gridTemplateColumns:"110px 1.6fr 1.4fr 30px",gap:8,marginBottom:10,alignItems:"center"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"110px 1.6fr 1.4fr 30px",gap:8,marginBottom:8,alignItems:"center"}}>
                       <select value={meal.mealType} onChange={e=>updMeal(d.id,meal.id,{mealType:e.target.value})} style={{...inp,padding:"6px 8px",fontSize:12,fontWeight:700,color:"#14a08c"}}>
                         {["Ăn sáng","Ăn trưa","Ăn tối","Tiệc Gala","Ăn nhẹ"].map(t=><option key={t} value={t}>{t}</option>)}
                       </select>
@@ -7315,25 +7338,32 @@ function MenuBuilder({user,initial,onBack}){
                         <option value="">— Chọn nhà hàng —</option>
                         {restaurants.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:""}</option>)}
                       </select>
-                      <select value="" onChange={e=>{if(e.target.value)pickRestMenu(d.id,meal.id,meal.restaurantId,e.target.value);}} disabled={!r} style={{...inp,padding:"6px 9px",fontSize:12,opacity:r?1:0.5}}>
+                      <select value={meal.restMenuId||""} onChange={e=>{if(e.target.value)pickRestMenu(d.id,meal.id,meal.restaurantId,e.target.value);}} disabled={!r} style={{...inp,padding:"6px 9px",fontSize:12,opacity:r?1:0.5}}>
                         <option value="">{r?"+ Lấy set thực đơn":"(chọn NH trước)"}</option>
-                        {r&&(r.menus||[]).map(m=><option key={m.id} value={m.id}>{m.name} · {(m.price||0).toLocaleString("vi-VN")} {m.cur}</option>)}
+                        {r&&(r.menus||[]).map(m=><option key={m.id} value={m.id}>{m.name} · {(m.price||0).toLocaleString("vi-VN")} {m.cur}{m.rating?` · ${"★".repeat(m.rating)}`:""}</option>)}
                       </select>
                       <button onClick={()=>delMeal(d.id,meal.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:14}}>🗑</button>
+                    </div>
+                    {/* city badge + quality hint */}
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+                      {meal.city&&<span style={{background:"rgba(20,150,140,0.12)",color:"#0d7a6a",fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:20}}>📍 {meal.city}</span>}
+                      {r&&(r.rating||r.review)&&<span style={{fontSize:11,color:"rgba(15,58,74,0.55)",display:"inline-flex",alignItems:"center",gap:5}}><StarRating value={r.rating} size={12}/>{r.review&&<em style={{fontStyle:"italic"}}>{r.review}</em>}</span>}
+                      {rm&&rm.review&&<span style={{fontSize:11,color:"#8e44ad",fontStyle:"italic"}}>· set: {rm.review}</span>}
                     </div>
                     {/* 2 columns */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                       <div>
                         <div style={{fontSize:10,fontWeight:800,color:"#0d7a6a",letterSpacing:0.5,textTransform:"uppercase",marginBottom:5}}>📋 Đề xuất từ nhà hàng</div>
                         <textarea value={meal.suggestedDishes} onChange={e=>updMeal(d.id,meal.id,{suggestedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6}}/>
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.suggestedPrice} onChange={e=>updMeal(d.id,meal.id,{suggestedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right"}}/><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>{meal.cur}</span></div>
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.suggestedPrice} onChange={e=>updMeal(d.id,meal.id,{suggestedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right"}}/>{curSel("suggestedCur",meal.suggestedCur||meal.cur)}</div>
                       </div>
                       <div>
                         <div style={{fontSize:10,fontWeight:800,color:"#8e44ad",letterSpacing:0.5,textTransform:"uppercase",marginBottom:5}}>✏️ Điều chỉnh theo feedback</div>
                         <textarea value={meal.adjustedDishes} onChange={e=>updMeal(d.id,meal.id,{adjustedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6,borderColor:"rgba(142,68,173,0.3)"}}/>
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.adjustedPrice} onChange={e=>updMeal(d.id,meal.id,{adjustedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right",borderColor:"rgba(142,68,173,0.3)"}}/><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>{meal.cur}</span></div>
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.adjustedPrice} onChange={e=>updMeal(d.id,meal.id,{adjustedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right",borderColor:"rgba(142,68,173,0.3)"}}/>{curSel("adjustedCur",meal.adjustedCur||meal.cur)}</div>
                       </div>
                     </div>
+                    <input value={meal.note||""} onChange={e=>updMeal(d.id,meal.id,{note:e.target.value})} placeholder="📝 Lưu ý bữa ăn (dị ứng, yêu cầu riêng, đánh giá thực tế...)" style={{...inp,marginTop:10,fontSize:12,fontStyle:meal.note?"normal":"italic"}}/>
                   </div>
                   );
                 })}
