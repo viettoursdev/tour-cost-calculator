@@ -464,6 +464,25 @@ window.fbDeleteItinerary=async(id)=>{
   try{await deleteDoc(_itinDoc(id));}catch(e){}
 };
 
+/* ══ Restaurant Library + Menu docs Firestore ══ */
+const _REST_DOC=doc(_db,"viettours","restaurant_list");
+window.fbOnRestaurants=(cb)=>onSnapshot(_REST_DOC,s=>cb(s.exists()?(s.data().restaurants||[]):[]));
+window.fbSaveRestaurants=async(list)=>{const u=window._vteUser;await setDoc(_REST_DOC,{restaurants:list,updatedAt:new Date().toISOString(),updatedBy:u?u.name:""});};
+const _MENU_INDEX=doc(_db,"viettours","menu_index");
+const _menuDoc=(id)=>doc(_db,"tour_menus",id);
+window.fbSaveMenu=async(m)=>{
+  const u=window._vteUser;const now=new Date().toISOString();
+  await setDoc(_menuDoc(m.id),{...m,updatedAt:now,updatedBy:u?u.name:""});
+  const snap=await getDoc(_MENU_INDEX);const list=snap.exists()?(snap.data().items||[]):[];
+  const idx=list.findIndex(x=>x.id===m.id);
+  const meta={id:m.id,code:m.code||"",title:m.title||"",destination:m.destination||"",days:m.days||0,updatedAt:now,updatedBy:u?u.name:"",linkedItineraryName:m.linkedItineraryName||"",linkedQuoteName:m.linkedQuoteName||""};
+  if(idx>=0)list[idx]={...list[idx],...meta};else list.unshift({...meta,createdAt:now,createdBy:u?u.name:""});
+  await setDoc(_MENU_INDEX,{items:list.slice(0,500)});
+};
+window.fbOnMenus=(cb)=>onSnapshot(_MENU_INDEX,s=>cb(s.exists()?(s.data().items||[]):[]));
+window.fbGetMenu=async(id)=>{const s=await getDoc(_menuDoc(id));return s.exists()?s.data():null;};
+window.fbDeleteMenu=async(id)=>{const snap=await getDoc(_MENU_INDEX);if(snap.exists())await setDoc(_MENU_INDEX,{items:(snap.data().items||[]).filter(x=>x.id!==id)});try{await deleteDoc(_menuDoc(id));}catch(e){}};
+
 window._fbReady=true;
 console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
 </script>
@@ -600,14 +619,14 @@ const DEFAULT_USERS=[
    Ngưỡng: từ Operations trở lên mới có editRateCard/exportQuote/importQuote
 */
 const PERMISSIONS={
-  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
-  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
-  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
-  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
-  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true},
-  "Admin":           {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:true},
-  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false},
-  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false},
+  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
+  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
+  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
+  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
+  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
+  "Admin":           {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:true,manageMenu:false},
+  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false,manageMenu:false},
+  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false,manageMenu:false},
 };
 const hasPerm=(user,key)=>{
   if(!user)return false;
@@ -1613,7 +1632,9 @@ const TEMPLATES={
   intl:{label:"Báo giá tour nước ngoài",icon:"🌏",desc:"Outbound tour quốc tế",init:TPL_INTL,sample:{name:"Tour Nhật Bản",dest:"Nhật Bản",days:5,nights:4}},
   dmc:{label:"Breakdown báo giá DMC",icon:"📋",desc:"Phân tích chi phí & so sánh với giá DMC",init:TPL_DMC,sample:{name:"DMC Package",dest:"",days:5,nights:4}},
   itinerary:{label:"Chương trình tour",icon:"🗺️",desc:"Tạo lịch trình tour theo ngày, xuất Word/PDF",itinerary:true},
+  menu:{label:"Thư viện thực đơn",icon:"🍽️",desc:"Quản lý thực đơn theo nhà hàng, xuất Word/PDF",menu:true,perm:"manageMenu"},
 };
+function generateMenuCode(type,continent,country,seq){return `TD-${type||"NN"}-${continent||"CA"}-${country||"TQ"}-${String(seq||1).padStart(3,"0")}`;}
 
 /* ═══ ITINERARY – Region code hierarchy ═══════════════ */
 const ITIN_TYPE={NN:"Nước ngoài",ND:"Nội địa"};
@@ -2433,7 +2454,7 @@ function LoginScreen({onLogin}){
 }
 
 /* ═══ TEMPLATE SELECTOR ════════════════════════════════ */
-function TemplateSelector({onSelect}){
+function TemplateSelector({onSelect,user}){
   return(
     <div className="modal-bg">
       <div className="modal-card" style={{maxWidth:680}}>
@@ -2443,7 +2464,7 @@ function TemplateSelector({onSelect}){
         </div>
         <div style={{padding:"28px 32px"}}>
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-            {Object.entries(TEMPLATES).map(([key,tpl])=>(
+            {Object.entries(TEMPLATES).filter(([key,tpl])=>!tpl.perm||(user&&hasPerm(user,tpl.perm))).map(([key,tpl])=>(
               <div key={key} className="tpl-card" onClick={()=>onSelect(key)}>
                 <div style={{fontSize:32,marginBottom:10}}>{tpl.icon}</div>
                 <div style={{color:"#0f3a4a",fontWeight:800,fontSize:16,marginBottom:6}}>{tpl.label}</div>
@@ -7029,6 +7050,297 @@ function ItineraryHome({user,list,loading,onNew,onOpen,onBack}){
 }
 
 
+
+/* ═══ EXPORT MENU (Word) — stub, hoàn thiện commit sau ═══ */
+async function exportMenuDocx(it,code){
+  if(window.showToast)window.showToast("Xuất Word thực đơn đang hoàn thiện","info",code);
+  else alert("Xuất Word thực đơn: "+code);
+}
+
+/* ═══ MENU LIBRARY ════════════════════════════════════ */
+function newMenuMeal(type="Trưa"){return{id:"m"+Date.now()+Math.random().toString(36).slice(2,5),mealType:type,restaurantId:"",restaurantName:"",suggestedDishes:"",suggestedPrice:0,adjustedDishes:"",adjustedPrice:0,cur:"VND"};}
+function newMenuDay(n){return{id:"md"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",city:"",meals:[newMenuMeal("Trưa")]};}
+function newRestaurant(){return{id:"r"+Date.now()+Math.random().toString(36).slice(2,5),name:"",country:"",city:"",note:"",menus:[{id:"rm"+Date.now(),name:"Set thực đơn 1",dishes:"",price:0,cur:"VND"}]};}
+
+function MenuApp({user,onBack}){
+  const [mode,setMode]=useState("list");
+  const [current,setCurrent]=useState(null);
+  const [list,setList]=useState([]);
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    if(!window.fbOnMenus){setLoading(false);return;}
+    const trySub=()=>{if(window.fbOnMenus){const u=window.fbOnMenus(items=>{setList(items);setLoading(false);});return()=>u&&u();}else setTimeout(trySub,300);};
+    return trySub();
+  },[]);
+  const openEdit=async(id)=>{if(!window.fbGetMenu)return;const f=await window.fbGetMenu(id);if(f){setCurrent(f);setMode("edit");}};
+  if(mode==="edit")return <MenuBuilder user={user} initial={current} onBack={()=>setMode("list")}/>;
+  if(mode==="restaurants")return <RestaurantLibrary user={user} onBack={()=>setMode("list")}/>;
+  return <MenuHome user={user} list={list} loading={loading} onNew={()=>{setCurrent(null);setMode("edit");}} onOpen={openEdit} onRestaurants={()=>setMode("restaurants")} onBack={onBack}/>;
+}
+
+function MenuHome({user,list,loading,onNew,onOpen,onRestaurants,onBack}){
+  const [search,setSearch]=useState("");const [delId,setDelId]=useState(null);
+  const filtered=list.filter(x=>{const q=search.toLowerCase();if(!q)return true;return (x.code||"").toLowerCase().includes(q)||(x.title||"").toLowerCase().includes(q)||(x.destination||"").toLowerCase().includes(q);});
+  const fmtDt=s=>{try{return new Date(s).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(e){return s;}};
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:1100,margin:"0 auto",flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <img src={VTE_LOGO_WHITE} style={{height:46}} alt="Viettours"/>
+            <div><div style={{fontSize:18,fontWeight:900}}>🍽️ Thư viện thực đơn</div>
+              <div style={{fontSize:12,opacity:0.8}}>{loading?"Đang tải...":`${list.length} bộ thực đơn · đồng bộ Cloud`}</div></div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={onRestaurants} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🏪 Nhà hàng</button>
+            <button onClick={onNew} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 18px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Tạo thực đơn</button>
+            <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Quay lại</button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 28px"}}>
+        <div style={{position:"relative",marginBottom:18,maxWidth:420}}>
+          <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:14,opacity:0.4}}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm mã, tên, điểm đến..." style={{width:"100%",padding:"9px 12px 9px 32px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}/>
+        </div>
+        {!loading&&filtered.length===0&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.35)"}}><div style={{fontSize:42,marginBottom:12}}>🍽️</div><div style={{fontSize:15,fontWeight:600}}>{list.length===0?"Chưa có thực đơn nào":"Không tìm thấy"}</div></div>}
+        {!loading&&filtered.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+            {filtered.map(x=>(
+              <div key={x.id} onClick={()=>onOpen(x.id)} style={{background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid rgba(20,150,140,0.15)",boxShadow:"0 2px 8px rgba(15,58,74,0.06)",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                  <span style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:6,fontFamily:"monospace"}}>{x.code||"—"}</span>
+                  <button onClick={e=>{e.stopPropagation();setDelId(x.id);}} style={{background:"rgba(220,50,80,0.07)",border:"none",borderRadius:6,color:"#dc3250",padding:"3px 8px",cursor:"pointer",fontSize:12}}>🗑</button>
+                </div>
+                <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a",marginBottom:2}}>{x.destination||x.title||"(Chưa đặt tên)"}</div>
+                <div style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>{x.days} ngày{x.linkedItineraryName?` · 🗺️ ${x.linkedItineraryName}`:""}{x.linkedQuoteName?` · 🔗 ${x.linkedQuoteName}`:""}</div>
+                <div style={{fontSize:11,color:"rgba(15,58,74,0.35)",marginTop:6}}>Cập nhật: {fmtDt(x.updatedAt)}{x.updatedBy?` · ${x.updatedBy}`:""}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {delId&&(
+        <div className="modal-bg" onClick={()=>setDelId(null)}><div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:380,padding:"26px 28px",textAlign:"center"}}>
+          <div style={{fontSize:34,marginBottom:10}}>🗑️</div><div style={{fontSize:16,fontWeight:800,color:"#0f3a4a",marginBottom:18}}>Xoá bộ thực đơn này?</div>
+          <div style={{display:"flex",gap:10}}><button onClick={()=>setDelId(null)} style={{flex:1,padding:11,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Huỷ</button>
+          <button onClick={async()=>{if(window.fbDeleteMenu)await window.fbDeleteMenu(delId);setDelId(null);}} style={{flex:1,padding:11,border:"none",borderRadius:10,background:"linear-gradient(135deg,#dc3250,#e74c3c)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Xoá</button></div>
+        </div></div>
+      )}
+    </div>
+  );
+}
+
+/* ── Restaurant Library ── */
+function RestaurantLibrary({user,onBack}){
+  const [list,setList]=useState([]);const [loading,setLoading]=useState(true);const [search,setSearch]=useState("");
+  useEffect(()=>{if(!window.fbOnRestaurants){setLoading(false);return;}const trySub=()=>{if(window.fbOnRestaurants){const u=window.fbOnRestaurants(items=>{setList(items);setLoading(false);});return()=>u&&u();}else setTimeout(trySub,300);};return trySub();},[]);
+  const save=(next)=>{setList(next);if(window.fbSaveRestaurants)window.fbSaveRestaurants(next).catch(()=>{});};
+  const addR=()=>save([...list,newRestaurant()]);
+  const updR=(id,patch)=>save(list.map(r=>r.id===id?{...r,...patch}:r));
+  const delR=(id)=>save(list.filter(r=>r.id!==id));
+  const addMenu=(rid)=>updR(rid,{menus:[...(list.find(r=>r.id===rid).menus||[]),{id:"rm"+Date.now(),name:"Set mới",dishes:"",price:0,cur:"VND"}]});
+  const updMenu=(rid,mid,patch)=>{const r=list.find(x=>x.id===rid);updR(rid,{menus:r.menus.map(m=>m.id===mid?{...m,...patch}:m)});};
+  const delMenu=(rid,mid)=>{const r=list.find(x=>x.id===rid);updR(rid,{menus:r.menus.filter(m=>m.id!==mid)});};
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"7px 11px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  const filtered=list.filter(r=>{const q=search.toLowerCase();if(!q)return true;return (r.name||"").toLowerCase().includes(q)||(r.city||"").toLowerCase().includes(q)||(r.country||"").toLowerCase().includes(q);});
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:1100,margin:"0 auto",flexWrap:"wrap",gap:12}}>
+          <div style={{fontSize:18,fontWeight:900}}>🏪 Thư viện Nhà hàng <span style={{fontSize:12,fontWeight:400,opacity:0.8}}>· {list.length} nhà hàng</span></div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={addR} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Thêm nhà hàng</button>
+            <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Thực đơn</button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 28px"}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Tìm nhà hàng, thành phố..." style={{...inp,maxWidth:420,marginBottom:18}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {filtered.map(r=>(
+            <div key={r.id} className="glass-strong" style={{borderRadius:14,padding:18}}>
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 30px",gap:10,marginBottom:12,alignItems:"center"}}>
+                <input value={r.name} onChange={e=>updR(r.id,{name:e.target.value})} placeholder="Tên nhà hàng" style={{...inp,fontWeight:700}}/>
+                <input value={r.country} onChange={e=>updR(r.id,{country:e.target.value})} placeholder="Quốc gia" style={inp}/>
+                <input value={r.city} onChange={e=>updR(r.id,{city:e.target.value})} placeholder="Thành phố" style={inp}/>
+                <button onClick={()=>delR(r.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:15}}>🗑</button>
+              </div>
+              <div style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.5)",marginBottom:8,letterSpacing:0.5,textTransform:"uppercase"}}>Thực đơn mẫu (mỗi món 1 dòng)</div>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {(r.menus||[]).map(m=>(
+                  <div key={m.id} style={{display:"grid",gridTemplateColumns:"1.2fr 2.5fr 1fr 30px",gap:10,alignItems:"start",background:"rgba(168,230,221,0.12)",borderRadius:10,padding:"10px 12px"}}>
+                    <input value={m.name} onChange={e=>updMenu(r.id,m.id,{name:e.target.value})} placeholder="Tên set" style={{...inp,padding:"6px 9px",fontSize:12,fontWeight:600}}/>
+                    <textarea value={m.dishes} onChange={e=>updMenu(r.id,m.id,{dishes:e.target.value})} rows={3} placeholder="Gỏi cuốn&#10;Cá kho tộ&#10;Canh chua..." style={{...inp,padding:"6px 9px",fontSize:12,resize:"vertical"}}/>
+                    <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                      <input type="number" value={m.price} onChange={e=>updMenu(r.id,m.id,{price:+e.target.value})} placeholder="Giá" style={{...inp,padding:"6px 8px",fontSize:12,textAlign:"right"}}/>
+                      <span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>{m.cur}</span>
+                    </div>
+                    <button onClick={()=>delMenu(r.id,m.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>addMenu(r.id)} style={{marginTop:8,background:"rgba(20,150,140,0.07)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:600,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm set thực đơn</button>
+            </div>
+          ))}
+        </div>
+        <div style={{height:40}}/>
+      </div>
+    </div>
+  );
+}
+
+/* ── Menu Builder ── */
+function MenuBuilder({user,initial,onBack}){
+  const [it,setIt]=useState(()=>initial||({
+    id:"mn"+Date.now(),type:"NN",continent:"CA",country:"TQ",seq:1,
+    title:"THỰC ĐƠN CHƯƠNG TRÌNH",destination:"",days:4,
+    linkedItineraryId:null,linkedItineraryName:"",linkedQuoteId:null,linkedQuoteName:"",
+    schedule:[newMenuDay(1),newMenuDay(2),newMenuDay(3),newMenuDay(4)],
+  }));
+  const [restaurants,setRestaurants]=useState([]);
+  const [quotes,setQuotes]=useState([]);
+  const [itins,setItins]=useState([]);
+  const [saving,setSaving]=useState(false);
+  const code=generateMenuCode(it.type,it.continent,it.country,it.seq);
+  useEffect(()=>{const subs=[];
+    if(window.fbOnRestaurants)subs.push(window.fbOnRestaurants(setRestaurants));
+    if(window.fbOnQuoteHistory)subs.push(window.fbOnQuoteHistory(l=>setQuotes(l||[])));
+    if(window.fbOnItineraries)subs.push(window.fbOnItineraries(l=>setItins(l||[])));
+    return()=>subs.forEach(u=>u&&u());
+  },[]);
+  /* auto-save (debounce 1.5s) — lưu sau mỗi lần input */
+  const saveTimer=useRef(null);
+  useEffect(()=>{
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{if(window.fbSaveMenu)window.fbSaveMenu({...it,code}).catch(()=>{});},1500);
+    return()=>{if(saveTimer.current)clearTimeout(saveTimer.current);};
+  },[it]);
+
+  const set=(k,v)=>setIt(p=>({...p,[k]:v}));
+  const updDay=(id,patch)=>setIt(p=>({...p,schedule:p.schedule.map(d=>d.id===id?{...d,...patch}:d)}));
+  const addDay=()=>setIt(p=>({...p,schedule:[...p.schedule,newMenuDay(p.schedule.length+1)]}));
+  const delDay=(id)=>setIt(p=>({...p,schedule:p.schedule.filter(d=>d.id!==id).map((d,i)=>({...d,dayNum:i+1}))}));
+  const reorderDays=(f,t)=>setIt(p=>({...p,schedule:reorder(p.schedule,f,t).map((d,i)=>({...d,dayNum:i+1}))}));
+  const addMeal=(dayId)=>updDay2(dayId,d=>({...d,meals:[...d.meals,newMenuMeal("Tối")]}));
+  const delMeal=(dayId,mid)=>updDay2(dayId,d=>({...d,meals:d.meals.filter(m=>m.id!==mid)}));
+  const updMeal=(dayId,mid,patch)=>updDay2(dayId,d=>({...d,meals:d.meals.map(m=>m.id===mid?{...m,...patch}:m)}));
+  function updDay2(dayId,fn){setIt(p=>({...p,schedule:p.schedule.map(d=>d.id===dayId?fn(d):d)}));}
+
+  const pickRestaurant=(dayId,mid,rid)=>{
+    const r=restaurants.find(x=>x.id===rid);
+    if(!r){updMeal(dayId,mid,{restaurantId:"",restaurantName:""});return;}
+    updMeal(dayId,mid,{restaurantId:rid,restaurantName:r.name});
+  };
+  const pickRestMenu=(dayId,mid,rid,menuId)=>{
+    const r=restaurants.find(x=>x.id===rid);const m=r&&r.menus.find(x=>x.id===menuId);
+    if(!m)return;
+    updMeal(dayId,mid,{suggestedDishes:m.dishes||"",suggestedPrice:m.price||0,cur:m.cur||"VND",adjustedDishes:m.dishes||"",adjustedPrice:m.price||0});
+  };
+  const linkQuote=(qId)=>{const q=quotes.find(x=>x.id===qId);if(!q){setIt(p=>({...p,linkedQuoteId:null,linkedQuoteName:""}));return;}setIt(p=>({...p,linkedQuoteId:q.id,linkedQuoteName:q.name||"",destination:p.destination||(q.dest||"").toUpperCase()}));};
+  const linkItin=(iId)=>{const i=itins.find(x=>x.id===iId);if(!i){setIt(p=>({...p,linkedItineraryId:null,linkedItineraryName:""}));return;}setIt(p=>({...p,linkedItineraryId:i.id,linkedItineraryName:i.destination||i.title||"",destination:p.destination||(i.destination||"")}));};
+  const doSaveNow=async()=>{setSaving(true);try{await window.fbSaveMenu({...it,code});if(window.showToast)window.showToast("Đã lưu thực đơn","success",code);}catch(e){alert("Lỗi: "+e.message);}finally{setSaving(false);}};
+
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"7px 11px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  const lbl={fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5,display:"block"};
+
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:1100,margin:"0 auto",flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <img src={VTE_LOGO_WHITE} style={{height:46}} alt="Viettours"/>
+            <div><div style={{fontSize:18,fontWeight:900}}>🍽️ Trình tạo Thực đơn</div>
+              <div style={{fontSize:12,opacity:0.8}}>Mã: <strong style={{fontFamily:"monospace"}}>{code}</strong> · <span style={{opacity:0.7}}>tự lưu</span></div></div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>exportMenuDocx(it,code)} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>📄 Xuất Word</button>
+            <button onClick={doSaveNow} disabled={saving} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{saving?"⏳":"💾 Lưu"}</button>
+            <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Quay lại</button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 28px"}}>
+        {/* Info */}
+        <div className="glass-strong" style={{borderRadius:16,padding:22,marginBottom:18}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.4fr 0.7fr",gap:12,marginBottom:14}}>
+            <div><label style={lbl}>Loại</label><select value={it.type} onChange={e=>set("type",e.target.value)} style={inp}>{Object.entries(ITIN_TYPE).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}</select></div>
+            <div><label style={lbl}>Châu lục</label><select value={it.continent} onChange={e=>{const c=e.target.value;const f=Object.keys(ITIN_COUNTRY[c]||{})[0];setIt(p=>({...p,continent:c,country:f}));}} style={inp}>{Object.entries(ITIN_CONTINENT).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}</select></div>
+            <div><label style={lbl}>Quốc gia</label><select value={it.country} onChange={e=>set("country",e.target.value)} style={inp}>{Object.entries(ITIN_COUNTRY[it.continent]||{}).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}</select></div>
+            <div><label style={lbl}>STT</label><input type="number" min={1} value={it.seq} onChange={e=>set("seq",+e.target.value)} style={inp}/></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12,marginBottom:12}}>
+            <div><label style={lbl}>Điểm đến</label><input value={it.destination} onChange={e=>set("destination",e.target.value)} placeholder="VD: BẮC KINH" style={inp}/></div>
+            <div><label style={lbl}>Số ngày</label><input type="number" min={1} value={it.days} onChange={e=>set("days",+e.target.value)} style={inp}/></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><label style={lbl}>🗺️ Link Chương trình tour</label><select value={it.linkedItineraryId||""} onChange={e=>linkItin(e.target.value)} style={inp}><option value="">— Không —</option>{itins.map(i=><option key={i.id} value={i.id}>{i.code?`[${i.code}] `:""}{i.destination||i.title}</option>)}</select></div>
+            <div><label style={lbl}>🔗 Link Báo giá</label><select value={it.linkedQuoteId||""} onChange={e=>linkQuote(e.target.value)} style={inp}><option value="">— Không —</option>{quotes.map(q=><option key={q.id} value={q.id}>{q.quoteCode?`[${q.quoteCode}] `:""}{q.name}</option>)}</select></div>
+          </div>
+        </div>
+
+        {/* Days */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#0f3a4a"}}>🍽️ Thực đơn theo ngày <span style={{fontSize:11,fontWeight:400,color:"rgba(15,58,74,0.4)"}}>· kéo ⋮⋮ đổi thứ tự</span></div>
+          <button onClick={addDay} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Thêm ngày</button>
+        </div>
+        <SortableList onReorder={reorderDays} handle=".mday-handle" deps={[it.schedule.length]} style={{display:"flex",flexDirection:"column",gap:14}}>
+          {it.schedule.map(d=>(
+            <div key={d.id} data-sid={d.id} className="glass-strong" style={{borderRadius:14,overflow:"hidden",border:"1px solid rgba(20,150,140,0.18)"}}>
+              <div style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span className="mday-handle" style={{cursor:"grab",fontSize:16,opacity:0.7}}>⋮⋮</span>
+                <span style={{fontWeight:900,fontSize:14}}>NGÀY {d.dayNum}</span>
+                <input value={d.date} onChange={e=>updDay(d.id,{date:e.target.value})} placeholder="Date" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 9px",color:"#fff",fontSize:12,fontFamily:"inherit",outline:"none",width:110}}/>
+                <input value={d.city} onChange={e=>updDay(d.id,{city:e.target.value})} placeholder="Thành phố" style={{flex:1,minWidth:150,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 10px",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                <button onClick={()=>delDay(d.id)} style={{background:"rgba(220,50,80,0.25)",border:"none",borderRadius:6,color:"#fff",width:26,height:26,cursor:"pointer",fontSize:13}}>🗑</button>
+              </div>
+              <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
+                {d.meals.map(meal=>{
+                  const r=restaurants.find(x=>x.id===meal.restaurantId);
+                  return(
+                  <div key={meal.id} style={{border:"1px solid rgba(20,150,140,0.15)",borderRadius:10,padding:"12px 14px",background:"rgba(168,230,221,0.06)"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"110px 1.6fr 1.4fr 30px",gap:8,marginBottom:10,alignItems:"center"}}>
+                      <select value={meal.mealType} onChange={e=>updMeal(d.id,meal.id,{mealType:e.target.value})} style={{...inp,padding:"6px 8px",fontSize:12,fontWeight:700,color:"#14a08c"}}>
+                        {["Ăn sáng","Ăn trưa","Ăn tối","Tiệc Gala","Ăn nhẹ"].map(t=><option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <select value={meal.restaurantId} onChange={e=>pickRestaurant(d.id,meal.id,e.target.value)} style={{...inp,padding:"6px 9px",fontSize:12}}>
+                        <option value="">— Chọn nhà hàng —</option>
+                        {restaurants.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:""}</option>)}
+                      </select>
+                      <select value="" onChange={e=>{if(e.target.value)pickRestMenu(d.id,meal.id,meal.restaurantId,e.target.value);}} disabled={!r} style={{...inp,padding:"6px 9px",fontSize:12,opacity:r?1:0.5}}>
+                        <option value="">{r?"+ Lấy set thực đơn":"(chọn NH trước)"}</option>
+                        {r&&(r.menus||[]).map(m=><option key={m.id} value={m.id}>{m.name} · {(m.price||0).toLocaleString("vi-VN")} {m.cur}</option>)}
+                      </select>
+                      <button onClick={()=>delMeal(d.id,meal.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:14}}>🗑</button>
+                    </div>
+                    {/* 2 columns */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                      <div>
+                        <div style={{fontSize:10,fontWeight:800,color:"#0d7a6a",letterSpacing:0.5,textTransform:"uppercase",marginBottom:5}}>📋 Đề xuất từ nhà hàng</div>
+                        <textarea value={meal.suggestedDishes} onChange={e=>updMeal(d.id,meal.id,{suggestedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6}}/>
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.suggestedPrice} onChange={e=>updMeal(d.id,meal.id,{suggestedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right"}}/><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>{meal.cur}</span></div>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,fontWeight:800,color:"#8e44ad",letterSpacing:0.5,textTransform:"uppercase",marginBottom:5}}>✏️ Điều chỉnh theo feedback</div>
+                        <textarea value={meal.adjustedDishes} onChange={e=>updMeal(d.id,meal.id,{adjustedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6,borderColor:"rgba(142,68,173,0.3)"}}/>
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.adjustedPrice} onChange={e=>updMeal(d.id,meal.id,{adjustedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right",borderColor:"rgba(142,68,173,0.3)"}}/><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>{meal.cur}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+                <button onClick={()=>addMeal(d.id)} style={{background:"rgba(20,150,140,0.08)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:600,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm bữa ăn</button>
+              </div>
+            </div>
+          ))}
+        </SortableList>
+        <div style={{height:40}}/>
+      </div>
+    </div>
+  );
+}
+
+
 function MainApp({user,onLogout}){
   const[template,setTemplate]=useState(null);
   const[info,setInfo]=useState({name:"",dest:"",days:1,nights:0});
@@ -7115,13 +7427,16 @@ function MainApp({user,onLogout}){
     [items,rates,pax,catEnabled]);
   // Note: uses ALL CATS - since domesticOnly cats are auto-disabled via catEnabled when intl template chosen
 
+  if(template==="menu"){
+    return <MenuApp user={user} onBack={()=>setTemplate(null)}/>;
+  }
   if(template==="itinerary"){
     return <ItineraryApp user={user} onBack={()=>setTemplate(null)}/>;
   }
   if(!template){
-    return <TemplateSelector onSelect={(t)=>{
+    return <TemplateSelector user={user} onSelect={(t)=>{
       const tpl=TEMPLATES[t];
-      if(t==="itinerary"){setTemplate(t);return;}
+      if(t==="itinerary"||t==="menu"){setTemplate(t);return;}
       setTemplate(t);
       setInfo(tpl.sample);
       setItems(tpl.init(20));
