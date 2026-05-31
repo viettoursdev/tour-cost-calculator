@@ -7575,6 +7575,8 @@ function newVisaProduct(){return{id:"vp"+Date.now()+Math.random().toString(36).s
 
 function VisaApp({user,onBack}){
   const [tab,setTab]=useState("catalog");
+  const [editingProc,setEditingProc]=useState(null);
+  if(editingProc)return <VisaProcBuilder user={user} initial={editingProc} onBack={()=>setEditingProc(null)}/>;
   const hbtn={background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"};
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
@@ -7595,11 +7597,7 @@ function VisaApp({user,onBack}){
       </div>
       {tab==="catalog"
         ?<VisaCatalog user={user}/>
-        :<div style={{maxWidth:1100,margin:"0 auto",padding:"60px 28px",textAlign:"center",color:"rgba(15,58,74,0.5)"}}>
-           <div style={{fontSize:46,marginBottom:14}}>🗂️</div>
-           <div style={{fontSize:16,fontWeight:800,color:"#0f3a4a"}}>Hồ sơ thủ tục Visa — đang phát triển</div>
-           <div style={{fontSize:13,marginTop:8,lineHeight:1.7}}>Biểu mẫu linh hoạt theo từng quốc gia: Doanh nghiệp · Khách tham dự · Nội dung xin visa · Thân nhân.<br/>Auto-lưu, lưu tối đa 10 version, cộng tác, xuất Word & PDF. <em>(Commit 3)</em></div>
-         </div>}
+        :<VisaProcManager user={user} onOpenEditor={setEditingProc}/>}
     </div>
   );
 }
@@ -7789,6 +7787,255 @@ function VisaPickerModal({pax,onClose,onPick}){
         <div style={{padding:"10px 24px 16px",fontSize:11,color:"rgba(15,58,74,0.45)",borderTop:"1px solid rgba(20,150,140,0.1)"}}>💡 Giá đã quy đổi về VND theo tỷ giá trong Quản lý Visa, gồm markup. Bạn có thể chỉnh lại dòng sau khi chèn.</div>
       </div>
     </div>
+  );
+}
+
+
+/* ═══ VISA PROCEDURE DOSSIER (Hồ sơ thủ tục) ═══════════ */
+function newProcField(label){return{id:"pf"+Date.now()+Math.random().toString(36).slice(2,6),label:label||"Trường mới"};}
+function newProcRow(fieldDefs){const values={};(fieldDefs||[]).forEach(f=>values[f.id]="");return{id:"pr"+Date.now()+Math.random().toString(36).slice(2,6),values};}
+function newProcSection(kind,title,labels,repeatable){const fieldDefs=(labels||["Trường mới"]).map(l=>newProcField(l));return{id:"ps"+Date.now()+Math.random().toString(36).slice(2,6),kind:kind||"custom",title:title||"Mục mới",repeatable:!!repeatable,fieldDefs,rows:[newProcRow(fieldDefs)]};}
+function generateVisaProcCode(){const d=new Date();const p=n=>String(n).padStart(2,"0");return `HSV-${p(d.getDate())}${p(d.getMonth()+1)}${String(d.getFullYear()).slice(2)}-${Math.random().toString(36).slice(2,5).toUpperCase()}`;}
+function newVisaProcDoc(user){
+  return{
+    id:"vproc"+Date.now()+Math.random().toString(36).slice(2,6),
+    code:generateVisaProcCode(),title:"Hồ sơ thủ tục visa",country:"",
+    linkedQuoteId:null,linkedQuoteName:"",
+    createdByUsername:user?user.u:"",createdByName:user?user.name:"",
+    collaborators:[],
+    sections:[
+      newProcSection("enterprise","Thông tin Doanh nghiệp bảo lãnh",["Tên doanh nghiệp","Mã số thuế","Địa chỉ","Người đại diện","Chức vụ","Điện thoại","Email","Ngành nghề"],false),
+      newProcSection("applicant","Khách tham dự",["Họ và tên","Giới tính","Ngày sinh","Số hộ chiếu","Ngày cấp HC","Ngày hết hạn HC","Chức vụ","Quốc tịch"],true),
+      newProcSection("content","Nội dung xin visa",["Mục đích nhập cảnh","Số lần nhập cảnh","Thời gian lưu trú","Ngày nhập cảnh","Ngày xuất cảnh","Nơi lưu trú","Đơn vị mời / đối tác"],false),
+      newProcSection("relative","Thân nhân",["Họ và tên","Quan hệ","Ngày sinh","Nghề nghiệp","Địa chỉ","Cùng đi (Có/Không)"],true),
+    ],
+    versions:[],
+  };
+}
+const PROC_KIND_ICON={enterprise:"🏢",applicant:"🧑‍✈️",content:"📝",relative:"👪",custom:"📋"};
+
+function VisaProcManager({user,onOpenEditor}){
+  const [list,setList]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  useEffect(()=>{
+    let u;const t=()=>{if(window.fbOnVisaProcs){u=window.fbOnVisaProcs(items=>{setList(items||[]);setLoaded(true);});}else setTimeout(t,300);};t();
+    return()=>u&&u();
+  },[]);
+  const canSee=(x)=>x.createdByUsername===user.u||(x.collaborators||[]).includes(user.u)||user.role==="CEO";
+  const visible=list.filter(canSee);
+  const openNew=()=>onOpenEditor(newVisaProcDoc(user));
+  const openEdit=async(id)=>{if(!window.fbGetVisaProc)return;const f=await window.fbGetVisaProc(id);if(f)onOpenEditor(f);else alert("Không tải được hồ sơ.");};
+  return <VisaProcHome user={user} list={visible} loaded={loaded} onNew={openNew} onOpen={openEdit}/>;
+}
+
+function VisaProcHome({user,list,loaded,onNew,onOpen}){
+  const [search,setSearch]=useState("");const [delId,setDelId]=useState(null);
+  const fmtDt=s=>{try{return new Date(s).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(e){return s;}};
+  const filtered=list.filter(x=>{const q=search.toLowerCase();if(!q)return true;return (x.code||"").toLowerCase().includes(q)||(x.title||"").toLowerCase().includes(q)||(x.country||"").toLowerCase().includes(q);});
+  return(
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"20px 28px 50px"}}>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:16}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Tìm mã, tên hồ sơ, quốc gia..." style={{flex:1,maxWidth:380,padding:"9px 12px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}/>
+        <div style={{flex:1}}/>
+        <button onClick={onNew} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Tạo hồ sơ thủ tục</button>
+      </div>
+      {!loaded&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.4)"}}>⏳ Đang tải...</div>}
+      {loaded&&filtered.length===0&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.35)"}}><div style={{fontSize:42,marginBottom:12}}>🗂️</div><div style={{fontSize:15,fontWeight:600}}>Chưa có hồ sơ nào</div><div style={{fontSize:12,marginTop:6}}>Bấm "+ Tạo hồ sơ thủ tục" để bắt đầu</div></div>}
+      {loaded&&filtered.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+          {filtered.map(x=>(
+            <div key={x.id} onClick={()=>onOpen(x.id)} style={{background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid rgba(20,150,140,0.15)",boxShadow:"0 2px 8px rgba(15,58,74,0.06)",cursor:"pointer"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                <span style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:6,fontFamily:"monospace"}}>{x.code||"—"}</span>
+                {x.createdByUsername===user.u
+                  ?<button onClick={e=>{e.stopPropagation();setDelId(x.id);}} style={{background:"rgba(220,50,80,0.07)",border:"none",borderRadius:6,color:"#dc3250",padding:"3px 8px",cursor:"pointer",fontSize:12}}>🗑</button>
+                  :<span style={{fontSize:9,fontWeight:700,color:"#0d7a6a",background:"rgba(20,150,140,0.1)",padding:"3px 7px",borderRadius:5}}>Cộng tác</span>}
+              </div>
+              <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a",marginBottom:2}}>{x.title||"(Chưa đặt tên)"}{x.country?` · ${x.country}`:""}</div>
+              <div style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>{x.createdByName?`Tạo bởi ${x.createdByName}`:""}{x.linkedQuoteName?` · 🔗 ${x.linkedQuoteName}`:""}</div>
+              <div style={{fontSize:11,color:"rgba(15,58,74,0.35)",marginTop:6}}>Cập nhật: {fmtDt(x.updatedAt)}{x.updatedBy?` · ${x.updatedBy}`:""}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {delId&&(
+        <div className="modal-bg" onClick={()=>setDelId(null)}><div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:380,padding:"26px 28px",textAlign:"center"}}>
+          <div style={{fontSize:34,marginBottom:10}}>🗑️</div><div style={{fontSize:16,fontWeight:800,color:"#0f3a4a",marginBottom:18}}>Xoá hồ sơ này?</div>
+          <div style={{display:"flex",gap:10}}><button onClick={()=>setDelId(null)} style={{flex:1,padding:11,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Huỷ</button>
+          <button onClick={async()=>{if(window.fbDeleteVisaProc)await window.fbDeleteVisaProc(delId);setDelId(null);}} style={{flex:1,padding:11,border:"none",borderRadius:10,background:"linear-gradient(135deg,#dc3250,#e74c3c)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Xoá</button></div>
+        </div></div>
+      )}
+    </div>
+  );
+}
+
+function VisaProcBuilder({user,initial,onBack}){
+  const [doc,setDoc]=useState(()=>initial||newVisaProcDoc(user));
+  const [quotes,setQuotes]=useState([]);
+  const [showCollab,setShowCollab]=useState(false);
+  const [showVers,setShowVers]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const isOwner=doc.createdByUsername===user.u;
+  useEffect(()=>{let u;const t=()=>{if(window.fbOnQuoteHistory){u=window.fbOnQuoteHistory(l=>setQuotes(l||[]));}else setTimeout(t,300);};t();return()=>u&&u();},[]);
+  const saveTimer=useRef(null);
+  useEffect(()=>{
+    if(saveTimer.current)clearTimeout(saveTimer.current);
+    saveTimer.current=setTimeout(()=>{if(window.fbSaveVisaProc)window.fbSaveVisaProc(doc).catch(()=>{});},1500);
+    return()=>{if(saveTimer.current)clearTimeout(saveTimer.current);};
+  },[doc]);
+
+  const set=(k,v)=>setDoc(p=>({...p,[k]:v}));
+  const updSection=(sid,fn)=>setDoc(p=>({...p,sections:p.sections.map(s=>s.id===sid?fn(s):s)}));
+  const addSection=()=>setDoc(p=>({...p,sections:[...p.sections,newProcSection("custom","Mục mới",["Trường mới"],false)]}));
+  const delSection=(sid)=>setDoc(p=>({...p,sections:p.sections.filter(s=>s.id!==sid)}));
+  const addField=(sid)=>updSection(sid,s=>{const f=newProcField("Trường mới");return{...s,fieldDefs:[...s.fieldDefs,f],rows:s.rows.map(r=>({...r,values:{...r.values,[f.id]:""}}))};});
+  const updFieldLabel=(sid,fid,label)=>updSection(sid,s=>({...s,fieldDefs:s.fieldDefs.map(f=>f.id===fid?{...f,label}:f)}));
+  const delField=(sid,fid)=>updSection(sid,s=>({...s,fieldDefs:s.fieldDefs.filter(f=>f.id!==fid),rows:s.rows.map(r=>{const v={...r.values};delete v[fid];return{...r,values:v};})}));
+  const addRow=(sid)=>updSection(sid,s=>({...s,rows:[...s.rows,newProcRow(s.fieldDefs)]}));
+  const delRow=(sid,rid)=>updSection(sid,s=>({...s,rows:s.rows.filter(r=>r.id!==rid)}));
+  const updCell=(sid,rid,fid,val)=>updSection(sid,s=>({...s,rows:s.rows.map(r=>r.id===rid?{...r,values:{...r.values,[fid]:val}}:r)}));
+  const linkQuote=(qId)=>{const q=quotes.find(x=>x.id===qId);if(!q){setDoc(p=>({...p,linkedQuoteId:null,linkedQuoteName:""}));return;}setDoc(p=>({...p,linkedQuoteId:q.id,linkedQuoteName:q.name||"",country:p.country||(q.dest||"")}));};
+  const saveVersion=()=>{
+    setDoc(p=>{const vers=[...(p.versions||[])];const versionNo=(vers[0]?vers[0].versionNo:0)+1;vers.unshift({versionNo,savedAt:new Date().toISOString(),savedBy:user.name,sections:JSON.parse(JSON.stringify(p.sections))});return{...p,versions:vers.slice(0,10)};});
+    if(window.showToast)window.showToast("Đã lưu phiên bản","success",doc.code);
+  };
+  const restoreVersion=(v)=>{if(!confirm(`Khôi phục phiên bản v${v.versionNo}? Nội dung hiện tại sẽ bị thay thế (vẫn còn trong lịch sử).`))return;setDoc(p=>({...p,sections:JSON.parse(JSON.stringify(v.sections))}));setShowVers(false);};
+  const doSaveNow=async()=>{setSaving(true);try{await window.fbSaveVisaProc(doc);if(window.showToast)window.showToast("Đã lưu hồ sơ","success",doc.code);}catch(e){alert("Lỗi: "+e.message);}finally{setSaving(false);}};
+
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"7px 10px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  const lbl={fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:0.6,textTransform:"uppercase",marginBottom:5,display:"block"};
+  const hbtn={background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"};
+
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:1100,margin:"0 auto",flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <img src={VTE_LOGO_WHITE} style={{height:46}} alt="Viettours"/>
+            <div><div style={{fontSize:18,fontWeight:900}}>🗂️ Hồ sơ thủ tục Visa</div>
+              <div style={{fontSize:12,opacity:0.8}}>Mã: <strong style={{fontFamily:"monospace"}}>{doc.code}</strong> · tự lưu{isOwner?"":" · cộng tác"}</div></div>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button onClick={()=>setShowVers(true)} style={hbtn}>🕐 Phiên bản ({(doc.versions||[]).length})</button>
+            <button onClick={saveVersion} style={{...hbtn,background:"#fff",color:"#0d7a6a",fontWeight:800}}>💾 Lưu phiên bản</button>
+            {isOwner&&<button onClick={()=>setShowCollab(true)} style={hbtn}>👥 Cộng tác ({(doc.collaborators||[]).length})</button>}
+            <button onClick={onBack} style={hbtn}>↩ Quay lại</button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 28px"}}>
+        {/* info */}
+        <div className="glass-strong" style={{borderRadius:16,padding:22,marginBottom:18}}>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.4fr",gap:12}}>
+            <div><label style={lbl}>Tên hồ sơ</label><input value={doc.title} onChange={e=>set("title",e.target.value)} placeholder="VD: Hồ sơ visa Schengen - Đoàn ABC" style={inp}/></div>
+            <div><label style={lbl}>Quốc gia</label><input value={doc.country} onChange={e=>set("country",e.target.value)} placeholder="VD: Đức / Schengen" style={inp}/></div>
+            <div><label style={lbl}>🔗 Link Báo giá</label><select value={doc.linkedQuoteId||""} onChange={e=>linkQuote(e.target.value)} style={inp}><option value="">— Không —</option>{quotes.map(q=><option key={q.id} value={q.id}>{q.quoteCode?`[${q.quoteCode}] `:""}{q.name}</option>)}</select></div>
+          </div>
+        </div>
+        {/* sections */}
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {doc.sections.map(s=>(
+            <div key={s.id} className="glass-strong" style={{borderRadius:14,overflow:"hidden",border:"1px solid rgba(20,150,140,0.18)"}}>
+              <div style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:17}}>{PROC_KIND_ICON[s.kind]||"📋"}</span>
+                <input value={s.title} onChange={e=>updSection(s.id,x=>({...x,title:e.target.value}))} style={{flex:1,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"5px 10px",color:"#fff",fontSize:14,fontWeight:800,fontFamily:"inherit",outline:"none"}}/>
+                <span style={{fontSize:11,opacity:0.8}}>{s.repeatable?"nhiều người":"đơn"}</span>
+                <button onClick={()=>delSection(s.id)} title="Xoá mục" style={{background:"rgba(220,50,80,0.25)",border:"none",borderRadius:6,color:"#fff",width:26,height:26,cursor:"pointer",fontSize:13}}>🗑</button>
+              </div>
+              <div style={{padding:"14px"}}>
+                {s.repeatable?(
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{borderCollapse:"collapse",width:"100%",minWidth:s.fieldDefs.length*150}}>
+                      <thead><tr>
+                        <th style={{width:34,padding:"4px",fontSize:11,color:"rgba(15,58,74,0.4)"}}>#</th>
+                        {s.fieldDefs.map(f=>(
+                          <th key={f.id} style={{padding:"4px 6px",minWidth:140}}>
+                            <div style={{display:"flex",alignItems:"center",gap:3}}>
+                              <input value={f.label} onChange={e=>updFieldLabel(s.id,f.id,e.target.value)} style={{...inp,padding:"5px 7px",fontSize:11.5,fontWeight:700,color:"#0d7a6a",background:"rgba(20,150,140,0.06)"}}/>
+                              <button onClick={()=>delField(s.id,f.id)} title="Xoá cột" style={{background:"none",border:"none",color:"rgba(220,50,80,0.4)",cursor:"pointer",fontSize:12,flexShrink:0}}>✕</button>
+                            </div>
+                          </th>
+                        ))}
+                        <th style={{width:34}}><button onClick={()=>addField(s.id)} title="Thêm cột" style={{background:"rgba(20,150,140,0.1)",border:"1px dashed rgba(20,150,140,0.4)",borderRadius:6,color:"#0d7a6a",width:26,height:26,cursor:"pointer",fontSize:14,fontFamily:"inherit"}}>+</button></th>
+                      </tr></thead>
+                      <tbody>
+                        {s.rows.map((r,ri)=>(
+                          <tr key={r.id}>
+                            <td style={{textAlign:"center",fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.4)"}}>{ri+1}</td>
+                            {s.fieldDefs.map(f=>(<td key={f.id} style={{padding:"3px 4px"}}><input value={r.values[f.id]||""} onChange={e=>updCell(s.id,r.id,f.id,e.target.value)} style={{...inp,padding:"6px 8px",fontSize:12.5}}/></td>))}
+                            <td style={{textAlign:"center"}}><button onClick={()=>delRow(s.id,r.id)} title="Xoá người" style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>🗑</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <button onClick={()=>addRow(s.id)} style={{marginTop:10,background:"rgba(20,150,140,0.08)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm người</button>
+                  </div>
+                ):(
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+                      {s.fieldDefs.map(f=>(
+                        <div key={f.id}>
+                          <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:4}}>
+                            <input value={f.label} onChange={e=>updFieldLabel(s.id,f.id,e.target.value)} style={{...inp,padding:"3px 7px",fontSize:11,fontWeight:700,color:"#0d7a6a",background:"transparent",border:"none"}}/>
+                            <button onClick={()=>delField(s.id,f.id)} title="Xoá trường" style={{background:"none",border:"none",color:"rgba(220,50,80,0.4)",cursor:"pointer",fontSize:11,flexShrink:0}}>✕</button>
+                          </div>
+                          <input value={(s.rows[0]&&s.rows[0].values[f.id])||""} onChange={e=>updCell(s.id,s.rows[0].id,f.id,e.target.value)} style={inp}/>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={()=>addField(s.id)} style={{marginTop:10,background:"rgba(20,150,140,0.08)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm trường</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={addSection} style={{marginTop:16,background:"#fff",border:"1.5px dashed rgba(20,150,140,0.4)",borderRadius:10,padding:"10px 18px",fontSize:13,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm mục hồ sơ</button>
+        <div style={{height:40}}/>
+      </div>
+
+      {showVers&&(
+        <div className="modal-bg" onClick={()=>setShowVers(false)}><div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:520,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+          <div style={{padding:"18px 22px",borderBottom:"1px solid rgba(20,150,140,0.12)",fontSize:16,fontWeight:800,color:"#0f3a4a"}}>🕐 Lịch sử phiên bản <span style={{fontSize:12,fontWeight:400,color:"rgba(15,58,74,0.5)"}}>(tối đa 10)</span></div>
+          <div style={{padding:"14px 22px",overflowY:"auto"}}>
+            {(doc.versions||[]).length===0&&<div style={{textAlign:"center",padding:"30px 0",color:"rgba(15,58,74,0.4)",fontSize:13}}>Chưa có phiên bản. Bấm "💾 Lưu phiên bản" để tạo mốc.</div>}
+            {(doc.versions||[]).map(v=>(
+              <div key={v.versionNo} style={{display:"flex",alignItems:"center",gap:10,background:"rgba(168,230,221,0.1)",borderRadius:9,padding:"9px 12px",marginBottom:8}}>
+                <span style={{background:"#0d7a6a",color:"#fff",borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:800}}>v{v.versionNo}</span>
+                <div style={{flex:1,fontSize:12,color:"rgba(15,58,74,0.65)"}}>{new Date(v.savedAt).toLocaleString("vi-VN")}<br/><span style={{fontSize:11,opacity:0.7}}>bởi {v.savedBy}</span></div>
+                <button onClick={()=>restoreVersion(v)} style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",color:"#0d7a6a",borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Khôi phục</button>
+              </div>
+            ))}
+          </div>
+          <div style={{padding:"12px 22px"}}><button onClick={()=>setShowVers(false)} style={{width:"100%",padding:11,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Đóng</button></div>
+        </div></div>
+      )}
+      {showCollab&&<VisaProcCollabModal doc={doc} user={user} onClose={()=>setShowCollab(false)} onChange={(collabs)=>set("collaborators",collabs)}/>}
+    </div>
+  );
+}
+
+function VisaProcCollabModal({doc,user,onClose,onChange}){
+  const [users,setUsers]=useState([]);
+  useEffect(()=>{let u;const t=()=>{if(window.fbOnUsers){u=window.fbOnUsers(list=>setUsers(list||[]));}else setTimeout(t,300);};t();return()=>u&&u();},[]);
+  const collabs=doc.collaborators||[];
+  const toggle=(uname)=>{const next=collabs.includes(uname)?collabs.filter(x=>x!==uname):[...collabs,uname];onChange(next);};
+  const others=users.filter(u=>u.u!==doc.createdByUsername);
+  return(
+    <div className="modal-bg" onClick={onClose}><div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:460,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"18px 22px",borderBottom:"1px solid rgba(20,150,140,0.12)",fontSize:16,fontWeight:800,color:"#0f3a4a"}}>👥 Mời cộng tác</div>
+      <div style={{padding:"8px 22px 14px",overflowY:"auto"}}>
+        <div style={{fontSize:12,color:"rgba(15,58,74,0.5)",margin:"8px 0 12px"}}>Người được mời sẽ thấy & chỉnh sửa hồ sơ này.</div>
+        {others.length===0&&<div style={{textAlign:"center",padding:"24px 0",color:"rgba(15,58,74,0.4)",fontSize:13}}>Chưa tải được danh sách user.</div>}
+        {others.map(u=>(
+          <label key={u.u} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:9,cursor:"pointer",background:collabs.includes(u.u)?"rgba(20,150,140,0.08)":"transparent",marginBottom:4}}>
+            <input type="checkbox" checked={collabs.includes(u.u)} onChange={()=>toggle(u.u)} style={{width:16,height:16,accentColor:"#14a08c"}}/>
+            <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:"#0f3a4a"}}>{u.name}</div><div style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>@{u.u} · {u.role}</div></div>
+          </label>
+        ))}
+      </div>
+      <div style={{padding:"12px 22px"}}><button onClick={onClose} style={{width:"100%",padding:11,border:"none",borderRadius:10,background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Xong</button></div>
+    </div></div>
   );
 }
 
