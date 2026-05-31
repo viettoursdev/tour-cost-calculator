@@ -7066,7 +7066,7 @@ async function exportMenuDocx(it,code){
 }
 
 /* ═══ MENU LIBRARY ════════════════════════════════════ */
-const MENU_CUR=["VND","USD","EUR","CNY","JPY","KRW","THB","SGD","TWD","HKD","AUD","MYR"];
+const MENU_CUR=["VND","USD","EUR","GBP","CNY","JPY","KRW","THB","SGD","TWD","HKD","AUD","CAD","CHF","MYR"];
 function StarRating({value,onChange,size=15}){
   return(<span style={{display:"inline-flex",gap:1,alignItems:"center"}}>{[1,2,3,4,5].map(n=>(
     <span key={n} onClick={onChange?(e)=>{e.stopPropagation();onChange(n===value?0:n);}:undefined} title={onChange?n+" sao":undefined}
@@ -7076,7 +7076,7 @@ function StarRating({value,onChange,size=15}){
 function newRestMenu(name){return{id:"rm"+Date.now()+Math.random().toString(36).slice(2,5),name:name||"Set mới",dishes:"",price:0,cur:"VND",rating:0,review:""};}
 function newMenuMeal(type="Ăn trưa"){return{id:"m"+Date.now()+Math.random().toString(36).slice(2,5),mealType:type,restaurantId:"",restaurantName:"",city:"",suggestedDishes:"",suggestedPrice:0,suggestedCur:"VND",adjustedDishes:"",adjustedPrice:0,adjustedCur:"VND",cur:"VND",note:""};}
 function newMenuDay(n){return{id:"md"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",city:"",meals:[newMenuMeal("Ăn trưa")]};}
-function newRestaurant(){return{id:"r"+Date.now()+Math.random().toString(36).slice(2,5),name:"",continent:"",country:"",city:"",note:"",rating:0,review:"",menus:[newRestMenu("Set thực đơn 1")]};}
+function newRestaurant(){return{id:"r"+Date.now()+Math.random().toString(36).slice(2,5),name:"",continent:"",country:"",city:"",website:"",menuLink:"",contact:"",note:"",rating:0,review:"",menus:[newRestMenu("Set thực đơn 1")]};}
 
 function MenuApp({user,onBack}){
   const [mode,setMode]=useState("list");
@@ -7187,6 +7187,17 @@ function RestaurantLibrary({user,onBack}){
                 <span style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.5)"}}>Đánh giá chất lượng:</span>
                 <StarRating value={r.rating} onChange={v=>updR(r.id,{rating:v})} size={17}/>
                 <input value={r.review} onChange={e=>updR(r.id,{review:e.target.value})} placeholder="Lưu ý cho tour sau (phục vụ, vị trí, chất lượng...)" style={{...inp,flex:1,minWidth:200,fontSize:12,fontStyle:r.review?"normal":"italic"}}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                <div style={{position:"relative"}}>
+                  <input value={r.website||""} onChange={e=>updR(r.id,{website:e.target.value})} placeholder="Website" style={{...inp,fontSize:12,paddingRight:r.website?30:11}}/>
+                  {r.website&&<a href={/^https?:\/\//.test(r.website)?r.website:"https://"+r.website} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} title="Mở website" style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",textDecoration:"none",fontSize:13}}>🌐</a>}
+                </div>
+                <div style={{position:"relative"}}>
+                  <input value={r.menuLink||""} onChange={e=>updR(r.id,{menuLink:e.target.value})} placeholder="Link menu" style={{...inp,fontSize:12,paddingRight:r.menuLink?30:11}}/>
+                  {r.menuLink&&<a href={/^https?:\/\//.test(r.menuLink)?r.menuLink:"https://"+r.menuLink} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} title="Mở link menu" style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",textDecoration:"none",fontSize:13}}>📋</a>}
+                </div>
+                <input value={r.contact||""} onChange={e=>updR(r.id,{contact:e.target.value})} placeholder="Contact (SĐT / email / người LH)" style={{...inp,fontSize:12}}/>
               </div>
               <div style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.5)",marginBottom:8,letterSpacing:0.5,textTransform:"uppercase"}}>Thực đơn mẫu (mỗi món 1 dòng)</div>
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
