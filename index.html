@@ -374,6 +374,13 @@ window.fbPullUsers=async function(){
 };
 window.fbOnUsers=function(cb){return onSnapshot(_USERS_DOC,s=>{cb(s.exists()?(s.data().users||[]):null);});};
 
+/* ══ Tour Payments Firestore sync ══ */
+const _tpDoc=(tourKey)=>doc(_db,"tour_payments",tourKey);
+window.fbSaveTourPayments=async(tourKey,payments,customItems)=>{
+  await setDoc(_tpDoc(tourKey),{payments,customItems:customItems||[],updatedAt:new Date().toISOString(),updatedBy:window._vteUser?.name||"unknown"});
+};
+window.fbOnTourPayments=(tourKey,cb)=>onSnapshot(_tpDoc(tourKey),s=>cb(s.exists()?s.data():null));
+
 /* ══ Payment Approvals Firestore sync ══ */
 const _PA_DOC=doc(_db,"viettours","payment_approvals");
 /* Legacy compat */
@@ -3987,14 +3994,55 @@ function PaymentView(props){
     try{setCustomItems(JSON.parse(localStorage.getItem("vte_pay_custom_"+tourKey)||"[]"));}catch(e){setCustomItems([]);}
   },[tourKey]);
   
-  const savePayments=(next)=>{setPayments(next);try{localStorage.setItem(STORAGE_KEY,JSON.stringify(next));}catch(e){}};
-  const saveCustom=(next)=>{setCustomItems(next);try{localStorage.setItem(STORAGE_CUSTOM,JSON.stringify(next));}catch(e){}};
+  const [syncTimeout,setSyncTimeout]=useState(null);
+  const syncToCloud=(nextPay,nextCustom)=>{
+    /* Debounce 1s để tránh ghi quá nhiều */
+    if(syncTimeout)clearTimeout(syncTimeout);
+    setSyncTimeout(setTimeout(()=>{
+      if(window.fbSaveTourPayments)window.fbSaveTourPayments(tourKey,nextPay,nextCustom).catch(()=>{});
+    },1000));
+  };
+  const savePayments=(next)=>{
+    setPayments(next);
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(next));}catch(e){}
+    syncToCloud(next,customItems);
+  };
+  const saveCustom=(next)=>{
+    setCustomItems(next);
+    try{localStorage.setItem(STORAGE_CUSTOM,JSON.stringify(next));}catch(e){}
+    syncToCloud(payments,next);
+  };
   
   const [expanded,setExpanded]=useState(null);
   const [reqModal,setReqModal]=useState(null);
   const [trackModal,setTrackModal]=useState(false);
   const [showAddCustom,setShowAddCustom]=useState(false);
   const [approvals,setApprovals]=useState({});
+  const [fbSyncing,setFbSyncing]=useState(false);
+
+  /* Real-time sync từ Firestore cho collaborators */
+  useEffect(()=>{
+    if(!window.fbOnTourPayments||!tourKey)return;
+    const trySubscribe=()=>{
+      if(window.fbOnTourPayments){
+        const unsub=window.fbOnTourPayments(tourKey,(data)=>{
+          if(!data)return;
+          /* Cập nhật payments từ cloud */
+          if(data.payments){
+            setPayments(data.payments);
+            try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data.payments));}catch(e){}
+          }
+          if(data.customItems){
+            setCustomItems(data.customItems);
+            try{localStorage.setItem(STORAGE_CUSTOM,JSON.stringify(data.customItems));}catch(e){}
+          }
+        });
+        return()=>unsub&&unsub();
+      }else{setTimeout(trySubscribe,300);}
+    };
+    return trySubscribe();
+  },[tourKey]);
+
   useEffect(()=>{
     if(!window.fbOnPaymentApprovals)return;
     const trySubscribe=()=>{
