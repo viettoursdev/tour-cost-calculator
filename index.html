@@ -6431,6 +6431,39 @@ function newActivity(){return{id:"a"+Date.now()+Math.random().toString(36).slice
 function newSegment(label=""){return{id:"s"+Date.now()+Math.random().toString(36).slice(2,5),groupLabel:label,transport:"",activities:[newActivity()]};}
 function newDay(n){return{id:"d"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",title:"",meals:{B:false,L:false,D:false},segments:[newSegment()]};}
 
+/* ── Flight string parser ── */
+function parseFlights(text){
+  const lines=text.split(/\n|;/).map(l=>l.trim()).filter(Boolean);
+  const out=[];
+  lines.forEach(line=>{
+    const fno=line.match(/\b([A-Z]{2})\s?-?\s?(\d{2,4})\b/);
+    const flightNo=fno?`${fno[1]}${fno[2]}`:"";
+    const times=[...line.matchAll(/\b(\d{1,2})[:h](\d{2})\b/g)].map(m=>`${m[1].padStart(2,"0")}:${m[2]}`);
+    const airports=[...line.matchAll(/\b([A-Z]{3})\b/g)].map(m=>m[1]).filter(a=>!["AND","THE","CHU"].includes(a));
+    const dateM=line.match(/\b(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)\b/);
+    const dayM=line.match(/ng[aà]y\s*(\d+)/i);
+    if(flightNo||times.length>=1){
+      out.push({
+        id:"f"+Date.now()+Math.random().toString(36).slice(2,6),
+        group:"Nhóm 1",
+        leg:dayM?`Ngày ${dayM[1]}`+(dateM?` (${dateM[1]})`:""):(dateM?dateM[1]:""),
+        flightNo,
+        dep:airports[0]&&times[0]?`${airports[0]} ${times[0]}`:(times[0]||""),
+        arr:airports[1]&&times[1]?`${airports[1]} ${times[1]}`:(times[1]||airports[1]||""),
+      });
+    }
+  });
+  return out;
+}
+const TRANSPORT_PRESETS=[
+  {icon:"🚗",label:"Xe ô tô",tpl:"🚗 Xe ô tô · ~__ km · ~__ phút di chuyển"},
+  {icon:"✈️",label:"Máy bay",tpl:"✈ Chuyến bay __ · __ → __ · ~__h bay"},
+  {icon:"🚄",label:"Tàu hỏa",tpl:"🚄 Tàu hỏa · ~__ km · ~__h"},
+  {icon:"🚌",label:"Xe khách",tpl:"🚌 Xe khách · ~__ km · ~__h"},
+  {icon:"🛥️",label:"Tàu thủy",tpl:"🛥 Tàu thủy · ~__ phút"},
+  {icon:"🚶",label:"Đi bộ",tpl:"🚶 Đi bộ tham quan · ~__ phút"},
+];
+
 function ItineraryBuilder({user,onBack}){
   const [it,setIt]=useState(()=>({
     id:"it"+Date.now(),
@@ -6443,7 +6476,14 @@ function ItineraryBuilder({user,onBack}){
     linkedQuoteId:null,linkedQuoteName:"",
   }));
   const [saving,setSaving]=useState(false);
+  const [flightPaste,setFlightPaste]=useState("");
   const set=(k,v)=>setIt(p=>({...p,[k]:v}));
+  const doParseFlights=()=>{
+    const parsed=parseFlights(flightPaste);
+    if(parsed.length===0){alert("Không nhận diện được chuyến bay. Thử dán dạng: CA904 TSN 05:40 PEK 11:35");return;}
+    setIt(p=>({...p,flights:parsed}));setFlightPaste("");
+    if(window.showToast)window.showToast(`Đã phân tích ${parsed.length} chuyến bay`,"success");
+  };
   const code=generateItinCode(it.type,it.continent,it.country,it.seq);
 
   /* ── Day ops ── */
@@ -6535,6 +6575,14 @@ function ItineraryBuilder({user,onBack}){
             <div style={{fontSize:15,fontWeight:800,color:"#0f3a4a"}}>✈️ Thông tin chuyến bay</div>
             <button onClick={addFlight} style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm chuyến</button>
           </div>
+          {/* Paste & parse */}
+          <div style={{background:"rgba(41,128,185,0.05)",border:"1px dashed rgba(41,128,185,0.3)",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#2980b9",marginBottom:6}}>📋 Dán đoạn thông tin chuyến bay → tự phân tích</div>
+            <div style={{display:"flex",gap:8}}>
+              <textarea value={flightPaste} onChange={e=>setFlightPaste(e.target.value)} rows={2} placeholder="VD: CA904 TSN 05:40 PEK 11:35 ngày 1&#10;CA903 PEK 20:35 TSN 00:40 ngày 4" style={{...inp,resize:"vertical",fontSize:12,flex:1}}/>
+              <button onClick={doParseFlights} style={{background:"linear-gradient(135deg,#2980b9,#3498db)",color:"#fff",border:"none",borderRadius:9,padding:"0 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚡ Phân tích</button>
+            </div>
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {it.flights.map(f=>(
               <div key={f.id} style={{display:"grid",gridTemplateColumns:"1.1fr 1.3fr 1fr 1.1fr 1.1fr 30px",gap:8,alignItems:"center"}}>
@@ -6583,7 +6631,18 @@ function ItineraryBuilder({user,onBack}){
                         <button onClick={()=>delSeg(d.id,seg.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:13}}>✕ nhóm</button>
                       </div>
                     )}
-                    <input value={seg.transport} onChange={e=>updSeg(d.id,seg.id,{transport:e.target.value})} placeholder="🚗 Phương tiện · khoảng cách · thời gian (VD: ✈ CA904 · TSN 05:40 → PEK 11:35 · ~5h)" style={{...inp,padding:"6px 10px",fontSize:12,color:"#14a08c",fontWeight:600,marginBottom:8,background:"rgba(20,150,140,0.05)"}}/>
+                    <div style={{display:"flex",gap:6,marginBottom:8}}>
+                      <select onChange={e=>{const pr=TRANSPORT_PRESETS.find(x=>x.label===e.target.value);if(pr)updSeg(d.id,seg.id,{transport:pr.tpl});e.target.value="";}} value="" style={{...inp,padding:"6px 8px",fontSize:12,width:120,flexShrink:0,color:"#14a08c",fontWeight:600}}>
+                        <option value="">+ Phương tiện</option>
+                        {TRANSPORT_PRESETS.map(pr=><option key={pr.label} value={pr.label}>{pr.icon} {pr.label}</option>)}
+                      </select>
+                      <input value={seg.transport} onChange={e=>updSeg(d.id,seg.id,{transport:e.target.value})} placeholder="Phương tiện · khoảng cách · thời gian (✨ AI tự tính — sắp có)" style={{...inp,padding:"6px 10px",fontSize:12,color:"#14a08c",fontWeight:600,background:"rgba(20,150,140,0.05)",flex:1}}/>
+                    </div>
+                    {/* activities header */}
+                    <div style={{display:"flex",gap:7,alignItems:"center",padding:"0 0 4px 20px",fontSize:10,fontWeight:700,color:"rgba(15,58,74,0.4)",letterSpacing:0.5,textTransform:"uppercase"}}>
+                      <span style={{width:60,textAlign:"center"}}>Giờ</span>
+                      <span style={{flex:1}}>Hoạt động / Thuyết minh</span>
+                    </div>
                     {/* activities (drag-drop) */}
                     <SortableList onReorder={(f,t)=>reorderActs(d.id,seg.id,f,t)} handle=".act-handle" deps={[seg.activities.length,d.id]} style={{display:"flex",flexDirection:"column",gap:5}}>
                       {seg.activities.map(a=>(
@@ -6591,6 +6650,7 @@ function ItineraryBuilder({user,onBack}){
                           <span className="act-handle" style={{cursor:"grab",color:"rgba(15,58,74,0.3)",fontSize:13,userSelect:"none"}}>⋮⋮</span>
                           <input value={a.time} onChange={e=>updAct(d.id,seg.id,a.id,{time:e.target.value})} placeholder="08:00" style={{width:60,...inp,padding:"5px 8px",fontSize:12,fontWeight:700,color:"#14a08c",textAlign:"center"}}/>
                           <input value={a.text} onChange={e=>updAct(d.id,seg.id,a.id,{text:e.target.value})} placeholder="Nội dung hoạt động / thuyết minh..." style={{flex:1,...inp,padding:"5px 10px",fontSize:12.5}}/>
+                          <button title="AI thuyết minh điểm đến (Phase 2 - sắp có)" disabled style={{background:"rgba(142,68,173,0.08)",border:"1px solid rgba(142,68,173,0.2)",borderRadius:6,color:"rgba(142,68,173,0.5)",cursor:"not-allowed",fontSize:12,padding:"3px 7px",fontFamily:"inherit"}}>✨</button>
                           <button onClick={()=>delAct(d.id,seg.id,a.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
                         </div>
                       ))}
