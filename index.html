@@ -6397,10 +6397,110 @@ function ContractManagerModal({info,pax,roundedPPax,user,onClose}){
 }
 
 
-/* ═══ EXPORT ITINERARY (Word) — stub, hoàn thiện ở commit sau ═══ */
+/* ═══ EXPORT ITINERARY (Word, docx-js) — mẫu Viettours ═══ */
 async function exportItineraryDocx(it,code){
-  if(window.showToast)window.showToast("Xuất Word chương trình đang hoàn thiện","info",code);
-  else alert("Xuất Word chương trình: "+code);
+  if(!window.docx){alert("Đang tải thư viện Word, thử lại sau 3 giây.");return;}
+  const {Document,Packer,Paragraph,TextRun,AlignmentType,Table,TableRow,TableCell,WidthType,BorderStyle,ShadingType,ImageRun,VerticalAlign}=window.docx;
+  const FONT="Aptos";
+  const NAVY="0F3A4A",TEAL="14A08C",INK="2B3640",MUTE="8A9099",WHITE="FFFFFF",TEALH="E6F6F3",ZEBRA="F7F9FA",LINE="E4E8EB",GRPC="2980B9",IMGC="A9C5BE";
+  const CW=10306; // content width DXA (A4, margin ~0.55")
+
+  function b64ToU8(b64){try{const bin=atob((b64||"").split(",")[1]||"");const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}catch(e){return new Uint8Array();}}
+  const tr=(t,o={})=>new TextRun({text:t==null?"":String(t),font:FONT,size:o.size||19,bold:!!o.bold,italics:!!o.italics,color:o.color||INK});
+  const P=(runs,o={})=>new Paragraph({children:Array.isArray(runs)?runs:[runs],alignment:o.align||AlignmentType.LEFT,spacing:{before:o.before||0,after:o.after==null?40:o.after},border:o.border,indent:o.indent?{left:o.indent}:undefined});
+  const NB={style:BorderStyle.NONE};
+  const noBorders={top:NB,bottom:NB,left:NB,right:NB,insideHorizontal:NB,insideVertical:NB};
+  const cell=(ch,o={})=>new TableCell({
+    children:Array.isArray(ch)?ch:[ch],
+    width:o.width?{size:o.width,type:WidthType.DXA}:undefined,
+    shading:o.fill?{fill:o.fill,type:ShadingType.CLEAR,color:"auto"}:undefined,
+    margins:{top:o.mt==null?30:o.mt,bottom:o.mb==null?30:o.mb,left:o.ml==null?90:o.ml,right:o.mr==null?90:o.mr},
+    verticalAlign:o.valign||VerticalAlign.CENTER,
+  });
+  const tbl=(rows,widths,o={})=>new Table({width:{size:CW,type:WidthType.DXA},columnWidths:widths,borders:o.borders||noBorders,rows});
+
+  const C=[];
+
+  /* Header: logo + code */
+  C.push(tbl([new TableRow({children:[
+    cell([new Paragraph({children:[new ImageRun({type:"png",data:b64ToU8(VTE_LOGO),transformation:{width:81,height:46}})],spacing:{after:0}})],{width:5153}),
+    cell([P(tr("MÃ CHƯƠNG TRÌNH",{size:14,bold:true,color:MUTE}),{align:AlignmentType.RIGHT,after:0}),P(tr(code,{size:22,bold:true,color:NAVY}),{align:AlignmentType.RIGHT,after:0})],{width:5153}),
+  ]})],[5153,5153]));
+
+  /* Title */
+  C.push(P(tr("CHƯƠNG TRÌNH THAM QUAN DU LỊCH",{size:18,bold:true,color:MUTE}),{align:AlignmentType.CENTER,before:140}));
+  C.push(P(tr((it.destination||"ĐIỂM ĐẾN").toUpperCase(),{size:48,bold:true,color:NAVY}),{align:AlignmentType.CENTER}));
+  C.push(P(tr(`${it.days} NGÀY ${it.nights} ĐÊM`,{size:22,bold:true,color:TEAL}),{align:AlignmentType.CENTER,after:0}));
+  C.push(new Paragraph({border:{bottom:{style:BorderStyle.SINGLE,size:10,color:TEAL,space:2}},spacing:{after:140,before:80}}));
+
+  /* 4 image frames — first page */
+  const dB={style:BorderStyle.DASHED,size:6,color:IMGC};
+  const imgCell=()=>new TableCell({width:{size:Math.floor(CW/4),type:WidthType.DXA},shading:{fill:"F4FAF8",type:ShadingType.CLEAR,color:"auto"},margins:{top:300,bottom:300,left:40,right:40},verticalAlign:VerticalAlign.CENTER,borders:{top:dB,bottom:dB,left:dB,right:dB},children:[P(tr("📷",{size:22,color:IMGC}),{align:AlignmentType.CENTER,after:0}),P(tr("Thêm ảnh",{size:14,bold:true,color:IMGC}),{align:AlignmentType.CENTER,after:0})]});
+  C.push(new Table({width:{size:CW,type:WidthType.DXA},columnWidths:[CW/4,CW/4,CW/4,CW/4],rows:[new TableRow({children:[imgCell(),imgCell(),imgCell(),imgCell()]})]}));
+  C.push(P(tr("",{}),{after:60}));
+
+  /* Intro box */
+  if(it.intro&&it.intro.trim()){
+    C.push(tbl([new TableRow({children:[cell([P(tr(it.intro.trim(),{size:19,italics:true,color:INK}),{after:0})],{fill:TEALH,mt:110,mb:110,ml:150,mr:150})]})],[CW]));
+    C.push(P(tr("",{}),{after:40}));
+  }
+
+  /* Flight info */
+  const fl=(it.flights||[]).filter(f=>f.flightNo||f.dep||f.arr);
+  if(fl.length){
+    C.push(P(tr("✈  THÔNG TIN CHUYẾN BAY",{size:18,bold:true,color:NAVY}),{before:120,after:50,border:{bottom:{style:BorderStyle.SINGLE,size:5,color:TEAL,space:2}}}));
+    const fw=[1900,2500,1900,2003,2003];
+    const fhead=["Đoàn","Chặng","Chuyến bay","Khởi hành","Hạ cánh"];
+    const rows=[new TableRow({children:fhead.map((h,i)=>cell([P(tr(h,{size:16,bold:true,color:WHITE}),{align:AlignmentType.CENTER,after:0})],{width:fw[i],fill:NAVY,mt:30,mb:30}))})];
+    fl.forEach((f,ri)=>rows.push(new TableRow({children:[f.group,f.leg,f.flightNo,f.dep,f.arr].map((v,ci)=>cell([P(tr(v,{size:16,bold:ci===0,color:ci===0?GRPC:INK}),{after:0,align:ci===0?AlignmentType.LEFT:AlignmentType.LEFT})],{width:fw[ci],fill:ri%2?ZEBRA:WHITE,mt:24,mb:24}))})));
+    C.push(tbl(rows,fw));
+    C.push(P(tr("",{}),{after:40}));
+  }
+
+  /* Days */
+  (it.schedule||[]).forEach(d=>{
+    /* day header bar */
+    C.push(tbl([new TableRow({children:[cell([new Paragraph({children:[tr(`NGÀY ${d.dayNum}`,{size:22,bold:true,color:WHITE}),tr(`     ${d.title||""}`,{size:19,bold:true,color:"CFE6E0"})],spacing:{after:0}})],{fill:NAVY,mt:50,mb:50,ml:150})]})],[CW]));
+    (d.segments||[]).forEach(seg=>{
+      if(d.segments.length>1&&seg.groupLabel)C.push(P(tr(seg.groupLabel,{size:16,bold:true,color:GRPC}),{before:50,after:20}));
+      if(seg.transport&&seg.transport.trim())C.push(tbl([new TableRow({children:[cell([P(tr(seg.transport.trim(),{size:15,bold:true,color:TEAL}),{after:0})],{fill:TEALH,mt:22,mb:22,ml:150})]})],[CW]));
+      const acts=(seg.activities||[]).filter(a=>(a.time&&a.time.trim())||(a.text&&a.text.trim()));
+      if(acts.length){
+        const tW=820,cW=CW-tW;
+        const arows=acts.map((a,i)=>new TableRow({children:[
+          cell([P(tr(a.time,{size:18,bold:true,color:TEAL}),{after:0})],{width:tW,fill:i%2?ZEBRA:WHITE,mt:16,mb:16,ml:90,mr:20}),
+          cell([P(tr(a.text,{size:19,color:INK}),{after:0})],{width:cW,fill:i%2?ZEBRA:WHITE,mt:16,mb:16,ml:90,mr:130}),
+        ]}));
+        C.push(tbl(arows,[tW,cW],{borders:{top:NB,bottom:NB,left:NB,right:NB,insideVertical:NB,insideHorizontal:{style:BorderStyle.SINGLE,size:2,color:LINE}}}));
+      }
+    });
+    const meals=[["B","Sáng"],["L","Trưa"],["D","Tối"]].filter(([m])=>d.meals&&d.meals[m]).map(([,n])=>n);
+    C.push(P([tr("🍽 Bữa ăn bao gồm: ",{size:16,bold:true,color:MUTE}),tr(meals.length?meals.join("  ·  "):"—",{size:16,bold:true,color:TEAL})],{before:40,after:140}));
+  });
+
+  /* Note */
+  C.push(P(tr("✱ Chương trình có thể thay đổi thứ tự tùy thời tiết & tình hình thực tế, vẫn đảm bảo đầy đủ nội dung.",{size:15,italics:true,color:MUTE}),{after:120}));
+
+  /* Includes / Excludes */
+  const half=Math.floor(CW/2);
+  const incCol=[P(tr("GIÁ BAO GỒM",{size:20,bold:true,color:NAVY}),{after:60,border:{bottom:{style:BorderStyle.SINGLE,size:4,color:TEAL,space:2}}})];
+  (it.includes||[]).filter(x=>x&&x.trim()).forEach(x=>incCol.push(P([tr("✓  ",{size:17,bold:true,color:"27AE60"}),tr(x,{size:17,color:INK})],{after:30})));
+  const excCol=[P(tr("KHÔNG BAO GỒM",{size:20,bold:true,color:NAVY}),{after:60,border:{bottom:{style:BorderStyle.SINGLE,size:4,color:TEAL,space:2}}})];
+  (it.excludes||[]).filter(x=>x&&x.trim()).forEach(x=>excCol.push(P([tr("✕  ",{size:17,bold:true,color:"C0392B"}),tr(x,{size:17,color:INK})],{after:30})));
+  C.push(tbl([new TableRow({children:[cell(incCol,{width:half,mr:120,valign:VerticalAlign.TOP}),cell(excCol,{width:half,ml:120,valign:VerticalAlign.TOP})]})],[half,half]));
+
+  /* Footer */
+  C.push(P(tr("Kính chúc Quý khách một hành trình lý thú và trọn vẹn!",{size:20,bold:true,italics:true,color:TEAL}),{align:AlignmentType.CENTER,before:240}));
+  C.push(P(tr("VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn",{size:15,color:MUTE}),{align:AlignmentType.CENTER}));
+
+  const doc=new Document({styles:{default:{document:{run:{font:FONT,size:19}}}},sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:800,right:800,bottom:800,left:800}}},children:C}]});
+  try{
+    const blob=await Packer.toBlob(doc);
+    const fn=`ChuongTrinh_${code}_${(it.destination||"Tour").replace(/[^a-zA-Z0-9_À-ỹ]/g,"_").slice(0,30)}.docx`;
+    if(window.saveAs)window.saveAs(blob,fn);
+    else{const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=fn;a.click();URL.revokeObjectURL(url);}
+    if(window.showToast)window.showToast("Đã xuất Word chương trình","export",code);
+  }catch(err){console.error(err);alert("Lỗi xuất Word: "+err.message);}
 }
 
 /* ═══ SORTABLE LIST (drag-drop wrapper, SortableJS) ═══ */
