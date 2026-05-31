@@ -13,6 +13,7 @@
 <script crossorigin src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script crossorigin src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getFirestore,doc,setDoc,getDoc,onSnapshot}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -480,6 +481,7 @@ body{font-family:'DM Sans','Segoe UI',sans-serif;color:#0f3a4a;background:linear
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 ::-webkit-scrollbar{width:8px;height:8px}
+.sortable-ghost{opacity:0.4;background:rgba(20,150,140,0.15)!important}
 /* ── Toast notifications ── */
 .toast-container{position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:10px;pointer-events:none}
 .toast{background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 28px rgba(15,58,74,0.18);display:flex;align-items:flex-start;gap:10px;min-width:280px;max-width:380px;pointer-events:all;animation:toastIn .3s cubic-bezier(.34,1.56,.64,1) forwards;border-left:4px solid #14a08c}
@@ -1590,7 +1592,24 @@ const TEMPLATES={
   domestic:{label:"Báo giá tour nội địa",icon:"🇻🇳",desc:"Tour trong nước Việt Nam",init:TPL_DOMESTIC,sample:{name:"Tour Đà Nẵng",dest:"Đà Nẵng",days:3,nights:2}},
   intl:{label:"Báo giá tour nước ngoài",icon:"🌏",desc:"Outbound tour quốc tế",init:TPL_INTL,sample:{name:"Tour Nhật Bản",dest:"Nhật Bản",days:5,nights:4}},
   dmc:{label:"Breakdown báo giá DMC",icon:"📋",desc:"Phân tích chi phí & so sánh với giá DMC",init:TPL_DMC,sample:{name:"DMC Package",dest:"",days:5,nights:4}},
+  itinerary:{label:"Chương trình tour",icon:"🗺️",desc:"Tạo lịch trình tour theo ngày, xuất Word/PDF",itinerary:true},
 };
+
+/* ═══ ITINERARY – Region code hierarchy ═══════════════ */
+const ITIN_TYPE={NN:"Nước ngoài",ND:"Nội địa"};
+const ITIN_CONTINENT={CA:"Châu Á",AU:"Châu Âu",MY:"Châu Mỹ",PH:"Châu Phi",DD:"Châu Đại Dương",VN:"Việt Nam"};
+const ITIN_COUNTRY={
+  CA:{TQ:"Trung Quốc",NB:"Nhật Bản",HQ:"Hàn Quốc",TL:"Thái Lan",SG:"Singapore",ML:"Malaysia",ID:"Indonesia",CPC:"Campuchia",LA:"Lào",AD:"Ấn Độ",DB:"Dubai/UAE",DL:"Đài Loan",HK:"Hồng Kông"},
+  AU:{PH:"Pháp",AN:"Anh",DC:"Đức",YL:"Ý",TBN:"Tây Ban Nha",TS:"Thụy Sĩ",HL:"Hà Lan",NGA:"Nga"},
+  MY:{MY:"Mỹ",CND:"Canada",BRA:"Brazil"},
+  PH:{AC:"Ai Cập",NP:"Nam Phi",MRC:"Morocco"},
+  DD:{UC:"Úc",NZ:"New Zealand"},
+  VN:{MB:"Miền Bắc",MT:"Miền Trung",MN:"Miền Nam"},
+};
+function generateItinCode(type,continent,country,seq){
+  const t=type||"NN",c=continent||"CA",ct=country||"TQ";
+  return `${t}-${c}-${ct}-${String(seq||1).padStart(3,"0")}`;
+}
 
 /* ═══ HELPERS ═══════════════════════════════════════════ */
 function calcVND(item,rates,pax){
@@ -6377,6 +6396,237 @@ function ContractManagerModal({info,pax,roundedPPax,user,onClose}){
   );
 }
 
+
+/* ═══ EXPORT ITINERARY (Word) — stub, hoàn thiện ở commit sau ═══ */
+async function exportItineraryDocx(it,code){
+  if(window.showToast)window.showToast("Xuất Word chương trình đang hoàn thiện","info",code);
+  else alert("Xuất Word chương trình: "+code);
+}
+
+/* ═══ SORTABLE LIST (drag-drop wrapper, SortableJS) ═══ */
+function SortableList({onReorder,handle,className,style,deps,children}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!ref.current||!window.Sortable)return;
+    const s=window.Sortable.create(ref.current,{animation:160,handle:handle||undefined,
+      ghostClass:"sortable-ghost",
+      onEnd:(e)=>{
+        if(e.oldIndex===e.newIndex||e.oldIndex==null)return;
+        /* revert DOM move → để React kiểm soát thứ tự */
+        const p=e.from;
+        p.removeChild(e.item);
+        p.insertBefore(e.item, p.children[e.oldIndex]||null);
+        onReorder(e.oldIndex,e.newIndex);
+      }});
+    return()=>{try{s.destroy();}catch(_){}}
+  },deps||[]);
+  return <div ref={ref} className={className} style={style}>{children}</div>;
+}
+function reorder(arr,from,to){const a=[...arr];const[m]=a.splice(from,1);a.splice(to,0,m);return a;}
+
+/* ═══ ITINERARY BUILDER ═══════════════════════════════ */
+const ITIN_DEFAULT_INC=[...DEFAULT_INCLUDES];
+const ITIN_DEFAULT_EXC=[...DEFAULT_EXCLUDES];
+function newActivity(){return{id:"a"+Date.now()+Math.random().toString(36).slice(2,5),time:"",text:""};}
+function newSegment(label=""){return{id:"s"+Date.now()+Math.random().toString(36).slice(2,5),groupLabel:label,transport:"",activities:[newActivity()]};}
+function newDay(n){return{id:"d"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",title:"",meals:{B:false,L:false,D:false},segments:[newSegment()]};}
+
+function ItineraryBuilder({user,onBack}){
+  const [it,setIt]=useState(()=>({
+    id:"it"+Date.now(),
+    type:"NN",continent:"CA",country:"TQ",seq:1,
+    title:"CHƯƠNG TRÌNH THAM QUAN DU LỊCH",
+    destination:"",days:4,nights:3,intro:"",
+    flights:[{id:"f1",group:"Nhóm 1",leg:"Đi · Ngày 1",flightNo:"",dep:"",arr:""}],
+    schedule:[newDay(1),newDay(2),newDay(3),newDay(4)],
+    includes:[...ITIN_DEFAULT_INC],excludes:[...ITIN_DEFAULT_EXC],
+    linkedQuoteId:null,linkedQuoteName:"",
+  }));
+  const [saving,setSaving]=useState(false);
+  const set=(k,v)=>setIt(p=>({...p,[k]:v}));
+  const code=generateItinCode(it.type,it.continent,it.country,it.seq);
+
+  /* ── Day ops ── */
+  const addDay=()=>setIt(p=>({...p,schedule:[...p.schedule,newDay(p.schedule.length+1)]}));
+  const delDay=(id)=>setIt(p=>{const s=p.schedule.filter(d=>d.id!==id).map((d,i)=>({...d,dayNum:i+1}));return{...p,schedule:s};});
+  const updDay=(id,patch)=>setIt(p=>({...p,schedule:p.schedule.map(d=>d.id===id?{...d,...patch}:d)}));
+  const reorderDays=(from,to)=>setIt(p=>({...p,schedule:reorder(p.schedule,from,to).map((d,i)=>({...d,dayNum:i+1}))}));
+
+  /* ── Segment ops ── */
+  const addSeg=(dayId)=>updDayById(dayId,d=>({...d,segments:[...d.segments,newSegment("▸ NHÓM ...")]}));
+  const delSeg=(dayId,segId)=>updDayById(dayId,d=>({...d,segments:d.segments.filter(s=>s.id!==segId)}));
+  const updSeg=(dayId,segId,patch)=>updDayById(dayId,d=>({...d,segments:d.segments.map(s=>s.id===segId?{...s,...patch}:s)}));
+  function updDayById(dayId,fn){setIt(p=>({...p,schedule:p.schedule.map(d=>d.id===dayId?fn(d):d)}));}
+
+  /* ── Activity ops ── */
+  const addAct=(dayId,segId)=>updSeg2(dayId,segId,s=>({...s,activities:[...s.activities,newActivity()]}));
+  const delAct=(dayId,segId,actId)=>updSeg2(dayId,segId,s=>({...s,activities:s.activities.filter(a=>a.id!==actId)}));
+  const updAct=(dayId,segId,actId,patch)=>updSeg2(dayId,segId,s=>({...s,activities:s.activities.map(a=>a.id===actId?{...a,...patch}:a)}));
+  const reorderActs=(dayId,segId,from,to)=>updSeg2(dayId,segId,s=>({...s,activities:reorder(s.activities,from,to)}));
+  function updSeg2(dayId,segId,fn){updDayById(dayId,d=>({...d,segments:d.segments.map(s=>s.id===segId?fn(s):s)}));}
+
+  /* ── Flight ops ── */
+  const addFlight=()=>setIt(p=>({...p,flights:[...p.flights,{id:"f"+Date.now(),group:"Nhóm",leg:"",flightNo:"",dep:"",arr:""}]}));
+  const delFlight=(id)=>setIt(p=>({...p,flights:p.flights.filter(f=>f.id!==id)}));
+  const updFlight=(id,patch)=>setIt(p=>({...p,flights:p.flights.map(f=>f.id===id?{...f,...patch}:f)}));
+
+  /* ── Includes/Excludes ── */
+  const updList=(key,i,v)=>setIt(p=>{const l=[...p[key]];l[i]=v;return{...p,[key]:l};});
+  const addListItem=(key)=>setIt(p=>({...p,[key]:[...p[key],""]}));
+  const delListItem=(key,i)=>setIt(p=>({...p,[key]:p[key].filter((_,j)=>j!==i)}));
+
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"8px 11px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  const lbl={fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.55)",letterSpacing:0.8,textTransform:"uppercase",marginBottom:5,display:"block"};
+
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff",boxShadow:"0 6px 28px rgba(10,60,50,0.25)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:14,maxWidth:1280,margin:"0 auto"}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <img src={VTE_LOGO_WHITE} style={{height:48}} alt="Viettours"/>
+            <div>
+              <div style={{fontSize:18,fontWeight:900}}>🗺️ Trình tạo Chương trình tour</div>
+              <div style={{fontSize:12,opacity:0.8}}>Mã: <strong style={{fontFamily:"monospace",letterSpacing:0.5}}>{code}</strong></div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{background:"rgba(255,255,255,0.15)",borderRadius:9,padding:"5px 12px",fontSize:12,fontWeight:600}}>{user.name} · {user.role}</span>
+            <button onClick={()=>exportItineraryDocx(it,code)} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>📄 Xuất Word</button>
+            <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Quay lại</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 28px"}}>
+        {/* ── Thông tin chung ── */}
+        <div className="glass-strong" style={{borderRadius:16,padding:22,marginBottom:18}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#0f3a4a",marginBottom:16}}>📋 Thông tin chương trình</div>
+          {/* Region code selectors */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.4fr 0.8fr",gap:12,marginBottom:16}}>
+            <div><label style={lbl}>Loại</label>
+              <select value={it.type} onChange={e=>set("type",e.target.value)} style={inp}>
+                {Object.entries(ITIN_TYPE).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}
+              </select></div>
+            <div><label style={lbl}>Châu lục</label>
+              <select value={it.continent} onChange={e=>{const c=e.target.value;set("continent",c);const first=Object.keys(ITIN_COUNTRY[c]||{})[0];setIt(p=>({...p,continent:c,country:first}));}} style={inp}>
+                {Object.entries(ITIN_CONTINENT).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}
+              </select></div>
+            <div><label style={lbl}>Quốc gia</label>
+              <select value={it.country} onChange={e=>set("country",e.target.value)} style={inp}>
+                {Object.entries(ITIN_COUNTRY[it.continent]||{}).map(([k,v])=><option key={k} value={k}>{k} · {v}</option>)}
+              </select></div>
+            <div><label style={lbl}>STT</label>
+              <input type="number" min={1} value={it.seq} onChange={e=>set("seq",+e.target.value)} style={inp}/></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 0.6fr 0.6fr",gap:12,marginBottom:14}}>
+            <div><label style={lbl}>Tên chương trình</label><input value={it.title} onChange={e=>set("title",e.target.value)} style={inp}/></div>
+            <div><label style={lbl}>Điểm đến</label><input value={it.destination} onChange={e=>set("destination",e.target.value)} placeholder="VD: BẮC KINH" style={inp}/></div>
+            <div><label style={lbl}>Số ngày</label><input type="number" min={1} value={it.days} onChange={e=>set("days",+e.target.value)} style={inp}/></div>
+            <div><label style={lbl}>Số đêm</label><input type="number" min={0} value={it.nights} onChange={e=>set("nights",+e.target.value)} style={inp}/></div>
+          </div>
+          <div><label style={lbl}>Giới thiệu điểm đến (3-4 câu)</label>
+            <textarea value={it.intro} onChange={e=>set("intro",e.target.value)} rows={3} placeholder="Đoạn thuyết minh ngắn về điểm đến..." style={{...inp,resize:"vertical"}}/></div>
+        </div>
+
+        {/* ── Chuyến bay ── */}
+        <div className="glass-strong" style={{borderRadius:16,padding:22,marginBottom:18}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontSize:15,fontWeight:800,color:"#0f3a4a"}}>✈️ Thông tin chuyến bay</div>
+            <button onClick={addFlight} style={{background:"rgba(20,150,140,0.1)",border:"1px solid rgba(20,150,140,0.3)",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm chuyến</button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {it.flights.map(f=>(
+              <div key={f.id} style={{display:"grid",gridTemplateColumns:"1.1fr 1.3fr 1fr 1.1fr 1.1fr 30px",gap:8,alignItems:"center"}}>
+                <input value={f.group} onChange={e=>updFlight(f.id,{group:e.target.value})} placeholder="Nhóm" style={{...inp,padding:"6px 9px",fontSize:12}}/>
+                <input value={f.leg} onChange={e=>updFlight(f.id,{leg:e.target.value})} placeholder="Đi · Ngày 1" style={{...inp,padding:"6px 9px",fontSize:12}}/>
+                <input value={f.flightNo} onChange={e=>updFlight(f.id,{flightNo:e.target.value})} placeholder="CA904" style={{...inp,padding:"6px 9px",fontSize:12}}/>
+                <input value={f.dep} onChange={e=>updFlight(f.id,{dep:e.target.value})} placeholder="TSN 05:40" style={{...inp,padding:"6px 9px",fontSize:12}}/>
+                <input value={f.arr} onChange={e=>updFlight(f.id,{arr:e.target.value})} placeholder="PEK 11:35" style={{...inp,padding:"6px 9px",fontSize:12}}/>
+                <button onClick={()=>delFlight(f.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:14}}>✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Lịch trình theo ngày (drag-drop) ── */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontSize:15,fontWeight:800,color:"#0f3a4a"}}>📅 Lịch trình theo ngày <span style={{fontSize:11,fontWeight:400,color:"rgba(15,58,74,0.4)"}}>· kéo ⋮⋮ để đổi thứ tự</span></div>
+          <button onClick={addDay} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Thêm ngày</button>
+        </div>
+        <SortableList onReorder={reorderDays} handle=".day-handle" deps={[it.schedule.length]} style={{display:"flex",flexDirection:"column",gap:14}}>
+          {it.schedule.map((d)=>(
+            <div key={d.id} data-sid={d.id} className="glass-strong" style={{borderRadius:14,overflow:"hidden",border:"1px solid rgba(20,150,140,0.18)"}}>
+              {/* Day header */}
+              <div style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span className="day-handle" style={{cursor:"grab",fontSize:16,opacity:0.7,userSelect:"none"}}>⋮⋮</span>
+                <span style={{fontWeight:900,fontSize:14}}>NGÀY {d.dayNum}</span>
+                <input value={d.date} onChange={e=>updDay(d.id,{date:e.target.value})} placeholder="Date (tuỳ chọn)" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 9px",color:"#fff",fontSize:12,fontFamily:"inherit",outline:"none",width:130}}/>
+                <input value={d.title} onChange={e=>updDay(d.id,{title:e.target.value})} placeholder="Điểm đến / tuyến (VD: TP.HCM → BẮC KINH)" style={{flex:1,minWidth:200,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 10px",color:"#fff",fontSize:13,fontWeight:600,fontFamily:"inherit",outline:"none"}}/>
+                {/* meals */}
+                <div style={{display:"flex",gap:4}}>
+                  {[["B","Sáng"],["L","Trưa"],["D","Tối"]].map(([m,name])=>(
+                    <button key={m} onClick={()=>updDay(d.id,{meals:{...d.meals,[m]:!d.meals[m]}})} title={name}
+                      style={{width:30,height:26,borderRadius:6,border:"1px solid rgba(255,255,255,0.3)",cursor:"pointer",fontSize:11,fontWeight:800,fontFamily:"inherit",background:d.meals[m]?"#14a08c":"rgba(255,255,255,0.1)",color:"#fff"}}>{m}</button>
+                  ))}
+                </div>
+                <button onClick={()=>delDay(d.id)} style={{background:"rgba(220,50,80,0.25)",border:"none",borderRadius:6,color:"#fff",width:26,height:26,cursor:"pointer",fontSize:13}}>🗑</button>
+              </div>
+              {/* Segments */}
+              <div style={{padding:"12px 14px"}}>
+                {d.segments.map((seg,si)=>(
+                  <div key={seg.id} style={{marginBottom:si<d.segments.length-1?12:0}}>
+                    {/* segment group label (only show input if >1 segment) */}
+                    {d.segments.length>1&&(
+                      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                        <input value={seg.groupLabel} onChange={e=>updSeg(d.id,seg.id,{groupLabel:e.target.value})} placeholder="▸ NHÓM HCM — CA904" style={{...inp,padding:"5px 10px",fontSize:12,fontWeight:700,color:"#2980b9",flex:1}}/>
+                        <button onClick={()=>delSeg(d.id,seg.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:13}}>✕ nhóm</button>
+                      </div>
+                    )}
+                    <input value={seg.transport} onChange={e=>updSeg(d.id,seg.id,{transport:e.target.value})} placeholder="🚗 Phương tiện · khoảng cách · thời gian (VD: ✈ CA904 · TSN 05:40 → PEK 11:35 · ~5h)" style={{...inp,padding:"6px 10px",fontSize:12,color:"#14a08c",fontWeight:600,marginBottom:8,background:"rgba(20,150,140,0.05)"}}/>
+                    {/* activities (drag-drop) */}
+                    <SortableList onReorder={(f,t)=>reorderActs(d.id,seg.id,f,t)} handle=".act-handle" deps={[seg.activities.length,d.id]} style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {seg.activities.map(a=>(
+                        <div key={a.id} data-sid={a.id} style={{display:"flex",gap:7,alignItems:"center"}}>
+                          <span className="act-handle" style={{cursor:"grab",color:"rgba(15,58,74,0.3)",fontSize:13,userSelect:"none"}}>⋮⋮</span>
+                          <input value={a.time} onChange={e=>updAct(d.id,seg.id,a.id,{time:e.target.value})} placeholder="08:00" style={{width:60,...inp,padding:"5px 8px",fontSize:12,fontWeight:700,color:"#14a08c",textAlign:"center"}}/>
+                          <input value={a.text} onChange={e=>updAct(d.id,seg.id,a.id,{text:e.target.value})} placeholder="Nội dung hoạt động / thuyết minh..." style={{flex:1,...inp,padding:"5px 10px",fontSize:12.5}}/>
+                          <button onClick={()=>delAct(d.id,seg.id,a.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
+                        </div>
+                      ))}
+                    </SortableList>
+                    <button onClick={()=>addAct(d.id,seg.id)} style={{marginTop:6,background:"rgba(20,150,140,0.07)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:600,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ hoạt động</button>
+                  </div>
+                ))}
+                <button onClick={()=>addSeg(d.id)} style={{marginTop:10,background:"rgba(41,128,185,0.08)",border:"1px dashed rgba(41,128,185,0.3)",borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:600,color:"#2980b9",cursor:"pointer",fontFamily:"inherit"}}>+ Tách nhóm (ngày đầu/cuối nhiều chuyến bay)</button>
+              </div>
+            </div>
+          ))}
+        </SortableList>
+
+        {/* ── Bao gồm / Không bao gồm ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginTop:20}}>
+          {[["includes","✓ GIÁ BAO GỒM","#27ae60"],["excludes","✕ KHÔNG BAO GỒM","#c0392b"]].map(([key,title,color])=>(
+            <div key={key} className="glass-strong" style={{borderRadius:14,padding:18}}>
+              <div style={{fontSize:13,fontWeight:800,color,marginBottom:10}}>{title}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {it[key].map((x,i)=>(
+                  <div key={i} style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <input value={x} onChange={e=>updList(key,i,e.target.value)} style={{...inp,padding:"5px 9px",fontSize:12}}/>
+                    <button onClick={()=>delListItem(key,i)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:12}}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>addListItem(key)} style={{marginTop:8,background:"rgba(20,150,140,0.07)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:600,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ thêm mục</button>
+            </div>
+          ))}
+        </div>
+        <div style={{height:40}}/>
+      </div>
+    </div>
+  );
+}
+
 function MainApp({user,onLogout}){
   const[template,setTemplate]=useState(null);
   const[info,setInfo]=useState({name:"",dest:"",days:1,nights:0});
@@ -6463,9 +6713,13 @@ function MainApp({user,onLogout}){
     [items,rates,pax,catEnabled]);
   // Note: uses ALL CATS - since domesticOnly cats are auto-disabled via catEnabled when intl template chosen
 
+  if(template==="itinerary"){
+    return <ItineraryBuilder user={user} onBack={()=>setTemplate(null)}/>;
+  }
   if(!template){
     return <TemplateSelector onSelect={(t)=>{
       const tpl=TEMPLATES[t];
+      if(t==="itinerary"){setTemplate(t);return;}
       setTemplate(t);
       setInfo(tpl.sample);
       setItems(tpl.init(20));
