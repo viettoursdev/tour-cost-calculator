@@ -7064,7 +7064,7 @@ async function exportMenuDocx(it,code){
   if(!window.docx){alert("Đang tải thư viện Word, thử lại sau 3 giây.");return;}
   const {Document,Packer,Paragraph,TextRun,AlignmentType,Table,TableRow,TableCell,WidthType,BorderStyle,ShadingType,ImageRun,VerticalAlign}=window.docx;
   const FONT="Aptos";
-  const NAVY="0F3A4A",TEAL="14A08C",INK="2B3640",MUTE="8A9099",WHITE="FFFFFF",TEALH="E6F6F3",PURP="B8761E",PURPH="FBF1DE";
+  const NAVY="0F3A4A",TEAL="14A08C",INK="2B3640",MUTE="8A9099",WHITE="FFFFFF",TEALH="E6F6F3",PURP="C2410C",PURPH="FDEBDD";
   const CW=10306;
   function b64ToU8(b64){try{const bin=atob((b64||"").split(",")[1]||"");const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}catch(e){return new Uint8Array();}}
   const tr=(t,o={})=>new TextRun({text:t==null?"":String(t),font:FONT,size:o.size||19,bold:!!o.bold,italics:!!o.italics,color:o.color||INK});
@@ -7143,10 +7143,11 @@ function exportMenuPDF(it,code){
   const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   const hasFont=loadVNFont(pdf);const FONT=hasFont?"DejaVu":"helvetica";
   const PW=210,PH=297,M=14,CW=PW-2*M;
-  const navy=[15,58,74],teal=[20,160,140],purp=[176,118,30],ink=[43,54,64],mute=[138,144,153],white=[255,255,255];
+  const navy=[15,58,74],teal=[20,160,140],purp=[194,65,12],ink=[43,54,64],mute=[138,144,153],white=[255,255,255];
   const money=(n,cur)=>((+n||0).toLocaleString("vi-VN"))+" "+(cur||"VND");
   let y=M;
   function ensure(h){if(y+h>PH-M){pdf.addPage();y=M;}}
+  function gradFill(x,yT,w,h,c1,c2){const steps=Math.max(2,Math.ceil(h));const sh=h/steps;for(let i=0;i<steps;i++){const t=i/(steps-1);pdf.setFillColor(Math.round(c1[0]+(c2[0]-c1[0])*t),Math.round(c1[1]+(c2[1]-c1[1])*t),Math.round(c1[2]+(c2[2]-c1[2])*t));pdf.rect(x,yT+i*sh,w,sh+0.3,"F");}}
   /* header */
   try{pdf.addImage(VTE_LOGO,"PNG",M,y,30,17,undefined,"FAST");}catch(e){}
   pdf.setFont(FONT,"bold");pdf.setFontSize(9);pdf.setTextColor(...mute);pdf.text("MÃ THỰC ĐƠN",PW-M,y+5,{align:"right"});
@@ -7178,8 +7179,8 @@ function exportMenuPDF(it,code){
       const rows=Math.max(sW.length,aW.length),lineH=4.2,headH=6,priceH=6,pad=2;
       const boxH=headH+rows*lineH+priceH+pad;
       ensure(boxH+2);
-      pdf.setFillColor(230,246,243);pdf.rect(x1,y,colW,boxH,"F");
-      pdf.setFillColor(251,241,222);pdf.rect(x2,y,colW,boxH,"F");
+      gradFill(x1,y,colW,boxH,[233,247,244],[202,234,226]);
+      gradFill(x2,y,colW,boxH,[253,237,221],[250,210,178]);
       pdf.setFont(FONT,"bold");pdf.setFontSize(7.5);
       pdf.setTextColor(...teal);pdf.text("ĐỀ XUẤT TỪ NHÀ HÀNG",x1+2,y+4);
       pdf.setTextColor(...purp);pdf.text("ĐIỀU CHỈNH THEO FEEDBACK",x2+2,y+4);
@@ -7513,19 +7514,19 @@ function MenuBuilder({user,initial,onBack}){
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
                       {meal.city&&<span style={{background:"rgba(20,150,140,0.12)",color:"#0d7a6a",fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:20}}>📍 {meal.city}</span>}
                       {r&&(r.rating||r.review)&&<span style={{fontSize:11,color:"rgba(15,58,74,0.55)",display:"inline-flex",alignItems:"center",gap:5}}><StarRating value={r.rating} size={12}/>{r.review&&<em style={{fontStyle:"italic"}}>{r.review}</em>}</span>}
-                      {rm&&rm.review&&<span style={{fontSize:11,color:"#b8761e",fontStyle:"italic"}}>· set: {rm.review}</span>}
+                      {rm&&rm.review&&<span style={{fontSize:11,color:"#c2410c",fontStyle:"italic"}}>· set: {rm.review}</span>}
                     </div>
                     {/* 2 columns */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                       <div>
-                        <div style={{fontSize:10,fontWeight:800,color:"#0d7a6a",letterSpacing:0.5,textTransform:"uppercase",marginBottom:5}}>📋 Đề xuất từ nhà hàng</div>
+                        <div style={{display:"inline-block",background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",padding:"3px 10px",borderRadius:6,marginBottom:6}}>📋 Đề xuất từ nhà hàng</div>
                         <textarea value={meal.suggestedDishes} onChange={e=>updMeal(d.id,meal.id,{suggestedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6}}/>
                         <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.suggestedPrice} onChange={e=>updMeal(d.id,meal.id,{suggestedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right"}}/>{curSel("suggestedCur",meal.suggestedCur||meal.cur)}</div>
                       </div>
                       <div>
-                        <div style={{fontSize:10,fontWeight:800,color:"#b8761e",letterSpacing:0.5,textTransform:"uppercase",marginBottom:5}}>✏️ Điều chỉnh theo feedback</div>
-                        <textarea value={meal.adjustedDishes} onChange={e=>updMeal(d.id,meal.id,{adjustedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6,borderColor:"rgba(184,118,30,0.35)"}}/>
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.adjustedPrice} onChange={e=>updMeal(d.id,meal.id,{adjustedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right",borderColor:"rgba(184,118,30,0.35)"}}/>{curSel("adjustedCur",meal.adjustedCur||meal.cur)}</div>
+                        <div style={{display:"inline-block",background:"linear-gradient(135deg,#9a3412,#ea580c)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:0.5,textTransform:"uppercase",padding:"3px 10px",borderRadius:6,marginBottom:6}}>✏️ Điều chỉnh theo feedback</div>
+                        <textarea value={meal.adjustedDishes} onChange={e=>updMeal(d.id,meal.id,{adjustedDishes:e.target.value})} rows={4} placeholder="Mỗi món 1 dòng..." style={{...inp,fontSize:12,resize:"vertical",marginBottom:6,borderColor:"rgba(194,65,12,0.35)"}}/>
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}><span style={{fontSize:11,color:"rgba(15,58,74,0.5)"}}>Giá:</span><input type="number" value={meal.adjustedPrice} onChange={e=>updMeal(d.id,meal.id,{adjustedPrice:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right",borderColor:"rgba(194,65,12,0.35)"}}/>{curSel("adjustedCur",meal.adjustedCur||meal.cur)}</div>
                       </div>
                     </div>
                     <input value={meal.note||""} onChange={e=>updMeal(d.id,meal.id,{note:e.target.value})} placeholder="📝 Lưu ý bữa ăn (dị ứng, yêu cầu riêng, đánh giá thực tế...)" style={{...inp,marginTop:10,fontSize:12,fontStyle:meal.note?"normal":"italic"}}/>
