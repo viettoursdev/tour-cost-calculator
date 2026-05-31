@@ -6431,25 +6431,37 @@ function newActivity(){return{id:"a"+Date.now()+Math.random().toString(36).slice
 function newSegment(label=""){return{id:"s"+Date.now()+Math.random().toString(36).slice(2,5),groupLabel:label,transport:"",activities:[newActivity()]};}
 function newDay(n){return{id:"d"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",title:"",meals:{B:false,L:false,D:false},segments:[newSegment()]};}
 
-/* ── Flight string parser ── */
+/* ── Flight string parser (GDS/PNR + casual) ── */
 function parseFlights(text){
-  const lines=text.split(/\n|;/).map(l=>l.trim()).filter(Boolean);
+  const MONTHS={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+  const lines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
   const out=[];
   lines.forEach(line=>{
-    const fno=line.match(/\b([A-Z]{2})\s?-?\s?(\d{2,4})\b/);
-    const flightNo=fno?`${fno[1]}${fno[2]}`:"";
-    const times=[...line.matchAll(/\b(\d{1,2})[:h](\d{2})\b/g)].map(m=>`${m[1].padStart(2,"0")}:${m[2]}`);
-    const airports=[...line.matchAll(/\b([A-Z]{3})\b/g)].map(m=>m[1]).filter(a=>!["AND","THE","CHU"].includes(a));
-    const dateM=line.match(/\b(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)\b/);
+    let s=line.replace(/^\s*\d{1,2}\s+/," "); // bỏ số thứ tự đầu dòng (segment)
+    /* Mã chuyến bay: 2 chữ + số (có thể cách: "BR 396") */
+    const fm=s.match(/\b([A-Z]{2})\s*(\d{2,4})\b/);
+    const flightNo=fm?`${fm[1]}${fm[2]}`:"";
+    if(fm)s=s.replace(fm[0]," ");
+    /* Ngày DDMMM (10JUN) hoặc DD/MM */
+    let dateStr="";
+    const dm=s.match(/\b(\d{1,2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\b/i);
+    if(dm){const mo=MONTHS[dm[2].toUpperCase()];dateStr=`${dm[1].padStart(2,"0")}/${String(mo).padStart(2,"0")}`;s=s.replace(dm[0]," ");}
+    else{const d2=s.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.]\d{2,4})?\b/);if(d2){dateStr=`${d2[1].padStart(2,"0")}/${d2[2].padStart(2,"0")}`;s=s.replace(d2[0]," ");}}
     const dayM=line.match(/ng[aà]y\s*(\d+)/i);
-    if(flightNo||times.length>=1){
+    /* Giờ: ưu tiên HH:MM, nếu không có thì 4 số HHMM */
+    let times=[...s.matchAll(/\b(\d{1,2}):(\d{2})\b/g)].map(m=>`${m[1].padStart(2,"0")}:${m[2]}`);
+    if(times.length<2){
+      times=[...s.matchAll(/\b([01]?\d|2[0-3])([0-5]\d)\b/g)].map(m=>`${m[1].padStart(2,"0")}:${m[2]}`);
+    }
+    /* Sân bay: mã 3 chữ */
+    const airports=[...s.matchAll(/\b([A-Z]{3})\b/g)].map(m=>m[1]).filter(a=>!["AND","THE"].includes(a));
+    if(flightNo||times.length){
+      const leg=dayM?`Ngày ${dayM[1]}`+(dateStr?` · ${dateStr}`:""):(dateStr||"");
       out.push({
         id:"f"+Date.now()+Math.random().toString(36).slice(2,6),
-        group:"Nhóm 1",
-        leg:dayM?`Ngày ${dayM[1]}`+(dateM?` (${dateM[1]})`:""):(dateM?dateM[1]:""),
-        flightNo,
-        dep:airports[0]&&times[0]?`${airports[0]} ${times[0]}`:(times[0]||""),
-        arr:airports[1]&&times[1]?`${airports[1]} ${times[1]}`:(times[1]||airports[1]||""),
+        group:"Nhóm 1",leg,flightNo,
+        dep:[airports[0],times[0]].filter(Boolean).join(" "),
+        arr:[airports[1],times[1]].filter(Boolean).join(" "),
       });
     }
   });
@@ -6579,7 +6591,7 @@ function ItineraryBuilder({user,onBack}){
           <div style={{background:"rgba(41,128,185,0.05)",border:"1px dashed rgba(41,128,185,0.3)",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
             <div style={{fontSize:11,fontWeight:700,color:"#2980b9",marginBottom:6}}>📋 Dán đoạn thông tin chuyến bay → tự phân tích</div>
             <div style={{display:"flex",gap:8}}>
-              <textarea value={flightPaste} onChange={e=>setFlightPaste(e.target.value)} rows={2} placeholder="VD: CA904 TSN 05:40 PEK 11:35 ngày 1&#10;CA903 PEK 20:35 TSN 00:40 ngày 4" style={{...inp,resize:"vertical",fontSize:12,flex:1}}/>
+              <textarea value={flightPaste} onChange={e=>setFlightPaste(e.target.value)} rows={2} placeholder="Dán code GDS/PNR, VD:&#10;1  BR 396 10JUN SGN TPE  1545 2010&#10;2  BR 051 24JUN IAH TPE  0120 0605" style={{...inp,resize:"vertical",fontSize:12,flex:1}}/>
               <button onClick={doParseFlights} style={{background:"linear-gradient(135deg,#2980b9,#3498db)",color:"#fff",border:"none",borderRadius:9,padding:"0 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚡ Phân tích</button>
             </div>
           </div>
