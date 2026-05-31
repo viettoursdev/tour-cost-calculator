@@ -233,13 +233,13 @@ function generateQuoteCode(template, existingQuotes){
   const dd=String(now.getDate()).padStart(2,"0");
   const mm=String(now.getMonth()+1).padStart(2,"0");
   const yy=String(now.getFullYear()).slice(-2);
-  const dateStr=`${dd}-${mm}-${yy}`;
+  const dateStr=`${dd}.${mm}.${yy}`;
   /* Count existing codes for same prefix + same date */
   const todaySameType=(existingQuotes||[]).filter(q=>
-    q.quoteCode&&q.quoteCode.startsWith(prefix+"-")&&q.quoteCode.endsWith("-"+dateStr)
+    q.quoteCode&&q.quoteCode.startsWith(prefix+".")&&q.quoteCode.endsWith("."+dateStr)
   ).length;
   const seq=String(todaySameType+1).padStart(2,"0");
-  return `${prefix}-${seq}-${dateStr}`;
+  return `${prefix}.${seq}.${dateStr}`;
 }
 
 window.fbSaveQuote=async function(entry){
