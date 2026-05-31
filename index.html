@@ -6289,6 +6289,31 @@ function MainApp({user,onLogout}){
                 style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:9,padding:"6px 14px",color:"rgba(255,255,255,0.85)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
                 ↺ Đổi
               </button>
+              <button onClick={()=>{
+                if(!confirm("Tạo báo giá mới?\n\nToàn bộ nội dung hiện tại (chi phí, thanh toán...) sẽ được làm mới."))return;
+                /* Reset all quote content, keep template */
+                const tpl=TEMPLATES[template];
+                setInfo(tpl?.sample||{name:"",dest:"",days:1,nights:0});
+                setItems(tpl?.init?.(pax)||{});
+                setPax(20);
+                setMargin(template==="domestic"?5:5);
+                setVat(template==="domestic"?8:0);
+                setSvcBasis(0);
+                setRounding(100000);
+                setCurrentQuoteId(null);
+                /* Clear localStorage payments for old tour */
+                try{
+                  for(let i=localStorage.length-1;i>=0;i--){
+                    const k=localStorage.key(i);
+                    if(k&&(k.startsWith("vte_payments_")||k.startsWith("vte_pay_custom_")))localStorage.removeItem(k);
+                  }
+                }catch(e){}
+                setView("cost");
+                if(window.showToast)window.showToast("Đã tạo báo giá mới","success","Sẵn sàng nhập thông tin");
+              }} title="Tạo báo giá mới - xoá toàn bộ nội dung hiện tại"
+                style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:9,padding:"6px 14px",color:"rgba(255,255,255,0.85)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                🆕 Mới
+              </button>
             </div>
           </div>
 
