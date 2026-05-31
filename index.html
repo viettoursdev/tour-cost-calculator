@@ -2678,7 +2678,7 @@ async function exportExcelPro(info,items,rates,pax,catEnabled,margin,vat,svcBasi
   try{
     const b64=VTE_LOGO.includes(",")?VTE_LOGO.split(",")[1]:VTE_LOGO;
     const imgId=wb.addImage({base64:b64,extension:"png"});
-    ws.addImage(imgId,{tl:{col:0.15,row:0.1},ext:{width:120,height:46}});
+    ws.addImage(imgId,{tl:{col:0.1,row:0.12},ext:{width:81,height:46}});
   }catch(e){console.warn("logo embed failed",e);}
   ws.getRow(1).height=44;
   ws.mergeCells(`C1:${LAST}1`);
@@ -2822,6 +2822,13 @@ async function exportExcelPro(info,items,rates,pax,catEnabled,margin,vat,svcBasi
   fc.value=foreign?"Báo giá có hiệu lực 07 ngày kể từ ngày xuất. Giá có thể thay đổi theo tỷ giá tại thời điểm xuất vé.":"Báo giá có hiệu lực 07 ngày kể từ ngày xuất.";
   fc.font=fnt({size:8,italic:true,color:{argb:MUTE}});ws.mergeCells(`B${r}:${LAST}${r}`);
 
+  // ── Hidden metadata sheet for perfect round-trip import ──
+  try{
+    const meta=wb.addWorksheet("_vtemeta",{state:"veryHidden"});
+    meta.getCell("A1").value="VTE_QUOTE_V1";
+    meta.getCell("A2").value=JSON.stringify({template,info,pax,rates,margin,vat,svcBasis:svcBasis||0,rounding:(typeof rounding!=="undefined"?rounding:100000),catEnabled,items});
+  }catch(e){}
+
   // ── Save ──
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
@@ -2830,6 +2837,75 @@ async function exportExcelPro(info,items,rates,pax,catEnabled,margin,vat,svcBasi
   a.download=`BaoGia_${(info.name||"Tour").replace(/[^a-zA-Z0-9_À-ỹ]/g,"_")}_${new Date().toLocaleDateString("vi-VN").replace(/\//g,"-")}.xlsx`;
   a.click();URL.revokeObjectURL(url);
   if(window.showToast)window.showToast("Đã xuất Excel báo giá","export",info.name||"");
+}
+
+
+/* ═══ IMPORT EXCEL → tái tạo báo giá (metadata + parse bảng) ═══ */
+async function importExcelPro(file,onLoad){
+  if(!window.ExcelJS){alert("Đang tải thư viện Excel, thử lại sau 3 giây.");return;}
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+
+    /* ── Layer A: metadata ẩn (round-trip chính xác) ── */
+    const meta=wb.getWorksheet("_vtemeta");
+    if(meta && String(meta.getCell("A1").value)==="VTE_QUOTE_V1"){
+      const raw=meta.getCell("A2").value;
+      const data=JSON.parse(typeof raw==="object"&&raw.richText?raw.richText.map(t=>t.text).join(""):raw);
+      onLoad({
+        template:data.template,info:data.info,pax:data.pax,rates:data.rates,
+        margin:data.margin,vat:data.vat,svcBasis:data.svcBasis||0,
+        rounding:data.rounding||100000,items:data.items,catEnabled:data.catEnabled,
+      });
+      if(window.showToast)window.showToast("Đã nhập báo giá từ Excel","success",data.info?.name||"");
+      return;
+    }
+
+    /* ── Layer B: parse bảng hiển thị (file nhập tay) ── */
+    const ws=wb.worksheets[0];
+    const getV=(r,c)=>{const v=ws.getCell(r,c).value;if(v==null)return"";if(typeof v==="object"){if(v.result!=null)return v.result;if(v.richText)return v.richText.map(t=>t.text).join("");if(v.text!=null)return v.text;return "";}return v;};
+    /* tìm dòng header */
+    let H=0;
+    for(let r=1;r<=20;r++){if(String(getV(r,1)).trim().toUpperCase()==="STT"){H=r;break;}}
+    if(!H){alert("❌ Không nhận diện được bảng báo giá. Vui lòng dùng file xuất từ hệ thống.");return;}
+    /* foreign nếu có cột NT */
+    const foreign=String(getV(H,5)).trim().toUpperCase()==="NT";
+    /* info từ block trên */
+    const info={name:String(getV(4,2))||"Nhập từ Excel",dest:String(getV(5,3))||"",days:1,nights:0};
+    const mD=String(getV(7,3)).match(/(\d+)\s*N\s*(\d+)/i);
+    if(mD){info.days=+mD[1];info.nights=+mD[2];}
+    let pax=+String(getV(6,3)).replace(/[^\d]/g,"")||20;
+    /* map nhãn category → catId */
+    const catByLabel={};getCATS("intl").concat(getCATS("domestic")).forEach(c=>{catByLabel[c.label]=c.id;});
+    const items={};let curCat=null;
+    const rates={VND:1,USD:26500,GBP:36300,EUR:31500,JPY:170,SGD:19200,THB:720,CNY:3500,KRW:18.5,AUD:16800};
+    for(let r=H+1;r<300;r++){
+      const a=getV(r,1),b=String(getV(r,2)).trim(),c=String(getV(r,3)).trim();
+      const isTotal=String(b).startsWith("Tổng chi phí")||String(b).startsWith("TỔNG");
+      if(isTotal||(a===""&&b===""&&c===""))break;
+      if(b&&catByLabel[b])curCat=catByLabel[b];
+      if(!c)continue;
+      const cid=curCat||"flight";
+      if(!items[cid])items[cid]=[];
+      let it;
+      if(foreign){
+        it={id:Date.now()+Math.random(),name:c,note:String(getV(r,4)),cur:String(getV(r,5)).trim()||"VND",
+            price:+getV(r,6)||0,times:+getV(r,9)||1,qtyMode:"custom",customQty:+getV(r,8)||1,
+            unit:"/"+String(getV(r,10)),enabled:true,foc:false};
+      }else{
+        it={id:Date.now()+Math.random(),name:c,note:String(getV(r,4)),cur:"VND",
+            price:+getV(r,5)||0,times:+getV(r,7)||1,qtyMode:"custom",customQty:+getV(r,6)||1,
+            unit:"/"+String(getV(r,8)),enabled:true,foc:false};
+      }
+      items[cid].push(it);
+    }
+    /* catEnabled */
+    const catEnabled={};getCATS(foreign?"intl":"domestic").forEach(c=>{catEnabled[c.id]=true;});
+    onLoad({template:foreign?"intl":"domestic",info,pax,rates,margin:5,vat:foreign?0:8,
+      svcBasis:0,rounding:100000,items,catEnabled});
+    if(window.showToast)window.showToast("Đã nhập báo giá từ Excel","success",info.name);
+  }catch(e){alert("❌ Lỗi đọc file Excel: "+e.message);}
 }
 
 /* ═══ EXPORT EXCEL (bilingual + formulas) ═══════════ */
@@ -6321,6 +6397,7 @@ function MainApp({user,onLogout}){
   const[dmcPrices,setDmcPrices]=useState({20:0,25:0,30:0,35:0,40:0}); // DMC package prices per pax per group size
   const[dmcMargin,setDmcMargin]=useState({type:"percent",value:0}); // DMC profit margin & service charge
   const fileInputRef=useRef(null);
+  const excelInputRef=useRef(null);
   const quoteRef=useRef(null);
 
   /* ═══ Export / Import báo giá ═══ */
@@ -6472,6 +6549,7 @@ function MainApp({user,onLogout}){
       {showRateSync&&<RateCardSyncModal user={user} onClose={()=>setShowRateSync(false)}/>}
       {showSaveHist&&<SaveQuoteModal info={info} template={template} pax={pax} totalCost={totalCost} user={user} curState={curState} currentQuoteId={currentQuoteId} onSave={(entry)=>{setShowSaveHist(false);if(entry?.id)setCurrentQuoteId(entry.id);}} onClose={()=>setShowSaveHist(false)}/>}
       <input type="file" ref={fileInputRef} accept=".json,application/json" onChange={handleImportQuote} style={{display:"none"}}/>
+      <input type="file" ref={excelInputRef} accept=".xlsx" onChange={(e)=>{const f=e.target.files?.[0];if(f){importExcelPro(f,(s)=>{loadState(s);setView("cost");});}e.target.value="";}} style={{display:"none"}}/>
 
       <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",borderBottom:"1px solid rgba(255,255,255,0.15)",padding:"18px 32px 16px",color:"#fff",boxShadow:"0 6px 28px rgba(10,60,50,0.25)"}}>
         <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto",gap:24,alignItems:"center",maxWidth:1400,margin:"0 auto"}}>
@@ -6649,6 +6727,7 @@ function MainApp({user,onLogout}){
               onMouseLeave={()=>setShowExportDD(false)}>
               {[
                 {label:"📥 Excel báo giá", action:()=>{exportExcelPro(info,items,rates,pax,catEnabled,margin,vat,svcBasis,user,template);setShowExportDD(false);}},
+                {label:"📤 Nhập từ Excel",action:()=>{excelInputRef.current?.click();setShowExportDD(false);}},
                 {label:"📄 PDF ảnh",    action:()=>{setView("quote");setTimeout(()=>exportPDFImage(quoteRef,info),400);setShowExportDD(false);}},
                 {label:"📄 PDF vector", action:()=>{exportPDFVector(info,pax,items,rates,catEnabled,roundedPPax,vat,user,getCATS(template),margin,totalCost,svcBasis);setShowExportDD(false);}},
                 {label:"🧾 Invoice",    action:()=>{setShowInvoice(true);setShowExportDD(false);}},
