@@ -16,7 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import{getFirestore,doc,setDoc,getDoc,onSnapshot}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,doc,setDoc,getDoc,onSnapshot,deleteDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const _fbConfig={
   apiKey:"AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw",
@@ -442,6 +442,26 @@ window.fbDeleteNotification = async (username, id) => {
   if (!snap.exists()) return;
   const notifs = (snap.data().notifications || []).filter(n => n.id !== id);
   await setDoc(_notifDoc(username), { notifications: notifs });
+};
+
+/* ══ Itineraries Firestore sync (index doc + per-itin doc) ══ */
+const _ITIN_INDEX=doc(_db,"viettours","itinerary_index");
+const _itinDoc=(id)=>doc(_db,"tour_itineraries",id);
+window.fbSaveItinerary=async(itin)=>{
+  const u=window._vteUser;const now=new Date().toISOString();
+  await setDoc(_itinDoc(itin.id),{...itin,updatedAt:now,updatedBy:u?u.name:""});
+  const snap=await getDoc(_ITIN_INDEX);const list=snap.exists()?(snap.data().items||[]):[];
+  const idx=list.findIndex(x=>x.id===itin.id);
+  const meta={id:itin.id,code:itin.code||"",title:itin.title||"",destination:itin.destination||"",days:itin.days||0,nights:itin.nights||0,updatedAt:now,updatedBy:u?u.name:"",linkedQuoteName:itin.linkedQuoteName||""};
+  if(idx>=0)list[idx]={...list[idx],...meta};else list.unshift({...meta,createdAt:now,createdBy:u?u.name:""});
+  await setDoc(_ITIN_INDEX,{items:list.slice(0,500)});
+};
+window.fbOnItineraries=(cb)=>onSnapshot(_ITIN_INDEX,s=>cb(s.exists()?(s.data().items||[]):[]));
+window.fbGetItinerary=async(id)=>{const s=await getDoc(_itinDoc(id));return s.exists()?s.data():null;};
+window.fbDeleteItinerary=async(id)=>{
+  const snap=await getDoc(_ITIN_INDEX);
+  if(snap.exists())await setDoc(_ITIN_INDEX,{items:(snap.data().items||[]).filter(x=>x.id!==id)});
+  try{await deleteDoc(_itinDoc(id));}catch(e){}
 };
 
 window._fbReady=true;
@@ -6578,8 +6598,8 @@ const TRANSPORT_PRESETS=[
   {icon:"🚶",label:"Đi bộ",tpl:"🚶 Đi bộ tham quan · ~__ phút"},
 ];
 
-function ItineraryBuilder({user,onBack}){
-  const [it,setIt]=useState(()=>({
+function ItineraryBuilder({user,initial,onBack}){
+  const [it,setIt]=useState(()=>initial||({
     id:"it"+Date.now(),
     type:"NN",continent:"CA",country:"TQ",seq:1,
     title:"CHƯƠNG TRÌNH THAM QUAN DU LỊCH",
@@ -6591,7 +6611,25 @@ function ItineraryBuilder({user,onBack}){
   }));
   const [saving,setSaving]=useState(false);
   const [flightPaste,setFlightPaste]=useState("");
+  const [quotes,setQuotes]=useState([]);
+  useEffect(()=>{
+    if(!window.fbOnQuoteHistory)return;
+    const unsub=window.fbOnQuoteHistory(list=>setQuotes(list||[]));
+    return()=>unsub&&unsub();
+  },[]);
   const set=(k,v)=>setIt(p=>({...p,[k]:v}));
+  const doSave=async()=>{
+    if(!window.fbSaveItinerary){alert("Firebase chưa sẵn sàng");return;}
+    setSaving(true);
+    try{await window.fbSaveItinerary({...it,code});if(window.showToast)window.showToast("Đã lưu chương trình lên Cloud","success",code);}
+    catch(e){alert("Lỗi lưu: "+e.message);}
+    finally{setSaving(false);}
+  };
+  const linkQuote=(qId)=>{
+    const q=quotes.find(x=>x.id===qId);
+    if(!q){setIt(p=>({...p,linkedQuoteId:null,linkedQuoteName:""}));return;}
+    setIt(p=>({...p,linkedQuoteId:q.id,linkedQuoteName:q.name||"",destination:p.destination||(q.dest||"").toUpperCase(),days:p.days||q.days||p.days,nights:p.nights||q.nights||p.nights}));
+  };
   const doParseFlights=()=>{
     const parsed=parseFlights(flightPaste);
     if(parsed.length===0){alert("Không nhận diện được chuyến bay. Thử dán dạng: CA904 TSN 05:40 PEK 11:35");return;}
@@ -6646,6 +6684,7 @@ function ItineraryBuilder({user,onBack}){
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <span style={{background:"rgba(255,255,255,0.15)",borderRadius:9,padding:"5px 12px",fontSize:12,fontWeight:600}}>{user.name} · {user.role}</span>
+            <button onClick={doSave} disabled={saving} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving?"⏳ Lưu...":"💾 Lưu"}</button>
             <button onClick={()=>exportItineraryDocx(it,code)} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>📄 Xuất Word</button>
             <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Quay lại</button>
           </div>
@@ -6679,8 +6718,15 @@ function ItineraryBuilder({user,onBack}){
             <div><label style={lbl}>Số ngày</label><input type="number" min={1} value={it.days} onChange={e=>set("days",+e.target.value)} style={inp}/></div>
             <div><label style={lbl}>Số đêm</label><input type="number" min={0} value={it.nights} onChange={e=>set("nights",+e.target.value)} style={inp}/></div>
           </div>
-          <div><label style={lbl}>Giới thiệu điểm đến (3-4 câu)</label>
+          <div style={{marginBottom:14}}><label style={lbl}>Giới thiệu điểm đến (3-4 câu)</label>
             <textarea value={it.intro} onChange={e=>set("intro",e.target.value)} rows={3} placeholder="Đoạn thuyết minh ngắn về điểm đến..." style={{...inp,resize:"vertical"}}/></div>
+          <div><label style={lbl}>🔗 Link báo giá (tự lấy điểm đến, ngày từ báo giá)</label>
+            <select value={it.linkedQuoteId||""} onChange={e=>linkQuote(e.target.value)} style={inp}>
+              <option value="">— Không liên kết —</option>
+              {quotes.map(q=><option key={q.id} value={q.id}>{q.quoteCode?`[${q.quoteCode}] `:""}{q.name}{q.customer?` · ${q.customer}`:""}</option>)}
+            </select>
+            {it.linkedQuoteName&&<div style={{fontSize:11,color:"#14a08c",marginTop:5,fontWeight:600}}>✓ Đã liên kết báo giá: {it.linkedQuoteName}</div>}
+          </div>
         </div>
 
         {/* ── Chuyến bay ── */}
@@ -6808,6 +6854,103 @@ function ItineraryBuilder({user,onBack}){
   );
 }
 
+/* ═══ ITINERARY APP (list ↔ edit) ═══════════════════════ */
+function ItineraryApp({user,onBack}){
+  const [mode,setMode]=useState("list");
+  const [current,setCurrent]=useState(null);
+  const [list,setList]=useState([]);
+  const [loading,setLoading]=useState(true);
+  useEffect(()=>{
+    if(!window.fbOnItineraries){setLoading(false);return;}
+    const trySub=()=>{
+      if(window.fbOnItineraries){const u=window.fbOnItineraries(items=>{setList(items);setLoading(false);});return()=>u&&u();}
+      else{setTimeout(trySub,300);}
+    };
+    return trySub();
+  },[]);
+  const openNew=()=>{setCurrent(null);setMode("edit");};
+  const openEdit=async(id)=>{
+    if(!window.fbGetItinerary)return;
+    const full=await window.fbGetItinerary(id);
+    if(full){setCurrent(full);setMode("edit");}
+    else alert("Không tải được chương trình.");
+  };
+  if(mode==="edit")return <ItineraryBuilder user={user} initial={current} onBack={()=>setMode("list")}/>;
+  return <ItineraryHome user={user} list={list} loading={loading} onNew={openNew} onOpen={openEdit} onBack={onBack}/>;
+}
+
+function ItineraryHome({user,list,loading,onNew,onOpen,onBack}){
+  const [search,setSearch]=useState("");
+  const [delId,setDelId]=useState(null);
+  const filtered=list.filter(x=>{
+    const q=search.toLowerCase();if(!q)return true;
+    return (x.code||"").toLowerCase().includes(q)||(x.title||"").toLowerCase().includes(q)||(x.destination||"").toLowerCase().includes(q)||(x.linkedQuoteName||"").toLowerCase().includes(q);
+  });
+  const fmtDt=s=>{try{return new Date(s).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(e){return s;}};
+  const doDel=async(id)=>{if(window.fbDeleteItinerary)await window.fbDeleteItinerary(id);setDelId(null);};
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:1100,margin:"0 auto",flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <img src={VTE_LOGO_WHITE} style={{height:46}} alt="Viettours"/>
+            <div><div style={{fontSize:18,fontWeight:900}}>🗺️ Chương trình tour</div>
+              <div style={{fontSize:12,opacity:0.8}}>{loading?"Đang tải...":`${list.length} chương trình · đồng bộ Cloud`}</div></div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={onNew} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 18px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Tạo chương trình</button>
+            <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Quay lại</button>
+          </div>
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 28px"}}>
+        <div style={{position:"relative",marginBottom:18,maxWidth:420}}>
+          <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",fontSize:14,opacity:0.4}}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm mã, tên, điểm đến..." style={{width:"100%",padding:"9px 12px 9px 32px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",color:"#0f3a4a"}}/>
+        </div>
+        {loading&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.4)"}}>⏳ Đang tải...</div>}
+        {!loading&&filtered.length===0&&(
+          <div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.35)"}}>
+            <div style={{fontSize:42,marginBottom:12}}>🗺️</div>
+            <div style={{fontSize:15,fontWeight:600}}>{list.length===0?"Chưa có chương trình nào":"Không tìm thấy"}</div>
+            <div style={{fontSize:12,marginTop:6}}>Bấm "+ Tạo chương trình" để bắt đầu</div>
+          </div>
+        )}
+        {!loading&&filtered.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+            {filtered.map(x=>(
+              <div key={x.id} onClick={()=>onOpen(x.id)} style={{background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid rgba(20,150,140,0.15)",boxShadow:"0 2px 8px rgba(15,58,74,0.06)",cursor:"pointer",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 20px rgba(15,58,74,0.12)";e.currentTarget.style.borderColor="rgba(20,150,140,0.35)";}}
+                onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(15,58,74,0.06)";e.currentTarget.style.borderColor="rgba(20,150,140,0.15)";}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                  <span style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:6,fontFamily:"monospace"}}>{x.code||"—"}</span>
+                  <button onClick={e=>{e.stopPropagation();setDelId(x.id);}} style={{background:"rgba(220,50,80,0.07)",border:"none",borderRadius:6,color:"#dc3250",padding:"3px 8px",cursor:"pointer",fontSize:12}}>🗑</button>
+                </div>
+                <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a",marginBottom:2}}>{x.destination||x.title||"(Chưa đặt tên)"}</div>
+                <div style={{fontSize:12,color:"rgba(15,58,74,0.5)"}}>{x.days}N{x.nights}Đ{x.linkedQuoteName?` · 🔗 ${x.linkedQuoteName}`:""}</div>
+                <div style={{fontSize:11,color:"rgba(15,58,74,0.35)",marginTop:6}}>Cập nhật: {fmtDt(x.updatedAt)}{x.updatedBy?` · ${x.updatedBy}`:""}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {delId&&(
+        <div className="modal-bg" onClick={()=>setDelId(null)}>
+          <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:380,padding:"26px 28px",textAlign:"center"}}>
+            <div style={{fontSize:34,marginBottom:10}}>🗑️</div>
+            <div style={{fontSize:16,fontWeight:800,color:"#0f3a4a",marginBottom:18}}>Xoá chương trình này?</div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setDelId(null)} style={{flex:1,padding:11,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Huỷ</button>
+              <button onClick={()=>doDel(delId)} style={{flex:1,padding:11,border:"none",borderRadius:10,background:"linear-gradient(135deg,#dc3250,#e74c3c)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Xoá</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function MainApp({user,onLogout}){
   const[template,setTemplate]=useState(null);
   const[info,setInfo]=useState({name:"",dest:"",days:1,nights:0});
@@ -6895,7 +7038,7 @@ function MainApp({user,onLogout}){
   // Note: uses ALL CATS - since domesticOnly cats are auto-disabled via catEnabled when intl template chosen
 
   if(template==="itinerary"){
-    return <ItineraryBuilder user={user} onBack={()=>setTemplate(null)}/>;
+    return <ItineraryApp user={user} onBack={()=>setTemplate(null)}/>;
   }
   if(!template){
     return <TemplateSelector onSelect={(t)=>{
