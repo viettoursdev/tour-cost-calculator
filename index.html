@@ -7566,7 +7566,7 @@ function MenuBuilder({user,initial,onBack}){
 
 
 /* ═══ VISA MANAGEMENT ═══════════════════════════════════ */
-const VISA_TYPES=["Evisa","Visa lẻ","Visa đoàn","Công tác","Du lịch","Thăm thân","Online","Nộp qua đối tác"];
+const VISAP_TYPES=["Evisa","Visa lẻ","Visa đoàn","Công tác","Du lịch","Thăm thân","Online","Nộp qua đối tác"];
 const VISA_VALIDITY=["1 lần","Nhập cảnh nhiều lần","Multi 1 năm","Multi 2 năm","Multi 5 năm","Multi 10 năm"];
 const VISA_LOCS=["HCM","HAN","DAD"];
 const VISA_FEE_PRESET=["Phí lãnh sự","Phí dịch vụ Viettours","Phí trung tâm (VFS/TLS)","Phí chuyển phát","Bảo hiểm du lịch","Phí dịch thuật / công chứng","Phí đối tác","Phí khác"];
@@ -7680,7 +7680,7 @@ function VisaCatalog({user}){
             <div style={{display:"grid",gridTemplateColumns:"1.6fr 1.2fr 1.3fr 0.9fr auto auto",gap:10,alignItems:"center",marginBottom:12}}>
               <input list={"vc-country-"+p.id} value={p.country} onChange={e=>updP(p.id,{country:e.target.value})} placeholder="Quốc gia ▾" style={{...inp,fontWeight:700}}/>
               <datalist id={"vc-country-"+p.id}>{countryOpts.map(o=><option key={o} value={o}/>)}</datalist>
-              <select value={p.visaType} onChange={e=>updP(p.id,{visaType:e.target.value})} style={inp}>{VISA_TYPES.map(o=><option key={o} value={o}>{o}</option>)}</select>
+              <select value={p.visaType} onChange={e=>updP(p.id,{visaType:e.target.value})} style={inp}>{VISAP_TYPES.map(o=><option key={o} value={o}>{o}</option>)}</select>
               <select value={p.validity} onChange={e=>updP(p.id,{validity:e.target.value})} style={inp}>{VISA_VALIDITY.map(o=><option key={o} value={o}>{o}</option>)}</select>
               <select value={p.location} onChange={e=>updP(p.id,{location:e.target.value})} style={inp}>{VISA_LOCS.map(o=><option key={o} value={o}>{o}</option>)}</select>
               <button onClick={()=>updP(p.id,{active:p.active===false})} title={p.active===false?"Đang tắt":"Đang bật"} style={{background:p.active===false?"rgba(15,58,74,0.12)":"#14a08c",border:"none",borderRadius:20,width:44,height:24,cursor:"pointer",position:"relative",flexShrink:0}}><div style={{position:"absolute",top:2,left:p.active===false?2:22,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/></button>
