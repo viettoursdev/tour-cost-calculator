@@ -6546,6 +6546,19 @@ function SortableList({onReorder,handle,className,style,deps,children}){
 }
 function reorder(arr,from,to){const a=[...arr];const[m]=a.splice(from,1);a.splice(to,0,m);return a;}
 
+/* ── AI Worker (Cloudflare proxy: Claude + Google Maps) ── */
+function getAIWorker(){try{return localStorage.getItem("vte_ai_worker")||"";}catch(e){return "";}}
+function setAIWorker(u){try{localStorage.setItem("vte_ai_worker",u);}catch(e){}}
+async function callAIWorker(path,body){
+  const url=getAIWorker();
+  if(!url)throw new Error("Chưa cấu hình AI Worker URL (bấm ⚙️ AI để nhập)");
+  const r=await fetch(url.replace(/\/+$/,"")+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error("Worker lỗi "+r.status);
+  const d=await r.json();
+  if(d.error)throw new Error(d.error);
+  return d;
+}
+
 /* ═══ ITINERARY BUILDER ═══════════════════════════════ */
 const ITIN_DEFAULT_INC=[...DEFAULT_INCLUDES];
 const ITIN_DEFAULT_EXC=[...DEFAULT_EXCLUDES];
@@ -6630,6 +6643,40 @@ function ItineraryBuilder({user,initial,onBack}){
     if(!q){setIt(p=>({...p,linkedQuoteId:null,linkedQuoteName:""}));return;}
     setIt(p=>({...p,linkedQuoteId:q.id,linkedQuoteName:q.name||"",destination:p.destination||(q.dest||"").toUpperCase(),days:p.days||q.days||p.days,nights:p.nights||q.nights||p.nights}));
   };
+  /* ── AI ── */
+  const [showAISettings,setShowAISettings]=useState(false);
+  const [workerUrl,setWorkerUrl]=useState(getAIWorker());
+  const [aiBusy,setAiBusy]=useState(null); // "intro" | activityId
+  const genIntro=async()=>{
+    if(!it.destination){alert("Nhập Điểm đến trước");return;}
+    setAiBusy("intro");
+    try{
+      const d=await callAIWorker("/ai",{prompt:`Viết đoạn giới thiệu 3-4 câu súc tích, chuyên nghiệp về điểm đến "${it.destination}" cho chương trình tour đoàn doanh nghiệp. Văn phong sang trọng, gợi cảm hứng. Chỉ trả về đoạn văn, không tiêu đề.`});
+      if(d.text)set("intro",d.text.trim());
+      if(window.showToast)window.showToast("AI đã tạo giới thiệu","success");
+    }catch(e){alert("❌ "+e.message);}finally{setAiBusy(null);}
+  };
+  const genActivity=async(dayId,segId,actId,placeText)=>{
+    if(!placeText||!placeText.trim()){alert("Nhập tên địa điểm trước");return;}
+    setAiBusy(actId);
+    try{
+      const d=await callAIWorker("/ai",{prompt:`Viết 1-2 câu thuyết minh ngắn gọn, súc tích, chuyên nghiệp về địa điểm/hoạt động: "${placeText}" tại ${it.destination||"điểm đến"}. Dành cho khách đoàn doanh nghiệp. Chỉ trả về câu thuyết minh, giữ lại tên địa điểm ở đầu nếu có.`});
+      if(d.text)updAct(dayId,segId,actId,{text:d.text.trim()});
+      if(window.showToast)window.showToast("AI đã tạo thuyết minh","success");
+    }catch(e){alert("❌ "+e.message);}finally{setAiBusy(null);}
+  };
+  const genDistance=async(dayId,segId,routeText)=>{
+    const parts=(routeText||"").split(/→|->|–|-/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length<2){alert("Điền tuyến ngày dạng 'Điểm A → Điểm B' để tính khoảng cách");return;}
+    setAiBusy("dist"+segId);
+    try{
+      const d=await callAIWorker("/distance",{origin:parts[0],destination:parts[parts.length-1],mode:"driving"});
+      if(d.distance||d.duration){
+        updSeg(dayId,segId,{transport:`🚗 Xe ô tô · ${d.distance||"~"} · ${d.duration||"~"} di chuyển`});
+        if(window.showToast)window.showToast("Đã tính khoảng cách","success",`${d.distance} · ${d.duration}`);
+      }else alert("Không tính được khoảng cách cho tuyến này");
+    }catch(e){alert("❌ "+e.message);}finally{setAiBusy(null);}
+  };
   const doParseFlights=()=>{
     const parsed=parseFlights(flightPaste);
     if(parsed.length===0){alert("Không nhận diện được chuyến bay. Thử dán dạng: CA904 TSN 05:40 PEK 11:35");return;}
@@ -6684,6 +6731,7 @@ function ItineraryBuilder({user,initial,onBack}){
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <span style={{background:"rgba(255,255,255,0.15)",borderRadius:9,padding:"5px 12px",fontSize:12,fontWeight:600}}>{user.name} · {user.role}</span>
+            <button onClick={()=>setShowAISettings(true)} title="Cấu hình AI Worker" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 12px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>⚙️ AI</button>
             <button onClick={doSave} disabled={saving} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving?"⏳ Lưu...":"💾 Lưu"}</button>
             <button onClick={()=>exportItineraryDocx(it,code)} style={{background:"#fff",color:"#0d7a6a",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>📄 Xuất Word</button>
             <button onClick={onBack} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>↩ Quay lại</button>
@@ -6718,7 +6766,11 @@ function ItineraryBuilder({user,initial,onBack}){
             <div><label style={lbl}>Số ngày</label><input type="number" min={1} value={it.days} onChange={e=>set("days",+e.target.value)} style={inp}/></div>
             <div><label style={lbl}>Số đêm</label><input type="number" min={0} value={it.nights} onChange={e=>set("nights",+e.target.value)} style={inp}/></div>
           </div>
-          <div style={{marginBottom:14}}><label style={lbl}>Giới thiệu điểm đến (3-4 câu)</label>
+          <div style={{marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <label style={lbl}>Giới thiệu điểm đến (3-4 câu)</label>
+              <button onClick={genIntro} disabled={aiBusy==="intro"} style={{background:"rgba(142,68,173,0.1)",border:"1px solid rgba(142,68,173,0.3)",borderRadius:7,padding:"3px 10px",fontSize:11,fontWeight:700,color:"#8e44ad",cursor:aiBusy==="intro"?"wait":"pointer",fontFamily:"inherit",marginBottom:5}}>{aiBusy==="intro"?"⏳ Đang tạo...":"✨ Tạo bằng AI"}</button>
+            </div>
             <textarea value={it.intro} onChange={e=>set("intro",e.target.value)} rows={3} placeholder="Đoạn thuyết minh ngắn về điểm đến..." style={{...inp,resize:"vertical"}}/></div>
           <div><label style={lbl}>🔗 Link báo giá (tự lấy điểm đến, ngày từ báo giá)</label>
             <select value={it.linkedQuoteId||""} onChange={e=>linkQuote(e.target.value)} style={inp}>
@@ -6789,7 +6841,8 @@ function ItineraryBuilder({user,initial,onBack}){
                         <option value="">+ Phương tiện</option>
                         {TRANSPORT_PRESETS.map(pr=><option key={pr.label} value={pr.label}>{pr.icon} {pr.label}</option>)}
                       </select>
-                      <input value={seg.transport} onChange={e=>updSeg(d.id,seg.id,{transport:e.target.value})} placeholder="Phương tiện · khoảng cách · thời gian (✨ AI tự tính — sắp có)" style={{...inp,padding:"6px 10px",fontSize:12,color:"#14a08c",fontWeight:600,background:"rgba(20,150,140,0.05)",flex:1}}/>
+                      <input value={seg.transport} onChange={e=>updSeg(d.id,seg.id,{transport:e.target.value})} placeholder="Phương tiện · khoảng cách · thời gian" style={{...inp,padding:"6px 10px",fontSize:12,color:"#14a08c",fontWeight:600,background:"rgba(20,150,140,0.05)",flex:1}}/>
+                      <button onClick={()=>genDistance(d.id,seg.id,d.title)} disabled={aiBusy==="dist"+seg.id} title="Tự tính khoảng cách/thời gian từ tuyến ngày (Google Maps)" style={{background:"rgba(41,128,185,0.1)",border:"1px solid rgba(41,128,185,0.3)",borderRadius:7,color:"#2980b9",cursor:"pointer",fontSize:12,padding:"6px 10px",fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>{aiBusy==="dist"+seg.id?"⏳":"📍 Tính"}</button>
                     </div>
                     {/* activities header */}
                     <div style={{display:"flex",gap:7,alignItems:"center",padding:"0 0 4px 0",fontSize:10,fontWeight:700,color:"rgba(15,58,74,0.4)",letterSpacing:0.5,textTransform:"uppercase"}}>
@@ -6804,7 +6857,7 @@ function ItineraryBuilder({user,initial,onBack}){
                           <span className="act-handle" style={{cursor:"grab",color:"rgba(15,58,74,0.3)",fontSize:13,userSelect:"none",flexShrink:0}}>⋮⋮</span>
                           <input value={a.time} onChange={e=>updAct(d.id,seg.id,a.id,{time:e.target.value})} placeholder="08:00" style={{...inp,width:64,flexShrink:0,padding:"6px 8px",fontSize:12.5,fontWeight:700,color:"#14a08c",textAlign:"center"}}/>
                           <input value={a.text} onChange={e=>updAct(d.id,seg.id,a.id,{text:e.target.value})} placeholder="Nội dung hoạt động / thuyết minh..." style={{...inp,flex:1,width:"auto",minWidth:0,padding:"6px 11px",fontSize:13}}/>
-                          <button title="AI thuyết minh điểm đến (Phase 2 - sắp có)" disabled style={{background:"rgba(142,68,173,0.08)",border:"1px solid rgba(142,68,173,0.2)",borderRadius:6,color:"rgba(142,68,173,0.5)",cursor:"not-allowed",fontSize:12,padding:"3px 7px",fontFamily:"inherit"}}>✨</button>
+                          <button onClick={()=>genActivity(d.id,seg.id,a.id,a.text)} disabled={aiBusy===a.id} title="AI tạo thuyết minh cho địa điểm này" style={{background:"rgba(142,68,173,0.1)",border:"1px solid rgba(142,68,173,0.3)",borderRadius:6,color:"#8e44ad",cursor:aiBusy===a.id?"wait":"pointer",fontSize:12,padding:"3px 7px",fontFamily:"inherit",flexShrink:0}}>{aiBusy===a.id?"⏳":"✨"}</button>
                           <button onClick={()=>delAct(d.id,seg.id,a.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
                         </div>
                       ))}
@@ -6850,6 +6903,31 @@ function ItineraryBuilder({user,initial,onBack}){
         </div>
         <div style={{height:40}}/>
       </div>
+      {showAISettings&&(
+        <div className="modal-bg" onClick={()=>setShowAISettings(false)}>
+          <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
+            <div style={{background:"linear-gradient(135deg,#8e44ad,#9b59b6)",color:"#fff",padding:"18px 24px",borderRadius:"18px 18px 0 0"}}>
+              <div style={{fontSize:17,fontWeight:800}}>⚙️ Cấu hình AI Worker</div>
+              <div style={{fontSize:12,opacity:0.85,marginTop:2}}>Cloudflare Worker proxy cho Claude + Google Maps</div>
+            </div>
+            <div style={{padding:"22px 24px"}}>
+              <label style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)",marginBottom:6,display:"block"}}>Worker URL</label>
+              <input value={workerUrl} onChange={e=>setWorkerUrl(e.target.value)} placeholder="https://viettours-ai.xxx.workers.dev" style={{...inp,fontSize:13,marginBottom:10}}/>
+              <div style={{background:"rgba(142,68,173,0.06)",border:"1px solid rgba(142,68,173,0.2)",borderRadius:10,padding:"12px 14px",fontSize:12,color:"rgba(15,58,74,0.7)",lineHeight:1.7,marginBottom:16}}>
+                <strong style={{color:"#8e44ad"}}>Hướng dẫn:</strong><br/>
+                1. Deploy Cloudflare Worker (code & guide tôi gửi riêng)<br/>
+                2. Set 2 secret: <code>ANTHROPIC_API_KEY</code>, <code>GOOGLE_MAPS_API_KEY</code><br/>
+                3. Dán URL Worker vào đây → Lưu<br/>
+                4. Dùng ✨ (thuyết minh AI) & 📍 (khoảng cách)
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setShowAISettings(false)} style={{flex:1,padding:12,border:"1.5px solid rgba(20,150,140,0.2)",borderRadius:10,background:"#fff",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",color:"rgba(15,58,74,0.6)"}}>Huỷ</button>
+                <button onClick={()=>{setAIWorker(workerUrl.trim());setShowAISettings(false);if(window.showToast)window.showToast("Đã lưu AI Worker URL","success");}} style={{flex:2,padding:12,border:"none",borderRadius:10,background:"linear-gradient(135deg,#8e44ad,#9b59b6)",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>💾 Lưu cấu hình</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
