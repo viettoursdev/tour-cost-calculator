@@ -7569,9 +7569,9 @@ function MenuBuilder({user,initial,onBack}){
 const VISAP_TYPES=["Evisa","Visa lẻ","Visa đoàn","Công tác","Du lịch","Thăm thân","Online","Nộp qua đối tác"];
 const VISA_VALIDITY=["1 lần","Nhập cảnh nhiều lần","Multi 1 năm","Multi 2 năm","Multi 5 năm","Multi 10 năm"];
 const VISA_LOCS=["HCM","HAN","DAD"];
-const VISA_FEE_PRESET=["Phí lãnh sự","Phí dịch vụ Viettours","Phí trung tâm (VFS/TLS)","Phí chuyển phát","Bảo hiểm du lịch","Phí dịch thuật / công chứng","Phí đối tác","Phí khác"];
-function newVisaFee(name){return{id:"vf"+Date.now()+Math.random().toString(36).slice(2,5),name:name||"Phí dịch vụ Viettours",amount:0,cur:"VND",perPax:true};}
-function newVisaProduct(){return{id:"vp"+Date.now()+Math.random().toString(36).slice(2,5),country:"",visaType:"Evisa",validity:"1 lần",location:"HCM",fees:[newVisaFee("Phí lãnh sự"),newVisaFee("Phí dịch vụ Viettours")],markupType:"percent",markupValue:0,markupCur:"VND",note:"",active:true};}
+const VISA_FEE_PRESET=["Chi phí lãnh sự","Chi phí trung tâm tiếp nhận","Chi phí dịch thuật","Chi phí công chứng","Chi phí hợp pháp hoá lãnh sự","Chi phí chuyển phát","Chi phí in ấn","Chi phí dịch vụ","Chi phí khác"];
+function newVisaFee(name){return{id:"vf"+Date.now()+Math.random().toString(36).slice(2,5),name:name||"Chi phí dịch vụ",amount:0,cur:"VND",perPax:true};}
+function newVisaProduct(){return{id:"vp"+Date.now()+Math.random().toString(36).slice(2,5),country:"",visaType:"Evisa",validity:"1 lần",location:"HCM",fees:VISA_FEE_PRESET.map(n=>newVisaFee(n)),markupType:"percent",markupValue:0,markupCur:"VND",note:"",active:true};}
 
 function VisaApp({user,onBack}){
   const [tab,setTab]=useState("catalog");
