@@ -7726,6 +7726,73 @@ function VisaCatalog({user}){
 }
 
 
+/* ── Visa Picker: chèn giá visa từ thư viện vào bảng tính tour ── */
+function VisaPickerModal({pax,onClose,onPick}){
+  const [data,setData]=useState(null);
+  const [search,setSearch]=useState("");
+  useEffect(()=>{
+    let u;const t=()=>{if(window.fbOnVisaProducts){u=window.fbOnVisaProducts(d=>setData(d||{products:[],rates:{}}));}else setTimeout(t,300);};t();
+    return()=>u&&u();
+  },[]);
+  const rates=(data&&data.rates)||{};
+  const products=((data&&data.products)||[]).filter(p=>p.active!==false);
+  const toVND=(amt,cur)=>(+amt||0)*(rates[cur]||1);
+  const calc=(p)=>{
+    const base=(p.fees||[]).filter(f=>f.perPax!==false).reduce((s,f)=>s+toVND(f.amount,f.cur),0);
+    const grp=(p.fees||[]).filter(f=>f.perPax===false).reduce((s,f)=>s+toVND(f.amount,f.cur),0);
+    let unit=base;
+    if(p.markupType==="fixed")unit+=toVND(p.markupValue,p.markupCur||"VND");else unit*=(1+(+p.markupValue||0)/100);
+    return {unit,grp};
+  };
+  const fmtVND=n=>Math.round(n).toLocaleString("vi-VN")+" ₫";
+  const filtered=products.filter(p=>{const q=search.toLowerCase();if(!q)return true;return [p.country,p.visaType,p.validity,p.location].join(" ").toLowerCase().includes(q);});
+  const pick=(p)=>{
+    const {unit,grp}=calc(p);
+    const feeTxt=(p.fees||[]).filter(f=>(+f.amount)>0).map(f=>`${f.name}: ${(+f.amount).toLocaleString("vi-VN")} ${f.cur}${f.perPax===false?"/đoàn":""}`).join("; ");
+    const lines=[mkItem({name:`Visa ${p.country} · ${p.visaType} · ${p.validity}`,note:`Nơi nộp ${p.location}${p.markupValue?` · markup ${p.markupType==="percent"?p.markupValue+"%":fmtVND(toVND(p.markupValue,p.markupCur))}`:""}${feeTxt?` · ${feeTxt}`:""}`,cur:"VND",price:Math.round(unit),unit:"/khách",qtyMode:"per_pax"})];
+    if(grp>0)lines.push(mkItem({name:`Visa ${p.country} – phí theo đoàn`,cur:"VND",price:Math.round(grp),unit:"/đoàn",qtyMode:"per_group"}));
+    onPick(lines);
+  };
+  return(
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={e=>e.stopPropagation()} style={{maxWidth:760,maxHeight:"86vh",display:"flex",flexDirection:"column"}}>
+        <div style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",padding:"18px 24px",borderRadius:"18px 18px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:900}}>🛂 Chọn Visa từ thư viện</div>
+            <div style={{fontSize:12,opacity:0.82,marginTop:3}}>Giá lấy từ Quản lý Visa · tự chèn vào hạng mục Visa</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,color:"#fff",width:30,height:30,cursor:"pointer",fontSize:15,fontFamily:"inherit"}}>✕</button>
+        </div>
+        <div style={{padding:"16px 24px",overflowY:"auto"}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Tìm quốc gia, loại, nơi nộp..." style={{width:"100%",padding:"9px 12px",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",color:"#0f3a4a",marginBottom:14}}/>
+          {!data&&<div style={{textAlign:"center",padding:"40px 0",color:"rgba(15,58,74,0.4)"}}>⏳ Đang tải thư viện visa...</div>}
+          {data&&filtered.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"rgba(15,58,74,0.4)"}}><div style={{fontSize:34,marginBottom:8}}>🛂</div><div style={{fontSize:14,fontWeight:600}}>{products.length===0?"Thư viện chưa có sản phẩm visa":"Không tìm thấy"}</div><div style={{fontSize:12,marginTop:5}}>Vào 🛂 Quản lý Visa để thêm sản phẩm.</div></div>}
+          <div style={{display:"flex",flexDirection:"column",gap:9}}>
+            {filtered.map(p=>{
+              const {unit,grp}=calc(p);
+              return(
+              <div key={p.id} style={{display:"flex",alignItems:"center",gap:12,background:"#fff",border:"1px solid rgba(20,150,140,0.18)",borderRadius:11,padding:"11px 14px"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:800,fontSize:14,color:"#0f3a4a"}}>{p.country||"(Chưa đặt QG)"} <span style={{fontWeight:600,fontSize:12,color:"rgba(15,58,74,0.55)"}}>· {p.visaType} · {p.validity}</span></div>
+                  <div style={{fontSize:11.5,color:"rgba(15,58,74,0.5)",marginTop:2}}>Nơi nộp {p.location} · {(p.fees||[]).filter(f=>(+f.amount)>0).length} khoản phí</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontWeight:900,fontSize:15,color:"#0d7a6a",whiteSpace:"nowrap"}}>{fmtVND(unit)}<span style={{fontSize:10,fontWeight:600,color:"rgba(15,58,74,0.5)"}}>/khách</span></div>
+                  {grp>0&&<div style={{fontSize:10.5,color:"#b8761e",fontWeight:700,whiteSpace:"nowrap"}}>+ {fmtVND(grp)}/đoàn</div>}
+                </div>
+                <button onClick={()=>pick(p)} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>Chọn →</button>
+              </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{padding:"10px 24px 16px",fontSize:11,color:"rgba(15,58,74,0.45)",borderTop:"1px solid rgba(20,150,140,0.1)"}}>💡 Giá đã quy đổi về VND theo tỷ giá trong Quản lý Visa, gồm markup. Bạn có thể chỉnh lại dòng sau khi chèn.</div>
+      </div>
+    </div>
+  );
+}
+
+
 function MainApp({user,onLogout}){
   const[template,setTemplate]=useState(null);
   const[info,setInfo]=useState({name:"",dest:"",days:1,nights:0});
@@ -7864,6 +7931,7 @@ function MainApp({user,onLogout}){
     if(quoteId)setCurrentQuoteId(quoteId);
   };
 
+  const pickVisaProduct=(lines)=>{(lines||[]).forEach(l=>addItem("visa",l));setRateModal(null);};
   const pickFromRate=(itemData)=>{
     const cid=rateModal==="transport"?"transport"
       :rateModal==="staff"?"staff"
@@ -7906,7 +7974,7 @@ function MainApp({user,onLogout}){
   return(
     <div style={{minHeight:"100vh"}}>
       {rateModal==="hotel"&&<HotelModal template={template} canEdit={hasPerm(user,"editRateCard")} onClose={()=>setRateModal(null)} onPick={pickFromRate}/>}
-      {rateModal==="visa"&&<VisaModal canEdit={hasPerm(user,"editRateCard")} onClose={()=>setRateModal(null)} onPick={pickFromRate}/>}
+      {rateModal==="visa"&&<VisaPickerModal pax={pax} onClose={()=>setRateModal(null)} onPick={pickVisaProduct}/>}
       {rateModal&&rateModal!=="hotel"&&rateModal!=="visa"&&<RateCardModal type={rateModal} template={template} onClose={()=>setRateModal(null)} onPick={pickFromRate}/>}
       {showInvoice&&<InvoiceModal info={info} pax={pax} items={items} rates={rates} catEnabled={catEnabled} roundedPPax={roundedPPax} vat={vat} user={user} activeCATS={getCATS(template)} margin={margin} totalCost={totalCost} svcBasis={svcBasis} onClose={()=>setShowInvoice(false)}/>}
       {showContract&&<ContractManagerModal info={info} pax={pax} roundedPPax={roundedPPax} user={user} onClose={()=>setShowContract(false)}/>}
