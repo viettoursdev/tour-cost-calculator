@@ -7305,6 +7305,11 @@ function RestaurantLibrary({user,onBack}){
   const delMenu=(rid,mid)=>{const r=list.find(x=>x.id===rid);updR(rid,{menus:r.menus.filter(m=>m.id!==mid)});};
   const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"7px 11px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
   const filtered=list.filter(r=>{const q=search.toLowerCase();if(!q)return true;return (r.name||"").toLowerCase().includes(q)||(r.city||"").toLowerCase().includes(q)||(r.country||"").toLowerCase().includes(q);});
+  const uniq=a=>[...new Set(a.filter(Boolean).map(s=>String(s).trim()))].sort((x,y)=>x.localeCompare(y,"vi"));
+  const CONT_SEED=["Châu Á","Châu Âu","Châu Úc","Châu Mỹ","Châu Phi","Việt Nam"];
+  const contOpts=uniq([...CONT_SEED,...list.map(r=>r.continent)]);
+  const countryOpts=cont=>uniq(list.filter(r=>!cont||r.continent===cont).map(r=>r.country));
+  const cityOpts=country=>uniq(list.filter(r=>!country||r.country===country).map(r=>r.city));
   return(
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
       <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px",color:"#fff"}}>
@@ -7323,9 +7328,12 @@ function RestaurantLibrary({user,onBack}){
             <div key={r.id} className="glass-strong" style={{borderRadius:14,padding:18}}>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 30px",gap:10,marginBottom:10,alignItems:"center"}}>
                 <input value={r.name} onChange={e=>updR(r.id,{name:e.target.value})} placeholder="Tên nhà hàng" style={{...inp,fontWeight:700}}/>
-                <input value={r.continent} onChange={e=>updR(r.id,{continent:e.target.value})} placeholder="Châu lục" style={inp}/>
-                <input value={r.country} onChange={e=>updR(r.id,{country:e.target.value})} placeholder="Quốc gia" style={inp}/>
-                <input value={r.city} onChange={e=>updR(r.id,{city:e.target.value})} placeholder="Thành phố" style={inp}/>
+                <input list={"dl-cont-"+r.id} value={r.continent} onChange={e=>updR(r.id,{continent:e.target.value})} placeholder="Châu lục ▾" style={inp}/>
+                <datalist id={"dl-cont-"+r.id}>{contOpts.map(o=><option key={o} value={o}/>)}</datalist>
+                <input list={"dl-country-"+r.id} value={r.country} onChange={e=>updR(r.id,{country:e.target.value})} placeholder="Quốc gia ▾" style={inp}/>
+                <datalist id={"dl-country-"+r.id}>{countryOpts(r.continent).map(o=><option key={o} value={o}/>)}</datalist>
+                <input list={"dl-city-"+r.id} value={r.city} onChange={e=>updR(r.id,{city:e.target.value})} placeholder="Thành phố ▾" style={inp}/>
+                <datalist id={"dl-city-"+r.id}>{cityOpts(r.country).map(o=><option key={o} value={o}/>)}</datalist>
                 <button onClick={()=>delR(r.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:15}}>🗑</button>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
