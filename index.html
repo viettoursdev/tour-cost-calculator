@@ -242,6 +242,63 @@ function generateQuoteCode(template, existingQuotes){
   return `${prefix}.${seq}.${dateStr}`;
 }
 
+/* Migrate existing quotes to add quoteCode */
+window.fbMigrateQuoteCodes=async function(){
+  if(!window.fbPullMasterRC)return; // Firebase not ready
+  try{
+    /* Migrate regular quotes */
+    const histSnap=await getDoc(_HIST_DOC);
+    if(histSnap.exists()){
+      const quotes=histSnap.data().quotes||[];
+      const missing=quotes.filter(q=>!q.quoteCode);
+      if(missing.length>0){
+        /* Sort by createdAt to assign codes chronologically */
+        const sorted=[...quotes].sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
+        /* Group by prefix+date to assign sequential numbers */
+        const dayCount={};
+        const updated=sorted.map(q=>{
+          if(q.quoteCode)return q;
+          const prefix=(q.template==="intl"?"NN":q.template==="dmc"?"DMC":"NĐ");
+          const d=new Date(q.createdAt||q.updatedAt||Date.now());
+          const dd=String(d.getDate()).padStart(2,"0");
+          const mm=String(d.getMonth()+1).padStart(2,"0");
+          const yy=String(d.getFullYear()).slice(-2);
+          const dateStr=`${dd}.${mm}.${yy}`;
+          const key=`${prefix}.${dateStr}`;
+          dayCount[key]=(dayCount[key]||0)+1;
+          const seq=String(dayCount[key]).padStart(2,"0");
+          return{...q,quoteCode:`${prefix}.${seq}.${dateStr}`};
+        });
+        await setDoc(_HIST_DOC,{quotes:updated.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))});
+        console.log(`✅ Migrated ${missing.length} quote codes`);
+      }
+    }
+    /* Migrate DMC quotes */
+    const dmcSnap=await getDoc(_DMC_HIST_DOC);
+    if(dmcSnap.exists()){
+      const dquotes=dmcSnap.data().quotes||[];
+      const dmissing=dquotes.filter(q=>!q.quoteCode);
+      if(dmissing.length>0){
+        const dsorted=[...dquotes].sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
+        const ddayCount={};
+        const dupdated=dsorted.map(q=>{
+          if(q.quoteCode)return q;
+          const d=new Date(q.createdAt||q.updatedAt||Date.now());
+          const dd=String(d.getDate()).padStart(2,"0");
+          const mm=String(d.getMonth()+1).padStart(2,"0");
+          const yy=String(d.getFullYear()).slice(-2);
+          const dateStr=`${dd}.${mm}.${yy}`;
+          const key=`DMC.${dateStr}`;
+          ddayCount[key]=(ddayCount[key]||0)+1;
+          return{...q,quoteCode:`DMC.${String(ddayCount[key]).padStart(2,"0")}.${dateStr}`};
+        });
+        await setDoc(_DMC_HIST_DOC,{quotes:dupdated.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0))});
+        console.log(`✅ Migrated ${dmissing.length} DMC quote codes`);
+      }
+    }
+  }catch(e){console.warn("Quote code migration failed:",e.message);}
+};
+
 window.fbSaveQuote=async function(entry){
   const snap=await getDoc(_HIST_DOC);
   const quotes=snap.exists()?(snap.data().quotes||[]):[];
@@ -6550,7 +6607,14 @@ function QuoteHistoryView({user,template,onLoadState,currentQuoteId,onSetQuoteId
 
   useEffect(()=>{
     if(!_onHistory)return;
-    const unsub=_onHistory(list=>{setQuotes(list);setLoading(false);});
+    const unsub=_onHistory(list=>{
+      setQuotes(list);
+      setLoading(false);
+      /* Auto-migrate quotes without codes */
+      if(!isDMCHistory&&list.some(q=>!q.quoteCode)&&window.fbMigrateQuoteCodes){
+        window.fbMigrateQuoteCodes();
+      }
+    });
     return()=>unsub&&unsub();
   },[]);
 
