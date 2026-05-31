@@ -2840,7 +2840,7 @@ async function exportExcelPro(info,items,rates,pax,catEnabled,margin,vat,svcBasi
 }
 
 
-/* ═══ IMPORT EXCEL → tái tạo báo giá (metadata + parse bảng) ═══ */
+/* ═══ IMPORT EXCEL → tái tạo báo giá (parse bảng = chính, metadata = config) ═══ */
 async function importExcelPro(file,onLoad){
   if(!window.ExcelJS){alert("Đang tải thư viện Excel, thử lại sau 3 giây.");return;}
   try{
@@ -2848,42 +2848,42 @@ async function importExcelPro(file,onLoad){
     const wb=new ExcelJS.Workbook();
     await wb.xlsx.load(buf);
 
-    /* ── Layer A: metadata ẩn (round-trip chính xác) ── */
-    const meta=wb.getWorksheet("_vtemeta");
-    if(meta && String(meta.getCell("A1").value)==="VTE_QUOTE_V1"){
-      const raw=meta.getCell("A2").value;
-      const data=JSON.parse(typeof raw==="object"&&raw.richText?raw.richText.map(t=>t.text).join(""):raw);
-      onLoad({
-        template:data.template,info:data.info,pax:data.pax,rates:data.rates,
-        margin:data.margin,vat:data.vat,svcBasis:data.svcBasis||0,
-        rounding:data.rounding||100000,items:data.items,catEnabled:data.catEnabled,
-      });
-      if(window.showToast)window.showToast("Đã nhập báo giá từ Excel","success",data.info?.name||"");
-      return;
+    /* Đọc metadata (nếu có) để lấy config header chính xác — KHÔNG dùng cho line items */
+    let meta=null;
+    const ms=wb.getWorksheet("_vtemeta");
+    if(ms && String(ms.getCell("A1").value)==="VTE_QUOTE_V1"){
+      try{
+        const raw=ms.getCell("A2").value;
+        meta=JSON.parse(typeof raw==="object"&&raw.richText?raw.richText.map(t=>t.text).join(""):raw);
+      }catch(e){}
     }
 
-    /* ── Layer B: parse bảng hiển thị (file nhập tay) ── */
-    const ws=wb.worksheets[0];
+    /* PARSE BẢNG HIỂN THỊ (luôn ưu tiên — chứa chỉnh sửa của user) */
+    const ws=wb.worksheets.find(w=>w.name!=="_vtemeta")||wb.worksheets[0];
     const getV=(r,c)=>{const v=ws.getCell(r,c).value;if(v==null)return"";if(typeof v==="object"){if(v.result!=null)return v.result;if(v.richText)return v.richText.map(t=>t.text).join("");if(v.text!=null)return v.text;return "";}return v;};
-    /* tìm dòng header */
     let H=0;
     for(let r=1;r<=20;r++){if(String(getV(r,1)).trim().toUpperCase()==="STT"){H=r;break;}}
-    if(!H){alert("❌ Không nhận diện được bảng báo giá. Vui lòng dùng file xuất từ hệ thống.");return;}
-    /* foreign nếu có cột NT */
+    if(!H){
+      /* Không parse được bảng → fallback hoàn toàn về metadata */
+      if(meta){onLoad({template:meta.template,info:meta.info,pax:meta.pax,rates:meta.rates,margin:meta.margin,vat:meta.vat,svcBasis:meta.svcBasis||0,rounding:meta.rounding||100000,items:meta.items,catEnabled:meta.catEnabled});
+        if(window.showToast)window.showToast("Đã nhập báo giá từ Excel","success",meta.info?.name||"");return;}
+      alert("❌ Không nhận diện được bảng báo giá. Vui lòng dùng file xuất từ hệ thống.");return;
+    }
     const foreign=String(getV(H,5)).trim().toUpperCase()==="NT";
-    /* info từ block trên */
+
+    /* Info từ block trên */
     const info={name:String(getV(4,2))||"Nhập từ Excel",dest:String(getV(5,3))||"",days:1,nights:0};
     const mD=String(getV(7,3)).match(/(\d+)\s*N\s*(\d+)/i);
     if(mD){info.days=+mD[1];info.nights=+mD[2];}
     let pax=+String(getV(6,3)).replace(/[^\d]/g,"")||20;
-    /* map nhãn category → catId */
+
+    /* Map nhãn category → catId */
     const catByLabel={};getCATS("intl").concat(getCATS("domestic")).forEach(c=>{catByLabel[c.label]=c.id;});
     const items={};let curCat=null;
-    const rates={VND:1,USD:26500,GBP:36300,EUR:31500,JPY:170,SGD:19200,THB:720,CNY:3500,KRW:18.5,AUD:16800};
-    for(let r=H+1;r<300;r++){
+    for(let r=H+1;r<400;r++){
       const a=getV(r,1),b=String(getV(r,2)).trim(),c=String(getV(r,3)).trim();
       const isTotal=String(b).startsWith("Tổng chi phí")||String(b).startsWith("TỔNG");
-      if(isTotal||(a===""&&b===""&&c===""))break;
+      if(isTotal||(String(a).trim()===""&&b===""&&c===""))break;
       if(b&&catByLabel[b])curCat=catByLabel[b];
       if(!c)continue;
       const cid=curCat||"flight";
@@ -2892,19 +2892,25 @@ async function importExcelPro(file,onLoad){
       if(foreign){
         it={id:Date.now()+Math.random(),name:c,note:String(getV(r,4)),cur:String(getV(r,5)).trim()||"VND",
             price:+getV(r,6)||0,times:+getV(r,9)||1,qtyMode:"custom",customQty:+getV(r,8)||1,
-            unit:"/"+String(getV(r,10)),enabled:true,foc:false};
+            unit:"/"+String(getV(r,10)).replace(/^\//,""),enabled:true,foc:false};
       }else{
         it={id:Date.now()+Math.random(),name:c,note:String(getV(r,4)),cur:"VND",
             price:+getV(r,5)||0,times:+getV(r,7)||1,qtyMode:"custom",customQty:+getV(r,6)||1,
-            unit:"/"+String(getV(r,8)),enabled:true,foc:false};
+            unit:"/"+String(getV(r,8)).replace(/^\//,""),enabled:true,foc:false};
       }
       items[cid].push(it);
     }
-    /* catEnabled */
-    const catEnabled={};getCATS(foreign?"intl":"domestic").forEach(c=>{catEnabled[c.id]=true;});
-    onLoad({template:foreign?"intl":"domestic",info,pax,rates,margin:5,vat:foreign?0:8,
-      svcBasis:0,rounding:100000,items,catEnabled});
-    if(window.showToast)window.showToast("Đã nhập báo giá từ Excel","success",info.name);
+
+    /* Config header: ưu tiên metadata (tỷ giá/margin/vat/rounding chính xác), fallback mặc định */
+    const tmpl=foreign?"intl":"domestic";
+    const rates=(meta&&meta.rates)?meta.rates:{VND:1,USD:26500,GBP:36300,EUR:31500,JPY:170,SGD:19200,THB:720,CNY:3500,KRW:18.5,AUD:16800};
+    const margin=(meta&&meta.margin!=null)?meta.margin:5;
+    const vat=(meta&&meta.vat!=null)?meta.vat:(foreign?0:8);
+    const rounding=(meta&&meta.rounding)?meta.rounding:100000;
+    const catEnabled={};getCATS(tmpl).forEach(c=>{catEnabled[c.id]=true;});
+
+    onLoad({template:tmpl,info,pax,rates,margin,vat,svcBasis:0,rounding,items,catEnabled});
+    if(window.showToast)window.showToast("Đã nhập báo giá từ Excel (theo nội dung file)","success",info.name);
   }catch(e){alert("❌ Lỗi đọc file Excel: "+e.message);}
 }
 
