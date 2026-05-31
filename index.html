@@ -483,6 +483,25 @@ window.fbOnMenus=(cb)=>onSnapshot(_MENU_INDEX,s=>cb(s.exists()?(s.data().items||
 window.fbGetMenu=async(id)=>{const s=await getDoc(_menuDoc(id));return s.exists()?s.data():null;};
 window.fbDeleteMenu=async(id)=>{const snap=await getDoc(_MENU_INDEX);if(snap.exists())await setDoc(_MENU_INDEX,{items:(snap.data().items||[]).filter(x=>x.id!==id)});try{await deleteDoc(_menuDoc(id));}catch(e){}};
 
+/* ══ Visa products (master price source) + Visa procedure docs ══ */
+const _VISA_DOC=doc(_db,"viettours","visa_products");
+window.fbOnVisaProducts=(cb)=>onSnapshot(_VISA_DOC,s=>cb(s.exists()?s.data():null));
+window.fbSaveVisaProducts=async(data)=>{const u=window._vteUser;await setDoc(_VISA_DOC,{products:data.products||[],rates:data.rates||{},updatedAt:new Date().toISOString(),updatedBy:u?u.name:""});};
+const _VPROC_INDEX=doc(_db,"viettours","visa_proc_index");
+const _vprocDoc=(id)=>doc(_db,"visa_procedures",id);
+window.fbSaveVisaProc=async(m)=>{
+  const u=window._vteUser;const now=new Date().toISOString();
+  await setDoc(_vprocDoc(m.id),{...m,updatedAt:now,updatedBy:u?u.name:""});
+  const snap=await getDoc(_VPROC_INDEX);const list=snap.exists()?(snap.data().items||[]):[];
+  const idx=list.findIndex(x=>x.id===m.id);
+  const meta={id:m.id,code:m.code||"",title:m.title||"",country:m.country||"",linkedQuoteName:m.linkedQuoteName||"",collaborators:m.collaborators||[],createdByUsername:m.createdByUsername||(u?u.u:""),updatedAt:now,updatedBy:u?u.name:""};
+  if(idx>=0)list[idx]={...list[idx],...meta};else list.unshift({...meta,createdAt:now,createdByName:u?u.name:""});
+  await setDoc(_VPROC_INDEX,{items:list.slice(0,500)});
+};
+window.fbOnVisaProcs=(cb)=>onSnapshot(_VPROC_INDEX,s=>cb(s.exists()?(s.data().items||[]):[]));
+window.fbGetVisaProc=async(id)=>{const s=await getDoc(_vprocDoc(id));return s.exists()?s.data():null;};
+window.fbDeleteVisaProc=async(id)=>{const snap=await getDoc(_VPROC_INDEX);if(snap.exists())await setDoc(_VPROC_INDEX,{items:(snap.data().items||[]).filter(x=>x.id!==id)});try{await deleteDoc(_vprocDoc(id));}catch(e){}};
+
 window._fbReady=true;
 console.log("✅ Firebase Firestore connected · database: viettours · auto-sync: ON");
 </script>
@@ -625,14 +644,14 @@ const DEFAULT_USERS=[
    Ngưỡng: từ Operations trở lên mới có editRateCard/exportQuote/importQuote
 */
 const PERMISSIONS={
-  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
-  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
-  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
-  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
-  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true},
-  "Admin":           {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:true,manageMenu:false},
-  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false,manageMenu:false},
-  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false,manageMenu:false},
+  "CEO":             {manageUsers:true, editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true, manageVisa:true},
+  "Trưởng Phòng":    {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true, manageVisa:true},
+  "Sales":           {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true, manageVisa:true},
+  "Operations":      {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true, manageVisa:true},
+  "Marketing":       {manageUsers:false,editRateCard:true, exportQuote:true, importQuote:true, viewHistory:true, syncRateCard:true, manageNCC:true, manageCustomers:true, manageContracts:true, viewContracts:true, manageMenu:true, manageVisa:true},
+  "Admin":           {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:true,manageMenu:false, manageVisa:false},
+  "Accountant":      {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:true, syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false,manageMenu:false, manageVisa:false},
+  "Standard":        {manageUsers:false,editRateCard:false,exportQuote:false,importQuote:false,viewHistory:false,syncRateCard:false,manageNCC:false,manageCustomers:false,manageContracts:false,viewContracts:false,manageMenu:false, manageVisa:false},
 };
 const hasPerm=(user,key)=>{
   if(!user)return false;
@@ -1639,6 +1658,7 @@ const TEMPLATES={
   dmc:{label:"Breakdown báo giá DMC",icon:"📋",desc:"Phân tích chi phí & so sánh với giá DMC",init:TPL_DMC,sample:{name:"DMC Package",dest:"",days:5,nights:4}},
   itinerary:{label:"Chương trình tour",icon:"🗺️",desc:"Tạo lịch trình tour theo ngày, xuất Word/PDF",itinerary:true},
   menu:{label:"Thư viện thực đơn",icon:"🍽️",desc:"Quản lý thực đơn theo nhà hàng, xuất Word/PDF",menu:true,perm:"manageMenu"},
+  visa:{label:"Quản lý Visa",icon:"🛂",desc:"Bảng giá visa theo quốc gia & hồ sơ thủ tục",visa:true,perm:"manageVisa"},
 };
 function generateMenuCode(type,continent,country,seq){return `TD-${type||"NN"}-${continent||"CA"}-${country||"TQ"}-${String(seq||1).padStart(3,"0")}`;}
 
@@ -7545,6 +7565,167 @@ function MenuBuilder({user,initial,onBack}){
 }
 
 
+/* ═══ VISA MANAGEMENT ═══════════════════════════════════ */
+const VISA_TYPES=["Evisa","Visa lẻ","Visa đoàn","Công tác","Du lịch","Thăm thân","Online","Nộp qua đối tác"];
+const VISA_VALIDITY=["1 lần","Nhập cảnh nhiều lần","Multi 1 năm","Multi 2 năm","Multi 5 năm","Multi 10 năm"];
+const VISA_LOCS=["HCM","HAN","DAD"];
+const VISA_FEE_PRESET=["Phí lãnh sự","Phí dịch vụ Viettours","Phí trung tâm (VFS/TLS)","Phí chuyển phát","Bảo hiểm du lịch","Phí dịch thuật / công chứng","Phí đối tác","Phí khác"];
+function newVisaFee(name){return{id:"vf"+Date.now()+Math.random().toString(36).slice(2,5),name:name||"Phí dịch vụ Viettours",amount:0,cur:"VND",perPax:true};}
+function newVisaProduct(){return{id:"vp"+Date.now()+Math.random().toString(36).slice(2,5),country:"",visaType:"Evisa",validity:"1 lần",location:"HCM",fees:[newVisaFee("Phí lãnh sự"),newVisaFee("Phí dịch vụ Viettours")],markupType:"percent",markupValue:0,markupCur:"VND",note:"",active:true};}
+
+function VisaApp({user,onBack}){
+  const [tab,setTab]=useState("catalog");
+  const hbtn={background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"8px 14px",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"};
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)",backgroundAttachment:"fixed"}}>
+      <div style={{background:"linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)",padding:"16px 28px 0",color:"#fff"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:1100,margin:"0 auto",flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <img src={VTE_LOGO_WHITE} style={{height:46}} alt="Viettours"/>
+            <div><div style={{fontSize:18,fontWeight:900}}>🛂 Quản lý Visa</div>
+              <div style={{fontSize:12,opacity:0.8}}>Bảng giá visa & hồ sơ thủ tục · đồng bộ Cloud</div></div>
+          </div>
+          <button onClick={onBack} style={hbtn}>↩ Quay lại</button>
+        </div>
+        <div style={{maxWidth:1100,margin:"12px auto 0",display:"flex",gap:6}}>
+          {[["catalog","📋 Danh mục giá"],["procedures","🗂️ Hồ sơ thủ tục"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{background:tab===k?"#f3fbfa":"rgba(255,255,255,0.12)",color:tab===k?"#0d7a6a":"#fff",border:"none",borderRadius:"10px 10px 0 0",padding:"9px 20px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {tab==="catalog"
+        ?<VisaCatalog user={user}/>
+        :<div style={{maxWidth:1100,margin:"0 auto",padding:"60px 28px",textAlign:"center",color:"rgba(15,58,74,0.5)"}}>
+           <div style={{fontSize:46,marginBottom:14}}>🗂️</div>
+           <div style={{fontSize:16,fontWeight:800,color:"#0f3a4a"}}>Hồ sơ thủ tục Visa — đang phát triển</div>
+           <div style={{fontSize:13,marginTop:8,lineHeight:1.7}}>Biểu mẫu linh hoạt theo từng quốc gia: Doanh nghiệp · Khách tham dự · Nội dung xin visa · Thân nhân.<br/>Auto-lưu, lưu tối đa 10 version, cộng tác, xuất Word & PDF. <em>(Commit 3)</em></div>
+         </div>}
+    </div>
+  );
+}
+
+function VisaCatalog({user}){
+  const [products,setProducts]=useState([]);
+  const [rates,setRates]=useState({...RATES_INIT});
+  const [loaded,setLoaded]=useState(false);
+  const [search,setSearch]=useState("");
+  const [outCur,setOutCur]=useState("VND");
+  const [showFx,setShowFx]=useState(false);
+  useEffect(()=>{
+    if(!window.fbOnVisaProducts){setLoaded(true);return;}
+    const trySub=()=>{if(window.fbOnVisaProducts){const u=window.fbOnVisaProducts(d=>{if(d){setProducts(d.products||[]);if(d.rates&&Object.keys(d.rates).length)setRates(r=>({...r,...d.rates}));}setLoaded(true);});return()=>u&&u();}else setTimeout(trySub,300);};
+    return trySub();
+  },[]);
+  const persist=(np,nr)=>{if(window.fbSaveVisaProducts)window.fbSaveVisaProducts({products:np||products,rates:nr||rates}).catch(()=>{});};
+  const saveProducts=(next)=>{setProducts(next);persist(next,null);};
+  const saveRates=(next)=>{setRates(next);persist(null,next);};
+  const addP=()=>saveProducts([newVisaProduct(),...products]);
+  const updP=(id,patch)=>saveProducts(products.map(p=>p.id===id?{...p,...patch}:p));
+  const delP=(id)=>saveProducts(products.filter(p=>p.id!==id));
+  const addFee=(pid)=>{const p=products.find(x=>x.id===pid);updP(pid,{fees:[...(p.fees||[]),newVisaFee("Phí khác")]});};
+  const updFee=(pid,fid,patch)=>{const p=products.find(x=>x.id===pid);updP(pid,{fees:p.fees.map(f=>f.id===fid?{...f,...patch}:f)});};
+  const delFee=(pid,fid)=>{const p=products.find(x=>x.id===pid);updP(pid,{fees:p.fees.filter(f=>f.id!==fid)});};
+
+  const toVND=(amt,cur)=>(+amt||0)*(rates[cur]||1);
+  const conv=(vnd,cur)=>cur==="VND"?vnd:(vnd/(rates[cur]||1));
+  const fmtO=(vnd)=>Math.round(conv(vnd,outCur)).toLocaleString("vi-VN")+" "+outCur;
+  const calc=(p)=>{
+    const base=(p.fees||[]).filter(f=>f.perPax!==false).reduce((s,f)=>s+toVND(f.amount,f.cur),0);
+    const perGroup=(p.fees||[]).filter(f=>f.perPax===false).reduce((s,f)=>s+toVND(f.amount,f.cur),0);
+    let unit=base;
+    if(p.markupType==="fixed")unit+=toVND(p.markupValue,p.markupCur||"VND");else unit*=(1+(+p.markupValue||0)/100);
+    return {unit,perGroup,base};
+  };
+
+  const inp={background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:8,padding:"7px 10px",fontSize:13,color:"#0f3a4a",fontFamily:"inherit",outline:"none",width:"100%"};
+  const uniq=a=>[...new Set(a.filter(Boolean).map(s=>String(s).trim()))].sort((x,y)=>x.localeCompare(y,"vi"));
+  const countryOpts=uniq(products.map(p=>p.country));
+  const filtered=products.filter(p=>{const q=search.toLowerCase();if(!q)return true;return (p.country||"").toLowerCase().includes(q)||(p.visaType||"").toLowerCase().includes(q)||(p.location||"").toLowerCase().includes(q)||(p.validity||"").toLowerCase().includes(q);});
+
+  return(
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"20px 28px 50px"}}>
+      {/* toolbar */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:16}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 Tìm quốc gia, loại, nơi nộp..." style={{...inp,maxWidth:340}}/>
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"#fff",border:"1.5px solid rgba(20,150,140,0.25)",borderRadius:9,padding:"4px 10px"}}>
+          <span style={{fontSize:12,color:"rgba(15,58,74,0.55)",fontWeight:600}}>Hiển thị giá:</span>
+          <select value={outCur} onChange={e=>setOutCur(e.target.value)} style={{border:"none",outline:"none",fontWeight:800,color:"#0d7a6a",fontSize:13,fontFamily:"inherit",background:"transparent"}}>{MENU_CUR.map(c=><option key={c} value={c}>{c}</option>)}</select>
+        </div>
+        <button onClick={()=>setShowFx(s=>!s)} style={{background:"rgba(20,150,140,0.08)",border:"1px solid rgba(20,150,140,0.25)",borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>💱 Tỷ giá {showFx?"▴":"▾"}</button>
+        <div style={{flex:1}}/>
+        <button onClick={addP} style={{background:"linear-gradient(135deg,#0d7a6a,#14a08c)",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>+ Thêm sản phẩm visa</button>
+      </div>
+      {showFx&&(
+        <div className="glass-strong" style={{borderRadius:12,padding:16,marginBottom:16}}>
+          <div style={{fontSize:11,fontWeight:800,color:"rgba(15,58,74,0.55)",letterSpacing:0.6,textTransform:"uppercase",marginBottom:10}}>Tỷ giá quy đổi về VND (đồng bộ mọi user)</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
+            {MENU_CUR.filter(c=>c!=="VND").map(c=>(
+              <div key={c} style={{display:"flex",alignItems:"center",gap:6}}>
+                <span style={{fontSize:12,fontWeight:800,color:"#0d7a6a",width:34}}>{c}</span>
+                <input type="number" value={rates[c]||0} onChange={e=>saveRates({...rates,[c]:+e.target.value})} style={{...inp,padding:"5px 8px",fontSize:12,textAlign:"right"}}/>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {!loaded&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.4)"}}>⏳ Đang tải...</div>}
+      {loaded&&filtered.length===0&&<div style={{textAlign:"center",padding:"60px 0",color:"rgba(15,58,74,0.35)"}}><div style={{fontSize:42,marginBottom:12}}>🛂</div><div style={{fontSize:15,fontWeight:600}}>{products.length===0?"Chưa có sản phẩm visa nào":"Không tìm thấy"}</div><div style={{fontSize:12,marginTop:6}}>Bấm "+ Thêm sản phẩm visa" để bắt đầu</div></div>}
+
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {filtered.map(p=>{
+          const r=calc(p);
+          return(
+          <div key={p.id} className="glass-strong" style={{borderRadius:14,padding:18,opacity:p.active===false?0.55:1}}>
+            {/* head */}
+            <div style={{display:"grid",gridTemplateColumns:"1.6fr 1.2fr 1.3fr 0.9fr auto auto",gap:10,alignItems:"center",marginBottom:12}}>
+              <input list={"vc-country-"+p.id} value={p.country} onChange={e=>updP(p.id,{country:e.target.value})} placeholder="Quốc gia ▾" style={{...inp,fontWeight:700}}/>
+              <datalist id={"vc-country-"+p.id}>{countryOpts.map(o=><option key={o} value={o}/>)}</datalist>
+              <select value={p.visaType} onChange={e=>updP(p.id,{visaType:e.target.value})} style={inp}>{VISA_TYPES.map(o=><option key={o} value={o}>{o}</option>)}</select>
+              <select value={p.validity} onChange={e=>updP(p.id,{validity:e.target.value})} style={inp}>{VISA_VALIDITY.map(o=><option key={o} value={o}>{o}</option>)}</select>
+              <select value={p.location} onChange={e=>updP(p.id,{location:e.target.value})} style={inp}>{VISA_LOCS.map(o=><option key={o} value={o}>{o}</option>)}</select>
+              <button onClick={()=>updP(p.id,{active:p.active===false})} title={p.active===false?"Đang tắt":"Đang bật"} style={{background:p.active===false?"rgba(15,58,74,0.12)":"#14a08c",border:"none",borderRadius:20,width:44,height:24,cursor:"pointer",position:"relative",flexShrink:0}}><div style={{position:"absolute",top:2,left:p.active===false?2:22,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/></button>
+              <button onClick={()=>delP(p.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.5)",cursor:"pointer",fontSize:15}}>🗑</button>
+            </div>
+            {/* fees */}
+            <div style={{fontSize:11,fontWeight:700,color:"rgba(15,58,74,0.5)",marginBottom:7,letterSpacing:0.5,textTransform:"uppercase"}}>Các thành phần phí</div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {(p.fees||[]).map(f=>(
+                <div key={f.id} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.2fr 0.9fr 24px",gap:8,alignItems:"center"}}>
+                  <input list={"vf-name-"+p.id} value={f.name} onChange={e=>updFee(p.id,f.id,{name:e.target.value})} placeholder="Tên phí" style={{...inp,padding:"6px 9px",fontSize:12}}/>
+                  <select value={f.perPax!==false?"pax":"group"} onChange={e=>updFee(p.id,f.id,{perPax:e.target.value==="pax"})} style={{...inp,padding:"6px 6px",fontSize:12}}><option value="pax">/ khách</option><option value="group">/ đoàn</option></select>
+                  <input type="number" value={f.amount} onChange={e=>updFee(p.id,f.id,{amount:+e.target.value})} placeholder="Số tiền" style={{...inp,padding:"6px 8px",fontSize:12,textAlign:"right"}}/>
+                  <select value={f.cur} onChange={e=>updFee(p.id,f.id,{cur:e.target.value})} style={{...inp,padding:"6px 4px",fontSize:12}}>{MENU_CUR.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                  <button onClick={()=>delFee(p.id,f.id)} style={{background:"none",border:"none",color:"rgba(220,50,80,0.45)",cursor:"pointer",fontSize:13}}>✕</button>
+                </div>
+              ))}
+              <datalist id={"vf-name-"+p.id}>{VISA_FEE_PRESET.map(o=><option key={o} value={o}/>)}</datalist>
+            </div>
+            <button onClick={()=>addFee(p.id)} style={{marginTop:7,background:"rgba(20,150,140,0.07)",border:"1px dashed rgba(20,150,140,0.3)",borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:600,color:"#0d7a6a",cursor:"pointer",fontFamily:"inherit"}}>+ Thêm phí</button>
+
+            {/* markup + preview */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:14,marginTop:14,paddingTop:12,borderTop:"1px solid rgba(20,150,140,0.12)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)"}}>Markup:</span>
+                <select value={p.markupType} onChange={e=>updP(p.id,{markupType:e.target.value})} style={{...inp,width:"auto",padding:"6px 8px",fontSize:12}}><option value="percent">%</option><option value="fixed">Cố định</option></select>
+                <input type="number" value={p.markupValue} onChange={e=>updP(p.id,{markupValue:+e.target.value})} style={{...inp,width:90,padding:"6px 8px",fontSize:12,textAlign:"right"}}/>
+                {p.markupType==="fixed"&&<select value={p.markupCur||"VND"} onChange={e=>updP(p.id,{markupCur:e.target.value})} style={{...inp,width:"auto",padding:"6px 4px",fontSize:12}}>{MENU_CUR.map(c=><option key={c} value={c}>{c}</option>)}</select>}
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:11,color:"rgba(15,58,74,0.5)",fontWeight:600}}>Đơn giá / khách</div>
+                <div style={{fontSize:22,fontWeight:900,color:"#0d7a6a",lineHeight:1.1}}>{fmtO(r.unit)}</div>
+                {r.perGroup>0&&<div style={{fontSize:11,color:"#b8761e",fontWeight:700,marginTop:2}}>+ phí đoàn: {fmtO(r.perGroup)}</div>}
+              </div>
+            </div>
+            <input value={p.note} onChange={e=>updP(p.id,{note:e.target.value})} placeholder="📝 Ghi chú (thời gian xử lý, hồ sơ yêu cầu, lưu ý...)" style={{...inp,marginTop:10,fontSize:12,fontStyle:p.note?"normal":"italic"}}/>
+          </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 function MainApp({user,onLogout}){
   const[template,setTemplate]=useState(null);
   const[info,setInfo]=useState({name:"",dest:"",days:1,nights:0});
@@ -7634,13 +7815,16 @@ function MainApp({user,onLogout}){
   if(template==="menu"){
     return <MenuApp user={user} onBack={()=>setTemplate(null)}/>;
   }
+  if(template==="visa"){
+    return <VisaApp user={user} onBack={()=>setTemplate(null)}/>;
+  }
   if(template==="itinerary"){
     return <ItineraryApp user={user} onBack={()=>setTemplate(null)}/>;
   }
   if(!template){
     return <TemplateSelector user={user} onSelect={(t)=>{
       const tpl=TEMPLATES[t];
-      if(t==="itinerary"||t==="menu"){setTemplate(t);return;}
+      if(t==="itinerary"||t==="menu"||t==="visa"){setTemplate(t);return;}
       setTemplate(t);
       setInfo(tpl.sample);
       setItems(tpl.init(20));
