@@ -6475,7 +6475,9 @@ async function exportItineraryDocx(it,code){
       }
     });
     const meals=[["B","Sáng"],["L","Trưa"],["D","Tối"]].filter(([m])=>d.meals&&d.meals[m]).map(([,n])=>n);
-    C.push(P([tr("🍽 Bữa ăn bao gồm: ",{size:16,bold:true,color:MUTE}),tr(meals.length?meals.join("  ·  "):"—",{size:16,bold:true,color:TEAL})],{before:40,after:140}));
+    const mealRuns=[tr("🍽 Bữa ăn bao gồm: ",{size:16,bold:true,color:MUTE}),tr(meals.length?meals.join("  ·  "):"—",{size:16,bold:true,color:TEAL})];
+    if(d.mealNote&&d.mealNote.trim())mealRuns.push(tr("  ("+d.mealNote.trim()+")",{size:15,italics:true,color:MUTE}));
+    C.push(P(mealRuns,{before:40,after:140}));
   });
 
   /* Note */
@@ -6529,7 +6531,7 @@ const ITIN_DEFAULT_INC=[...DEFAULT_INCLUDES];
 const ITIN_DEFAULT_EXC=[...DEFAULT_EXCLUDES];
 function newActivity(){return{id:"a"+Date.now()+Math.random().toString(36).slice(2,5),time:"",text:""};}
 function newSegment(label=""){return{id:"s"+Date.now()+Math.random().toString(36).slice(2,5),groupLabel:label,transport:"",activities:[newActivity()]};}
-function newDay(n){return{id:"d"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",title:"",meals:{B:false,L:false,D:false},segments:[newSegment()]};}
+function newDay(n){return{id:"d"+Date.now()+Math.random().toString(36).slice(2,5),dayNum:n,date:"",title:"",meals:{B:false,L:false,D:false},mealNote:"",segments:[newSegment()]};}
 
 /* ── Flight string parser (GDS/PNR + casual) ── */
 function parseFlights(text){
@@ -6723,13 +6725,6 @@ function ItineraryBuilder({user,onBack}){
                 <span style={{fontWeight:900,fontSize:14}}>NGÀY {d.dayNum}</span>
                 <input value={d.date} onChange={e=>updDay(d.id,{date:e.target.value})} placeholder="Date (tuỳ chọn)" style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 9px",color:"#fff",fontSize:12,fontFamily:"inherit",outline:"none",width:130}}/>
                 <input value={d.title} onChange={e=>updDay(d.id,{title:e.target.value})} placeholder="Điểm đến / tuyến (VD: TP.HCM → BẮC KINH)" style={{flex:1,minWidth:200,background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:7,padding:"4px 10px",color:"#fff",fontSize:13,fontWeight:600,fontFamily:"inherit",outline:"none"}}/>
-                {/* meals */}
-                <div style={{display:"flex",gap:4}}>
-                  {[["B","Sáng"],["L","Trưa"],["D","Tối"]].map(([m,name])=>(
-                    <button key={m} onClick={()=>updDay(d.id,{meals:{...d.meals,[m]:!d.meals[m]}})} title={name}
-                      style={{width:30,height:26,borderRadius:6,border:"1px solid rgba(255,255,255,0.3)",cursor:"pointer",fontSize:11,fontWeight:800,fontFamily:"inherit",background:d.meals[m]?"#14a08c":"rgba(255,255,255,0.1)",color:"#fff"}}>{m}</button>
-                  ))}
-                </div>
                 <button onClick={()=>delDay(d.id)} style={{background:"rgba(220,50,80,0.25)",border:"none",borderRadius:6,color:"#fff",width:26,height:26,cursor:"pointer",fontSize:13}}>🗑</button>
               </div>
               {/* Segments */}
@@ -6772,6 +6767,19 @@ function ItineraryBuilder({user,onBack}){
                   </div>
                 ))}
                 <button onClick={()=>addSeg(d.id)} style={{marginTop:10,background:"rgba(41,128,185,0.08)",border:"1px dashed rgba(41,128,185,0.3)",borderRadius:7,padding:"5px 12px",fontSize:12,fontWeight:600,color:"#2980b9",cursor:"pointer",fontFamily:"inherit"}}>+ Tách nhóm (ngày đầu/cuối nhiều chuyến bay)</button>
+                {/* Bữa ăn bao gồm */}
+                <div style={{marginTop:12,paddingTop:12,borderTop:"1px dashed rgba(20,150,140,0.18)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:"rgba(15,58,74,0.6)"}}>🍽 Bữa ăn bao gồm:</span>
+                  <div style={{display:"flex",gap:6}}>
+                    {[["B","Sáng"],["L","Trưa"],["D","Tối"]].map(([m,name])=>(
+                      <button key={m} onClick={()=>updDay(d.id,{meals:{...d.meals,[m]:!d.meals[m]}})}
+                        style={{padding:"5px 14px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",border:"1.5px solid",borderColor:d.meals[m]?"#14a08c":"rgba(20,150,140,0.3)",background:d.meals[m]?"#14a08c":"#fff",color:d.meals[m]?"#fff":"rgba(15,58,74,0.5)"}}>
+                        {d.meals[m]?"✓ ":""}{name}
+                      </button>
+                    ))}
+                  </div>
+                  <input value={d.mealNote||""} onChange={e=>updDay(d.id,{mealNote:e.target.value})} placeholder="Ghi chú bữa ăn (VD: buffet KS, đặc sản địa phương...)" style={{...inp,flex:1,minWidth:180,padding:"6px 11px",fontSize:12}}/>
+                </div>
               </div>
             </div>
           ))}
