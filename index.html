@@ -26,8 +26,10 @@ const _fbConfig={
   messagingSenderId:"304145851784",
   appId:"1:304145851784:web:e4977ff4e343ab74e4c63d"
 };
+window.__fbA=1;
 const _fbApp=initializeApp(_fbConfig);
 const _db=getFirestore(_fbApp,"viettours");
+window.__fbA=2;
 const _RC_DOC=doc(_db,"viettours","master_rate_card");
 
 /* ── Roles có quyền edit & auto-push ── */
@@ -483,6 +485,7 @@ window.fbOnMenus=(cb)=>onSnapshot(_MENU_INDEX,s=>cb(s.exists()?(s.data().items||
 window.fbGetMenu=async(id)=>{const s=await getDoc(_menuDoc(id));return s.exists()?s.data():null;};
 window.fbDeleteMenu=async(id)=>{const snap=await getDoc(_MENU_INDEX);if(snap.exists())await setDoc(_MENU_INDEX,{items:(snap.data().items||[]).filter(x=>x.id!==id)});try{await deleteDoc(_menuDoc(id));}catch(e){}};
 
+window.__fbB=1;
 /* ══ Visa products (master price source) + Visa procedure docs ══ */
 const _VISA_DOC=doc(_db,"viettours","visa_products");
 window.fbOnVisaProducts=(cb)=>onSnapshot(_VISA_DOC,s=>cb(s.exists()?s.data():null));
