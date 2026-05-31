@@ -197,7 +197,10 @@ window.fbSaveDMCQuote=async function(entry){
   const u=window._vteUser;
   const idx=quotes.findIndex(q=>q.id===entry.id);
   if(idx>=0){quotes[idx]={...quotes[idx],...entry,updatedAt:new Date().toISOString(),updatedBy:u?(u.name+" ("+u.role+")"):"unknown"};}
-  else{quotes.unshift({...entry,createdByUsername:u?.u||"",createdByName:u?.name||"",collaborators:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:u?(u.name+" ("+u.role+")"):"unknown"});}
+  else{
+    const qCode=entry.quoteCode||generateQuoteCode("dmc",quotes);
+    quotes.unshift({...entry,quoteCode:qCode,createdByUsername:u?.u||"",createdByName:u?.name||"",collaborators:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:u?(u.name+" ("+u.role+")"):"unknown"});
+  }
   await setDoc(_DMC_HIST_DOC,{quotes:quotes.slice(0,500)});
 };
 window.fbDeleteDMCQuote=async function(id){
@@ -223,6 +226,22 @@ window.fbUpdateDMCCollaborators=async(quoteId,collaborators)=>{
 
 /* ══ Quote History Firestore sync ══ */
 window.fbOnQuoteHistory=function(cb){return onSnapshot(_HIST_DOC,s=>{cb(s.exists()?s.data().quotes||[]:[]); });};
+/* ── Quote Code Generator: NĐ/NN-seq-DD-MM-YY ── */
+function generateQuoteCode(template, existingQuotes){
+  const prefix=template==="intl"?"NN":template==="dmc"?"DMC":"NĐ";
+  const now=new Date();
+  const dd=String(now.getDate()).padStart(2,"0");
+  const mm=String(now.getMonth()+1).padStart(2,"0");
+  const yy=String(now.getFullYear()).slice(-2);
+  const dateStr=`${dd}-${mm}-${yy}`;
+  /* Count existing codes for same prefix + same date */
+  const todaySameType=(existingQuotes||[]).filter(q=>
+    q.quoteCode&&q.quoteCode.startsWith(prefix+"-")&&q.quoteCode.endsWith("-"+dateStr)
+  ).length;
+  const seq=String(todaySameType+1).padStart(2,"0");
+  return `${prefix}-${seq}-${dateStr}`;
+}
+
 window.fbSaveQuote=async function(entry){
   const snap=await getDoc(_HIST_DOC);
   const quotes=snap.exists()?(snap.data().quotes||[]):[];
@@ -238,8 +257,10 @@ window.fbSaveQuote=async function(entry){
       updatedBy:u?(u.name+" ("+u.role+")"):"unknown",
     };
   }else{
-    /* Create: set creator info */
+    /* Create: set creator info + generate quoteCode */
+    const qCode=entry.quoteCode||generateQuoteCode(entry.template||"domestic",quotes);
     quotes.unshift({...entry,
+      quoteCode:qCode,
       createdByUsername:u?.u||"",
       createdByName:u?.name||"",
       collaborators:[],
@@ -6619,7 +6640,8 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
            q.customer?.toLowerCase().includes(ql)||
            q.dest?.toLowerCase().includes(ql)||
            q.savedBy?.toLowerCase().includes(ql)||
-           q.createdByName?.toLowerCase().includes(ql);
+           q.createdByName?.toLowerCase().includes(ql)||
+           q.quoteCode?.toLowerCase().includes(ql);
   });
 
   const fmtDt=s=>{if(!s)return"—";try{return new Date(s).toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});}catch(e){return s;}};
@@ -6694,8 +6716,10 @@ Báo giá hiện tại sẽ bị thay thế.`))return;
                   <div style={{flex:1,minWidth:160}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
                       {active&&<span style={{background:"#14a08c",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:10}}>⚡ Đang làm</span>}
+                      {/* Quote Code badge */}
+                      {q.quoteCode&&<span style={{background:"linear-gradient(135deg,#0f3a4a,#14566b)",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 9px",borderRadius:6,letterSpacing:0.5,fontFamily:"monospace"}}>#{q.quoteCode}</span>}
                       <span style={{background:q.template==="intl"?"rgba(41,128,185,0.1)":"rgba(39,174,96,0.1)",color:q.template==="intl"?"#2980b9":"#27ae60",border:"1px solid",borderColor:q.template==="intl"?"rgba(41,128,185,0.3)":"rgba(39,174,96,0.3)",borderRadius:10,padding:"2px 8px",fontSize:10,fontWeight:700}}>
-                        {q.template==="intl"?"✈️ Quốc tế":"🇻🇳 Nội địa"}
+                        {q.template==="intl"?"✈️ Quốc tế":q.template==="dmc"?"📋 DMC":"🇻🇳 Nội địa"}
                       </span>
                     </div>
                     <div style={{fontWeight:800,fontSize:15,color:"#0f3a4a",marginBottom:2}}>{q.name}</div>
