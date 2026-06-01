@@ -205,12 +205,14 @@ export const useQuoteStore = create<QuoteState>()(
                 ...s.draft,
                 ...(data.template !== undefined ? { template: data.template } : {}),
                 ...(data.info ? { info: data.info } : {}),
-                ...(data.pax != null ? { pax: data.pax } : {}),
+                // Clamp pax and rounding on import to the same minimums as the setters.
+                // A malformed file with pax: 0 would otherwise divide-by-zero in computeTotals.
+                ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
                 ...(data.rates ? { rates: data.rates } : {}),
                 ...(data.margin != null ? { margin: data.margin } : {}),
                 ...(data.vat != null ? { vat: data.vat } : {}),
                 ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
-                ...(data.rounding != null ? { rounding: data.rounding } : {}),
+                ...(data.rounding != null ? { rounding: Math.max(1, Number(data.rounding) || 1) } : {}),
                 ...(data.items ? { items: data.items } : {}),
                 ...(data.catEnabled ? { catEnabled: data.catEnabled } : {}),
               },
