@@ -7,7 +7,10 @@ import { CATS } from './constants';
  * Source: public/legacy.html:1686-1692.
  */
 export function calcVND(item: Item, rates: Record<string, number>, pax: number): number {
-  if (!item.enabled || item.foc) return 0;
+  // Byte-for-byte parity with legacy.html:1687-1688: `enabled === false`, not `!enabled`.
+  // Matters for JSON imports where `enabled` may be undefined — legacy treats missing as
+  // enabled, so we match that semantics rather than the stricter TS-types interpretation.
+  if (item.enabled === false || item.foc === true) return 0;
   const r = rates[item.cur] ?? 1;
   const qty = item.qtyMode === 'per_pax' ? pax
             : item.qtyMode === 'per_group' ? 1
