@@ -80,7 +80,8 @@ export function writeSavedQuotes(map: SavedQuotesByUser): void {
 }
 
 /**
- * Read just the current user's snapshots, sorted newest-first by id.
+ * Read just the current user's snapshots. Returned in storage order, which is
+ * effectively newest-first because saveSnapshot prepends new entries.
  * Returns [] if the user has none.
  */
 export function readUserSnapshots(username: string): Snapshot[] {
