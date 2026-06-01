@@ -1,0 +1,46 @@
+import { useState } from 'react';
+import { AppBar, Box, Tab, Tabs, Toolbar, Typography } from '@mui/material';
+import { TabPlaceholder } from './TabPlaceholder';
+
+const TABS = [
+  { key: 'rates', label: 'Rate Card' },
+  { key: 'quote', label: 'Báo Giá' },
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'payment', label: 'Thanh Toán' },
+  { key: 'contract', label: 'Hợp Đồng' },
+  { key: 'customer', label: 'Khách Hàng' },
+  { key: 'ncc', label: 'NCC' },
+] as const;
+
+type TabKey = (typeof TABS)[number]['key'];
+
+export function AppShell() {
+  const [active, setActive] = useState<TabKey>('rates');
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <AppBar position="static" color="primary">
+        <Toolbar>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+            Viettours — Tour Cost Calculator
+          </Typography>
+        </Toolbar>
+        <Tabs
+          value={active}
+          onChange={(_, v) => setActive(v as TabKey)}
+          textColor="inherit"
+          indicatorColor="secondary"
+          variant="scrollable"
+        >
+          {TABS.map((t) => (
+            <Tab key={t.key} value={t.key} label={t.label} />
+          ))}
+        </Tabs>
+      </AppBar>
+      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+        {TABS.map((t) =>
+          t.key === active ? <TabPlaceholder key={t.key} tabKey={t.key} label={t.label} /> : null,
+        )}
+      </Box>
+    </Box>
+  );
+}

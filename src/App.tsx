@@ -1,3 +1,12 @@
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { theme } from './theme';
+import { MainApp } from './components/shell/MainApp';
+
 export default function App() {
-  return <div style={{ padding: 24 }}>Viettours Tour Cost Calculator — Vite scaffold ready</div>;
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <MainApp />
+    </ThemeProvider>
+  );
 }
