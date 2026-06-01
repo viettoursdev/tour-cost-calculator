@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Box, Button, Chip, Grid, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
+import Grid from '@mui/material/Grid2';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { HotelModal } from './HotelModal';
 import { VisaModal } from './VisaModal';
@@ -72,7 +73,7 @@ export function RatesPanel() {
         {RATE_CATEGORIES.map((cat) => {
           const count = countFor(cat.key);
           return (
-            <Grid item xs={12} sm={6} md={4} key={cat.key}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={cat.key}>
               <Paper sx={{ p: 2 }} variant="outlined">
                 <Stack direction="row" spacing={2} alignItems="center">
                   <Box sx={{ fontSize: 32 }}>{cat.icon}</Box>

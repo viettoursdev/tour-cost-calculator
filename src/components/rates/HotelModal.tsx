@@ -250,7 +250,7 @@ export function HotelModal({ open, onClose }: Props) {
                                 onChange={(e) =>
                                   editOption(idx, oIdx, { price: Number(e.target.value) })
                                 }
-                                inputProps={{ min: 0, style: { textAlign: 'right' } }}
+                                slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right' } } }}
                               />
                             </TableCell>
                             <TableCell>

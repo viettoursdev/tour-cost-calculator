@@ -161,7 +161,7 @@ export function VisaModal({ open, onClose }: Props) {
                         type="number"
                         value={price}
                         onChange={(e) => setPrice(cost.id, Number(e.target.value))}
-                        inputProps={{ min: 0, style: { textAlign: 'right' } }}
+                        slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right' } } }}
                         sx={{ width: 160 }}
                       />
                     </TableCell>
