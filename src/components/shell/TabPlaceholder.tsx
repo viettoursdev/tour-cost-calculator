@@ -9,7 +9,13 @@ export function TabPlaceholder({ tabKey, label }: Props) {
       <Alert
         severity="info"
         action={
-          <Button color="inherit" size="small" href={legacyUrl}>
+          <Button
+            color="inherit"
+            size="small"
+            href={legacyUrl}
+            target="_blank"
+            rel="noopener"
+          >
             Mở trong bản cũ →
           </Button>
         }

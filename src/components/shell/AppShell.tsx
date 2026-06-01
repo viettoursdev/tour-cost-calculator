@@ -14,6 +14,9 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
+const isTabKey = (v: unknown): v is TabKey =>
+  typeof v === 'string' && TABS.some((t) => t.key === v);
+
 export function AppShell() {
   const [active, setActive] = useState<TabKey>('rates');
   return (
@@ -26,7 +29,9 @@ export function AppShell() {
         </Toolbar>
         <Tabs
           value={active}
-          onChange={(_, v) => setActive(v as TabKey)}
+          onChange={(_, v) => {
+            if (isTabKey(v)) setActive(v);
+          }}
           textColor="inherit"
           indicatorColor="secondary"
           variant="scrollable"
