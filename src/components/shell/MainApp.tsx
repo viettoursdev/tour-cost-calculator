@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useRateCardStore } from '@/stores/rateCardStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
 
@@ -13,9 +14,15 @@ export function MainApp() {
   }, [authInit]);
 
   useEffect(() => {
-    if (!currentUser) return;
-    const unsub = useRateCardStore.getState().init();
-    return () => unsub?.();
+    if (!currentUser) {
+      useQuoteStore.getState().reset();
+      return;
+    }
+    const rcUnsub = useRateCardStore.getState().init();
+    useQuoteStore.getState().init(currentUser);
+    return () => {
+      rcUnsub?.();
+    };
   }, [currentUser]);
 
   if (!currentUser) return <LoginScreen />;
