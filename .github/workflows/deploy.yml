@@ -26,9 +26,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
-      # Vite outputs to dist/preview/ because base=/tour-cost-calculator/preview/.
-      # We additionally publish the legacy app at the root so the live URL keeps working.
-      - run: cp public/legacy.html dist/index.html
+      # Vite outputs to dist/ at the root. Preserve legacy monolith at /legacy.html.
       - run: cp public/legacy.html dist/legacy.html
       - uses: actions/upload-pages-artifact@v3
         with:
