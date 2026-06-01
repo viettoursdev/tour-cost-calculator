@@ -1546,3 +1546,23 @@ git commit -m "docs: record Phase 2 cutover to Vite build"
 - Rollback path (revert the cutover commit) is tested mentally and the team knows about `/legacy.html`.
 
 Next plan: Phase 3 — tab-by-tab port (one focused plan per tab, written after Phase 2 ships).
+
+---
+
+## Carryovers for Phase 3 (from PR-2.1 implementation)
+
+The PR-2.1 implementer surfaced these deliberate simplifications and one plan misattribution. Phase-3 plans must address each:
+
+1. **Plan misattribution on `RatesPanel`.** Legacy `RatesPanel` (legacy.html:2641) is a small currency-conversion widget (USD/EUR → VND), NOT the rate-card editor. The actual rate-card UI in legacy is a dropdown on the calculator toolbar at legacy.html:8700 opening the three modals. PR-2.1 implemented `RatesPanel` as a launcher panel of category cards (one per Hotel/Visa/Transport/Staff/DMC/etc.) opening the modals — surfacing the dropdown's behavior as a first-class tab. **Accepted by user.** The original currency-conversion widget belongs to the Cost view; port it there in PR-3.1 if still needed.
+
+2. **Seed data tables omitted.** Legacy modals seed empty user state from multi-hundred-line constant tables (`HOTEL_DB`, `RATE_VISA`, `RATE_TRANSPORT`, `RATE_STAFF`, `RATE_DMC`). PR-2.1's modals start from whatever is already saved or let users add rows from scratch. **PR-3.1 (Cost view) must either ship the seed tables in `src/lib/seeds/` or seed them into Firestore on first run** — pick one, document the decision in the Phase-3 plan.
+
+3. **`onPick` integration omitted from modals.** Legacy modals double as "pick a row into the current quote" widgets. PR-2.1's modals are edit-only. Re-add the `onPick` callback when the Cost view is ported in PR-3.1 — likely as a second prop on each modal that toggles its action buttons between "Save" and "Save & insert into quote."
+
+4. **`RateCardModal` simplified to a generic table editor.** Legacy `RateCardModal` (legacy.html:2221–2640, ~420 LoC) branches across 8+ category-specific layouts (transport with city selector, intl-staff with country selector, etc.). PR-2.1 implemented one generic table-of-records editor parameterised by `type`, with columns derived from saved-row key union (defaults to `label/min/max/unit/note`). Numeric coercion is best-effort by column-name regex. **A Phase-3 PR (likely PR-3.6 Contract core or earlier if a Sales user reports friction) may want a richer per-category editor.** Triage based on actual user feedback after cutover.
+
+5. **Hotel last-selected city not persisted.** Legacy stored `vte_hotel_city` for cross-session UX. PR-2.1's HotelModal resets to HCM each time it opens. If parity matters, extend `rateCardStore` with `selectedCity: string` + persist via the existing `persist` middleware partialize.
+
+6. **Visa "bulk-add to quote" footer omitted.** Depends on `onPick` integration (item 3).
+
+7. **`status` chip added beyond plan.** PR-2.1 added a small "Đang đồng bộ / Đã đồng bộ / Lỗi" chip to the RatesPanel header surfacing the store's `status` field. Kept — useful UX. No action needed.
