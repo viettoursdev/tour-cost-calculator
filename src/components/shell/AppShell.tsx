@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AppBar, Box, Button, Tab, Tabs, Toolbar, Typography } from '@mui/material';
 import { TabPlaceholder } from './TabPlaceholder';
 import { RatesPanel } from '@/components/rates/RatesPanel';
+import { QuoteView } from '@/components/quote/QuoteView';
 import { useAuthStore } from '@/stores/authStore';
 
 const TABS = [
@@ -56,15 +57,12 @@ export function AppShell() {
         </Tabs>
       </AppBar>
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-        {TABS.map((t) =>
-          t.key === active ? (
-            t.key === 'rates' ? (
-              <RatesPanel key={t.key} />
-            ) : (
-              <TabPlaceholder key={t.key} tabKey={t.key} label={t.label} />
-            )
-          ) : null,
-        )}
+        {TABS.map((t) => {
+          if (t.key !== active) return null;
+          if (t.key === 'rates') return <RatesPanel key={t.key} />;
+          if (t.key === 'quote') return <QuoteView key={t.key} />;
+          return <TabPlaceholder key={t.key} tabKey={t.key} label={t.label} />;
+        })}
       </Box>
     </Box>
   );
