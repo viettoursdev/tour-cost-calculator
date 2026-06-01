@@ -167,6 +167,10 @@ From highest to lowest permissions:
 
 ## 6. Current Status
 
+### Phase 2 refactor cutover (2026-06-01)
+Phase 2 refactor cutover complete. App now served from Vite + React + TS build at root URL. Legacy monolith preserved at `/tour-cost-calculator/legacy.html` for ~2 weeks; only the Rate Card tab is ported in the new build, all other tabs link to legacy via the placeholder.
+- Phase 2 PRs landed: PR-0.1 (scaffold), PR-0.2 (shell), PR-1.1–1.4 (types/firebase/storage/auth), PR-2.1 (Rates port), PR-2.2 (cutover).
+
 ### Last completed tasks:
 1. Push Notifications system (bell icon, in-app + browser push, deadline checks)
 2. DMC Breakdown history separated from regular quote history
