@@ -30,7 +30,7 @@ export const CATS: CategoryDef[] = [
   { id: 'gala',       icon: '🎆',  label: 'Gala Dinner',       labelEn: 'Gala Dinner',       color: '#c0392b', rateCard: 'gala' },
   { id: 'logistics',  icon: '📦',  label: 'Logistics & Sản xuất', labelEn: 'Logistics & Production', color: '#e67e22', rateCard: 'logistics' },
   { id: 'staff',      icon: '👥',  label: 'Nhân sự',           labelEn: 'Staff',             color: '#dc3250', rateCard: 'staff' },
-  { id: 'insurance',  icon: '🛡️', label: 'Bảo hiểm',          labelEn: 'Insurance',         color: '#16a085' },
+  { id: 'insurance',  icon: '🛡️', label: 'Bảo hiểm',          labelEn: 'Insurance',         color: '#16a085', rateCard: 'insurance' },
   { id: 'visa',       icon: '🛂',  label: 'Visa',              labelEn: 'Visa',              color: '#1abc9c', rateCard: 'visa' },
   { id: 'dmc',        icon: '🌐',  label: 'DMC – Package đối tác', labelEn: 'DMC Package',   color: '#8e44ad', rateCard: 'dmc' },
   { id: 'service_fee',icon: '💼',  label: 'Phí dịch vụ',       labelEn: 'Service Fee',       color: '#7f8c8d', dmcOnly: true },
