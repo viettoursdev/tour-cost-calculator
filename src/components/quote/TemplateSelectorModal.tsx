@@ -20,12 +20,16 @@ const LEGACY_URL = '/tour-cost-calculator/legacy.html';
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
 
 export function TemplateSelectorModal({ open, onClose, canCancel = false }: Props) {
-  const draft = useQuoteStore((s) => s.draft);
+  // Narrow selectors — modal only needs to know whether a draft exists and whether
+  // it has items. Subscribing to the whole `draft` would re-render this on every
+  // keystroke in the cost view.
+  const hasDraft = useQuoteStore((s) => s.draft.template !== null);
+  const hasItems = useQuoteStore((s) => Object.keys(s.draft.items).length > 0);
   const newDraft = useQuoteStore((s) => s.newDraft);
   const [pendingConfirm, setPendingConfirm] = useState<Template | null>(null);
 
   const handlePick = (key: Template) => {
-    if (draft.template !== null && (Object.keys(draft.items).length > 0)) {
+    if (hasDraft && hasItems) {
       setPendingConfirm(key);
     } else {
       newDraft(key);
