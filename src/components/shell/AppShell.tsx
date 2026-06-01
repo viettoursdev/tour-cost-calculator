@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { AppBar, Box, Tab, Tabs, Toolbar, Typography } from '@mui/material';
+import { AppBar, Box, Button, Tab, Tabs, Toolbar, Typography } from '@mui/material';
 import { TabPlaceholder } from './TabPlaceholder';
+import { useAuthStore } from '@/stores/authStore';
 
 const TABS = [
   { key: 'rates', label: 'Rate Card' },
@@ -19,6 +20,8 @@ const isTabKey = (v: unknown): v is TabKey =>
 
 export function AppShell() {
   const [active, setActive] = useState<TabKey>('rates');
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const logout = useAuthStore((s) => s.logout);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AppBar position="static" color="primary">
@@ -26,6 +29,16 @@ export function AppShell() {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Viettours — Tour Cost Calculator
           </Typography>
+          {currentUser && (
+            <>
+              <Typography variant="body2" sx={{ mr: 2 }}>
+                {currentUser.name} ({currentUser.role})
+              </Typography>
+              <Button color="inherit" onClick={logout}>
+                Đăng xuất
+              </Button>
+            </>
+          )}
         </Toolbar>
         <Tabs
           value={active}
