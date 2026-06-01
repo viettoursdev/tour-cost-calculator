@@ -13,6 +13,13 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# Force GitHub-Actions JavaScript actions (checkout, setup-node, etc.) to run
+# on Node.js 24 instead of the deprecated Node 20. Default flips on
+# 2026-06-16; setting this explicitly removes the deprecation warning today
+# and keeps the workflow stable across the cutover date.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
       - run: npm ci
       - run: npm run lint
