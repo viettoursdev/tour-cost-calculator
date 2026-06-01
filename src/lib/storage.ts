@@ -1,4 +1,4 @@
-import type { RateCard } from '@/types';
+import type { RateCard, SavedQuotesByUser, Snapshot } from '@/types';
 
 export function readJSON<T>(key: string, fallback: T): T {
   try {
@@ -60,4 +60,30 @@ export function migrateLegacyRateCard(): RateCard | null {
   if (!found) return null;
   toDelete.forEach(remove);
   return { hotels, visaRates, otherRates };
+}
+
+/**
+ * Read the per-user snapshot map from localStorage[vte_q].
+ * Returns {} if missing or malformed.
+ * Source: public/legacy.html:728 (ldQuotes).
+ */
+export function readSavedQuotes(): SavedQuotesByUser {
+  return readJSON<SavedQuotesByUser>('vte_q', {});
+}
+
+/**
+ * Write the full per-user snapshot map back to localStorage[vte_q].
+ * Source: public/legacy.html:729 (svQuotes).
+ */
+export function writeSavedQuotes(map: SavedQuotesByUser): void {
+  writeJSON('vte_q', map);
+}
+
+/**
+ * Read just the current user's snapshots, sorted newest-first by id.
+ * Returns [] if the user has none.
+ */
+export function readUserSnapshots(username: string): Snapshot[] {
+  const map = readSavedQuotes();
+  return map[username] ?? [];
 }
