@@ -150,12 +150,22 @@ export async function fbSaveQuote(
   const quotes = snap.exists() ? ((snap.data().quotes as CloudQuoteEntry[]) ?? []) : [];
   const idx = quotes.findIndex((q) => q.id === entry.id);
 
+  // Firestore rejects `undefined` field values, so build entries with only defined keys.
+  const optionalFields: Partial<CloudQuoteEntry> = {};
+  if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
+  if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
+
   let saved: CloudQuoteEntry;
   if (idx >= 0) {
     const existing = quotes[idx];
+    // Strip any `undefined` from `entry` before spreading so we don't accidentally
+    // overwrite existing values with undefined.
+    const entryDefined = Object.fromEntries(
+      Object.entries(entry).filter(([, v]) => v !== undefined),
+    ) as Partial<CloudQuoteEntry>;
     saved = {
       ...existing,
-      ...entry,
+      ...entryDefined,
       quoteCode: existing.quoteCode,
       createdByUsername: existing.createdByUsername || savedBy.u,
       createdByName: existing.createdByName || savedBy.name,
@@ -175,8 +185,7 @@ export async function fbSaveQuote(
       template: entry.template,
       pax: entry.pax,
       totalCost: entry.totalCost,
-      customerId: entry.customerId,
-      customerName: entry.customerName,
+      ...optionalFields,
       createdByUsername: savedBy.u,
       createdByName: savedBy.name,
       collaborators: entry.collaborators ?? [],
