@@ -8,7 +8,6 @@ import { useAuthStore } from '@/stores/authStore';
 const TABS = [
   { key: 'rates', label: 'Rate Card' },
   { key: 'quote', label: 'Báo Giá' },
-  { key: 'dashboard', label: 'Dashboard' },
   { key: 'payment', label: 'Thanh Toán' },
   { key: 'contract', label: 'Hợp Đồng' },
   { key: 'customer', label: 'Khách Hàng' },

@@ -102,6 +102,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         >
           <ToggleButton value="cost">Chi phí</ToggleButton>
           <ToggleButton value="summary">Tổng kết</ToggleButton>
+          <ToggleButton value="dashboard">Dashboard</ToggleButton>
           <ToggleButton value="history">Lịch sử</ToggleButton>
         </ToggleButtonGroup>
 
