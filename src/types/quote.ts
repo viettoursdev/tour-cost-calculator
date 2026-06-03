@@ -53,3 +53,42 @@ export type Snapshot = {
 };
 
 export type SavedQuotesByUser = Record<string, Snapshot[]>;
+
+export type Collaborator = {
+  u: string;
+  name: string;
+};
+
+export type QuoteVersion = {
+  versionNo: number;
+  savedAt: string;     // ISO
+  savedBy: string;     // "Tony (CEO)"
+  note: string;
+  state: QuoteDraft;
+};
+
+export type CloudQuoteEntry = {
+  id: number;
+  cloudId: string;
+  quoteCode: string;
+  name: string;
+  template: Template;
+  pax: number;
+  totalCost: number;
+  customerId?: string;
+  customerName?: string;
+  createdByUsername: string;
+  createdByName: string;
+  collaborators: Collaborator[];
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+export type CloudQuoteProject = {
+  versions: QuoteVersion[];
+  currentState: QuoteDraft;
+  collaborators: Collaborator[];
+  updatedAt: string;
+  updatedBy: string;
+};
