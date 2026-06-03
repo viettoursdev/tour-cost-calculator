@@ -8,11 +8,15 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useQuoteStore } from '@/stores/quoteStore';
 
-type Props = { onOpenSelector: () => void };
+type Props = {
+  onOpenSelector: () => void;
+  onOpenSaveCloud: () => void;
+};
 
-export function QuoteToolbar({ onOpenSelector }: Props) {
+export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const info = useQuoteStore((s) => s.draft.info);
   const pax = useQuoteStore((s) => s.draft.pax);
   const rates = useQuoteStore((s) => s.draft.rates);
@@ -98,6 +102,7 @@ export function QuoteToolbar({ onOpenSelector }: Props) {
         >
           <ToggleButton value="cost">Chi phí</ToggleButton>
           <ToggleButton value="summary">Tổng kết</ToggleButton>
+          <ToggleButton value="history">Lịch sử</ToggleButton>
         </ToggleButtonGroup>
 
         <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={onOpenSelector}>
@@ -113,6 +118,9 @@ export function QuoteToolbar({ onOpenSelector }: Props) {
           ref={fileInput} type="file" accept="application/json"
           hidden onChange={handleImportFile}
         />
+        <Button size="small" startIcon={<CloudUploadIcon />} onClick={onOpenSaveCloud}>
+          Lưu cloud
+        </Button>
       </Toolbar>
 
       <Box sx={{ px: 2, pb: 1 }}>
