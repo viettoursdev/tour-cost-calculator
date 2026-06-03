@@ -4,6 +4,7 @@ import { TemplateSelectorModal } from './TemplateSelectorModal';
 import { QuoteToolbar } from './QuoteToolbar';
 import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
+import { DashboardView } from './DashboardView';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
@@ -40,6 +41,7 @@ export function QuoteView() {
             <Box sx={{ flex: 1, overflowY: 'auto' }}>
               {view === 'cost' && <CostView />}
               {view === 'summary' && <SummaryView />}
+              {view === 'dashboard' && <DashboardView />}
               {view === 'history' && <QuoteHistoryView />}
             </Box>
 
