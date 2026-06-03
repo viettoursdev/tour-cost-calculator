@@ -4,6 +4,8 @@ import { TemplateSelectorModal } from './TemplateSelectorModal';
 import { QuoteToolbar } from './QuoteToolbar';
 import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
+import { QuoteHistoryView } from './QuoteHistoryView';
+import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
 import { useQuoteStore } from '@/stores/quoteStore';
 
@@ -13,6 +15,7 @@ export function QuoteView() {
   const template = useQuoteStore((s) => s.draft.template);
   const view = useQuoteStore((s) => s.view);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [saveCloudOpen, setSaveCloudOpen] = useState(false);
 
   // If no template, show the gate non-dismissably.
   const gateOpen = template === null || selectorOpen;
@@ -28,11 +31,16 @@ export function QuoteView() {
 
       {template !== null && (
         <>
-          <QuoteToolbar onOpenSelector={() => setSelectorOpen(true)} />
+          <QuoteToolbar
+            onOpenSelector={() => setSelectorOpen(true)}
+            onOpenSaveCloud={() => setSaveCloudOpen(true)}
+          />
 
           <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <Box sx={{ flex: 1, overflowY: 'auto' }}>
-              {view === 'cost' ? <CostView /> : <SummaryView />}
+              {view === 'cost' && <CostView />}
+              {view === 'summary' && <SummaryView />}
+              {view === 'history' && <QuoteHistoryView />}
             </Box>
 
             <Drawer
@@ -54,6 +62,11 @@ export function QuoteView() {
               <HistPanel />
             </Drawer>
           </Box>
+
+          <SaveCloudQuoteModal
+            open={saveCloudOpen}
+            onClose={() => setSaveCloudOpen(false)}
+          />
         </>
       )}
     </Box>

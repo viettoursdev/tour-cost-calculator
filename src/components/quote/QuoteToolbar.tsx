@@ -13,13 +13,10 @@ import { useQuoteStore } from '@/stores/quoteStore';
 
 type Props = {
   onOpenSelector: () => void;
-  onOpenSaveCloud?: () => void;
+  onOpenSaveCloud: () => void;
 };
 
-export function QuoteToolbar({
-  onOpenSelector,
-  onOpenSaveCloud = () => {},
-}: Props) {
+export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const info = useQuoteStore((s) => s.draft.info);
   const pax = useQuoteStore((s) => s.draft.pax);
   const rates = useQuoteStore((s) => s.draft.rates);
