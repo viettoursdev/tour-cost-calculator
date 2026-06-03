@@ -2,10 +2,17 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { readUserSnapshots, readSavedQuotes, writeSavedQuotes } from '@/lib/storage';
+import {
+  fbDeleteQuote, fbGetQuoteProject, fbSaveQuote, fbSaveQuoteState,
+  fbUpdateCollaborators, generateQuoteCode,
+} from '@/lib/firebase';
 import { TEMPLATES, RATES_INIT, CATS, mkItem } from '@/components/quote/constants';
+import { computeTotals } from '@/components/quote/calc';
 import { useAuthStore } from './authStore';
+import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
-  CategoryId, Item, QuoteDraft, QuoteInfo, Snapshot, Template, User,
+  CategoryId, CloudQuoteEntry, Collaborator, Item, QuoteDraft, QuoteInfo,
+  Snapshot, Template, User,
 } from '@/types';
 
 const EMPTY_DRAFT: QuoteDraft = {
@@ -24,7 +31,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 type QuoteState = {
   draft: QuoteDraft;
-  view: 'cost' | 'summary';
+  view: 'cost' | 'summary' | 'history';
   snapshots: Snapshot[];
   currentUsername: string | null;
 
@@ -33,7 +40,7 @@ type QuoteState = {
 
   newDraft: (template: Template) => void;
   abandon: () => void;
-  setView: (v: 'cost' | 'summary') => void;
+  setView: (v: 'cost' | 'summary' | 'history') => void;
 
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
@@ -55,6 +62,12 @@ type QuoteState = {
   loadSnapshot: (id: number) => void;
   deleteSnapshot: (id: number) => void;
   renameSnapshot: (id: number, name: string) => void;
+
+  // Cloud sync (PR-3.2)
+  saveCloud: (name: string, collaborators: Collaborator[], note?: string) => Promise<CloudQuoteEntry>;
+  deleteCloud: (id: number, cloudId: string) => Promise<void>;
+  updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
+  loadCloud: (cloudId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
 /**
@@ -272,6 +285,62 @@ export const useQuoteStore = create<QuoteState>()(
           map[currentUsername] = next;
           writeSavedQuotes(map);
           set({ snapshots: next });
+        },
+
+        saveCloud: async (name, collaborators, note) => {
+          const { draft } = get();
+          const u = useAuthStore.getState().currentUser;
+          if (!u) throw new Error('saveCloud: no current user');
+          if (!draft.template) throw new Error('saveCloud: draft has no template');
+          const totalCost = computeTotals(draft).totalCost;
+          const isNew = !draft.currentQuoteId;
+          const cloudId =
+            draft.currentQuoteId ??
+            Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+          const id = Date.now();
+          const quoteCode = isNew
+            ? generateQuoteCode(draft.template, useQuoteHistoryStore.getState().quotes)
+            : undefined;
+          const entry = await fbSaveQuote(
+            {
+              id,
+              cloudId,
+              quoteCode,
+              name: name.trim() || draft.info.name || 'Báo giá không tên',
+              template: draft.template,
+              pax: draft.pax,
+              totalCost,
+              collaborators,
+            },
+            { u: u.u, name: u.name, role: u.role },
+          );
+          await fbSaveQuoteState(cloudId, draft, note, { name: u.name, role: u.role });
+          set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId } }));
+          return entry;
+        },
+
+        deleteCloud: async (id, cloudId) => {
+          await fbDeleteQuote(id, cloudId);
+          const { draft } = get();
+          if (draft.currentQuoteId === cloudId) {
+            set({ draft: { ...draft, currentQuoteId: null } });
+          }
+        },
+
+        updateCloudCollaborators: async (id, cloudId, collabs) => {
+          await fbUpdateCollaborators(id, cloudId, collabs);
+        },
+
+        loadCloud: async (cloudId) => {
+          const project = await fbGetQuoteProject(cloudId);
+          if (!project) {
+            return { ok: false, error: 'Báo giá không tồn tại trong cloud' };
+          }
+          set({
+            draft: { ...project.currentState, currentQuoteId: cloudId },
+            view: 'cost',
+          });
+          return { ok: true };
         },
       }),
       {
