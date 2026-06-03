@@ -30,11 +30,11 @@ export const useQuoteHistoryStore = create<QuoteHistoryState>()(
     visibleQuotes: () => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return [];
-      return get().quotes.filter(
-        (q) =>
-          q.createdByUsername === u.u ||
-          q.collaborators.some((c) => c.u === u.u),
-      );
+      return get().quotes.filter((q) => {
+        // Defensive: legacy-written entries may have a missing `collaborators` field.
+        const collabs = q.collaborators ?? [];
+        return q.createdByUsername === u.u || collabs.some((c) => c.u === u.u);
+      });
     },
   })),
 );

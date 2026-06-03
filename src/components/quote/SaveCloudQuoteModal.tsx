@@ -26,7 +26,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const [name, setName] = useState(draftName || '');
   const [collabUsers, setCollabUsers] = useState<User[]>(() => {
     if (!existingEntry) return [];
-    const set = new Set(existingEntry.collaborators.map((c) => c.u));
+    const set = new Set((existingEntry.collaborators ?? []).map((c) => c.u));
     return users.filter((u) => set.has(u.u));
   });
   const [note, setNote] = useState('');

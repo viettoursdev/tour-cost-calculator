@@ -124,7 +124,7 @@ export function QuoteHistoryView() {
           <Chip
             size="small"
             icon={<GroupIcon />}
-            label={p.row.collaborators.length}
+            label={(p.row.collaborators ?? []).length}
             onClick={(e) => setCollabAnchor({ el: e.currentTarget, row: p.row })}
             clickable
           />
@@ -229,7 +229,7 @@ function CollaboratorPopover({
 }) {
   const currentUserU = useAuthStore((s) => s.currentUser?.u);
   const initial = useMemo(() => {
-    const set = new Set(row.collaborators.map((c) => c.u));
+    const set = new Set((row.collaborators ?? []).map((c) => c.u));
     return users.filter((u) => set.has(u.u));
   }, [row.collaborators, users]);
   const [picked, setPicked] = useState<User[]>(initial);
