@@ -3,7 +3,7 @@ import {
   deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  CloudQuoteEntry, CloudQuoteProject, Collaborator, Customer, QuoteDraft, RateCard,
+  CloudQuoteEntry, CloudQuoteProject, Collaborator, Customer, Ncc, QuoteDraft, RateCard,
   RateCardDoc, Template, User,
 } from '@/types';
 
@@ -23,6 +23,7 @@ const USERS_DOC = doc(db, 'viettours', 'user_accounts');
 const RC_DOC = doc(db, 'viettours', 'master_rate_card');
 const QUOTE_HISTORY_DOC = doc(db, 'viettours', 'quote_history');
 const CUSTOMER_DOC = doc(db, 'viettours', 'customer_list');
+const NCC_DOC = doc(db, 'viettours', 'ncc_master');
 const quoteProjectDoc = (cloudId: string) => doc(db, 'quote_projects', cloudId);
 
 // ── Users ──
@@ -314,6 +315,33 @@ export async function fbPushCustomers(
 ): Promise<void> {
   await setDoc(CUSTOMER_DOC, {
     customers: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── NCC (Suppliers) ──
+
+/**
+ * Subscribe to the NCC (suppliers) list.
+ * Legacy window.fbOnNCC reads data.suppliers.
+ */
+export function fbSubscribeNcc(cb: (list: Ncc[]) => void): Unsubscribe {
+  return onSnapshot(NCC_DOC, (snap) => {
+    cb(snap.exists() ? ((snap.data().suppliers as Ncc[]) ?? []) : []);
+  });
+}
+
+/**
+ * Full-overwrite push of the NCC list.
+ * Legacy window.fbPushNCC writes { suppliers, updatedAt, updatedBy }.
+ */
+export async function fbPushNcc(
+  list: Ncc[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(NCC_DOC, {
+    suppliers: list,
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });
