@@ -1,0 +1,325 @@
+import { useMemo, useState } from 'react';
+import {
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  IconButton, LinearProgress, MenuItem, Select, Stack, TextField, Tooltip, Typography,
+} from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { useNccStore } from '@/stores/nccStore';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
+import { NCCModal } from './NCCModal';
+import { NCC_SECTORS, SECTOR_COLOR } from './constants';
+import type { Ncc } from '@/types';
+
+type ModalState = { ncc: Ncc | null } | null;
+
+export function NCCView() {
+  const suppliers = useNccStore((s) => s.suppliers);
+  const loading = useNccStore((s) => s.loading);
+  const syncing = useNccStore((s) => s.syncing);
+  const save = useNccStore((s) => s.save);
+  const del = useNccStore((s) => s.delete);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const canEdit = !!currentUser && hasPerm(currentUser, 'manageNCC');
+
+  const [search, setSearch] = useState('');
+  const [filterSector, setFilterSector] = useState('');
+  const [modal, setModal] = useState<ModalState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Ncc | null>(null);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return suppliers.filter((s) => {
+      if (filterSector && !s.sectors.includes(filterSector)) return false;
+      if (!q) return true;
+      return (
+        s.name?.toLowerCase().includes(q) ||
+        s.location?.toLowerCase().includes(q) ||
+        s.note?.toLowerCase().includes(q) ||
+        (s.contacts ?? []).some(
+          (ct) =>
+            ct.name?.toLowerCase().includes(q) ||
+            ct.phone?.includes(q) ||
+            ct.email?.toLowerCase().includes(q) ||
+            ct.position?.toLowerCase().includes(q),
+        )
+      );
+    });
+  }, [suppliers, search, filterSector]);
+
+  const handleSave = async (form: Ncc) => {
+    await save(form);
+    setModal(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    await del(deleteTarget.id);
+    setDeleteTarget(null);
+  };
+
+  return (
+    <Box sx={{ p: 2, maxWidth: 1280, mx: 'auto' }}>
+      {/* Header */}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1.5} sx={{ mb: 2.5 }}>
+        <Box>
+          <Typography variant="h6" fontWeight={800}>🏢 Danh sách NCC</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {loading
+              ? 'Đang tải...'
+              : `${suppliers.length} nhà cung cấp · Đồng bộ real-time Cloud`}
+            {syncing && <Chip label="☁️ Đang đồng bộ..." size="small" sx={{ ml: 1 }} />}
+          </Typography>
+        </Box>
+        {canEdit && (
+          <Button variant="contained" onClick={() => setModal({ ncc: null })}>
+            ➕ Thêm NCC
+          </Button>
+        )}
+      </Stack>
+
+      {loading && <LinearProgress sx={{ mb: 2 }} />}
+
+      {/* Search & sector filter */}
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+        <TextField
+          size="small"
+          placeholder="Tìm tên, địa điểm, contact..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ flex: 1, minWidth: 220 }}
+        />
+        <Select
+          size="small"
+          value={filterSector}
+          onChange={(e) => setFilterSector(e.target.value)}
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="">Tất cả lĩnh vực</MenuItem>
+          {NCC_SECTORS.map((s) => (
+            <MenuItem key={s} value={s}>{s}</MenuItem>
+          ))}
+        </Select>
+        {(search || filterSector) && (
+          <Button size="small" color="error" variant="outlined"
+            onClick={() => { setSearch(''); setFilterSector(''); }}>
+            ✕ Xoá lọc
+          </Button>
+        )}
+      </Stack>
+
+      {/* Empty states */}
+      {!loading && filtered.length === 0 && (
+        <Box sx={{ textAlign: 'center', py: 8, color: 'text.disabled' }}>
+          <Typography variant="h2">🏢</Typography>
+          <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
+            {suppliers.length === 0 ? 'Chưa có NCC nào' : 'Không tìm thấy kết quả'}
+          </Typography>
+          {suppliers.length === 0 && canEdit && (
+            <Typography variant="caption">Bấm "Thêm NCC" để bắt đầu</Typography>
+          )}
+        </Box>
+      )}
+
+      {/* Card grid */}
+      {!loading && filtered.length > 0 && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
+          {filtered.map((s) => (
+            <NccCard
+              key={s.id}
+              ncc={s}
+              canEdit={canEdit}
+              onEdit={() => setModal({ ncc: s })}
+              onDelete={() => setDeleteTarget(s)}
+              onClick={() => setModal({ ncc: s })}
+            />
+          ))}
+        </Box>
+      )}
+
+      {/* Modal */}
+      {modal !== null && (
+        <NCCModal
+          ncc={modal.ncc}
+          canEdit={canEdit}
+          onSave={handleSave}
+          onClose={() => setModal(null)}
+        />
+      )}
+
+      {/* Delete confirm */}
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
+        <DialogTitle>Xoá NCC?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning">
+            Xoá <strong>{deleteTarget?.name}</strong>? Không thể hoàn tác.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Huỷ</Button>
+          <Button variant="contained" color="error" onClick={handleDelete}>Xoá</Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+// ── Inline card ──
+
+function NccCard({
+  ncc: s,
+  canEdit,
+  onEdit,
+  onDelete,
+  onClick,
+}: {
+  ncc: Ncc;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        bgcolor: 'background.paper',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2,
+        p: 2,
+        cursor: 'pointer',
+        transition: 'box-shadow .2s, border-color .2s',
+        '&:hover': { boxShadow: 4, borderColor: 'primary.light' },
+      }}
+    >
+      {/* Name row */}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
+        <Typography fontWeight={800} variant="body1" sx={{ flex: 1, mr: 1, lineHeight: 1.3 }}>
+          🏢 {s.name}
+        </Typography>
+        {canEdit && (
+          <Stack direction="row" onClick={(e) => e.stopPropagation()}>
+            <Tooltip title="Sửa">
+              <IconButton size="small" onClick={onEdit}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Xoá">
+              <IconButton size="small" color="error" onClick={onDelete}>
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
+      </Stack>
+
+      {/* Sectors */}
+      <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mb: 1 }}>
+        {(s.sectors ?? []).slice(0, 3).map((sec) => (
+          <Chip
+            key={sec}
+            label={sec}
+            size="small"
+            sx={{
+              fontSize: 10,
+              bgcolor: `${SECTOR_COLOR[sec] ?? '#7f8c8d'}20`,
+              color: SECTOR_COLOR[sec] ?? '#7f8c8d',
+              border: `1px solid ${SECTOR_COLOR[sec] ?? '#7f8c8d'}60`,
+            }}
+          />
+        ))}
+        {(s.sectors ?? []).length > 3 && (
+          <Typography variant="caption" color="text.disabled">
+            +{s.sectors.length - 3} khác
+          </Typography>
+        )}
+      </Stack>
+
+      {/* Location */}
+      {s.location && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          📍 {s.location}
+        </Typography>
+      )}
+
+      {/* Contacts preview */}
+      {(s.contacts ?? [])
+        .filter((ct) => ct.name || ct.phone || ct.email)
+        .slice(0, 2)
+        .map((ct, i) => (
+          <Stack
+            key={i}
+            direction="row"
+            flexWrap="wrap"
+            spacing={1}
+            useFlexGap
+            alignItems="center"
+            sx={{
+              fontSize: 12,
+              color: 'text.secondary',
+              borderTop: i === 0 ? '1px dashed' : 'none',
+              borderColor: 'divider',
+              pt: i === 0 ? 1 : 0.5,
+              mt: i === 0 ? 0.5 : 0,
+            }}
+          >
+            {ct.name && (
+              <Typography variant="caption" fontWeight={700}>
+                {ct.name}{ct.position ? ` · ${ct.position}` : ''}
+              </Typography>
+            )}
+            {ct.phone && (
+              <Typography
+                variant="caption"
+                component="a"
+                href={`tel:${ct.phone}`}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: 'primary.main', textDecoration: 'none' }}
+              >
+                📞 {ct.phone}
+              </Typography>
+            )}
+            {ct.email && (
+              <Typography
+                variant="caption"
+                component="a"
+                href={`mailto:${ct.email}`}
+                onClick={(e) => e.stopPropagation()}
+                sx={{ color: 'primary.main', textDecoration: 'none' }}
+              >
+                ✉️ {ct.email}
+              </Typography>
+            )}
+          </Stack>
+        ))}
+      {(s.contacts ?? []).length > 2 && (
+        <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
+          +{s.contacts.length - 2} contact khác...
+        </Typography>
+      )}
+
+      {/* Note */}
+      {s.note && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: 'block',
+            mt: 1,
+            borderTop: '1px dashed',
+            borderColor: 'divider',
+            pt: 0.75,
+            fontStyle: 'italic',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          📝 {s.note}
+        </Typography>
+      )}
+    </Box>
+  );
+}
