@@ -3,8 +3,8 @@ import {
   deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  CloudQuoteEntry, CloudQuoteProject, Collaborator, Customer, Ncc, QuoteDraft, RateCard,
-  RateCardDoc, Template, User,
+  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, Ncc, QuoteDraft,
+  RateCard, RateCardDoc, Template, User,
 } from '@/types';
 
 const firebaseConfig = {
@@ -24,6 +24,7 @@ const RC_DOC = doc(db, 'viettours', 'master_rate_card');
 const QUOTE_HISTORY_DOC = doc(db, 'viettours', 'quote_history');
 const CUSTOMER_DOC = doc(db, 'viettours', 'customer_list');
 const NCC_DOC = doc(db, 'viettours', 'ncc_master');
+const CONTRACTS_DOC = doc(db, 'viettours', 'contracts_master');
 const quoteProjectDoc = (cloudId: string) => doc(db, 'quote_projects', cloudId);
 
 // ── Users ──
@@ -342,6 +343,42 @@ export async function fbPushNcc(
 ): Promise<void> {
   await setDoc(NCC_DOC, {
     suppliers: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── Contracts ──
+
+/**
+ * Subscribe to the contract list.
+ * Source: legacy window.fbOnContracts (legacy.html:353).
+ */
+export function fbSubscribeContracts(cb: (list: Contract[]) => void): Unsubscribe {
+  return onSnapshot(CONTRACTS_DOC, (snap) => {
+    cb(snap.exists() ? ((snap.data().contracts as Contract[]) ?? []) : []);
+  });
+}
+
+/**
+ * One-time pull of the contract list (used for checking on init).
+ * Source: legacy window.fbGetContracts (legacy.html:354).
+ */
+export async function fbGetContracts(): Promise<Contract[]> {
+  const snap = await getDoc(CONTRACTS_DOC);
+  return snap.exists() ? ((snap.data().contracts as Contract[]) ?? []) : [];
+}
+
+/**
+ * Full-overwrite push of the contract list.
+ * Source: legacy window.fbPushContracts (legacy.html:355-358).
+ */
+export async function fbPushContracts(
+  list: Contract[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(CONTRACTS_DOC, {
+    contracts: list,
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });
