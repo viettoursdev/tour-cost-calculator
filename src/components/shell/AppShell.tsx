@@ -4,6 +4,7 @@ import { TabPlaceholder } from './TabPlaceholder';
 import { RatesPanel } from '@/components/rates/RatesPanel';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { CustomerView } from '@/components/customer/CustomerView';
+import { NCCView } from '@/components/ncc/NCCView';
 import { useAuthStore } from '@/stores/authStore';
 
 const TABS = [
@@ -62,6 +63,7 @@ export function AppShell() {
           if (t.key === 'rates') return <RatesPanel key={t.key} />;
           if (t.key === 'quote') return <QuoteView key={t.key} />;
           if (t.key === 'customer') return <CustomerView key={t.key} />;
+          if (t.key === 'ncc') return <NCCView key={t.key} />;
           return <TabPlaceholder key={t.key} tabKey={t.key} label={t.label} />;
         })}
       </Box>
