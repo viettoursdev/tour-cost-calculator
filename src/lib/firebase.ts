@@ -3,8 +3,8 @@ import {
   deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  CloudQuoteEntry, CloudQuoteProject, Collaborator, QuoteDraft, RateCard, RateCardDoc,
-  Template, User,
+  CloudQuoteEntry, CloudQuoteProject, Collaborator, Customer, QuoteDraft, RateCard,
+  RateCardDoc, Template, User,
 } from '@/types';
 
 const firebaseConfig = {
@@ -22,6 +22,7 @@ export const db = getFirestore(app, 'viettours');
 const USERS_DOC = doc(db, 'viettours', 'user_accounts');
 const RC_DOC = doc(db, 'viettours', 'master_rate_card');
 const QUOTE_HISTORY_DOC = doc(db, 'viettours', 'quote_history');
+const CUSTOMER_DOC = doc(db, 'viettours', 'customer_list');
 const quoteProjectDoc = (cloudId: string) => doc(db, 'quote_projects', cloudId);
 
 // ── Users ──
@@ -287,4 +288,33 @@ export async function fbGetQuoteProject(
 ): Promise<CloudQuoteProject | null> {
   const snap = await getDoc(quoteProjectDoc(cloudId));
   return snap.exists() ? (snap.data() as CloudQuoteProject) : null;
+}
+
+// ── Customers ──
+
+/**
+ * Subscribe to the customer list in real-time.
+ * Source: public/legacy.html customer_list pattern (fbOnCustomers).
+ */
+export function fbSubscribeCustomers(
+  cb: (list: Customer[]) => void,
+): Unsubscribe {
+  return onSnapshot(CUSTOMER_DOC, (snap) => {
+    cb(snap.exists() ? ((snap.data().customers as Customer[]) ?? []) : []);
+  });
+}
+
+/**
+ * Full-overwrite push of the customer list.
+ * Source: public/legacy.html (fbPushCustomers).
+ */
+export async function fbPushCustomers(
+  list: Customer[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(CUSTOMER_DOC, {
+    customers: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
 }
