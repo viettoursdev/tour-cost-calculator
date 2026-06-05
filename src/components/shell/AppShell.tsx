@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { AppBar, Box, Button, Tab, Tabs, Toolbar, Typography } from '@mui/material';
-import { TabPlaceholder } from './TabPlaceholder';
 import { RatesPanel } from '@/components/rates/RatesPanel';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { CustomerView } from '@/components/customer/CustomerView';
@@ -11,11 +10,13 @@ import { useAuthStore } from '@/stores/authStore';
 const TABS = [
   { key: 'rates', label: 'Rate Card' },
   { key: 'quote', label: 'Báo Giá' },
-  { key: 'payment', label: 'Thanh Toán' },
   { key: 'contract', label: 'Hợp Đồng' },
   { key: 'customer', label: 'Khách Hàng' },
   { key: 'ncc', label: 'NCC' },
 ] as const;
+// 'payment' tab removed: PaymentView is a sub-view inside the Quote tab (same as Dashboard),
+// not a standalone top-level tab in legacy. Payment tracking is accessible from
+// the Hợp Đồng tab's accordion rows via PaymentPanel.
 
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -66,7 +67,6 @@ export function AppShell() {
           if (t.key === 'customer') return <CustomerView key={t.key} />;
           if (t.key === 'contract') return <ContractView key={t.key} />;
           if (t.key === 'ncc') return <NCCView key={t.key} />;
-          return <TabPlaceholder key={t.key} tabKey={t.key} label={t.label} />;
         })}
       </Box>
     </Box>
