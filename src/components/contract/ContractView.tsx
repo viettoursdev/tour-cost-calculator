@@ -7,6 +7,8 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import { exportContractPDF } from '@/lib/exports/exportContractPDF';
 import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -182,19 +184,28 @@ export function ContractView() {
                 canEdit={canEdit}
                 onUpdate={(payments) => updatePayments(c.id, payments)}
               />
-              {(c.hasAcceptance || (c.contractStatus === 'completed' && canEdit)) && (
-                <Box sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
+                <Button
+                  size="small"
+                  startIcon={<PictureAsPdfIcon />}
+                  color="error"
+                  variant="outlined"
+                  onClick={() => exportContractPDF(c)}
+                >
+                  Xuất hợp đồng PDF
+                </Button>
+                {(c.hasAcceptance || (c.contractStatus === 'completed' && canEdit)) && (
                   <Button size="small" variant="outlined"
                     onClick={() => setAcceptanceTarget(c)}>
                     📋 {c.hasAcceptance ? 'Xem biên bản nghiệm thu' : 'Phát hành biên bản nghiệm thu'}
                   </Button>
-                  {c.hasAcceptance && c.acceptanceDate && (
-                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                      Ngày: {c.acceptanceDate}
-                    </Typography>
-                  )}
-                </Box>
-              )}
+                )}
+                {c.hasAcceptance && c.acceptanceDate && (
+                  <Typography variant="caption" color="text.secondary" alignSelf="center">
+                    BBNT: {c.acceptanceDate}
+                  </Typography>
+                )}
+              </Stack>
             </AccordionDetails>
           </Accordion>
         );
