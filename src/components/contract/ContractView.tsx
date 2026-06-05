@@ -8,7 +8,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import ArticleIcon from '@mui/icons-material/Article';
 import { exportContractPDF } from '@/lib/exports/exportContractPDF';
+import { exportContractDocx } from '@/lib/exports/exportContractDocx';
 import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -192,7 +194,16 @@ export function ContractView() {
                   variant="outlined"
                   onClick={() => exportContractPDF(c)}
                 >
-                  Xuất hợp đồng PDF
+                  PDF
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<ArticleIcon />}
+                  color="primary"
+                  variant="outlined"
+                  onClick={() => void exportContractDocx(c)}
+                >
+                  Word (.docx)
                 </Button>
                 {(c.hasAcceptance || (c.contractStatus === 'completed' && canEdit)) && (
                   <Button size="small" variant="outlined"
