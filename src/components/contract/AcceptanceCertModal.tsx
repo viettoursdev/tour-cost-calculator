@@ -2,6 +2,9 @@ import { useState } from 'react';
 import {
   Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import { useAuthStore } from '@/stores/authStore';
+import { exportAcceptanceCertPDF } from '@/lib/exports/exportAcceptanceCert';
 import type { Contract } from '@/types';
 
 type Props = {
@@ -14,6 +17,13 @@ export function AcceptanceCertModal({ contract, onSave, onClose }: Props) {
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(contract.acceptanceDate ?? today);
   const [note, setNote] = useState(contract.acceptanceNote ?? '');
+  const currentUser = useAuthStore((s) => s.currentUser);
+
+  const handleExportPDF = () => {
+    if (currentUser) {
+      exportAcceptanceCertPDF(contract, { date, note }, { name: currentUser.name, role: currentUser.role });
+    }
+  };
 
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
@@ -39,13 +49,15 @@ export function AcceptanceCertModal({ contract, onSave, onClose }: Props) {
             onChange={(e) => setNote(e.target.value)}
             placeholder="Các bên đã hoàn thành đầy đủ nghĩa vụ..."
           />
-          <Typography variant="caption" color="text.secondary">
-            * PDF xuất biên bản sẽ có trong phiên bản tiếp theo.
-          </Typography>
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Huỷ</Button>
+        {date && (
+          <Button startIcon={<PictureAsPdfIcon />} onClick={handleExportPDF} color="error">
+            Xuất PDF
+          </Button>
+        )}
         <Button
           variant="contained"
           disabled={!date}
