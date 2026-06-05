@@ -3,8 +3,8 @@ import {
   deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, Ncc, QuoteDraft,
-  RateCard, RateCardDoc, Template, User,
+  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, Ncc, Notification,
+  QuoteDraft, RateCard, RateCardDoc, Template, User,
 } from '@/types';
 
 const firebaseConfig = {
@@ -25,6 +25,7 @@ const QUOTE_HISTORY_DOC = doc(db, 'viettours', 'quote_history');
 const CUSTOMER_DOC = doc(db, 'viettours', 'customer_list');
 const NCC_DOC = doc(db, 'viettours', 'ncc_master');
 const CONTRACTS_DOC = doc(db, 'viettours', 'contracts_master');
+const notifDoc = (username: string) => doc(db, 'user_notifications', username);
 const quoteProjectDoc = (cloudId: string) => doc(db, 'quote_projects', cloudId);
 
 // ── Users ──
@@ -382,4 +383,52 @@ export async function fbPushContracts(
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });
+}
+
+// ── Notifications ──
+
+/**
+ * Send a notification to a target user. Prepends to their list; caps at 100.
+ * Source: legacy window.fbSendNotification (legacy.html:417).
+ */
+export async function fbSendNotification(
+  targetUsername: string,
+  notif: Omit<Notification, 'id' | 'read' | 'createdAt'>,
+): Promise<void> {
+  const snap = await getDoc(notifDoc(targetUsername));
+  const existing: Notification[] = snap.exists()
+    ? ((snap.data().notifications as Notification[]) ?? [])
+    : [];
+  const newNotif: Notification = {
+    ...notif,
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+  await setDoc(notifDoc(targetUsername), {
+    notifications: [newNotif, ...existing].slice(0, 100),
+  });
+}
+
+/**
+ * Subscribe to the current user's notifications.
+ * Source: legacy window.fbOnNotifications (legacy.html:427).
+ */
+export function fbSubscribeNotifications(
+  username: string,
+  cb: (list: Notification[]) => void,
+): Unsubscribe {
+  return onSnapshot(notifDoc(username), (snap) => {
+    cb(snap.exists() ? ((snap.data().notifications as Notification[]) ?? []) : []);
+  });
+}
+
+/**
+ * Write the full notification list back (used for mark-read).
+ */
+export async function fbPushNotifications(
+  username: string,
+  notifications: Notification[],
+): Promise<void> {
+  await setDoc(notifDoc(username), { notifications });
 }

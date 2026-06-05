@@ -1,28 +1,38 @@
 import { useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, LinearProgress, Paper, Stack, TextField,
-  Tooltip, Typography,
+  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  IconButton, LinearProgress, List, ListItemButton, ListItemText,
+  Paper, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import AddIcon from '@mui/icons-material/Add';
+import SendIcon from '@mui/icons-material/Send';
 import { fmtVND } from '@/components/quote/calc';
-import type { Contract, ContractPayment } from '@/types';
+import { fbSendNotification } from '@/lib/firebase';
+import { useAuthStore } from '@/stores/authStore';
+import type { Contract, ContractPayment, User } from '@/types';
 
 type Props = {
   contract: Contract;
   canEdit: boolean;
   onUpdate: (payments: ContractPayment[]) => void;
+  currentUser?: User | null;
 };
 
-export function PaymentPanel({ contract, canEdit, onUpdate }: Props) {
+export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props) {
   const [payments, setPayments] = useState<ContractPayment[]>(
     (contract.payments ?? []).map((p, i) => p.id ? p : { ...p, id: `p_${i}_${Date.now()}` }),
   );
   const [adding, setAdding] = useState(false);
   const [newP, setNewP] = useState({ label: '', amount: '', dueDate: '', note: '' });
   const [editAmt, setEditAmt] = useState<{ id: string; val: string } | null>(null);
+  const [approverPickerPayment, setApproverPickerPayment] = useState<string | null>(null);
+  const [sendingApproval, setSendingApproval] = useState(false);
+  const allUsers = useAuthStore((s) => s.users);
+  const approvers = allUsers.filter((u) => ['CEO', 'Trưởng Phòng'].includes(u.role));
+  const isRequester = currentUser && !['CEO', 'Trưởng Phòng'].includes(currentUser.role);
 
   const totalAmount = Math.round((contract.pricePerPax || 0) * (contract.contractPax || 0));
   const totalPaid = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + (p.receivedAmount ?? p.amount), 0);
@@ -147,6 +157,18 @@ export function PaymentPanel({ contract, canEdit, onUpdate }: Props) {
                     <DeleteOutlineIcon fontSize="small" />
                   </IconButton>
                 )}
+                {isRequester && canEdit && !isPaid && !p.approvalRequested && (
+                  <Tooltip title="Gửi đề nghị duyệt cho CEO / Trưởng Phòng">
+                    <IconButton size="small" color="info" onClick={() => setApproverPickerPayment(p.id)}>
+                      <SendIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {isRequester && p.approvalRequested && !isPaid && (
+                  <Tooltip title="Đã gửi đề nghị duyệt">
+                    <Chip label="⏳ Đã gửi" size="small" color="info" variant="outlined" sx={{ fontSize: 10, height: 20 }} />
+                  </Tooltip>
+                )}
               </Stack>
             </Paper>
           );
@@ -185,6 +207,65 @@ export function PaymentPanel({ contract, canEdit, onUpdate }: Props) {
           </Stack>
         </Paper>
       )}
+
+      <Dialog open={!!approverPickerPayment} onClose={() => setApproverPickerPayment(null)}>
+        <DialogTitle>Chọn người duyệt thanh toán</DialogTitle>
+        <DialogContent sx={{ p: 0, minWidth: 300 }}>
+          {approvers.length === 0 ? (
+            <Box sx={{ p: 3, textAlign: 'center', color: 'text.disabled' }}>
+              <Typography variant="body2">Không tìm thấy CEO / Trưởng Phòng</Typography>
+            </Box>
+          ) : (
+            <List disablePadding>
+              {approvers.map((approver) => (
+                <ListItemButton
+                  key={approver.u}
+                  disabled={sendingApproval}
+                  onClick={async () => {
+                    if (!approverPickerPayment || !currentUser) return;
+                    const p = payments.find((x) => x.id === approverPickerPayment);
+                    if (!p) return;
+                    setSendingApproval(true);
+                    try {
+                      await fbSendNotification(approver.u, {
+                        type: 'payment_approval',
+                        title: '💰 Đề nghị xác nhận thanh toán',
+                        message: `${currentUser.name} đề nghị xác nhận: HĐ #${contract.contractNo || contract.id} · "${p.label}" · ${(+p.amount || 0).toLocaleString('vi-VN')} đ`,
+                        createdBy: `${currentUser.name} (${currentUser.role})`,
+                        data: {
+                          contractId: contract.id,
+                          contractNo: contract.contractNo,
+                          paymentId: p.id,
+                          paymentLabel: p.label,
+                          amount: +p.amount,
+                          requestedBy: currentUser.u,
+                          requestedByName: currentUser.name,
+                          assignedTo: approver.u,
+                          assignedToName: approver.name,
+                        },
+                      });
+                      const next = payments.map((x) =>
+                        x.id === approverPickerPayment ? { ...x, approvalRequested: true } : x,
+                      );
+                      commit(next);
+                      setApproverPickerPayment(null);
+                    } catch (e) {
+                      window.alert('❌ Lỗi gửi đề nghị: ' + (e as Error).message);
+                    } finally {
+                      setSendingApproval(false);
+                    }
+                  }}
+                >
+                  <ListItemText primary={approver.name} secondary={approver.role} />
+                </ListItemButton>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApproverPickerPayment(null)}>Huỷ</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
