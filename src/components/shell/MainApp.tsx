@@ -5,6 +5,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
+import { useContractStore } from '@/stores/contractStore';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
 
@@ -26,11 +27,13 @@ export function MainApp() {
     const qhUnsub = useQuoteHistoryStore.getState().init(currentUser);
     const custUnsub = useCustomerStore.getState().init();
     const nccUnsub = useNccStore.getState().init();
+    const contractUnsub = useContractStore.getState().init();
     return () => {
       rcUnsub?.();
       qhUnsub?.();
       custUnsub?.();
       nccUnsub?.();
+      contractUnsub?.();
     };
   }, [currentUser]);
 
