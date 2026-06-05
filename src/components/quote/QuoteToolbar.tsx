@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import {
-  AppBar, Box, Button, Chip, Stack, TextField, ToggleButton,
-  ToggleButtonGroup, Toolbar, Typography,
+  AppBar, Box, Button, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
+  Stack, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -9,7 +9,12 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import TableChartIcon from '@mui/icons-material/TableChart';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { exportExcelQuote } from '@/lib/exports/exportExcel';
+import { exportPDFQuote } from '@/lib/exports/exportPDF';
+import { useAuthStore } from '@/stores/authStore';
 
 type Props = {
   onOpenSelector: () => void;
@@ -28,7 +33,11 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
 
+  const draft = useQuoteStore((s) => s.draft);
+  const currentUser = useAuthStore((s) => s.currentUser);
+
   const [showRates, setShowRates] = useState(false);
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const handleExport = () => {
@@ -109,9 +118,44 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={onOpenSelector}>
           Báo giá mới
         </Button>
-        <Button size="small" startIcon={<FileDownloadIcon />} onClick={handleExport}>
-          Xuất JSON
+        {/* Export dropdown */}
+        <Button
+          size="small"
+          startIcon={<FileDownloadIcon />}
+          endIcon={<ExpandMoreIcon />}
+          onClick={(e) => setExportAnchor(e.currentTarget)}
+        >
+          Xuất
         </Button>
+        <Menu
+          anchorEl={exportAnchor}
+          open={!!exportAnchor}
+          onClose={() => setExportAnchor(null)}
+        >
+          <MenuItem onClick={() => {
+            if (draft.template && draft.template !== 'dmc' && currentUser) {
+              void exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
+            }
+            setExportAnchor(null);
+          }}>
+            <ListItemIcon><TableChartIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>📊 Excel báo giá</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => {
+            if (draft.template && draft.template !== 'dmc' && currentUser) {
+              exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
+            }
+            setExportAnchor(null);
+          }}>
+            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>📄 PDF báo giá</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={() => { handleExport(); setExportAnchor(null); }}>
+            <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>📋 JSON (backup)</ListItemText>
+          </MenuItem>
+        </Menu>
         <Button size="small" startIcon={<FileUploadIcon />} onClick={handleImportClick}>
           Nhập JSON
         </Button>

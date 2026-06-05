@@ -1,0 +1,165 @@
+/**
+ * Export the active quote draft to a PDF file.
+ * Ported from legacy exportPDFVector at public/legacy.html:3256.
+ * Vietnamese characters rendered via jsPDF's built-in UTF-8 support.
+ */
+import { jsPDF } from 'jspdf';
+import { getCATS } from '@/components/quote/constants';
+import { calcVND, computeTotals, fmtVND } from '@/components/quote/calc';
+import type { Item, QuoteDraft } from '@/types';
+
+type ExportParams = {
+  draft: QuoteDraft;
+  savedBy: { name: string; role: string };
+};
+
+export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
+  const { info, items, rates, pax, catEnabled, template, margin, vat } = draft;
+  if (!template || template === 'dmc') return;
+
+  const totals = computeTotals(draft);
+  const roundedPPax = totals.roundedPPax;
+  const activeCATS = getCATS(template);
+
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const FONT = 'helvetica';
+  const pageW = 210, mX = 15;
+  let y = 18;
+
+  const teal: [number, number, number] = [20, 160, 140];
+  const dark: [number, number, number] = [15, 58, 74];
+  const gray: [number, number, number] = [120, 130, 140];
+  const red: [number, number, number] = [220, 50, 80];
+  const gold: [number, number, number] = [245, 166, 35];
+
+  const checkPage = (need: number) => {
+    if (y + need > 279) { pdf.addPage(); y = 18; }
+  };
+
+  // Header band
+  pdf.setFillColor(...teal);
+  pdf.rect(0, 0, pageW, 8, 'F');
+
+  // Company name
+  pdf.setFontSize(16); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX, y + 6);
+  y += 20;
+
+  // Quote title band
+  pdf.setFillColor(...teal);
+  pdf.roundedRect(mX, y, pageW - mX * 2, 26, 3, 3, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
+  pdf.text('BAO GIA TOUR / QUOTATION', pageW / 2, y + 7, { align: 'center' });
+  pdf.setFontSize(16);
+  const tourTitle = (info.name || 'Tour').slice(0, 50); // truncate long names
+  pdf.text(tourTitle, pageW / 2, y + 15, { align: 'center' });
+  pdf.setFontSize(10); pdf.setTextColor(255, 224, 130); pdf.setFont(FONT, 'normal');
+  pdf.text(`${info.dest || ''} - ${info.days}N${info.nights}D - ${pax} khach`, pageW / 2, y + 22, { align: 'center' });
+  y += 34;
+
+  if (info.startDate) {
+    pdf.setFontSize(9); pdf.setTextColor(...dark); pdf.setFont(FONT, 'normal');
+    const startD = new Date(info.startDate);
+    const endD = new Date(startD.getTime() + (info.days - 1) * 86400000);
+    const fmtD = (d: Date) => d.toLocaleDateString('en-GB');
+    pdf.text(`Khoi hanh: ${fmtD(startD)}  ->  Ket thuc: ${fmtD(endD)}`, pageW / 2, y, { align: 'center' });
+    y += 7;
+  }
+
+  // Price highlight box
+  pdf.setFillColor(255, 248, 225);
+  pdf.roundedRect(mX, y, pageW - mX * 2, 24, 3, 3, 'F');
+  pdf.setDrawColor(...gold); pdf.setLineWidth(0.5);
+  pdf.roundedRect(mX, y, pageW - mX * 2, 24, 3, 3, 'S');
+  pdf.setFontSize(9); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+  pdf.text('GIA TRON GOI / KHACH · PACKAGE PRICE / PAX', pageW / 2, y + 8, { align: 'center' });
+  pdf.setFontSize(22); pdf.setTextColor(...red);
+  pdf.text(fmtVND(roundedPPax), pageW / 2, y + 18, { align: 'center' });
+  y += 30;
+  pdf.setFontSize(9); pdf.setTextColor(...dark); pdf.setFont(FONT, 'normal');
+  pdf.text(`Tong doan ${pax} khach: ${fmtVND(roundedPPax * pax)}`, pageW / 2, y, { align: 'center' });
+  y += 12;
+
+  // Services section
+  pdf.setFontSize(11); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+  pdf.text('DICH VU BAO GOM / INCLUDED SERVICES', mX, y);
+  y += 3;
+  pdf.setDrawColor(...teal); pdf.setLineWidth(0.5);
+  pdf.line(mX, y, pageW - mX, y);
+  y += 7;
+
+  activeCATS.forEach(cat => {
+    if (!catEnabled[cat.id as keyof typeof catEnabled]) return;
+    const catItems = (items[cat.id as keyof typeof items] ?? [])
+      .filter((i: Item) => i.name && (calcVND(i, rates, pax) > 0 || i.foc === true));
+    if (catItems.length === 0) return;
+    const sub = catItems.reduce((s: number, i: Item) => s + calcVND(i, rates, pax), 0);
+    checkPage(10);
+    pdf.setFontSize(10); pdf.setTextColor(...dark); pdf.setFont(FONT, 'bold');
+    pdf.text(`${cat.label} / ${cat.labelEn}`, mX, y);
+    pdf.setTextColor(...teal);
+    pdf.text(pax > 0 ? fmtVND(sub / pax) + '/khach' : '', pageW - mX, y, { align: 'right' });
+    y += 5;
+    pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
+    catItems.forEach((it: Item) => {
+      checkPage(9);
+      const itVnd = calcVND(it, rates, pax);
+      pdf.setTextColor(...dark);
+      const nameText = `• ${(it.name || '').slice(0, 55)}`;
+      pdf.text(nameText, mX + 4, y);
+      if (it.foc) {
+        pdf.setTextColor(39, 174, 96); pdf.setFont(FONT, 'bold');
+        pdf.text('FOC - Mien phi', pageW - mX, y, { align: 'right' });
+        pdf.setFont(FONT, 'normal');
+      } else {
+        pdf.setTextColor(...teal);
+        pdf.text(fmtVND(itVnd), pageW - mX, y, { align: 'right' });
+      }
+      y += 4;
+      if (it.note) {
+        checkPage(5);
+        pdf.setTextColor(...gray); pdf.setFontSize(8);
+        pdf.text(`   ${it.note.slice(0, 70)}`, mX + 6, y);
+        y += 4; pdf.setFontSize(9);
+      }
+    });
+    y += 2;
+  });
+
+  // Pricing summary
+  checkPage(50);
+  y += 4;
+  pdf.setFillColor(...dark);
+  pdf.roundedRect(mX, y, pageW - mX * 2, 46, 2, 2, 'F');
+  const col1 = mX + 5, col2 = pageW - mX - 5;
+  pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
+  pdf.text('TOM TAT LUI NHUAN / PROFIT SUMMARY', pageW / 2, y + 7, { align: 'center' });
+  pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
+  const rows: [string, string][] = [
+    [`Tong chi phi goc (${pax} khach):`, fmtVND(totals.totalCost)],
+    [`Phi dich vu (${margin}%):`, fmtVND(totals.totalProfit)],
+    [`Thue VAT (${vat}%):`, fmtVND(totals.totalVAT)],
+  ];
+  let ry = y + 14;
+  rows.forEach(([lab, val]) => {
+    pdf.text(lab, col1, ry); pdf.text(val, col2, ry, { align: 'right' });
+    ry += 6;
+  });
+  pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
+  pdf.setTextColor(255, 224, 130);
+  pdf.text('Gia ban / khach:', col1, ry);
+  pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
+  y += 50;
+
+  // Footer
+  checkPage(15);
+  pdf.setFontSize(8); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
+  pdf.text(
+    `Bao gia co hieu luc 07 ngay · Phu trach: ${savedBy.name} (${savedBy.role}) · ${new Date().toLocaleDateString('vi-VN')}`,
+    pageW / 2, y, { align: 'center' },
+  );
+
+  const safeName = (info.name || 'Tour').replace(/[^a-zA-Z0-9_]/g, '_');
+  const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
+  pdf.save(`BaoGia_${safeName}_${dateStr}.pdf`);
+}
