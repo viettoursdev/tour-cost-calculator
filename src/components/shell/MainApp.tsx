@@ -6,6 +6,8 @@ import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useContractStore } from '@/stores/contractStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { checkContractDeadlines } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
 
@@ -28,12 +30,15 @@ export function MainApp() {
     const custUnsub = useCustomerStore.getState().init();
     const nccUnsub = useNccStore.getState().init();
     const contractUnsub = useContractStore.getState().init();
+    const notifUnsub = useNotificationStore.getState().init(currentUser.u);
+    setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
       rcUnsub?.();
       qhUnsub?.();
       custUnsub?.();
       nccUnsub?.();
       contractUnsub?.();
+      notifUnsub?.();
     };
   }, [currentUser]);
 

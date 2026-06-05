@@ -5,6 +5,7 @@ import { QuoteView } from '@/components/quote/QuoteView';
 import { CustomerView } from '@/components/customer/CustomerView';
 import { NCCView } from '@/components/ncc/NCCView';
 import { ContractView } from '@/components/contract/ContractView';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { useAuthStore } from '@/stores/authStore';
 
 const TABS = [
@@ -39,6 +40,7 @@ export function AppShell() {
               <Typography variant="body2" sx={{ mr: 2 }}>
                 {currentUser.name} ({currentUser.role})
               </Typography>
+              <NotificationBell />
               <Button color="inherit" onClick={logout}>
                 Đăng xuất
               </Button>
