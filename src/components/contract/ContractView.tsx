@@ -185,6 +185,7 @@ export function ContractView() {
                 contract={c}
                 canEdit={canEdit}
                 onUpdate={(payments) => updatePayments(c.id, payments)}
+                currentUser={currentUser}
               />
               <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
                 <Button
