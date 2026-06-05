@@ -19,7 +19,7 @@ export default defineConfig({
             '@mui/x-date-pickers',
           ],
           firebase: ['firebase/app', 'firebase/firestore'],
-          exports: ['xlsx', 'jspdf', 'html2canvas', 'docx', 'file-saver'],
+          exports: ['xlsx', 'jspdf', 'html2canvas', 'docx', 'file-saver', 'exceljs'],
         },
       },
     },

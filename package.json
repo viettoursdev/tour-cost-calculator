@@ -26,6 +26,7 @@
     "@mui/x-data-grid": "^7.29.13",
     "@mui/x-date-pickers": "^7.29.4",
     "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "firebase": "^10.14.1",
     "html2canvas": "^1.4.1",
