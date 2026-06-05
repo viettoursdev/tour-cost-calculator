@@ -6,7 +6,8 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
-import type { Collaborator, User } from '@/types';
+import { useCustomerStore } from '@/stores/customerStore';
+import type { Collaborator, Customer, User } from '@/types';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -17,11 +18,18 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const saveCloud = useQuoteStore((s) => s.saveCloud);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const customers = useCustomerStore((s) => s.customers);
 
   const existingEntry = useMemo(
     () => (currentQuoteId ? quotes.find((q) => q.cloudId === currentQuoteId) : undefined),
     [currentQuoteId, quotes],
   );
+
+  // Pre-load existing customer if the cloud entry has one
+  const existingCustomer = useMemo(() => {
+    if (!existingEntry?.customerId) return null;
+    return customers.find((c) => c.id === existingEntry.customerId) ?? null;
+  }, [existingEntry, customers]);
 
   const [name, setName] = useState(draftName || '');
   const [collabUsers, setCollabUsers] = useState<User[]>(() => {
@@ -29,6 +37,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     const set = new Set((existingEntry.collaborators ?? []).map((c) => c.u));
     return users.filter((u) => set.has(u.u));
   });
+  const [customer, setCustomer] = useState<Customer | null>(existingCustomer);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +52,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     setError(null);
     try {
       const collaborators: Collaborator[] = collabUsers.map((u) => ({ u: u.u, name: u.name }));
-      await saveCloud(name, collaborators, note);
+      await saveCloud(name, collaborators, note, customer ?? undefined);
       onClose();
     } catch (e) {
       setError((e as Error).message || 'Lỗi không xác định');
@@ -71,6 +80,35 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
             autoFocus
           />
 
+          {/* Customer link */}
+          <Autocomplete
+            options={customers}
+            value={customer}
+            onChange={(_, v) => setCustomer(v)}
+            getOptionLabel={(c) => c.name}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Khách hàng (optional)"
+                placeholder="Chọn hoặc bỏ trống"
+              />
+            )}
+            renderOption={(props, c) => (
+              <li {...props} key={c.id}>
+                <Stack>
+                  <Typography variant="body2" fontWeight={600}>{c.name}</Typography>
+                  {c.contacts?.[0]?.name && (
+                    <Typography variant="caption" color="text.secondary">
+                      {c.contacts[0].name}{c.contacts[0].phone ? ` · ${c.contacts[0].phone}` : ''}
+                    </Typography>
+                  )}
+                </Stack>
+              </li>
+            )}
+          />
+
+          {/* Collaborators */}
           <Autocomplete
             multiple
             options={otherUsers}
