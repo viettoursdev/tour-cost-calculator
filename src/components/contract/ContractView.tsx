@@ -194,7 +194,6 @@ export function ContractView() {
                   variant="outlined"
                   onClick={() => exportContractPDF(c)}
                 >
-<<<<<<< HEAD
                   PDF
                 </Button>
                 <Button
@@ -205,9 +204,6 @@ export function ContractView() {
                   onClick={() => void exportContractDocx(c)}
                 >
                   Word (.docx)
-=======
-                  Xuất hợp đồng PDF
->>>>>>> origin/main
                 </Button>
                 {(c.hasAcceptance || (c.contractStatus === 'completed' && canEdit)) && (
                   <Button size="small" variant="outlined"
