@@ -8,6 +8,10 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { usePaymentStore } from '@/stores/paymentStore';
+import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
+import { PaymentRequestModal } from './PaymentRequestModal';
 import { getCATS } from './constants';
 import { fmtVND } from './calc';
 import {
@@ -15,7 +19,7 @@ import {
 } from './paymentUtils';
 import { TrackItemsModal } from './TrackItemsModal';
 import { AddCustomCostModal } from './AddCustomCostModal';
-import type { CategoryId, Installment, PaymentRecord } from '@/types';
+import type { CategoryId, Installment, PaymentItem, PaymentRecord } from '@/types';
 
 function defaultRec(): PaymentRecord {
   return { supplier: '', installments: [], note: '' };
@@ -67,6 +71,14 @@ export function PaymentView() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [trackModalOpen, setTrackModalOpen] = useState(false);
   const [addCustomOpen, setAddCustomOpen] = useState(false);
+  const [reqModal, setReqModal] = useState<
+    | { ci: PaymentItem; inst: Installment; instIdx: number }
+    | null
+  >(null);
+
+  const approvals = usePaymentApprovalStore((s) => s.approvals);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const canRequestPayment = hasPerm(currentUser, 'exportQuote');
 
   if (!tourName.trim()) {
     return (
@@ -341,7 +353,14 @@ export function PaymentView() {
                     <Box sx={{ p: 2, pt: 0 }}>
                       <Divider sx={{ mb: 1.5 }} />
                       <Stack spacing={1}>
-                        {(rec.installments ?? []).map((inst, idx) => (
+                        {(rec.installments ?? []).map((inst, idx) => {
+                          const apKey = `${tourKey}_${ci.key}_${idx}`;
+                          const ap = approvals[apKey];
+                          const final = ap?.finalStatus;
+                          const isApproved = final === 'approved';
+                          const isRejected = final === 'rejected';
+                          const showPending = !isApproved && !isRejected && inst.status !== 'paid';
+                          return (
                           <Stack
                             key={idx}
                             direction="row"
@@ -356,6 +375,24 @@ export function PaymentView() {
                               borderColor: inst.status === 'paid' ? 'rgba(39,174,96,0.25)' : 'rgba(245,166,35,0.25)',
                             }}
                           >
+                            {inst.status !== 'paid' && (
+                              isApproved ? (
+                                <Chip label="✅ Đã duyệt" size="small"
+                                  sx={{ height: 22, fontSize: 10, fontWeight: 700,
+                                        bgcolor: 'rgba(39,174,96,0.12)', color: '#27ae60',
+                                        border: '1px solid rgba(39,174,96,0.3)' }} />
+                              ) : isRejected ? (
+                                <Chip label="❌ Từ chối" size="small"
+                                  sx={{ height: 22, fontSize: 10, fontWeight: 700,
+                                        bgcolor: 'rgba(220,50,80,0.1)', color: '#dc3250',
+                                        border: '1px solid rgba(220,50,80,0.25)' }} />
+                              ) : showPending ? (
+                                <Chip label="⏳ Chờ duyệt" size="small"
+                                  sx={{ height: 22, fontSize: 10, fontWeight: 600,
+                                        bgcolor: 'rgba(245,166,35,0.1)', color: '#d18a13',
+                                        border: '1px dashed rgba(245,166,35,0.4)' }} />
+                              ) : null
+                            )}
                             <TextField
                               value={inst.label}
                               onChange={(e) => updInstallment(ci.key, idx, { label: e.target.value })}
@@ -394,6 +431,17 @@ export function PaymentView() {
                               />
                             )}
                             <Box sx={{ flex: 1 }} />
+                            {canRequestPayment && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                onClick={() => setReqModal({ ci, inst, instIdx: idx })}
+                                sx={{ fontSize: 11, py: 0.25, px: 1.25 }}
+                              >
+                                📄 Phiếu ĐN
+                              </Button>
+                            )}
                             <IconButton
                               size="small"
                               color="error"
@@ -402,7 +450,8 @@ export function PaymentView() {
                               <DeleteOutlineIcon fontSize="small" />
                             </IconButton>
                           </Stack>
-                        ))}
+                          );
+                        })}
                       </Stack>
                       <Button
                         fullWidth
@@ -443,6 +492,18 @@ export function PaymentView() {
         activeCats={activeCats}
         onAdd={addCustom}
       />
+      {reqModal && currentUser && (
+        <PaymentRequestModal
+          open
+          onClose={() => setReqModal(null)}
+          ci={reqModal.ci}
+          inst={reqModal.inst}
+          instIdx={reqModal.instIdx}
+          info={draft.info}
+          currentUser={currentUser}
+          approvalEntry={approvals[`${tourKey}_${reqModal.ci.key}_${reqModal.instIdx}`]}
+        />
+      )}
     </Box>
   );
 }
