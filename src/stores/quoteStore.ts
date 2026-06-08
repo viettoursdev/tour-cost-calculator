@@ -42,7 +42,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 type QuoteState = {
   draft: QuoteDraft;
-  view: 'cost' | 'summary' | 'history' | 'dashboard';
+  view: 'cost' | 'summary' | 'history' | 'dashboard' | 'payment';
   snapshots: Snapshot[];
   currentUsername: string | null;
 
@@ -51,7 +51,7 @@ type QuoteState = {
 
   newDraft: (template: Template) => void;
   abandon: () => void;
-  setView: (v: 'cost' | 'summary' | 'history' | 'dashboard') => void;
+  setView: (v: 'cost' | 'summary' | 'history' | 'dashboard' | 'payment') => void;
 
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
