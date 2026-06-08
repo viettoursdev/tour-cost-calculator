@@ -36,7 +36,7 @@ export const CATS: CategoryDef[] = [
   { id: 'service_fee',icon: '💼',  label: 'Phí dịch vụ',       labelEn: 'Service Fee',       color: '#7f8c8d', dmcOnly: true },
 ];
 
-const DMC_CAT_IDS: CategoryId[] = ['hotel', 'transport', 'meal', 'sight', 'staff', 'service_fee'];
+export const DMC_CAT_IDS: CategoryId[] = ['hotel', 'transport', 'meal', 'sight', 'staff', 'service_fee'];
 
 // Source: public/legacy.html:1586-1589
 export function getCATS(template: Template): CategoryDef[] {
