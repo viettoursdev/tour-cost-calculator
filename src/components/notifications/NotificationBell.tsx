@@ -6,8 +6,9 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
-import { fbSendNotification } from '@/lib/firebase';
-import type { Notification } from '@/types';
+import { usePaymentStore } from '@/stores/paymentStore';
+import { fbSendNotification, fbSetApprovalStage } from '@/lib/firebase';
+import type { Notification, TourPaymentApprovalData } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
   payment_due:      '#f39c12',
@@ -69,6 +70,7 @@ export function NotificationBell() {
                   canApprove={canApprove}
                   username={currentUser.u}
                   currentUserName={currentUser.name}
+                  currentUserRole={currentUser.role}
                   onRead={() => void markRead(currentUser.u, n.id)}
                 />
               ))
@@ -83,12 +85,13 @@ export function NotificationBell() {
 // ── Inline notification item ──
 
 function NotificationItem({
-  notif, canApprove, username, currentUserName, onRead,
+  notif, canApprove, username, currentUserName, currentUserRole, onRead,
 }: {
   notif: Notification;
   canApprove: boolean;
   username: string;
   currentUserName: string;
+  currentUserRole: string;
   onRead: () => void;
 }) {
   const updatePayments = useContractStore((s) => s.updatePayments);
@@ -96,7 +99,80 @@ function NotificationItem({
   const [acted, setActed] = useState(false);
 
   const borderColor = TYPE_COLOR[notif.type] ?? '#95a5a6';
-  const isApprovalRequest = notif.type === 'payment_approval' && canApprove && !acted;
+  const isTourPaymentApproval =
+    notif.type === 'payment_approval'
+    && (notif.data as { approvalKey?: string } | undefined)?.approvalKey != null
+    && canApprove
+    && !acted;
+  const isApprovalRequest =
+    notif.type === 'payment_approval' && !isTourPaymentApproval && canApprove && !acted;
+
+  const handleTourPaymentApproval = async (approved: boolean) => {
+    if (acting) return;
+    setActing(true);
+    try {
+      const data = notif.data as unknown as TourPaymentApprovalData;
+      const stage = data.approvalStage;
+      const status: 'approved' | 'rejected' = approved ? 'approved' : 'rejected';
+      const approverLabel = `${currentUserName} (${currentUserRole})`;
+      await fbSetApprovalStage(
+        data.approvalKey, stage, status, username, approverLabel, '',
+        {
+          intendedApprover1Name: data.approver1Name,
+          intendedApprover2Name: data.approver2Name,
+        },
+      );
+
+      // If stage 1 approved and stage 2 designated, forward to stage 2 approver.
+      if (approved && stage === 1 && data.approver2Username) {
+        const stage2Data: TourPaymentApprovalData = { ...data, approvalStage: 2 };
+        await fbSendNotification(data.approver2Username, {
+          type: 'payment_approval',
+          title: '💰 Đề nghị duyệt (Stage 2) thanh toán NCC',
+          message: `${data.requestedByName} đề nghị duyệt (stage 2): "${data.catName}" - ${data.supplier || '(NCC)'} - ${(data.amount || 0).toLocaleString('vi-VN')} đ · Tour: ${data.tourName}`,
+          createdBy: approverLabel,
+          data: { ...stage2Data } as unknown as Record<string, unknown>,
+        });
+      }
+
+      // If final stage approved, mark installment paid in tour_payments.
+      if (approved && stage === 2) {
+        const store = usePaymentStore.getState();
+        store.ensureSubscribed(data.tourKey);
+        const tour = store.getTour(data.tourKey);
+        const rec = tour.payments[data.ciKey] ?? {};
+        const insts = [...(rec.installments ?? [])];
+        if (insts[data.instIdx]) {
+          insts[data.instIdx] = {
+            ...insts[data.instIdx],
+            status: 'paid',
+            paidDate: new Date().toISOString().slice(0, 10),
+          };
+          store.setPayments(data.tourKey, {
+            ...tour.payments,
+            [data.ciKey]: { ...rec, installments: insts },
+          });
+        }
+        store.releaseSubscription(data.tourKey);
+      }
+
+      // Reply to requester.
+      await fbSendNotification(data.requestedBy, {
+        type: 'payment_approval',
+        title: approved ? '✅ Thanh toán đã được duyệt' : '❌ Đề nghị thanh toán bị từ chối',
+        message: `"${data.catName}" · ${(data.amount || 0).toLocaleString('vi-VN')} đ · Tour: ${data.tourName}`,
+        createdBy: currentUserName,
+        data: { approved, approvalKey: data.approvalKey, stage } as Record<string, unknown>,
+      });
+
+      setActed(true);
+      onRead();
+    } catch (e) {
+      window.alert('❌ Lỗi: ' + (e as Error).message);
+    } finally {
+      setActing(false);
+    }
+  };
 
   const handleApproval = async (approved: boolean) => {
     if (acting) return;
@@ -197,6 +273,28 @@ function NotificationItem({
             variant="outlined"
             disabled={acting}
             onClick={(e) => { e.stopPropagation(); void handleApproval(false); }}
+          >
+            ❌ Từ chối
+          </Button>
+        </Stack>
+      )}
+      {isTourPaymentApproval && (
+        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+          <Button
+            size="small"
+            color="success"
+            variant="outlined"
+            disabled={acting}
+            onClick={(e) => { e.stopPropagation(); void handleTourPaymentApproval(true); }}
+          >
+            ✅ Duyệt
+          </Button>
+          <Button
+            size="small"
+            color="error"
+            variant="outlined"
+            disabled={acting}
+            onClick={(e) => { e.stopPropagation(); void handleTourPaymentApproval(false); }}
           >
             ❌ Từ chối
           </Button>
