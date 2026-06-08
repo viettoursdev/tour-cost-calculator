@@ -97,6 +97,7 @@ export function DMCComparePanel({
           {GROUP_SIZES.map((gs) => {
             const dmcPpax = +(dmcPrices[gs] || 0);
             const dmcTotal = dmcPpax * gs;
+            const rateMissing = outputCurrency !== 'VND' && !rates[outputCurrency];
             const bdTotalDisplay = toOutputCurrency(totalCostVND, outputCurrency, rates);
             const bdPpaxDisplay = gs > 0 ? bdTotalDisplay / gs : 0;
             const margin = dmcPpax - bdPpaxDisplay;
@@ -120,10 +121,10 @@ export function DMCComparePanel({
                   {dmcPpax > 0 ? fmtCurrency(dmcTotal, outputCurrency) : '—'}
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600, color: '#8e44ad' }}>
-                  {fmtCurrency(bdPpaxDisplay, outputCurrency)}
+                  {rateMissing ? '—' : fmtCurrency(bdPpaxDisplay, outputCurrency)}
                 </TableCell>
                 <TableCell align="right">
-                  {dmcPpax > 0 ? (
+                  {dmcPpax > 0 && !rateMissing ? (
                     <Chip
                       size="small"
                       label={`${isPos ? '+' : ''}${fmtCurrency(margin, outputCurrency)} (${isPos ? '+' : ''}${marginPct.toFixed(1)}%)`}
