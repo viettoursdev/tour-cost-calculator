@@ -5,6 +5,7 @@ import { QuoteToolbar } from './QuoteToolbar';
 import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
 import { DashboardView } from './DashboardView';
+import { PaymentView } from './PaymentView';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
@@ -42,6 +43,7 @@ export function QuoteView() {
               {view === 'cost' && <CostView />}
               {view === 'summary' && <SummaryView />}
               {view === 'dashboard' && <DashboardView />}
+              {view === 'payment' && <PaymentView />}
               {view === 'history' && <QuoteHistoryView />}
             </Box>
 

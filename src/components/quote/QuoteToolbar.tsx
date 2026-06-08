@@ -163,6 +163,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           <ToggleButton value="cost">{isDMC ? 'Breakdown' : 'Chi phí'}</ToggleButton>
           {!isDMC && <ToggleButton value="summary">Tổng kết</ToggleButton>}
           {!isDMC && <ToggleButton value="dashboard">Dashboard</ToggleButton>}
+          {!isDMC && <ToggleButton value="payment">Thanh toán</ToggleButton>}
           <ToggleButton value="history">Lịch sử</ToggleButton>
         </ToggleButtonGroup>
 
