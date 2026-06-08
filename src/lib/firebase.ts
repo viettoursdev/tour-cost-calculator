@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import {
-  deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type Unsubscribe,
+  deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type DocumentReference,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, Ncc, Notification,
@@ -27,6 +28,10 @@ const NCC_DOC = doc(db, 'viettours', 'ncc_master');
 const CONTRACTS_DOC = doc(db, 'viettours', 'contracts_master');
 const notifDoc = (username: string) => doc(db, 'user_notifications', username);
 const quoteProjectDoc = (cloudId: string) => doc(db, 'quote_projects', cloudId);
+
+// Source: public/legacy.html:196-197
+const DMC_QUOTE_HISTORY_DOC = doc(db, 'viettours', 'dmc_quote_history');
+const dmcQuoteProjectDoc = (cloudId: string) => doc(db, 'dmc_quote_projects', cloudId);
 
 // ── Users ──
 export async function fbPullUsers(): Promise<User[]> {
@@ -113,185 +118,178 @@ export function generateQuoteCode(template: Template, existing: CloudQuoteEntry[
   return `${prefix}.${seq}.${dateStr}`;
 }
 
-/**
- * Subscribe to the cloud quote history (regular only — DMC is a separate doc).
- * Source: public/legacy.html:233.
- */
-export function fbSubscribeQuoteHistory(
-  cb: (quotes: CloudQuoteEntry[]) => void,
-): Unsubscribe {
-  return onSnapshot(QUOTE_HISTORY_DOC, (snap) => {
-    cb(snap.exists() ? ((snap.data().quotes as CloudQuoteEntry[]) ?? []) : []);
-  });
-}
+// ── Cloud Quote History (factory: regular + DMC share identical logic) ──
 
-/**
- * Save or update a CloudQuoteEntry in viettours/quote_history.quotes[].
- * Existing entry: merge in-place, preserve createdBy fields and createdAt and
- * existing collaborators (unless `entry.collaborators` is provided).
- * New entry: insert at head with creator info from `savedBy`.
- * Always slices to 500 and writes back.
- * Source: public/legacy.html:307-335.
- */
-export async function fbSaveQuote(
-  entry: {
-    id: number;
-    cloudId: string;
-    quoteCode?: string;
-    name: string;
-    template: Template;
-    pax: number;
-    totalCost: number;
-    customerId?: string;
-    customerName?: string;
-    collaborators?: Collaborator[];
-  },
-  savedBy: { u: string; name: string; role: string },
-): Promise<CloudQuoteEntry> {
-  const nowIso = new Date().toISOString();
-  const savedByLabel = `${savedBy.name} (${savedBy.role})`;
-  const snap = await getDoc(QUOTE_HISTORY_DOC);
-  const quotes = snap.exists() ? ((snap.data().quotes as CloudQuoteEntry[]) ?? []) : [];
-  const idx = quotes.findIndex((q) => q.id === entry.id);
+type SaveEntry = {
+  id: number;
+  cloudId: string;
+  quoteCode?: string;
+  name: string;
+  template: Template;
+  pax: number;
+  totalCost: number;
+  customerId?: string;
+  customerName?: string;
+  collaborators?: Collaborator[];
+};
 
-  // Firestore rejects `undefined` field values, so build entries with only defined keys.
-  const optionalFields: Partial<CloudQuoteEntry> = {};
-  if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
-  if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
+type SavedBy = { u: string; name: string; role: string };
 
-  let saved: CloudQuoteEntry;
-  if (idx >= 0) {
-    const existing = quotes[idx];
-    // Strip any `undefined` from `entry` before spreading so we don't accidentally
-    // overwrite existing values with undefined.
-    const entryDefined = Object.fromEntries(
-      Object.entries(entry).filter(([, v]) => v !== undefined),
-    ) as Partial<CloudQuoteEntry>;
-    saved = {
-      ...existing,
-      ...entryDefined,
-      quoteCode: existing.quoteCode,
-      createdByUsername: existing.createdByUsername || savedBy.u,
-      createdByName: existing.createdByName || savedBy.name,
-      createdAt: existing.createdAt || nowIso,
-      collaborators: entry.collaborators ?? existing.collaborators ?? [],
-      updatedAt: nowIso,
-      updatedBy: savedByLabel,
-    };
-    quotes[idx] = saved;
-  } else {
-    const quoteCode = entry.quoteCode ?? generateQuoteCode(entry.template, quotes);
-    saved = {
-      id: entry.id,
-      cloudId: entry.cloudId,
-      quoteCode,
-      name: entry.name,
-      template: entry.template,
-      pax: entry.pax,
-      totalCost: entry.totalCost,
-      ...optionalFields,
-      createdByUsername: savedBy.u,
-      createdByName: savedBy.name,
-      collaborators: entry.collaborators ?? [],
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      updatedBy: savedByLabel,
-    };
-    quotes.unshift(saved);
-  }
-  await setDoc(QUOTE_HISTORY_DOC, { quotes: quotes.slice(0, 500) });
-  return saved;
-}
+function makeQuoteHistoryApi(
+  historyDoc: DocumentReference,
+  projectDoc: (cloudId: string) => DocumentReference,
+) {
+  return {
+    /** Source: public/legacy.html:233. */
+    fbSubscribeQuoteHistory(cb: (quotes: CloudQuoteEntry[]) => void): Unsubscribe {
+      return onSnapshot(historyDoc, (snap) => {
+        cb(snap.exists() ? ((snap.data().quotes as CloudQuoteEntry[]) ?? []) : []);
+      });
+    },
 
-/**
- * Append a new version to quote_projects/{cloudId} and update currentState.
- * Versions capped at 20 (FIFO via .slice(-20)).
- * Source: public/legacy.html:164-176.
- */
-export async function fbSaveQuoteState(
-  cloudId: string,
-  state: QuoteDraft,
-  note: string | undefined,
-  savedBy: { name: string; role: string },
-): Promise<void> {
-  const snap = await getDoc(quoteProjectDoc(cloudId));
-  const existing = snap.exists()
-    ? (snap.data() as CloudQuoteProject)
-    : ({ versions: [], collaborators: [] } as Partial<CloudQuoteProject>);
-  const versionNo = (existing.versions?.length ?? 0) + 1;
-  const nowIso = new Date().toISOString();
-  const savedByLabel = `${savedBy.name} (${savedBy.role})`;
-  const newVersion = {
-    versionNo,
-    savedAt: nowIso,
-    savedBy: savedByLabel,
-    note: note?.trim() || `Phiên bản ${versionNo}`,
-    state,
+    /** Source: public/legacy.html:307-335. */
+    async fbSaveQuote(entry: SaveEntry, savedBy: SavedBy): Promise<CloudQuoteEntry> {
+      const nowIso = new Date().toISOString();
+      const savedByLabel = `${savedBy.name} (${savedBy.role})`;
+      const snap = await getDoc(historyDoc);
+      const quotes = snap.exists() ? ((snap.data().quotes as CloudQuoteEntry[]) ?? []) : [];
+      const idx = quotes.findIndex((q) => q.id === entry.id);
+
+      const optionalFields: Partial<CloudQuoteEntry> = {};
+      if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
+      if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
+
+      let saved: CloudQuoteEntry;
+      if (idx >= 0) {
+        const existing = quotes[idx];
+        const entryDefined = Object.fromEntries(
+          Object.entries(entry).filter(([, v]) => v !== undefined),
+        ) as Partial<CloudQuoteEntry>;
+        saved = {
+          ...existing,
+          ...entryDefined,
+          quoteCode: existing.quoteCode,
+          createdByUsername: existing.createdByUsername || savedBy.u,
+          createdByName: existing.createdByName || savedBy.name,
+          createdAt: existing.createdAt || nowIso,
+          collaborators: entry.collaborators ?? existing.collaborators ?? [],
+          updatedAt: nowIso,
+          updatedBy: savedByLabel,
+        };
+        quotes[idx] = saved;
+      } else {
+        const quoteCode = entry.quoteCode ?? generateQuoteCode(entry.template, quotes);
+        saved = {
+          id: entry.id,
+          cloudId: entry.cloudId,
+          quoteCode,
+          name: entry.name,
+          template: entry.template,
+          pax: entry.pax,
+          totalCost: entry.totalCost,
+          ...optionalFields,
+          createdByUsername: savedBy.u,
+          createdByName: savedBy.name,
+          collaborators: entry.collaborators ?? [],
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          updatedBy: savedByLabel,
+        };
+        quotes.unshift(saved);
+      }
+      await setDoc(historyDoc, { quotes: quotes.slice(0, 500) });
+      return saved;
+    },
+
+    /** Source: public/legacy.html:164-176. */
+    async fbSaveQuoteState(
+      cloudId: string,
+      state: QuoteDraft,
+      note: string | undefined,
+      savedBy: { name: string; role: string },
+    ): Promise<void> {
+      const snap = await getDoc(projectDoc(cloudId));
+      const existing = snap.exists()
+        ? (snap.data() as CloudQuoteProject)
+        : ({ versions: [], collaborators: [] } as Partial<CloudQuoteProject>);
+      const versionNo = (existing.versions?.length ?? 0) + 1;
+      const nowIso = new Date().toISOString();
+      const savedByLabel = `${savedBy.name} (${savedBy.role})`;
+      const newVersion = {
+        versionNo,
+        savedAt: nowIso,
+        savedBy: savedByLabel,
+        note: note?.trim() || `Phiên bản ${versionNo}`,
+        state,
+      };
+      const versions = [...(existing.versions ?? []), newVersion].slice(-20);
+      await setDoc(projectDoc(cloudId), {
+        ...existing,
+        versions,
+        currentState: state,
+        updatedAt: nowIso,
+        updatedBy: savedBy.name,
+      });
+    },
+
+    async fbDeleteQuote(id: number, cloudId: string): Promise<void> {
+      const snap = await getDoc(historyDoc);
+      if (snap.exists()) {
+        const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).filter(
+          (q) => q.id !== id,
+        );
+        await setDoc(historyDoc, { quotes });
+      }
+      try {
+        await deleteDoc(projectDoc(cloudId));
+      } catch (e) {
+        console.warn('fbDeleteQuote: project doc delete failed:', (e as Error).message);
+      }
+    },
+
+    async fbUpdateCollaborators(
+      id: number,
+      cloudId: string,
+      collaborators: Collaborator[],
+    ): Promise<void> {
+      // Write to project doc.
+      const projSnap = await getDoc(projectDoc(cloudId));
+      const existingProj = projSnap.exists() ? projSnap.data() : {};
+      await setDoc(projectDoc(cloudId), { ...existingProj, collaborators });
+      // Mirror onto the history entry so list filters see it.
+      const histSnap = await getDoc(historyDoc);
+      if (histSnap.exists()) {
+        const quotes = ((histSnap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+        const i = quotes.findIndex((q) => q.id === id);
+        if (i >= 0) {
+          quotes[i] = { ...quotes[i], collaborators };
+          await setDoc(historyDoc, { quotes });
+        }
+      }
+    },
+
+    async fbGetQuoteProject(cloudId: string): Promise<CloudQuoteProject | null> {
+      const snap = await getDoc(projectDoc(cloudId));
+      return snap.exists() ? (snap.data() as CloudQuoteProject) : null;
+    },
   };
-  const versions = [...(existing.versions ?? []), newVersion].slice(-20);
-  await setDoc(quoteProjectDoc(cloudId), {
-    ...existing,
-    versions,
-    currentState: state,
-    updatedAt: nowIso,
-    updatedBy: savedBy.name,
-  });
 }
 
-/**
- * Remove the entry from viettours/quote_history and best-effort delete the
- * project doc. A failed project delete is logged but does not throw.
- */
-export async function fbDeleteQuote(id: number, cloudId: string): Promise<void> {
-  const snap = await getDoc(QUOTE_HISTORY_DOC);
-  if (snap.exists()) {
-    const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).filter(
-      (q) => q.id !== id,
-    );
-    await setDoc(QUOTE_HISTORY_DOC, { quotes });
-  }
-  try {
-    await deleteDoc(quoteProjectDoc(cloudId));
-  } catch (e) {
-    console.warn('fbDeleteQuote: project doc delete failed:', (e as Error).message);
-  }
-}
+const _regular = makeQuoteHistoryApi(QUOTE_HISTORY_DOC, quoteProjectDoc);
+export const fbSubscribeQuoteHistory = _regular.fbSubscribeQuoteHistory;
+export const fbSaveQuote             = _regular.fbSaveQuote;
+export const fbSaveQuoteState        = _regular.fbSaveQuoteState;
+export const fbDeleteQuote           = _regular.fbDeleteQuote;
+export const fbUpdateCollaborators   = _regular.fbUpdateCollaborators;
+export const fbGetQuoteProject       = _regular.fbGetQuoteProject;
 
-/**
- * Update collaborators on both the project doc and the history metadata entry
- * so the visibility filter picks it up immediately on either subscription.
- * Source: public/legacy.html:181-193.
- */
-export async function fbUpdateCollaborators(
-  id: number,
-  cloudId: string,
-  collaborators: Collaborator[],
-): Promise<void> {
-  const projSnap = await getDoc(quoteProjectDoc(cloudId));
-  const existingProj = projSnap.exists() ? projSnap.data() : {};
-  await setDoc(quoteProjectDoc(cloudId), { ...existingProj, collaborators });
-
-  const histSnap = await getDoc(QUOTE_HISTORY_DOC);
-  if (histSnap.exists()) {
-    const quotes = ((histSnap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
-    const idx = quotes.findIndex((q) => q.id === id);
-    if (idx >= 0) {
-      quotes[idx] = { ...quotes[idx], collaborators };
-      await setDoc(QUOTE_HISTORY_DOC, { quotes });
-    }
-  }
-}
-
-/**
- * Read a single cloud quote project doc. Returns null if missing.
- * Source: public/legacy.html:177-179.
- */
-export async function fbGetQuoteProject(
-  cloudId: string,
-): Promise<CloudQuoteProject | null> {
-  const snap = await getDoc(quoteProjectDoc(cloudId));
-  return snap.exists() ? (snap.data() as CloudQuoteProject) : null;
-}
+const _dmc = makeQuoteHistoryApi(DMC_QUOTE_HISTORY_DOC, dmcQuoteProjectDoc);
+export const fbSubscribeDMCQuoteHistory = _dmc.fbSubscribeQuoteHistory;
+export const fbSaveDMCQuote              = _dmc.fbSaveQuote;
+export const fbSaveDMCQuoteState         = _dmc.fbSaveQuoteState;
+export const fbDeleteDMCQuote            = _dmc.fbDeleteQuote;
+export const fbUpdateDMCCollaborators    = _dmc.fbUpdateCollaborators;
+export const fbGetDMCQuoteProject        = _dmc.fbGetQuoteProject;
 
 // ── Customers ──
 

@@ -45,24 +45,26 @@ export function QuoteView() {
               {view === 'history' && <QuoteHistoryView />}
             </Box>
 
-            <Drawer
-              variant="permanent"
-              anchor="right"
-              sx={{
-                width: HIST_DRAWER_WIDTH,
-                flexShrink: 0,
-                display: { xs: 'none', md: 'block' },
-                '& .MuiDrawer-paper': {
+            {template !== 'dmc' && (
+              <Drawer
+                variant="permanent"
+                anchor="right"
+                sx={{
                   width: HIST_DRAWER_WIDTH,
-                  position: 'relative',
-                  border: 'none',
-                  borderLeft: '1px solid',
-                  borderColor: 'divider',
-                },
-              }}
-            >
-              <HistPanel />
-            </Drawer>
+                  flexShrink: 0,
+                  display: { xs: 'none', md: 'block' },
+                  '& .MuiDrawer-paper': {
+                    width: HIST_DRAWER_WIDTH,
+                    position: 'relative',
+                    border: 'none',
+                    borderLeft: '1px solid',
+                    borderColor: 'divider',
+                  },
+                }}
+              >
+                <HistPanel />
+              </Drawer>
+            )}
           </Box>
 
           <SaveCloudQuoteModal

@@ -15,6 +15,9 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
 import { useAuthStore } from '@/stores/authStore';
+import { fmtOutput } from '@/lib/currency';
+import { computeTotals } from './calc';
+import type { OutputCurrency } from '@/types';
 
 type Props = {
   onOpenSelector: () => void;
@@ -33,8 +36,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
 
+  const template = useQuoteStore((s) => s.draft.template);
+  const outputCurrency = (useQuoteStore((s) => s.draft.outputCurrency) ?? 'USD') as OutputCurrency;
+
   const draft = useQuoteStore((s) => s.draft);
   const currentUser = useAuthStore((s) => s.currentUser);
+
+  const isDMC = template === 'dmc';
+  const totalCost = computeTotals(draft).totalCost;
 
   const [showRates, setShowRates] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
@@ -105,13 +114,55 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
         <Box sx={{ flexGrow: 1 }} />
 
+        {isDMC && (
+          <Stack direction="row" gap={1.25} alignItems="stretch">
+            <Box
+              sx={{
+                background: 'rgba(255,255,255,0.13)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: 1.75,
+                px: 2.5, py: 1.5,
+                textAlign: 'right',
+                minWidth: 150,
+              }}
+            >
+              <Typography color="rgba(255,255,255,0.65)" fontSize={11} fontWeight={600} letterSpacing={0.5} mb={0.5}>
+                Tổng breakdown
+              </Typography>
+              <Typography color="#ffe082" fontWeight={800} fontSize={20}>
+                {fmtOutput(totalCost, outputCurrency, rates)}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                background: 'linear-gradient(135deg, #fff 0%, #fff8e1 100%)',
+                borderRadius: 1.75,
+                px: 2.5, py: 1.5,
+                textAlign: 'right',
+                minWidth: 180,
+                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+              }}
+            >
+              <Typography color="#8e44ad" fontSize={11} fontWeight={800} letterSpacing={1} textTransform="uppercase" mb={0.5}>
+                📊 Per pax
+              </Typography>
+              <Typography color="#8e44ad" fontWeight={900} fontSize={24} lineHeight={1}>
+                {pax > 0 ? fmtOutput(totalCost / pax, outputCurrency, rates) : '–'}
+              </Typography>
+              <Typography color="rgba(15,58,74,0.45)" fontSize={11} mt={0.5}>
+                {pax} khách · {outputCurrency}
+              </Typography>
+            </Box>
+          </Stack>
+        )}
+
         <ToggleButtonGroup
           size="small" exclusive value={view}
           onChange={(_, v) => v && setView(v)}
         >
-          <ToggleButton value="cost">Chi phí</ToggleButton>
-          <ToggleButton value="summary">Tổng kết</ToggleButton>
-          <ToggleButton value="dashboard">Dashboard</ToggleButton>
+          <ToggleButton value="cost">{isDMC ? 'Breakdown' : 'Chi phí'}</ToggleButton>
+          {!isDMC && <ToggleButton value="summary">Tổng kết</ToggleButton>}
+          {!isDMC && <ToggleButton value="dashboard">Dashboard</ToggleButton>}
           <ToggleButton value="history">Lịch sử</ToggleButton>
         </ToggleButtonGroup>
 

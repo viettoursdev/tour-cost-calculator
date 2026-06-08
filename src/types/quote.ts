@@ -5,6 +5,16 @@ export type CategoryId =
 
 export type Template = 'domestic' | 'intl' | 'dmc';
 
+export type OutputCurrency =
+  | 'VND' | 'USD' | 'EUR' | 'JPY' | 'SGD' | 'KRW' | 'THB' | 'GBP' | 'AUD' | 'CNY';
+
+export type DmcMargin = {
+  type: 'percent' | 'fixed';   // percent of totalCostVND, or fixed in outputCurrency
+  value: number;
+};
+
+export type DmcPrices = Record<number, number>;  // keys at runtime: 20, 25, 30, 35, 40
+
 export type QtyMode = 'per_pax' | 'per_group' | 'custom';
 
 export type Item = {
@@ -41,6 +51,10 @@ export type QuoteDraft = {
   items: Partial<Record<CategoryId, Item[]>>;
   catEnabled: Record<CategoryId, boolean>;
   currentQuoteId: string | null;
+  // DMC template only — undefined for regular drafts.
+  outputCurrency?: OutputCurrency;
+  dmcPrices?: DmcPrices;
+  dmcMargin?: DmcMargin;
 };
 
 export type Snapshot = {
