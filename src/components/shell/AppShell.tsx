@@ -1,12 +1,21 @@
 import { useState } from 'react';
-import { AppBar, Box, Button, Tab, Tabs, Toolbar, Typography } from '@mui/material';
+import {
+  AppBar, Box, Button, IconButton, ListItemIcon, ListItemText, Menu, MenuItem,
+  Tab, Tabs, Toolbar, Tooltip, Typography,
+} from '@mui/material';
+import SettingsIcon from '@mui/icons-material/Settings';
+import PeopleIcon from '@mui/icons-material/People';
+import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import { RatesPanel } from '@/components/rates/RatesPanel';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { CustomerView } from '@/components/customer/CustomerView';
 import { NCCView } from '@/components/ncc/NCCView';
 import { ContractView } from '@/components/contract/ContractView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { UserManagementModal } from '@/components/admin/UserManagementModal';
+import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
 import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
 
 const TABS = [
   { key: 'rates', label: 'Rate Card' },
@@ -28,6 +37,10 @@ export function AppShell() {
   const [active, setActive] = useState<TabKey>('rates');
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
+  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
+  const [userMgrOpen, setUserMgrOpen] = useState(false);
+  const [rateSyncOpen, setRateSyncOpen] = useState(false);
+  const canManageUsers = hasPerm(currentUser, 'manageUsers');
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AppBar position="static" color="primary">
@@ -41,6 +54,29 @@ export function AppShell() {
                 {currentUser.name} ({currentUser.role})
               </Typography>
               <NotificationBell />
+              <Tooltip title="Cài đặt">
+                <IconButton color="inherit" onClick={(e) => setSettingsAnchor(e.currentTarget)}>
+                  <SettingsIcon />
+                </IconButton>
+              </Tooltip>
+              <Menu
+                anchorEl={settingsAnchor}
+                open={!!settingsAnchor}
+                onClose={() => setSettingsAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                {canManageUsers && (
+                  <MenuItem onClick={() => { setUserMgrOpen(true); setSettingsAnchor(null); }}>
+                    <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText>👤 Quản lý tài khoản</ListItemText>
+                  </MenuItem>
+                )}
+                <MenuItem onClick={() => { setRateSyncOpen(true); setSettingsAnchor(null); }}>
+                  <ListItemIcon><CloudSyncIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>🗂️ Đồng bộ Rate Card</ListItemText>
+                </MenuItem>
+              </Menu>
               <Button color="inherit" onClick={logout}>
                 Đăng xuất
               </Button>
@@ -71,6 +107,20 @@ export function AppShell() {
           if (t.key === 'ncc') return <NCCView key={t.key} />;
         })}
       </Box>
+      {userMgrOpen && currentUser && (
+        <UserManagementModal
+          open
+          onClose={() => setUserMgrOpen(false)}
+          currentUser={currentUser}
+        />
+      )}
+      {rateSyncOpen && currentUser && (
+        <RateCardSyncModal
+          open
+          onClose={() => setRateSyncOpen(false)}
+          currentUser={currentUser}
+        />
+      )}
     </Box>
   );
 }
