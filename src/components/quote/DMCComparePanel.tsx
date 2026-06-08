@@ -112,7 +112,7 @@ export function DMCComparePanel({
                     value={dmcPrices[gs] || ''}
                     onChange={(e) => setDmcPrice(gs, +e.target.value)}
                     placeholder="0"
-                    inputProps={{ style: { textAlign: 'right', width: 90 } }}
+                    slotProps={{ htmlInput: { style: { textAlign: 'right', width: 90 } } }}
                     sx={{ '& input': { fontSize: 13 } }}
                   />
                 </TableCell>
