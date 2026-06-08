@@ -1,0 +1,462 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert, Box, Button, Chip, Divider, IconButton, Stack, TextField, Typography,
+} from '@mui/material';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { useQuoteStore } from '@/stores/quoteStore';
+import { usePaymentStore } from '@/stores/paymentStore';
+import { getCATS } from './constants';
+import { fmtVND } from './calc';
+import {
+  buildAllItems, buildSourceItems, computePaymentTotals, slugifyTourKey,
+} from './paymentUtils';
+import { TrackItemsModal } from './TrackItemsModal';
+import { AddCustomCostModal } from './AddCustomCostModal';
+import type { CategoryId, Installment, PaymentRecord } from '@/types';
+
+function defaultRec(): PaymentRecord {
+  return { supplier: '', installments: [], note: '' };
+}
+
+export function PaymentView() {
+  const draft = useQuoteStore((s) => s.draft);
+  const tourName = draft.info.name ?? '';
+  const tourKey = slugifyTourKey(tourName);
+  const template = draft.template;
+
+  const slot = usePaymentStore((s) => s.slots[tourKey]);
+  const payments = useMemo(() => slot?.data.payments ?? {}, [slot]);
+  const customItems = useMemo(() => slot?.data.customItems ?? [], [slot]);
+
+  useEffect(() => {
+    if (!tourName.trim()) return;
+    const store = usePaymentStore.getState();
+    store.ensureSubscribed(tourKey);
+    return () => {
+      usePaymentStore.getState().releaseSubscription(tourKey);
+    };
+  }, [tourKey, tourName]);
+
+  const activeCats = useMemo(() => (template ? getCATS(template) : []), [template]);
+
+  const sourceItems = useMemo(
+    () => buildSourceItems(draft, activeCats),
+    [draft, activeCats],
+  );
+  const allItems = useMemo(
+    () => buildAllItems(sourceItems, payments, customItems),
+    [sourceItems, payments, customItems],
+  );
+  const trackedItems = allItems.filter((i) => i.tracked);
+  const totals = computePaymentTotals(allItems, payments);
+  const untracked = allItems.length - trackedItems.length;
+
+  const grouped = useMemo(() => {
+    const map = new Map<CategoryId, { label: string; icon: string; color: string; items: typeof trackedItems }>();
+    trackedItems.forEach((ci) => {
+      const g = map.get(ci.catId) ?? { label: ci.catLabel, icon: ci.catIcon, color: ci.catColor, items: [] };
+      g.items.push(ci);
+      map.set(ci.catId, g);
+    });
+    return Array.from(map.entries());
+  }, [trackedItems]);
+
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [trackModalOpen, setTrackModalOpen] = useState(false);
+  const [addCustomOpen, setAddCustomOpen] = useState(false);
+
+  if (!tourName.trim()) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="info">
+          Đặt tên tour ở mục Thông tin trước khi quản lý thanh toán.
+        </Alert>
+      </Box>
+    );
+  }
+
+  const getRec = (key: string): PaymentRecord => ({ ...defaultRec(), ...(payments[key] ?? {}) });
+  const updateRec = (key: string, rec: PaymentRecord) =>
+    usePaymentStore.getState().setPayments(tourKey, { ...payments, [key]: rec });
+
+  const toggleTrack = (key: string) => {
+    const rec = payments[key] ?? {};
+    updateRec(key, { ...rec, tracked: rec.tracked === false ? true : false });
+  };
+  const setSupplier = (key: string, v: string) => {
+    const rec = payments[key] ?? {};
+    updateRec(key, { ...rec, supplier: v });
+  };
+  const setCustomAmount = (key: string, v: number) => {
+    const rec = payments[key] ?? {};
+    updateRec(key, { ...rec, customAmount: v });
+  };
+  const resetAmount = (key: string) => {
+    const rec = { ...(payments[key] ?? {}) };
+    delete rec.customAmount;
+    updateRec(key, rec);
+  };
+  const setNote = (key: string, v: string) => {
+    const rec = payments[key] ?? {};
+    updateRec(key, { ...rec, note: v });
+  };
+
+  const addInstallment = (key: string, amount: number) => {
+    const rec = getRec(key);
+    const paidSum = (rec.installments ?? []).reduce((s, i) => s + (+i.amount || 0), 0);
+    const remaining = Math.max(0, amount - paidSum);
+    const next: Installment = {
+      label: `Đợt ${(rec.installments ?? []).length + 1}`,
+      amount: remaining,
+      status: 'unpaid',
+      paidDate: '',
+    };
+    updateRec(key, { ...rec, installments: [...(rec.installments ?? []), next] });
+  };
+  const updInstallment = (key: string, idx: number, patch: Partial<Installment>) => {
+    const rec = payments[key];
+    if (!rec) return;
+    const insts = [...(rec.installments ?? [])];
+    insts[idx] = { ...insts[idx], ...patch };
+    updateRec(key, { ...rec, installments: insts });
+  };
+  const delInstallment = (key: string, idx: number) => {
+    const rec = payments[key];
+    if (!rec) return;
+    updateRec(key, { ...rec, installments: (rec.installments ?? []).filter((_, i) => i !== idx) });
+  };
+
+  const editCustomAmount = (key: string, v: number) => {
+    usePaymentStore.getState().setCustomItems(
+      tourKey,
+      customItems.map((c) => (c.key === key ? { ...c, amount: v } : c)),
+    );
+  };
+  const delCustom = (key: string) => {
+    if (!window.confirm('Xoá khoản chi phí tự tạo này?')) return;
+    usePaymentStore.getState().setCustomItems(
+      tourKey,
+      customItems.filter((c) => c.key !== key),
+    );
+    const next = { ...payments };
+    delete next[key];
+    usePaymentStore.getState().setPayments(tourKey, next);
+  };
+  const addCustom = (item: typeof customItems[number]) => {
+    usePaymentStore.getState().setCustomItems(tourKey, [...customItems, item]);
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={() => setTrackModalOpen(true)}
+        >
+          ⚙️ Quản lý hạng mục {untracked > 0 ? `(${untracked} đang ẩn)` : ''}
+        </Button>
+        <Button variant="contained" color="warning" onClick={() => setAddCustomOpen(true)}>
+          ➕ Thêm chi phí tự tạo
+        </Button>
+      </Stack>
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <SummaryCard
+          gradient="linear-gradient(135deg,#0f1c2d,#16314a)"
+          icon="💰"
+          label="Tổng chi phí quản lý"
+          value={fmtVND(totals.totalCost)}
+          sub={`${trackedItems.length} khoản đang theo dõi`}
+        />
+        <SummaryCard
+          gradient="linear-gradient(135deg,#0d7a6a,#14a08c)"
+          icon="✅"
+          label="Đã thanh toán"
+          value={fmtVND(totals.totalPaid)}
+          sub={`${totals.totalCost > 0 ? Math.round((totals.totalPaid / totals.totalCost) * 100) : 0}% tổng chi phí`}
+        />
+        <SummaryCard
+          gradient="linear-gradient(135deg,#dc3250,#c0392b)"
+          icon="⚠️"
+          label="Công nợ còn thiếu"
+          value={fmtVND(totals.totalRemaining)}
+          sub={`${totals.totalCost > 0 ? Math.round((totals.totalRemaining / totals.totalCost) * 100) : 0}% chưa trả`}
+        />
+        <SummaryCard
+          gradient="linear-gradient(135deg,#f5a623,#e67e22)"
+          icon="📅"
+          label="Đã lên lịch TT"
+          value={fmtVND(totals.totalScheduled)}
+          sub="Tổng các đợt đã tạo"
+        />
+      </Box>
+
+      {trackedItems.length === 0 && (
+        <Box sx={{ textAlign: 'center', py: 8, color: 'text.disabled' }}>
+          <Typography fontSize={40} sx={{ mb: 1.5 }}>📋</Typography>
+          <Typography variant="subtitle1" fontWeight={600}>Chưa có khoản nào được theo dõi</Typography>
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            Bấm "⚙️ Quản lý hạng mục" để chọn khoản cần quản lý, hoặc "➕ Thêm chi phí tự tạo".
+          </Typography>
+        </Box>
+      )}
+
+      {grouped.map(([catId, grp]) => (
+        <Box key={catId} sx={{ mb: 3 }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+            <Typography fontSize={18}>{grp.icon}</Typography>
+            <Typography fontWeight={800} fontSize={15} sx={{ color: grp.color }}>
+              {grp.label}
+            </Typography>
+          </Stack>
+          <Stack spacing={1.25}>
+            {grp.items.map((ci) => {
+              const rec = getRec(ci.key);
+              const paidSum = (rec.installments ?? [])
+                .filter((i) => i.status === 'paid')
+                .reduce((s, i) => s + (+i.amount || 0), 0);
+              const remaining = ci.amount - paidSum;
+              const pct = ci.amount > 0 ? Math.round((paidSum / ci.amount) * 100) : 0;
+              const isOpen = expanded === ci.key;
+              return (
+                <Box
+                  key={ci.key}
+                  sx={{
+                    bgcolor: '#fff',
+                    border: '1px solid',
+                    borderColor: isOpen ? grp.color : 'rgba(20,150,140,0.15)',
+                    borderRadius: 1.5,
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1.5}
+                    sx={{ p: 1.75, cursor: 'pointer' }}
+                    onClick={() => setExpanded(isOpen ? null : ci.key)}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+                        <Typography fontWeight={700} fontSize={14}>{ci.name}</Typography>
+                        {ci.custom && (
+                          <Chip label="Tự tạo" size="small" sx={{ height: 18, fontSize: 9, fontWeight: 700,
+                                bgcolor: 'rgba(245,166,35,0.15)', color: '#d18a13' }} />
+                        )}
+                        {ci.isOverridden && (
+                          <Chip label="Đã chỉnh giá" size="small" sx={{ height: 18, fontSize: 9, fontWeight: 700,
+                                bgcolor: 'rgba(155,89,182,0.15)', color: '#8e44ad' }} />
+                        )}
+                      </Stack>
+                      <TextField
+                        placeholder="+ Tên nhà cung cấp..."
+                        value={rec.supplier ?? ''}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => setSupplier(ci.key, e.target.value)}
+                        size="small"
+                        variant="standard"
+                        sx={{ mt: 0.5, '& .MuiInput-input': { fontSize: 12, color: '#0d7a6a' } }}
+                      />
+                    </Box>
+                    <Box
+                      sx={{ textAlign: 'right', minWidth: 160 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <TextField
+                        type="number"
+                        value={ci.amount}
+                        onChange={(e) => {
+                          const v = +e.target.value;
+                          if (ci.custom) editCustomAmount(ci.key, v);
+                          else setCustomAmount(ci.key, v);
+                        }}
+                        size="small"
+                        variant="standard"
+                        sx={{
+                          width: 140,
+                          '& .MuiInput-input': {
+                            textAlign: 'right', fontWeight: 800, fontSize: 15,
+                            color: ci.isOverridden ? '#8e44ad' : 'text.primary',
+                          },
+                        }}
+                      />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: 'block', mt: 0.25,
+                          color: remaining <= 0 ? '#27ae60' : paidSum > 0 ? '#f5a623' : 'text.disabled',
+                        }}
+                      >
+                        {remaining <= 0 ? '✅ Đã trả đủ' : paidSum > 0 ? `Còn thiếu ${fmtVND(remaining)}` : 'Chưa thanh toán'}
+                      </Typography>
+                      {ci.isOverridden && (
+                        <Button
+                          size="small"
+                          onClick={() => resetAmount(ci.key)}
+                          startIcon={<RestartAltIcon sx={{ fontSize: 12 }} />}
+                          sx={{ color: '#8e44ad', fontSize: 10, textTransform: 'none', py: 0 }}
+                        >
+                          Về giá vốn ({fmtVND(ci.sourceAmount)})
+                        </Button>
+                      )}
+                    </Box>
+                    <Box
+                      sx={{
+                        width: 42, height: 42, borderRadius: '50%',
+                        background: `conic-gradient(${grp.color} ${pct * 3.6}deg, rgba(20,150,140,0.1) 0deg)`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}
+                    >
+                      <Box sx={{
+                        width: 32, height: 32, borderRadius: '50%', bgcolor: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 800, color: grp.color,
+                      }}>{pct}%</Box>
+                    </Box>
+                    {ci.custom && (
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => { e.stopPropagation(); delCustom(ci.key); }}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    {isOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </Stack>
+
+                  {isOpen && (
+                    <Box sx={{ p: 2, pt: 0 }}>
+                      <Divider sx={{ mb: 1.5 }} />
+                      <Stack spacing={1}>
+                        {(rec.installments ?? []).map((inst, idx) => (
+                          <Stack
+                            key={idx}
+                            direction="row"
+                            alignItems="center"
+                            spacing={1}
+                            flexWrap="wrap"
+                            useFlexGap
+                            sx={{
+                              p: 1.25, borderRadius: 1.25,
+                              bgcolor: inst.status === 'paid' ? 'rgba(39,174,96,0.07)' : 'rgba(245,166,35,0.06)',
+                              border: '1px solid',
+                              borderColor: inst.status === 'paid' ? 'rgba(39,174,96,0.25)' : 'rgba(245,166,35,0.25)',
+                            }}
+                          >
+                            <TextField
+                              value={inst.label}
+                              onChange={(e) => updInstallment(ci.key, idx, { label: e.target.value })}
+                              size="small"
+                              variant="outlined"
+                              sx={{ width: 120, '& .MuiInputBase-input': { fontSize: 12, py: 0.5 } }}
+                            />
+                            <TextField
+                              type="number"
+                              value={inst.amount}
+                              onChange={(e) => updInstallment(ci.key, idx, { amount: +e.target.value })}
+                              size="small"
+                              variant="outlined"
+                              sx={{ width: 130, '& .MuiInputBase-input': { fontSize: 13, fontWeight: 700, py: 0.5 } }}
+                            />
+                            <Button
+                              size="small"
+                              variant={inst.status === 'paid' ? 'contained' : 'outlined'}
+                              color={inst.status === 'paid' ? 'success' : 'inherit'}
+                              onClick={() => updInstallment(ci.key, idx, {
+                                status: inst.status === 'paid' ? 'unpaid' : 'paid',
+                                paidDate: inst.status === 'paid' ? '' : inst.paidDate,
+                              })}
+                              sx={{ fontSize: 11, fontWeight: 700, px: 1.5, py: 0.25 }}
+                            >
+                              {inst.status === 'paid' ? '✅ Đã TT' : '⏳ Chưa TT'}
+                            </Button>
+                            {inst.status === 'paid' && (
+                              <TextField
+                                type="date"
+                                value={inst.paidDate || ''}
+                                onChange={(e) => updInstallment(ci.key, idx, { paidDate: e.target.value })}
+                                size="small"
+                                variant="outlined"
+                                sx={{ '& .MuiInputBase-input': { fontSize: 12, py: 0.5 } }}
+                              />
+                            )}
+                            <Box sx={{ flex: 1 }} />
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => delInstallment(ci.key, idx)}
+                            >
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Stack>
+                        ))}
+                      </Stack>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        sx={{
+                          mt: 1.25, borderStyle: 'dashed', borderColor: grp.color, color: grp.color, fontWeight: 700,
+                        }}
+                        onClick={() => addInstallment(ci.key, ci.amount)}
+                      >
+                        ➕ Thêm đợt thanh toán {(rec.installments ?? []).length === 0 ? '(cọc / toàn bộ)' : ''}
+                      </Button>
+                      <TextField
+                        placeholder="Ghi chú (số TK, điều kiện...)"
+                        value={rec.note ?? ''}
+                        onChange={(e) => setNote(ci.key, e.target.value)}
+                        size="small"
+                        fullWidth
+                        sx={{ mt: 1 }}
+                      />
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+          </Stack>
+        </Box>
+      ))}
+
+      <TrackItemsModal
+        open={trackModalOpen}
+        onClose={() => setTrackModalOpen(false)}
+        items={allItems}
+        onToggle={toggleTrack}
+      />
+      <AddCustomCostModal
+        open={addCustomOpen}
+        onClose={() => setAddCustomOpen(false)}
+        activeCats={activeCats}
+        onAdd={addCustom}
+      />
+    </Box>
+  );
+}
+
+function SummaryCard({
+  gradient, icon, label, value, sub,
+}: { gradient: string; icon: string; label: string; value: string; sub: string }) {
+  return (
+    <Box sx={{ background: gradient, color: '#fff', borderRadius: 2, px: 2.5, py: 2 }}>
+      <Typography variant="caption" sx={{ opacity: 0.85 }}>{icon} {label}</Typography>
+      <Typography fontWeight={800} fontSize={22} sx={{ mt: 0.5 }}>{value}</Typography>
+      <Typography variant="caption" sx={{ display: 'block', mt: 0.25, opacity: 0.75 }}>
+        {sub}
+      </Typography>
+    </Box>
+  );
+}
