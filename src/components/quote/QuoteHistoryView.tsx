@@ -22,7 +22,11 @@ const TEMPLATE_LABEL: Record<Template, string> = {
 type TemplateFilter = 'all' | Template;
 
 export function QuoteHistoryView() {
+  const template = useQuoteStore((s) => s.draft.template);
+  const isDMC = template === 'dmc';
+
   const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const dmcQuotes = useQuoteHistoryStore((s) => s.dmcQuotes);
   const loading = useQuoteHistoryStore((s) => s.loading);
   const error = useQuoteHistoryStore((s) => s.error);
   const visibleQuotes = useQuoteHistoryStore((s) => s.visibleQuotes);
@@ -41,17 +45,19 @@ export function QuoteHistoryView() {
     row: CloudQuoteEntry;
   } | null>(null);
 
+  const allQuotes = isDMC ? dmcQuotes : quotes;
+
   const visible = useMemo(
-    () => visibleQuotes(),
-    // visibleQuotes reads from store; re-run when quotes or current user identity changes.
+    () => visibleQuotes(template ?? undefined),
+    // visibleQuotes reads from store; re-run when quotes, dmcQuotes or current user identity changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [quotes, currentUserU],
+    [allQuotes, currentUserU],
   );
 
   const filtered = useMemo(() => {
     const lc = search.trim().toLowerCase();
     return visible.filter((q) => {
-      if (templateFilter !== 'all' && q.template !== templateFilter) return false;
+      if (!isDMC && templateFilter !== 'all' && q.template !== templateFilter) return false;
       if (!lc) return true;
       return (
         q.name.toLowerCase().includes(lc) ||
@@ -59,7 +65,7 @@ export function QuoteHistoryView() {
         q.customerName?.toLowerCase().includes(lc)
       );
     });
-  }, [visible, search, templateFilter]);
+  }, [visible, search, templateFilter, isDMC]);
 
   const handleLoad = async (row: CloudQuoteEntry) => {
     if (currentQuoteId && currentQuoteId !== row.cloudId) {
@@ -156,6 +162,9 @@ export function QuoteHistoryView() {
 
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Typography variant="h6" sx={{ mb: 2 }}>
+        {isDMC ? '🕐 Lịch sử breakdown DMC' : 'Lịch sử báo giá'}
+      </Typography>
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <TextField
           size="small"
@@ -165,17 +174,19 @@ export function QuoteHistoryView() {
           onChange={(e) => setSearch(e.target.value)}
           sx={{ minWidth: 240 }}
         />
-        <Select
-          size="small"
-          value={templateFilter}
-          onChange={(e) => setTemplateFilter(e.target.value as TemplateFilter)}
-        >
-          <MenuItem value="all">Tất cả loại</MenuItem>
-          <MenuItem value="domestic">Nội địa</MenuItem>
-          <MenuItem value="intl">Quốc tế</MenuItem>
-        </Select>
+        {!isDMC && (
+          <Select
+            size="small"
+            value={templateFilter}
+            onChange={(e) => setTemplateFilter(e.target.value as TemplateFilter)}
+          >
+            <MenuItem value="all">Tất cả loại</MenuItem>
+            <MenuItem value="domestic">Nội địa</MenuItem>
+            <MenuItem value="intl">Quốc tế</MenuItem>
+          </Select>
+        )}
         <Typography variant="body2" color="text.secondary">
-          Hiển thị <strong>{filtered.length}</strong> / {quotes.length}
+          Hiển thị <strong>{filtered.length}</strong> / {allQuotes.length}
         </Typography>
       </Stack>
 
@@ -193,6 +204,14 @@ export function QuoteHistoryView() {
             pagination: { paginationModel: { pageSize: 25 } },
           }}
           pageSizeOptions={[10, 25, 50, 100]}
+          slotProps={{
+            noRowsOverlay: {
+              sx: {},
+            },
+          }}
+          localeText={{
+            noRowsLabel: isDMC ? 'Chưa có breakdown DMC nào' : 'Chưa có báo giá nào',
+          }}
         />
       </Box>
 
