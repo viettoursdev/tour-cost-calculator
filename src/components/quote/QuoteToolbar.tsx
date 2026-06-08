@@ -11,12 +11,14 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
 import { useAuthStore } from '@/stores/authStore';
 import { fmtOutput } from '@/lib/currency';
 import { computeTotals } from './calc';
+import { InvoiceModal } from './InvoiceModal';
 import type { OutputCurrency } from '@/types';
 
 type Props = {
@@ -43,10 +45,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const currentUser = useAuthStore((s) => s.currentUser);
 
   const isDMC = template === 'dmc';
-  const totalCost = computeTotals(draft).totalCost;
+  const totals = computeTotals(draft);
+  const totalCost = totals.totalCost;
 
   const [showRates, setShowRates] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const handleExport = () => {
@@ -202,6 +206,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
             <ListItemText>📄 PDF báo giá</ListItemText>
           </MenuItem>
+          {draft.template && draft.template !== 'dmc' && currentUser && (
+            <MenuItem onClick={() => { setInvoiceOpen(true); setExportAnchor(null); }}>
+              <ListItemIcon><ReceiptLongIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>🧾 Invoice</ListItemText>
+            </MenuItem>
+          )}
           <Divider />
           <MenuItem onClick={() => { handleExport(); setExportAnchor(null); }}>
             <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
@@ -254,6 +264,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           </Stack>
         )}
       </Box>
+      {invoiceOpen && currentUser && draft.template && draft.template !== 'dmc' && (
+        <InvoiceModal
+          open={invoiceOpen}
+          onClose={() => setInvoiceOpen(false)}
+          draft={draft}
+          totals={totals}
+          user={currentUser}
+        />
+      )}
     </AppBar>
   );
 }
