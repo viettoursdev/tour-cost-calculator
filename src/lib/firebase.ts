@@ -4,8 +4,9 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, Ncc, Notification,
-  QuoteDraft, RateCard, RateCardDoc, Template, User,
+  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem, Ncc,
+  Notification, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
+  QuoteDraft, RateCard, RateCardDoc, Template, TourPayments, User,
 } from '@/types';
 
 const firebaseConfig = {
@@ -429,4 +430,103 @@ export async function fbPushNotifications(
   notifications: Notification[],
 ): Promise<void> {
   await setDoc(notifDoc(username), { notifications });
+}
+
+// ── Tour Payments ──
+
+const tourPaymentsDoc = (tourKey: string) => doc(db, 'tour_payments', tourKey);
+
+/**
+ * Full-overwrite push of payments + customItems for a tour.
+ * Source: legacy window.fbSaveTourPayments (legacy.html:384).
+ */
+export async function fbSaveTourPayments(
+  tourKey: string,
+  payments: Record<string, PaymentRecord>,
+  customItems: CustomCostItem[],
+  savedBy: string,
+): Promise<void> {
+  await setDoc(tourPaymentsDoc(tourKey), {
+    payments,
+    customItems: customItems ?? [],
+    updatedAt: new Date().toISOString(),
+    updatedBy: savedBy || 'unknown',
+  });
+}
+
+/**
+ * Subscribe to a tour's payment doc.
+ * Source: legacy window.fbOnTourPayments (legacy.html:387).
+ */
+export function fbSubscribeTourPayments(
+  tourKey: string,
+  cb: (data: TourPayments | null) => void,
+): Unsubscribe {
+  return onSnapshot(tourPaymentsDoc(tourKey), (snap) => {
+    if (!snap.exists()) return cb(null);
+    const data = snap.data();
+    cb({
+      payments: (data.payments ?? {}) as Record<string, PaymentRecord>,
+      customItems: (data.customItems ?? []) as CustomCostItem[],
+    });
+  });
+}
+
+// ── Payment Approvals (2-stage flow) ──
+
+const PA_DOC = doc(db, 'viettours', 'payment_approvals');
+
+/**
+ * Write a single stage of an approval (1 or 2). Final status follows legacy rules:
+ *   - rejected at any stage  → finalStatus = 'rejected'
+ *   - approved at stage 1    → finalStatus = 'pending_stage2'
+ *   - approved at stage 2    → finalStatus = 'approved'
+ * Intended approver names are preserved across stages so the PDF/badges can still
+ * render the originally-designated names even after a delegate clicks.
+ * Source: legacy window.fbSetApprovalStage (legacy.html:398).
+ */
+export async function fbSetApprovalStage(
+  key: string,
+  stage: 1 | 2,
+  status: 'approved' | 'rejected',
+  approverUsername: string,
+  approverName: string,
+  note: string,
+  intended: { intendedApprover1Name?: string; intendedApprover2Name?: string } = {},
+): Promise<void> {
+  const snap = await getDoc(PA_DOC);
+  const ex: PaymentApprovalDoc = snap.exists() ? (snap.data() as PaymentApprovalDoc) : {};
+  const existing: PaymentApprovalEntry = ex[key] ?? {};
+  const stageData: PaymentApprovalStage = {
+    status,
+    approverUsername: approverUsername || '',
+    approverName: approverName || '',
+    note: note || '',
+    updatedAt: new Date().toISOString(),
+  };
+  const finalStatus: PaymentApprovalEntry['finalStatus'] =
+    status === 'rejected' ? 'rejected' : stage === 2 ? 'approved' : 'pending_stage2';
+  const updated: PaymentApprovalEntry = {
+    ...existing,
+    [`stage${stage}`]: stageData,
+    currentStage: stage,
+    finalStatus,
+    ...(intended.intendedApprover1Name
+      ? { intendedApprover1Name: intended.intendedApprover1Name } : {}),
+    ...(intended.intendedApprover2Name
+      ? { intendedApprover2Name: intended.intendedApprover2Name } : {}),
+  };
+  await setDoc(PA_DOC, { ...ex, [key]: updated });
+}
+
+/**
+ * Subscribe to the full payment-approvals document (one doc, key → entry map).
+ * Source: legacy window.fbOnPaymentApprovals (legacy.html:412).
+ */
+export function fbSubscribePaymentApprovals(
+  cb: (data: PaymentApprovalDoc) => void,
+): Unsubscribe {
+  return onSnapshot(PA_DOC, (snap) => {
+    cb(snap.exists() ? (snap.data() as PaymentApprovalDoc) : {});
+  });
 }
