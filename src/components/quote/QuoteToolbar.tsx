@@ -160,9 +160,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           size="small" exclusive value={view}
           onChange={(_, v) => v && setView(v)}
         >
-          <ToggleButton value="cost">Chi phí</ToggleButton>
-          <ToggleButton value="summary">Tổng kết</ToggleButton>
-          <ToggleButton value="dashboard">Dashboard</ToggleButton>
+          <ToggleButton value="cost">{isDMC ? 'Breakdown' : 'Chi phí'}</ToggleButton>
+          {!isDMC && <ToggleButton value="summary">Tổng kết</ToggleButton>}
+          {!isDMC && <ToggleButton value="dashboard">Dashboard</ToggleButton>}
           <ToggleButton value="history">Lịch sử</ToggleButton>
         </ToggleButtonGroup>
 
