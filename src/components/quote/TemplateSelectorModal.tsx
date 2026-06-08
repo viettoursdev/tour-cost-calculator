@@ -66,31 +66,19 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
             mb: 4,
           }}
         >
-          {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => {
-            const isDmc = tpl.key === 'dmc';
-            return (
-              <Card key={tpl.key} variant="outlined" sx={{ opacity: isDmc ? 0.55 : 1 }}>
-                <CardActionArea
-                  disabled={isDmc}
-                  onClick={() => handlePick(tpl.key)}
-                  sx={{ height: '100%' }}
-                >
-                  <CardContent>
-                    <Typography variant="h3" sx={{ mb: 1 }}>{tpl.icon}</Typography>
-                    <Typography fontWeight={700}>{tpl.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {tpl.desc}
-                    </Typography>
-                    {isDmc && (
-                      <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 1 }}>
-                        Đang được port — tạm thời sử dụng bản cũ
-                      </Typography>
-                    )}
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            );
-          })}
+          {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => (
+            <Card key={tpl.key} variant="outlined">
+              <CardActionArea onClick={() => handlePick(tpl.key)} sx={{ height: '100%' }}>
+                <CardContent>
+                  <Typography variant="h3" sx={{ mb: 1 }}>{tpl.icon}</Typography>
+                  <Typography fontWeight={700}>{tpl.label}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {tpl.desc}
+                  </Typography>
+                </CardContent>
+              </CardActionArea>
+            </Card>
+          ))}
         </Box>
 
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
