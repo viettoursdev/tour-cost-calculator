@@ -7,6 +7,7 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { usePaymentStore } from '@/stores/paymentStore';
 import { checkContractDeadlines } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
@@ -31,6 +32,7 @@ export function MainApp() {
     const nccUnsub = useNccStore.getState().init();
     const contractUnsub = useContractStore.getState().init();
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
+    usePaymentStore.getState().init();
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
       rcUnsub?.();
