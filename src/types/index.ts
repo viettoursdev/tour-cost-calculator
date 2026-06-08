@@ -5,3 +5,4 @@ export * from './customer';
 export * from './ncc';
 export * from './contract';
 export * from './notification';
+export * from './payment';
