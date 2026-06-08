@@ -4,16 +4,27 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { readUserSnapshots, readSavedQuotes, writeSavedQuotes } from '@/lib/storage';
 import {
   fbDeleteQuote, fbGetQuoteProject, fbSaveQuote, fbSaveQuoteState,
-  fbUpdateCollaborators, generateQuoteCode,
+  fbUpdateCollaborators,
+  fbDeleteDMCQuote, fbGetDMCQuoteProject, fbSaveDMCQuote, fbSaveDMCQuoteState,
+  fbUpdateDMCCollaborators,
+  generateQuoteCode,
 } from '@/lib/firebase';
-import { TEMPLATES, RATES_INIT, CATS, mkItem } from '@/components/quote/constants';
+import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
-  CategoryId, CloudQuoteEntry, Collaborator, Item, QuoteDraft, QuoteInfo,
-  Snapshot, Template, User,
+  CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
+  QuoteDraft, QuoteInfo, Snapshot, Template, User,
 } from '@/types';
+
+function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
+  return {
+    outputCurrency: 'USD',
+    dmcPrices: { 20: 0, 25: 0, 30: 0, 35: 0, 40: 0 },
+    dmcMargin: { type: 'percent', value: 0 },
+  };
+}
 
 const EMPTY_DRAFT: QuoteDraft = {
   template: null,
@@ -49,6 +60,9 @@ type QuoteState = {
   setVat: (n: number) => void;
   setSvcBasis: (n: number) => void;
   setRounding: (n: number) => void;
+  setOutputCurrency: (cur: OutputCurrency) => void;
+  setDmcPrice: (groupSize: number, value: number) => void;
+  setDmcMargin: (patch: Partial<DmcMargin>) => void;
 
   toggleCat: (cid: CategoryId) => void;
   addItem: (cid: CategoryId, override?: Partial<Item>) => void;
@@ -98,22 +112,27 @@ export const useQuoteStore = create<QuoteState>()(
 
         init: (user) => {
           const key = persistKey(user.u);
-          // Hydrate draft from per-user key directly (the placeholder persist won't have it).
           let storedDraft: QuoteDraft | null = null;
+          let storedView: QuoteState['view'] = 'cost';
           try {
             const raw = localStorage.getItem(key);
             if (raw) {
-              const parsed = JSON.parse(raw) as { state?: { draft?: QuoteDraft } };
+              const parsed = JSON.parse(raw) as { state?: { draft?: QuoteDraft; view?: QuoteState['view'] } };
               storedDraft = parsed.state?.draft ?? null;
+              if (parsed.state?.view) storedView = parsed.state.view;
             }
           } catch {
             /* ignore */
+          }
+          if (storedDraft?.template === 'dmc') {
+            storedDraft = { ...dmcDefaults(), ...storedDraft };
+            if (storedView !== 'cost' && storedView !== 'history') storedView = 'cost';
           }
           set({
             draft: storedDraft ?? EMPTY_DRAFT,
             snapshots: readUserSnapshots(user.u),
             currentUsername: user.u,
-            view: 'cost',
+            view: storedView,
           });
         },
 
@@ -124,13 +143,21 @@ export const useQuoteStore = create<QuoteState>()(
         newDraft: (template) => {
           const tpl = TEMPLATES[template];
           const items = tpl.init(EMPTY_DRAFT.pax);
+          const catEnabled = Object.fromEntries(
+            CATS.map((c) => [
+              c.id,
+              template === 'dmc' ? DMC_CAT_IDS.includes(c.id) : c.id !== 'dmc',
+            ]),
+          ) as Record<CategoryId, boolean>;
           set({
             draft: {
               ...EMPTY_DRAFT,
               template,
               info: { ...EMPTY_DRAFT.info, ...tpl.sample, startDate: null },
               items,
+              catEnabled,
               currentQuoteId: null,
+              ...(template === 'dmc' ? dmcDefaults() : {}),
             },
             view: 'cost',
           });
@@ -140,7 +167,14 @@ export const useQuoteStore = create<QuoteState>()(
           set({ draft: EMPTY_DRAFT, view: 'cost' });
         },
 
-        setView: (v) => set({ view: v }),
+        setView: (v) =>
+          set((s) => {
+            let next: QuoteState['view'] = v;
+            if (s.draft.template === 'dmc' && next !== 'cost' && next !== 'history') {
+              next = 'cost';
+            }
+            return { view: next };
+          }),
 
         patchInfo: (patch) =>
           set((s) => ({ draft: { ...s.draft, info: { ...s.draft.info, ...patch } } })),
@@ -154,6 +188,25 @@ export const useQuoteStore = create<QuoteState>()(
         setVat: (n) => set((s) => ({ draft: { ...s.draft, vat: n } })),
         setSvcBasis: (n) => set((s) => ({ draft: { ...s.draft, svcBasis: n } })),
         setRounding: (n) => set((s) => ({ draft: { ...s.draft, rounding: Math.max(1, n) } })),
+
+        setOutputCurrency: (cur) =>
+          set((s) => ({ draft: { ...s.draft, outputCurrency: cur } })),
+
+        setDmcPrice: (groupSize, value) =>
+          set((s) => ({
+            draft: {
+              ...s.draft,
+              dmcPrices: { ...(s.draft.dmcPrices ?? {}), [groupSize]: value },
+            },
+          })),
+
+        setDmcMargin: (patch) =>
+          set((s) => ({
+            draft: {
+              ...s.draft,
+              dmcMargin: { ...(s.draft.dmcMargin ?? { type: 'percent', value: 0 }), ...patch },
+            },
+          })),
 
         toggleCat: (cid) =>
           set((s) => ({
@@ -292,16 +345,20 @@ export const useQuoteStore = create<QuoteState>()(
           const u = useAuthStore.getState().currentUser;
           if (!u) throw new Error('saveCloud: no current user');
           if (!draft.template) throw new Error('saveCloud: draft has no template');
+          const isDmc = draft.template === 'dmc';
+          const _save  = isDmc ? fbSaveDMCQuote      : fbSaveQuote;
+          const _saveS = isDmc ? fbSaveDMCQuoteState : fbSaveQuoteState;
           const totalCost = computeTotals(draft).totalCost;
           const isNew = !draft.currentQuoteId;
           const cloudId =
             draft.currentQuoteId ??
             Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
           const id = Date.now();
-          const quoteCode = isNew
-            ? generateQuoteCode(draft.template, useQuoteHistoryStore.getState().quotes)
-            : undefined;
-          const entry = await fbSaveQuote(
+          const existing = isDmc
+            ? useQuoteHistoryStore.getState().dmcQuotes
+            : useQuoteHistoryStore.getState().quotes;
+          const quoteCode = isNew ? generateQuoteCode(draft.template, existing) : undefined;
+          const entry = await _save(
             {
               id,
               cloudId,
@@ -315,13 +372,15 @@ export const useQuoteStore = create<QuoteState>()(
             },
             { u: u.u, name: u.name, role: u.role },
           );
-          await fbSaveQuoteState(cloudId, draft, note, { name: u.name, role: u.role });
+          await _saveS(cloudId, draft, note, { name: u.name, role: u.role });
           set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId } }));
           return entry;
         },
 
         deleteCloud: async (id, cloudId) => {
-          await fbDeleteQuote(id, cloudId);
+          const isDmc = get().draft.template === 'dmc';
+          const _del = isDmc ? fbDeleteDMCQuote : fbDeleteQuote;
+          await _del(id, cloudId);
           const { draft } = get();
           if (draft.currentQuoteId === cloudId) {
             set({ draft: { ...draft, currentQuoteId: null } });
@@ -329,11 +388,18 @@ export const useQuoteStore = create<QuoteState>()(
         },
 
         updateCloudCollaborators: async (id, cloudId, collabs) => {
-          await fbUpdateCollaborators(id, cloudId, collabs);
+          const isDmc = get().draft.template === 'dmc';
+          const _col = isDmc ? fbUpdateDMCCollaborators : fbUpdateCollaborators;
+          await _col(id, cloudId, collabs);
         },
 
         loadCloud: async (cloudId) => {
-          const project = await fbGetQuoteProject(cloudId);
+          // Try DMC first if the current draft is DMC, else regular. This matches the
+          // QuoteHistoryView wiring: a user can only load quotes from the template-
+          // matched history view.
+          const isDmc = get().draft.template === 'dmc';
+          const _get = isDmc ? fbGetDMCQuoteProject : fbGetQuoteProject;
+          const project = await _get(cloudId);
           if (!project) {
             return { ok: false, error: 'Báo giá không tồn tại trong cloud' };
           }
