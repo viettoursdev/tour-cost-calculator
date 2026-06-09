@@ -14,6 +14,8 @@ import {
 } from './constants';
 import { parseFlights } from './parseFlights';
 import { SortableList } from './SortableList';
+import { AISettingsModal } from './AISettingsModal';
+import { callAIWorker } from '@/lib/aiWorker';
 import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import BoltIcon from '@mui/icons-material/Bolt';
@@ -50,6 +52,8 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [it, setIt] = useState<Itinerary>(() => initial ?? freshItinerary());
   const [saving, setSaving] = useState(false);
   const [flightPaste, setFlightPaste] = useState('');
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
 
   const code = useMemo(
@@ -142,6 +146,80 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const reorderActs = (dayId: string, segId: string, from: number, to: number) =>
     updSegById(dayId, segId, (s) => ({ ...s, activities: reorder(s.activities, from, to) }));
 
+  // ── Includes / Excludes ops ──
+  const updList = (key: 'includes' | 'excludes', i: number, v: string) =>
+    setIt((p) => {
+      const l = [...p[key]];
+      l[i] = v;
+      return { ...p, [key]: l };
+    });
+  const addListItem = (key: 'includes' | 'excludes') =>
+    setIt((p) => ({ ...p, [key]: [...p[key], ''] }));
+  const delListItem = (key: 'includes' | 'excludes', i: number) =>
+    setIt((p) => ({ ...p, [key]: p[key].filter((_, j) => j !== i) }));
+
+  // ── AI ──
+  const genIntro = async () => {
+    if (!it.destination) {
+      window.alert('Nhập Điểm đến trước');
+      return;
+    }
+    setAiBusy('intro');
+    try {
+      const d = await callAIWorker('/ai', {
+        prompt: `Viết đoạn giới thiệu 3-4 câu súc tích, chuyên nghiệp về điểm đến "${it.destination}" cho chương trình tour đoàn doanh nghiệp. Văn phong sang trọng, gợi cảm hứng. Chỉ trả về đoạn văn, không tiêu đề.`,
+      });
+      if (d.text) set('intro', d.text.trim());
+    } catch (e) {
+      window.alert('❌ ' + (e as Error).message);
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const genActivity = async (dayId: string, segId: string, actId: string, placeText: string) => {
+    if (!placeText.trim()) {
+      window.alert('Nhập tên địa điểm trước');
+      return;
+    }
+    setAiBusy(actId);
+    try {
+      const d = await callAIWorker('/ai', {
+        prompt: `Viết 1-2 câu thuyết minh ngắn gọn, súc tích, chuyên nghiệp về địa điểm/hoạt động: "${placeText}" tại ${it.destination || 'điểm đến'}. Dành cho khách đoàn doanh nghiệp. Chỉ trả về câu thuyết minh, giữ lại tên địa điểm ở đầu nếu có.`,
+      });
+      if (d.text) updAct(dayId, segId, actId, { text: d.text.trim() });
+    } catch (e) {
+      window.alert('❌ ' + (e as Error).message);
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const genDistance = async (dayId: string, segId: string, routeText: string) => {
+    const parts = (routeText || '').split(/→|->|–|-/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length < 2) {
+      window.alert("Điền tuyến ngày dạng 'Điểm A → Điểm B' để tính khoảng cách");
+      return;
+    }
+    setAiBusy('dist' + segId);
+    try {
+      const d = await callAIWorker('/distance', {
+        origin: parts[0],
+        destination: parts[parts.length - 1],
+        mode: 'driving',
+      });
+      if (d.distance || d.duration) {
+        updSeg(dayId, segId, { transport: `🚗 Xe ô tô · ${d.distance || '~'} · ${d.duration || '~'} di chuyển` });
+      } else {
+        window.alert('Không tính được khoảng cách cho tuyến này');
+      }
+    } catch (e) {
+      window.alert('❌ ' + (e as Error).message);
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
   const linkQuote = (qId: string) => {
     if (!qId) {
       setIt((p) => ({ ...p, linkedQuoteId: null, linkedQuoteName: '' }));
@@ -170,7 +248,8 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Button color="inherit" variant="outlined" startIcon={<SettingsIcon />} disabled>
+            <Button color="inherit" variant="outlined" startIcon={<SettingsIcon />}
+              onClick={() => setAiSettingsOpen(true)}>
               AI
             </Button>
             <Button color="inherit" variant="outlined" startIcon={<SaveIcon />}
@@ -250,9 +329,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               <Typography variant="caption" fontWeight={700} color="text.secondary">
                 Giới thiệu điểm đến (3-4 câu)
               </Typography>
-              <Button size="small" disabled
-                sx={{ color: '#8e44ad', borderColor: '#8e44ad' }} variant="outlined">
-                ✨ Tạo bằng AI
+              <Button size="small" variant="outlined" onClick={genIntro}
+                disabled={aiBusy === 'intro'}
+                sx={{ color: '#8e44ad', borderColor: 'rgba(142,68,173,0.3)' }}>
+                {aiBusy === 'intro' ? '⏳ Đang tạo...' : '✨ Tạo bằng AI'}
               </Button>
             </Stack>
             <TextField fullWidth multiline minRows={3} size="small"
@@ -410,6 +490,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                         onChange={(e) => updSeg(d.id, seg.id, { transport: e.target.value })}
                         placeholder="Phương tiện · khoảng cách · thời gian"
                         sx={{ '& .MuiInputBase-input': { fontSize: 12, color: '#14a08c', fontWeight: 600 } }} />
+                      <Button size="small" variant="outlined"
+                        disabled={aiBusy === 'dist' + seg.id}
+                        onClick={() => genDistance(d.id, seg.id, d.title)}
+                        title="Tự tính khoảng cách/thời gian từ tuyến ngày (Google Maps)"
+                        sx={{ color: '#2980b9', borderColor: 'rgba(41,128,185,0.3)', whiteSpace: 'nowrap', fontSize: 11 }}>
+                        {aiBusy === 'dist' + seg.id ? '⏳' : '📍 Tính'}
+                      </Button>
                     </Stack>
 
                     <SortableList
@@ -430,6 +517,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                             value={a.text}
                             onChange={(e) => updAct(d.id, seg.id, a.id, { text: e.target.value })}
                             placeholder="Nội dung hoạt động / thuyết minh..." />
+                          <Button size="small" variant="outlined"
+                            disabled={aiBusy === a.id}
+                            onClick={() => void genActivity(d.id, seg.id, a.id, a.text)}
+                            title="AI tạo thuyết minh cho địa điểm này"
+                            sx={{ color: '#8e44ad', borderColor: 'rgba(142,68,173,0.3)', minWidth: 0, px: 1, flexShrink: 0 }}>
+                            {aiBusy === a.id ? '⏳' : '✨'}
+                          </Button>
                           <IconButton size="small" color="error" onClick={() => delAct(d.id, seg.id, a.id)}>
                             <DeleteOutlineIcon fontSize="small" />
                           </IconButton>
@@ -474,8 +568,38 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
           ))}
         </SortableList>
 
-        <Box sx={{ height: 32 }} />
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 3 }}>
+          {(['includes', 'excludes'] as const).map((key) => {
+            const isInc = key === 'includes';
+            return (
+              <Paper key={key} sx={{ p: 2.25 }}>
+                <Typography fontWeight={800} fontSize={13} sx={{ mb: 1.25, color: isInc ? '#27ae60' : '#c0392b' }}>
+                  {isInc ? '✓ GIÁ BAO GỒM' : '✕ KHÔNG BAO GỒM'}
+                </Typography>
+                <Stack spacing={0.75}>
+                  {it[key].map((x, i) => (
+                    <Stack key={i} direction="row" spacing={0.75} alignItems="center">
+                      <TextField fullWidth size="small" value={x}
+                        onChange={(e) => updList(key, i, e.target.value)} />
+                      <IconButton size="small" color="error" onClick={() => delListItem(key, i)}>
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Stack>
+                  ))}
+                </Stack>
+                <Button size="small" startIcon={<AddIcon />} onClick={() => addListItem(key)}
+                  sx={{ mt: 1, color: '#0d7a6a', fontSize: 12 }}>
+                  thêm mục
+                </Button>
+              </Paper>
+            );
+          })}
+        </Box>
+
+        <Box sx={{ height: 40 }} />
       </Box>
+
+      <AISettingsModal open={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} />
     </Box>
   );
 }
