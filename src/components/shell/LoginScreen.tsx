@@ -50,32 +50,33 @@ export function LoginScreen() {
         <Stack spacing={2}>
           <TextField
             label="Tài khoản"
-            placeholder="ceo / sale1 / manager1..."
             value={u}
             onChange={(e) => setU(e.target.value)}
             autoFocus
             required
             autoComplete="username"
-            slotProps={{ inputLabel: { shrink: true } }}
           />
           <TextField
             label="Mật khẩu"
             type="password"
-            placeholder="••••••"
             value={p}
             onChange={(e) => setP(e.target.value)}
             required
             autoComplete="current-password"
-            slotProps={{ inputLabel: { shrink: true } }}
           />
           {err && <Alert severity="error">{err}</Alert>}
           <Button type="submit" variant="contained" disabled={busy || !u || !p}>
             {busy ? 'Đang xử lý…' : 'Đăng nhập'}
           </Button>
         </Stack>
-        <Alert severity="info" sx={{ mt: 2.5, fontSize: 12 }}>
-          <strong>Tài khoản demo:</strong> ceo / ceo123 · manager1 / mgr123 · sale1 / sale123
-        </Alert>
+        {/* Demo credential hint shown only in local dev builds. Production builds
+            strip this block at compile time (Vite replaces import.meta.env.DEV
+            with `false` and DCE eliminates the unreachable branch). */}
+        {import.meta.env.DEV && (
+          <Alert severity="info" sx={{ mt: 2.5, fontSize: 12 }}>
+            <strong>Tài khoản demo (dev only):</strong> ceo / ceo123 · manager1 / mgr123 · sale1 / sale123
+          </Alert>
+        )}
       </Paper>
     </Box>
   );
