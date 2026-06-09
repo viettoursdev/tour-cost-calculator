@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Box, Button, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
@@ -10,7 +10,11 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode } from './itinCode';
 import { ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, newDay } from './constants';
-import type { Itinerary, ItineraryType, User } from '@/types';
+import { parseFlights } from './parseFlights';
+import type { Flight, Itinerary, ItineraryType, User } from '@/types';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import BoltIcon from '@mui/icons-material/Bolt';
+import AddIcon from '@mui/icons-material/Add';
 
 type Props = {
   initial: Itinerary | null;
@@ -42,6 +46,7 @@ function freshItinerary(): Itinerary {
 export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [it, setIt] = useState<Itinerary>(() => initial ?? freshItinerary());
   const [saving, setSaving] = useState(false);
+  const [flightPaste, setFlightPaste] = useState('');
   const quotes = useQuoteHistoryStore((s) => s.quotes);
 
   const code = useMemo(
@@ -62,6 +67,24 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addFlight = () => setIt((p) => ({
+    ...p,
+    flights: [...p.flights, { id: 'f' + Date.now(), group: 'Nhóm', leg: '', flightNo: '', dep: '', arr: '' }],
+  }));
+  const delFlight = (id: string) => setIt((p) => ({ ...p, flights: p.flights.filter((f) => f.id !== id) }));
+  const updFlight = (id: string, patch: Partial<Flight>) =>
+    setIt((p) => ({ ...p, flights: p.flights.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
+
+  const doParseFlights = () => {
+    const parsed = parseFlights(flightPaste);
+    if (parsed.length === 0) {
+      window.alert('Không nhận diện được chuyến bay. Thử dán dạng: CA904 TSN 05:40 PEK 11:35');
+      return;
+    }
+    setIt((p) => ({ ...p, flights: parsed }));
+    setFlightPaste('');
   };
 
   const linkQuote = (qId: string) => {
@@ -205,9 +228,56 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
         </Paper>
 
         <Paper sx={{ p: 3, mb: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            (Phần Chuyến bay, Lịch trình theo ngày, Bao gồm/Không bao gồm sẽ được bổ sung ở các task tiếp theo.)
-          </Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="subtitle1" fontWeight={800}>✈️ Thông tin chuyến bay</Typography>
+            <Button size="small" startIcon={<AddIcon />} onClick={addFlight} variant="outlined">
+              Thêm chuyến
+            </Button>
+          </Stack>
+
+          <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: 'rgba(41,128,185,0.05)', border: '1px dashed rgba(41,128,185,0.3)' }}>
+            <Typography variant="caption" fontWeight={700} sx={{ color: '#2980b9', display: 'block', mb: 0.5 }}>
+              📋 Dán đoạn thông tin chuyến bay → tự phân tích
+            </Typography>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                fullWidth size="small" multiline minRows={2}
+                value={flightPaste}
+                onChange={(e) => setFlightPaste(e.target.value)}
+                placeholder={"Dán code GDS/PNR, VD:\n1  BR 396 10JUN SGN TPE  1545 2010\n2  BR 051 24JUN IAH TPE  0120 0605"}
+                InputProps={{ sx: { fontSize: 12, fontFamily: 'monospace' } }}
+              />
+              <Button variant="contained" startIcon={<BoltIcon />} onClick={doParseFlights}
+                sx={{ background: 'linear-gradient(135deg,#2980b9,#3498db)', whiteSpace: 'nowrap' }}>
+                Phân tích
+              </Button>
+            </Stack>
+          </Paper>
+
+          <Stack spacing={1}>
+            {it.flights.map((f) => (
+              <Box key={f.id} sx={{ display: 'grid', gridTemplateColumns: '1.1fr 1.3fr 1fr 1.1fr 1.1fr 40px', gap: 1, alignItems: 'center' }}>
+                <TextField size="small" value={f.group}
+                  onChange={(e) => updFlight(f.id, { group: e.target.value })}
+                  placeholder="Nhóm" />
+                <TextField size="small" value={f.leg}
+                  onChange={(e) => updFlight(f.id, { leg: e.target.value })}
+                  placeholder="Đi · Ngày 1" />
+                <TextField size="small" value={f.flightNo}
+                  onChange={(e) => updFlight(f.id, { flightNo: e.target.value })}
+                  placeholder="CA904" />
+                <TextField size="small" value={f.dep}
+                  onChange={(e) => updFlight(f.id, { dep: e.target.value })}
+                  placeholder="TSN 05:40" />
+                <TextField size="small" value={f.arr}
+                  onChange={(e) => updFlight(f.id, { arr: e.target.value })}
+                  placeholder="PEK 11:35" />
+                <IconButton size="small" color="error" onClick={() => delFlight(f.id)}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ))}
+          </Stack>
         </Paper>
       </Box>
     </Box>
