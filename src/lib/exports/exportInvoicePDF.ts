@@ -1,14 +1,15 @@
 /**
  * Export a customer-facing Invoice as a PDF.
  * Source: public/legacy.html:3433-3636.
- * Helvetica only (no DejaVu font, no logo image) — matches the convention used by
- * exportContractPDF and exportPaymentRequestPDF.
+ * Uses bundled DejaVu Sans for Vietnamese diacritics + the embedded VTE_LOGO.
  */
 import { jsPDF } from 'jspdf';
 import { numberToVietWords } from './vietWords';
 import { calcVND, type Totals } from '@/components/quote/calc';
 import { getCATS } from '@/components/quote/constants';
 import { calcEndDate, fmtDate } from '@/lib/dateUtils';
+import { loadVNFont } from './vnFont';
+import { VTE_LOGO } from './vteLogo';
 import type { Item, QuoteDraft } from '@/types';
 
 export interface InvoiceCustomer {
@@ -36,10 +37,10 @@ const RED: RGB = [220, 50, 80];
 const LIGHTGRAY: RGB = [235, 240, 242];
 
 const BRAND = 'VIETTOURS INCENTIVES & EVENTS';
-const COMPANY_VN = 'CONG TY TNHH DU LICH VA SU KIEN VIET';
+const COMPANY_VN = 'CÔNG TY TNHH DU LỊCH VÀ SỰ KIỆN VIỆT';
 const COMPANY_EN = 'Vietnam Tourism & Events Co., Ltd.';
 const MST = '0302650371';
-const ADDRESS = '19B Mai Thi Luu, P. Tan Dinh, TP. Ho Chi Minh';
+const ADDRESS = '19B Mai Thị Lựu, P. Tân Định, TP. Hồ Chí Minh';
 
 export function exportInvoicePDF(args: InvoiceArgs): void {
   const { draft, totals, customer, lang, paymentTerms, savedBy } = args;
@@ -47,7 +48,8 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   const T = (vn: string, en: string) => (EN ? en : vn);
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const FONT = 'helvetica';
+  const hasFont = loadVNFont(pdf);
+  const FONT = hasFont ? 'DejaVu' : 'helvetica';
   const setF = (style = 'normal') => pdf.setFont(FONT, style);
   const pageW = 210, pageH = 297, mX = 15;
   let y = 16;
@@ -62,48 +64,50 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   // Top accent band
   pdf.setFillColor(...TEAL); pdf.rect(0, 0, pageW, 4, 'F');
 
-  // Company block (left)
+  // Logo + Company block (left). Falls back to text-only if logo fails.
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 42, 24, undefined, 'FAST'); } catch { /* ignore */ }
+  const cx = mX + 46;
   pdf.setFontSize(14); pdf.setTextColor(...TEAL); setF('bold');
-  pdf.text(BRAND, mX, y + 2);
+  pdf.text(BRAND, cx, y + 2);
   pdf.setFontSize(7); pdf.setTextColor(...GRAY); setF('normal');
   y += 6;
-  pdf.text(EN ? COMPANY_EN : COMPANY_VN, mX, y); y += 3.5;
-  pdf.text(`${T('MST', 'Tax code')}: ${MST}`, mX, y); y += 3.5;
-  const addrLines: string[] = pdf.splitTextToSize(`${T('Dia chi', 'Address')}: ${ADDRESS}`, pageW - mX * 2);
-  pdf.text(addrLines, mX, y); y += addrLines.length * 3.3;
+  pdf.text(EN ? COMPANY_EN : COMPANY_VN, cx, y); y += 3.5;
+  pdf.text(`${T('MST', 'Tax code')}: ${MST}`, cx, y); y += 3.5;
+  const addrLines: string[] = pdf.splitTextToSize(`${T('Địa chỉ', 'Address')}: ${ADDRESS}`, pageW - cx - mX);
+  pdf.text(addrLines, cx, y); y += addrLines.length * 3.3;
 
   // INVOICE title (right)
   pdf.setFontSize(22); pdf.setTextColor(...DARK); setF('bold');
-  pdf.text(T('HOA DON', 'INVOICE'), pageW - mX, 18, { align: 'right' });
+  pdf.text(T('HÓA ĐƠN', 'INVOICE'), pageW - mX, 18, { align: 'right' });
   pdf.setFontSize(9); pdf.setTextColor(...GRAY); setF('normal');
   pdf.text(T('INVOICE / QUOTATION', 'QUOTATION'), pageW - mX, 24, { align: 'right' });
   pdf.setFontSize(8.5); pdf.setTextColor(...DARK);
-  pdf.text(`${T('So', 'No')}: ${invNo}`, pageW - mX, 31, { align: 'right' });
-  pdf.text(`${T('Ngay', 'Date')}: ${now.toLocaleDateString(EN ? 'en-GB' : 'vi-VN')}`, pageW - mX, 36, { align: 'right' });
+  pdf.text(`${T('Số', 'No')}: ${invNo}`, pageW - mX, 31, { align: 'right' });
+  pdf.text(`${T('Ngày', 'Date')}: ${now.toLocaleDateString(EN ? 'en-GB' : 'vi-VN')}`, pageW - mX, 36, { align: 'right' });
 
   y = Math.max(y, 40) + 4;
   pdf.setDrawColor(...TEAL); pdf.setLineWidth(0.5); pdf.line(mX, y, pageW - mX, y); y += 8;
 
   // Bill To + Tour info
   pdf.setFontSize(9); pdf.setTextColor(...TEAL); setF('bold');
-  pdf.text(T('KINH GUI / BILL TO:', 'BILL TO:'), mX, y);
-  pdf.text(T('THONG TIN TOUR:', 'TOUR INFO:'), pageW / 2 + 5, y);
+  pdf.text(T('KÍNH GỬI / BILL TO:', 'BILL TO:'), mX, y);
+  pdf.text(T('THÔNG TIN TOUR:', 'TOUR INFO:'), pageW / 2 + 5, y);
   y += 5;
   pdf.setFontSize(9); pdf.setTextColor(...DARK); setF('normal');
-  pdf.text(`${T('Khach hang', 'Customer')}: ${customer.name || ''}`, mX, y);
+  pdf.text(`${T('Khách hàng', 'Customer')}: ${customer.name || ''}`, mX, y);
   pdf.text(`Tour: ${draft.info.name || ''}`, pageW / 2 + 5, y); y += 4.5;
-  pdf.text(`${T('Cong ty', 'Company')}: ${customer.company || '-'}`, mX, y);
-  pdf.text(`${T('Diem den', 'Destination')}: ${draft.info.dest || ''}`, pageW / 2 + 5, y); y += 4.5;
-  pdf.text(`${T('Dien thoai', 'Phone')}: ${customer.phone || '-'}`, mX, y);
-  pdf.text(`${T('Thoi gian', 'Duration')}: ${draft.info.days}${T('N', 'D')} ${draft.info.nights}${T('D', 'N')}`, pageW / 2 + 5, y);
+  pdf.text(`${T('Công ty', 'Company')}: ${customer.company || '-'}`, mX, y);
+  pdf.text(`${T('Điểm đến', 'Destination')}: ${draft.info.dest || ''}`, pageW / 2 + 5, y); y += 4.5;
+  pdf.text(`${T('Điện thoại', 'Phone')}: ${customer.phone || '-'}`, mX, y);
+  pdf.text(`${T('Thời gian', 'Duration')}: ${draft.info.days}${T('N', 'D')} ${draft.info.nights}${T('Đ', 'N')}`, pageW / 2 + 5, y);
   y += 4.5;
   if (draft.info.startDate) {
     const endD = calcEndDate(draft.info.startDate, draft.info.days);
-    pdf.text(`${T('Khoi hanh', 'Departure')}: ${fmtDate(draft.info.startDate, EN)} -> ${fmtDate(endD, EN)}`, pageW / 2 + 5, y);
+    pdf.text(`${T('Khởi hành', 'Departure')}: ${fmtDate(draft.info.startDate, EN)} → ${fmtDate(endD, EN)}`, pageW / 2 + 5, y);
     y += 4.5;
   }
   pdf.text(`Email: ${customer.email || '-'}`, mX, y);
-  pdf.text(`${T('So khach', 'Pax')}: ${draft.pax}`, pageW / 2 + 5, y); y += 8;
+  pdf.text(`${T('Số khách', 'Pax')}: ${draft.pax}`, pageW / 2 + 5, y); y += 8;
 
   // Items table header
   const colNo = mX + 2;
@@ -115,11 +119,11 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   pdf.setFillColor(...TEAL); pdf.rect(mX, y, pageW - mX * 2, 8, 'F');
   pdf.setFontSize(8); pdf.setTextColor(255, 255, 255); setF('bold');
   pdf.text(T('STT', 'No'), colNo, y + 5.5);
-  pdf.text(T('DIEN GIAI / DESCRIPTION', 'DESCRIPTION'), colDesc, y + 5.5);
-  pdf.text(T('DVT', 'Unit'), colUnit, y + 5.5);
+  pdf.text(T('DIỄN GIẢI / DESCRIPTION', 'DESCRIPTION'), colDesc, y + 5.5);
+  pdf.text(T('ĐVT', 'Unit'), colUnit, y + 5.5);
   pdf.text(T('SL', 'Qty'), colQty, y + 5.5, { align: 'right' });
-  pdf.text(T('DON GIA', 'Unit Price'), colPrice, y + 5.5, { align: 'right' });
-  pdf.text(T('THANH TIEN', 'Amount'), colAmount, y + 5.5, { align: 'right' });
+  pdf.text(T('ĐƠN GIÁ', 'Unit Price'), colPrice, y + 5.5, { align: 'right' });
+  pdf.text(T('THÀNH TIỀN', 'Amount'), colAmount, y + 5.5, { align: 'right' });
   y += 8;
 
   let stt = 0;
@@ -175,18 +179,18 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
     pdf.setFontSize(bold ? 10 : 9); setF(bold ? 'bold' : 'normal');
     pdf.setTextColor(...color);
     pdf.text(label, tX, y);
-    pdf.text(fmtV(val) + ' VND', pageW - mX - 2, y, { align: 'right' });
+    pdf.text(fmtV(val) + ' ₫', pageW - mX - 2, y, { align: 'right' });
     y += bold ? 7 : 5.5;
   };
-  totalRow(T('Tam tinh / Subtotal:', 'Subtotal:'), grandSubtotal + draft.svcBasis, false);
-  totalRow(T(`Dich vu & loi nhuan (${draft.margin}%):`, `Service & margin (${draft.margin}%):`), profit, false);
-  if (draft.vat > 0) totalRow(`${T('Thue VAT', 'VAT')} (${draft.vat}%):`, vatAmt, false);
+  totalRow(T('Tạm tính / Subtotal:', 'Subtotal:'), grandSubtotal + draft.svcBasis, false);
+  totalRow(T(`Dịch vụ & lợi nhuận (${draft.margin}%):`, `Service & margin (${draft.margin}%):`), profit, false);
+  if (draft.vat > 0) totalRow(`${T('Thuế VAT', 'VAT')} (${draft.vat}%):`, vatAmt, false);
   pdf.setDrawColor(...DARK); pdf.setLineWidth(0.3); pdf.line(tX, y - 1, pageW - mX, y - 1); y += 4;
-  totalRow(T('TONG CONG / TOTAL:', 'TOTAL:'), grandTotal, true, RED);
+  totalRow(T('TỔNG CỘNG / TOTAL:', 'TOTAL:'), grandTotal, true, RED);
   y += 2;
   pdf.setFontSize(7.5); pdf.setTextColor(...GRAY); setF('normal');
   pdf.text(
-    T(`(Da lam tron - ${fmtV(totals.roundedPPax)} VND/khach x ${draft.pax})`, `(Rounded - ${fmtV(totals.roundedPPax)} VND/pax x ${draft.pax})`),
+    T(`(Đã làm tròn · ${fmtV(totals.roundedPPax)} ₫/khách × ${draft.pax})`, `(Rounded · ${fmtV(totals.roundedPPax)} ₫/pax × ${draft.pax})`),
     pageW - mX - 2, y, { align: 'right' },
   );
   y += 9;
@@ -198,7 +202,7 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
     const w: string[] = pdf.splitTextToSize(`Amount in words: ${grandTotal.toLocaleString('en-US')} VND.`, pageW - mX * 2);
     pdf.text(w, mX, y); y += w.length * 4.5;
   } else {
-    const w: string[] = pdf.splitTextToSize(`So tien bang chu: ${numberToVietWords(grandTotal)} dong.`, pageW - mX * 2);
+    const w: string[] = pdf.splitTextToSize(`Số tiền bằng chữ: ${numberToVietWords(grandTotal)} đồng.`, pageW - mX * 2);
     pdf.text(w, mX, y); y += w.length * 4.5;
   }
   y += 6;
@@ -206,14 +210,14 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   // Payment terms
   checkPage(36);
   pdf.setFontSize(9); pdf.setTextColor(...TEAL); setF('bold');
-  pdf.text(T('DIEU KHOAN THANH TOAN:', 'PAYMENT TERMS:'), mX, y); y += 5;
+  pdf.text(T('ĐIỀU KHOẢN THANH TOÁN:', 'PAYMENT TERMS:'), mX, y); y += 5;
   pdf.setFontSize(8); pdf.setTextColor(...DARK); setF('normal');
   const trimmed = (paymentTerms || '').trim();
   const defaultsVI = [
-    '1. Thanh toan 70% sau khi ky hop dong',
-    '2. Thanh toan 30% con lai truoc ngay khoi hanh',
-    '3. Bao gia co hieu luc 7 ngay - Da bao gom VAT',
-    '4. Chuyen khoan: [Ten ngan hang] - [So tai khoan] - [Chu tai khoan]',
+    '1. Thanh toán 70% sau khi ký hợp đồng',
+    '2. Thanh toán 30% còn lại trước ngày khởi hành',
+    '3. Báo giá có hiệu lực 7 ngày · Đã bao gồm VAT',
+    '4. Chuyển khoản: [Tên ngân hàng] · [Số tài khoản] · [Chủ tài khoản]',
   ];
   const defaultsEN = [
     '1. 70% payment after contract signing',
@@ -234,12 +238,12 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   checkPage(34);
   const sigW = (pageW - mX * 2) / 2;
   pdf.setFontSize(9); pdf.setTextColor(...DARK); setF('bold');
-  pdf.text(T('KHACH HANG', 'CUSTOMER'), mX + sigW / 2, y, { align: 'center' });
-  pdf.text(T('DAI DIEN CONG TY', 'COMPANY REPRESENTATIVE'), mX + sigW + sigW / 2, y, { align: 'center' });
+  pdf.text(T('KHÁCH HÀNG', 'CUSTOMER'), mX + sigW / 2, y, { align: 'center' });
+  pdf.text(T('ĐẠI DIỆN CÔNG TY', 'COMPANY REPRESENTATIVE'), mX + sigW + sigW / 2, y, { align: 'center' });
   y += 4;
   pdf.setFontSize(7.5); pdf.setTextColor(...GRAY); setF('normal');
-  pdf.text(T('(Ky, ghi ro ho ten)', '(Signature & full name)'), mX + sigW / 2, y, { align: 'center' });
-  pdf.text(T('(Ky, dong dau)', '(Signature & stamp)'), mX + sigW + sigW / 2, y, { align: 'center' });
+  pdf.text(T('(Ký, ghi rõ họ tên)', '(Signature & full name)'), mX + sigW / 2, y, { align: 'center' });
+  pdf.text(T('(Ký, đóng dấu)', '(Signature & stamp)'), mX + sigW + sigW / 2, y, { align: 'center' });
   y += 20;
   pdf.setTextColor(...DARK); setF('bold'); pdf.setFontSize(9);
   pdf.text(customer.name || '', mX + sigW / 2, y, { align: 'center' });
@@ -253,7 +257,7 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
     pdf.setFontSize(7.5); pdf.setTextColor(...TEAL); setF('bold');
     pdf.text(BRAND, mX, pageH - 7);
     pdf.setTextColor(...GRAY); setF('normal');
-    pdf.text(`${invNo} - ${T('Trang', 'Page')} ${i}/${totalPg}`, pageW - mX, pageH - 7, { align: 'right' });
+    pdf.text(`${invNo} · ${T('Trang', 'Page')} ${i}/${totalPg}`, pageW - mX, pageH - 7, { align: 'right' });
   }
 
   const customerSlug = (customer.name || 'Customer').replace(/[^a-zA-Z0-9_]/g, '_');
