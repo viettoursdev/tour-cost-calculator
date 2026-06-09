@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Dialog,
@@ -25,7 +26,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { HOTEL_CITIES } from './constants';
-import type { Item } from '@/types';
+import type { Item, Template } from '@/types';
 
 type HotelOption = { label: string; price: number; note?: string };
 type Hotel = {
@@ -66,10 +67,14 @@ type Props = {
   onPick?: (line: Partial<Item>) => void;
   /** Pax count used to compute `customQty = ceil(pax/2)` (rooms). */
   pax?: number;
+  /** Active quote template. When 'intl' the modal shows an info banner only
+   *  (intl hotels are typically priced inside the DMC package). */
+  template?: Template;
 };
 
-export function HotelModal({ open, onClose, onPick, pax }: Props) {
+export function HotelModal({ open, onClose, onPick, pax, template }: Props) {
   const isPicker = !!onPick;
+  const isIntl = template === 'intl';
   const hotelsByCity = useRateCardStore((s) => s.rates.hotels);
   const updateHotels = useRateCardStore((s) => s.updateHotels);
 
@@ -147,6 +152,32 @@ export function HotelModal({ open, onClose, onPick, pax }: Props) {
       ),
     );
   };
+
+  // For intl tours, the legacy app shows an info card explaining that hotel
+  // pricing is normally inside the DMC package. We do the same — early-return
+  // so users don't accidentally edit/pick from the domestic VN hotel list.
+  if (isIntl) {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', color: '#fff' }}>
+          <Typography variant="h6" fontWeight={800}>🏨 Khách sạn quốc tế</Typography>
+          <Typography variant="caption" sx={{ opacity: 0.85 }}>
+            Tour outbound: dùng DMC hoặc nhập thủ công
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Alert severity="info" sx={{ fontSize: 13, lineHeight: 1.7 }}>
+            💡 <strong>Tour quốc tế:</strong> Giá khách sạn outbound thường đã bao gồm trong gói DMC.
+            Vui lòng dùng rate card <strong>📋 DMC</strong> hoặc nhập trực tiếp vào dòng
+            "Khách sạn" với tiền tệ địa phương.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>

@@ -2,10 +2,36 @@ import { useState } from 'react';
 import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
 import Grid from '@mui/material/Grid2';
 import { useRateCardStore } from '@/stores/rateCardStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { HotelModal } from './HotelModal';
 import { VisaModal } from './VisaModal';
 import { RateCardModal } from './RateCardModal';
 import { RATE_CATEGORIES } from './constants';
+import type { Template } from '@/types';
+
+/**
+ * Per-template visibility rules for rate-card tiles.
+ * Source: public/legacy.html:8707-8716. Categories not in this map default to "always show".
+ */
+function isRateCategoryVisible(key: string, template: Template | null): boolean {
+  // No active template (template selector not yet picked) → show everything so
+  // the user can still edit rate cards from the Rates tab without a draft.
+  if (!template) return true;
+  switch (key) {
+    case 'insurance':
+    case 'logistics':
+    case 'gala':
+      return template !== 'dmc';
+    case 'dmc':
+      return template === 'intl';
+    case 'teambuild':
+    case 'meeting':
+      return template === 'domestic';
+    default:
+      // hotel, transport, staff, visa, and anything else: always shown
+      return true;
+  }
+}
 
 type ModalState =
   | { kind: 'none' }
@@ -18,8 +44,11 @@ export function RatesPanel() {
   const hotels = useRateCardStore((s) => s.rates.hotels);
   const visaRates = useRateCardStore((s) => s.rates.visaRates);
   const otherRates = useRateCardStore((s) => s.rates.otherRates);
+  const template = useQuoteStore((s) => s.draft.template);
 
   const [modal, setModal] = useState<ModalState>({ kind: 'none' });
+
+  const visibleCategories = RATE_CATEGORIES.filter((c) => isRateCategoryVisible(c.key, template));
 
   const cityCount = Object.keys(hotels).filter(
     (k) => Array.isArray(hotels[k]) && (hotels[k] as unknown[]).length > 0,
@@ -69,8 +98,14 @@ export function RatesPanel() {
         <strong>{otherKeysCount}</strong> hạng mục khác đã lưu.
       </Alert>
 
+      {template && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          Đang lọc theo template: <strong>{template}</strong> · {visibleCategories.length}/{RATE_CATEGORIES.length} hạng mục
+        </Typography>
+      )}
+
       <Grid container spacing={2}>
-        {RATE_CATEGORIES.map((cat) => {
+        {visibleCategories.map((cat) => {
           const count = countFor(cat.key);
           return (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={cat.key}>
@@ -97,7 +132,11 @@ export function RatesPanel() {
         })}
       </Grid>
 
-      <HotelModal open={modal.kind === 'hotel'} onClose={() => setModal({ kind: 'none' })} />
+      <HotelModal
+        open={modal.kind === 'hotel'}
+        onClose={() => setModal({ kind: 'none' })}
+        template={template ?? undefined}
+      />
       <VisaModal open={modal.kind === 'visa'} onClose={() => setModal({ kind: 'none' })} />
       {modal.kind === 'other' && (
         <RateCardModal

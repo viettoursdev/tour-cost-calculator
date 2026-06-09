@@ -84,6 +84,12 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
 
   const rows = useMemo(() => asRows(stored), [stored]);
 
+  // Edit/view-mode toggle (legacy at public/legacy.html:2322). Picker mode is
+  // always read-only; editor mode defaults to view (prevents accidental edits)
+  // and flips to true when the user clicks "✏️ Sửa".
+  const [editMode, setEditMode] = useState(false);
+  const readOnly = isPicker || !editMode;
+
   // Column set: union of keys across all rows, or sensible defaults for an empty list.
   const columns = useMemo(() => {
     const set = new Set<string>();
@@ -135,12 +141,26 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
-        📋 {isPicker ? `Chọn ${label} từ rate card` : `Rate Card · ${label}`}
-        {!isPicker && (
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-            ({storageKey})
-          </Typography>
-        )}
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Box sx={{ flex: 1 }}>
+            📋 {isPicker ? `Chọn ${label} từ rate card` : `Rate Card · ${label}`}
+            {!isPicker && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                {editMode ? '✏️ Chế độ chỉnh sửa — click số để sửa' : '👀 Chế độ xem — bấm "Sửa" để chỉnh giá'}
+              </Typography>
+            )}
+          </Box>
+          {!isPicker && (
+            <Button
+              size="small"
+              variant={editMode ? 'contained' : 'outlined'}
+              color={editMode ? 'success' : 'primary'}
+              onClick={() => setEditMode((v) => !v)}
+            >
+              {editMode ? '✓ Xong' : '✏️ Sửa'}
+            </Button>
+          )}
+        </Stack>
       </DialogTitle>
       <DialogContent dividers>
         {rows.length === 0 && (
@@ -164,7 +184,7 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
                 <TableRow key={idx}>
                   {columns.map((c) => (
                     <TableCell key={c}>
-                      {isPicker ? (
+                      {readOnly ? (
                         <Typography variant="body2"
                           fontWeight={c === 'label' || c === 'name' ? 700 : 400}
                           sx={{ whiteSpace: 'nowrap' }}>
@@ -193,11 +213,11 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
                         }}>
                         Chọn →
                       </Button>
-                    ) : (
+                    ) : editMode ? (
                       <IconButton size="small" onClick={() => deleteRow(idx)}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>
-                    )}
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}
@@ -205,7 +225,7 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
           </Table>
         </Box>
 
-        {!isPicker && (
+        {!isPicker && editMode && (
           <Stack direction="row" spacing={2} sx={{ mt: 2, alignItems: 'center' }}>
             <Button variant="contained" startIcon={<AddIcon />} onClick={addRow}>
               Thêm dòng

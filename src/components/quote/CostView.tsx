@@ -118,6 +118,7 @@ export function CostView() {
           <HotelModal
             open
             pax={pax}
+            template={template}
             onClose={() => setPicker(null)}
             onPick={(line) => {
               addItem(picker.catId, line);
