@@ -8,6 +8,7 @@ import type {
   Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
   Notification, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
+  VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc,
 } from '@/types';
 
 const firebaseConfig = {
@@ -682,5 +683,96 @@ export async function fbDeleteMenu(id: string): Promise<void> {
 export function fbSubscribeMenus(cb: (list: MenuIndexEntry[]) => void): Unsubscribe {
   return onSnapshot(MENU_INDEX_DOC, (s) => {
     cb(s.exists() ? ((s.data().items as MenuIndexEntry[]) ?? []) : []);
+  });
+}
+
+// ── Visa products + FX rates ──
+
+const VISA_PRODUCTS_DOC = doc(db, 'viettours', 'visa_products');
+
+/**
+ * Subscribe to the visa-product catalog (products + FX rates).
+ * Source: legacy window.fbOnVisaProducts (legacy.html:491).
+ */
+export function fbSubscribeVisaProducts(
+  cb: (data: VisaProductsDoc | null) => void,
+): Unsubscribe {
+  return onSnapshot(VISA_PRODUCTS_DOC, (s) => {
+    cb(s.exists() ? (s.data() as VisaProductsDoc) : null);
+  });
+}
+
+/**
+ * Save the visa catalog (products + FX rates).
+ * Source: legacy window.fbSaveVisaProducts (legacy.html:492).
+ */
+export async function fbSaveVisaProducts(
+  data: { products: VisaProduct[]; rates: Record<string, number> },
+  savedBy: string,
+): Promise<void> {
+  await setDoc(VISA_PRODUCTS_DOC, {
+    products: data.products,
+    rates: data.rates,
+    updatedAt: new Date().toISOString(),
+    updatedBy: savedBy || '',
+  });
+}
+
+// ── Visa procedure documents ──
+
+const VISA_PROC_INDEX_DOC = doc(db, 'viettours', 'visa_proc_index');
+const visaProcDoc = (id: string) => doc(db, 'visa_procedures', id);
+
+/**
+ * Save full visa-procedure doc, then upsert its metadata entry in the index.
+ * Source: legacy window.fbSaveVisaProc (legacy.html:495-503).
+ */
+export async function fbSaveVisaProc(d: VisaProcDoc, savedBy: string): Promise<void> {
+  const now = new Date().toISOString();
+  await setDoc(visaProcDoc(d.id), { ...d, updatedAt: now, updatedBy: savedBy });
+
+  const snap = await getDoc(VISA_PROC_INDEX_DOC);
+  const list = snap.exists() ? ((snap.data().items as VisaProcIndexEntry[]) ?? []) : [];
+  const meta: VisaProcIndexEntry = {
+    id: d.id,
+    code: d.code ?? '',
+    title: d.title ?? '',
+    country: d.country ?? '',
+    linkedQuoteName: d.linkedQuoteName ?? '',
+    collaborators: d.collaborators ?? [],
+    createdByUsername: d.createdByUsername ?? '',
+    createdByName: d.createdByName ?? '',
+    updatedAt: now,
+    updatedBy: savedBy,
+  };
+  const idx = list.findIndex((x) => x.id === d.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...meta };
+  else list.unshift({ ...meta, createdAt: now });
+  await setDoc(VISA_PROC_INDEX_DOC, { items: list.slice(0, 500) });
+}
+
+export async function fbGetVisaProc(id: string): Promise<VisaProcDoc | null> {
+  const snap = await getDoc(visaProcDoc(id));
+  return snap.exists() ? (snap.data() as VisaProcDoc) : null;
+}
+
+export async function fbDeleteVisaProc(id: string): Promise<void> {
+  const snap = await getDoc(VISA_PROC_INDEX_DOC);
+  if (snap.exists()) {
+    const items = ((snap.data().items as VisaProcIndexEntry[]) ?? []).filter((x) => x.id !== id);
+    await setDoc(VISA_PROC_INDEX_DOC, { items });
+  }
+  try {
+    await deleteDoc(visaProcDoc(id));
+  } catch {
+    /* doc may not exist */
+  }
+}
+
+export function fbSubscribeVisaProcs(
+  cb: (list: VisaProcIndexEntry[]) => void,
+): Unsubscribe {
+  return onSnapshot(VISA_PROC_INDEX_DOC, (s) => {
+    cb(s.exists() ? ((s.data().items as VisaProcIndexEntry[]) ?? []) : []);
   });
 }
