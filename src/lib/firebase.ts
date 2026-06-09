@@ -5,9 +5,9 @@ import {
 } from 'firebase/firestore';
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
-  Itinerary, ItineraryIndexEntry, Ncc,
+  Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
   Notification, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
-  QuoteDraft, RateCard, RateCardDoc, Template, TourPayments, User,
+  QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
 } from '@/types';
 
 const firebaseConfig = {
@@ -600,5 +600,87 @@ export function fbSubscribeItineraries(
 ): Unsubscribe {
   return onSnapshot(ITIN_INDEX_DOC, (s) => {
     cb(s.exists() ? ((s.data().items as ItineraryIndexEntry[]) ?? []) : []);
+  });
+}
+
+// ── Restaurants ──
+
+const REST_DOC = doc(db, 'viettours', 'restaurant_list');
+
+/**
+ * Subscribe to the shared restaurant library.
+ * Source: legacy window.fbOnRestaurants (legacy.html:472).
+ */
+export function fbSubscribeRestaurants(cb: (list: Restaurant[]) => void): Unsubscribe {
+  return onSnapshot(REST_DOC, (s) => {
+    cb(s.exists() ? ((s.data().restaurants as Restaurant[]) ?? []) : []);
+  });
+}
+
+/**
+ * Full-overwrite push of the restaurant library.
+ * Source: legacy window.fbSaveRestaurants (legacy.html:473).
+ */
+export async function fbSaveRestaurants(list: Restaurant[], savedBy: string): Promise<void> {
+  await setDoc(REST_DOC, {
+    restaurants: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: savedBy || '',
+  });
+}
+
+// ── Menus ──
+
+const MENU_INDEX_DOC = doc(db, 'viettours', 'menu_index');
+const menuDoc = (id: string) => doc(db, 'tour_menus', id);
+
+/**
+ * Save the full menu doc, then upsert its metadata entry in the index.
+ * Source: legacy window.fbSaveMenu (legacy.html:476-484).
+ */
+export async function fbSaveMenu(m: Menu, savedBy: string): Promise<void> {
+  const now = new Date().toISOString();
+  await setDoc(menuDoc(m.id), { ...m, updatedAt: now, updatedBy: savedBy });
+
+  const snap = await getDoc(MENU_INDEX_DOC);
+  const list = snap.exists() ? ((snap.data().items as MenuIndexEntry[]) ?? []) : [];
+  const meta: MenuIndexEntry = {
+    id: m.id,
+    code: m.code ?? '',
+    title: m.title ?? '',
+    destination: m.destination ?? '',
+    days: m.days ?? 0,
+    linkedItineraryName: m.linkedItineraryName ?? '',
+    linkedQuoteName: m.linkedQuoteName ?? '',
+    updatedAt: now,
+    updatedBy: savedBy,
+  };
+  const idx = list.findIndex((x) => x.id === m.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...meta };
+  else list.unshift({ ...meta, createdAt: now, createdBy: savedBy });
+  await setDoc(MENU_INDEX_DOC, { items: list.slice(0, 500) });
+}
+
+export async function fbGetMenu(id: string): Promise<Menu | null> {
+  const snap = await getDoc(menuDoc(id));
+  return snap.exists() ? (snap.data() as Menu) : null;
+}
+
+export async function fbDeleteMenu(id: string): Promise<void> {
+  const snap = await getDoc(MENU_INDEX_DOC);
+  if (snap.exists()) {
+    const items = ((snap.data().items as MenuIndexEntry[]) ?? []).filter((x) => x.id !== id);
+    await setDoc(MENU_INDEX_DOC, { items });
+  }
+  try {
+    await deleteDoc(menuDoc(id));
+  } catch {
+    /* doc may not exist */
+  }
+}
+
+export function fbSubscribeMenus(cb: (list: MenuIndexEntry[]) => void): Unsubscribe {
+  return onSnapshot(MENU_INDEX_DOC, (s) => {
+    cb(s.exists() ? ((s.data().items as MenuIndexEntry[]) ?? []) : []);
   });
 }
