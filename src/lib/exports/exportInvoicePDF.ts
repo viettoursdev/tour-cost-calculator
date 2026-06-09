@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf';
 import { numberToVietWords } from './vietWords';
 import { calcVND, type Totals } from '@/components/quote/calc';
 import { getCATS } from '@/components/quote/constants';
+import { calcEndDate, fmtDate } from '@/lib/dateUtils';
 import type { Item, QuoteDraft } from '@/types';
 
 export interface InvoiceCustomer {
@@ -39,19 +40,6 @@ const COMPANY_VN = 'CONG TY TNHH DU LICH VA SU KIEN VIET';
 const COMPANY_EN = 'Vietnam Tourism & Events Co., Ltd.';
 const MST = '0302650371';
 const ADDRESS = '19B Mai Thi Luu, P. Tan Dinh, TP. Ho Chi Minh';
-
-function calcEndDate(startDate: string | null, days: number): Date | null {
-  if (!startDate) return null;
-  const d = new Date(startDate);
-  d.setDate(d.getDate() + Math.max(0, days - 1));
-  return d;
-}
-
-function fmtDate(d: Date | string | null | undefined, en: boolean): string {
-  if (!d) return '';
-  const date = typeof d === 'string' ? new Date(d) : d;
-  return date.toLocaleDateString(en ? 'en-GB' : 'vi-VN');
-}
 
 export function exportInvoicePDF(args: InvoiceArgs): void {
   const { draft, totals, customer, lang, paymentTerms, savedBy } = args;
