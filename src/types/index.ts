@@ -7,3 +7,4 @@ export * from './contract';
 export * from './notification';
 export * from './payment';
 export * from './itinerary';
+export * from './menu';
