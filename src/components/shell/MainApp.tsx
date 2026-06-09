@@ -10,6 +10,8 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
+import { useMenuStore } from '@/stores/menuStore';
+import { useRestaurantStore } from '@/stores/restaurantStore';
 import { checkContractDeadlines } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
@@ -37,6 +39,8 @@ export function MainApp() {
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
     const itinUnsub = useItineraryStore.getState().init();
+    const menuUnsub = useMenuStore.getState().init();
+    const restUnsub = useRestaurantStore.getState().init();
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
       rcUnsub?.();
@@ -47,6 +51,8 @@ export function MainApp() {
       notifUnsub?.();
       paUnsub?.();
       itinUnsub?.();
+      menuUnsub?.();
+      restUnsub?.();
     };
   }, [currentUser]);
 
