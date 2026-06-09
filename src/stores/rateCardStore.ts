@@ -22,6 +22,10 @@ type RateCardState = {
 };
 
 let pushDebounced: ((rc: RateCard, pushedBy: string) => void) | null = null;
+// `pushedAt` of this client's most recent push. The onSnapshot listener uses it
+// to ignore our own write when it round-trips back (~2s later) — applying it
+// would clobber any edits typed in the meantime and disrupt the active input.
+let lastSelfPushAt: string | null = null;
 
 export const useRateCardStore = create<RateCardState>()(
   subscribeWithSelector(
@@ -51,13 +55,19 @@ export const useRateCardStore = create<RateCardState>()(
           if (!pushDebounced) {
             pushDebounced = debounce((rc: RateCard, pushedBy: string) => {
               fbPushMasterRC(rc, pushedBy)
-                .then(() => set({ status: 'idle' }))
+                .then((pushedAt) => {
+                  lastSelfPushAt = pushedAt;
+                  set({ status: 'idle' });
+                })
                 .catch(() => set({ status: 'error' }));
             }, 2000);
           }
 
           // 4. Subscribe to remote changes from other clients.
           return fbSubscribeMasterRC((cloud) => {
+            // Ignore the echo of our own push — applying it would overwrite
+            // local edits made after the push and reset the active input.
+            if (cloud._meta?.pushedAt && cloud._meta.pushedAt === lastSelfPushAt) return;
             set({
               rates: {
                 hotels: cloud.hotels,

@@ -68,7 +68,7 @@ export async function fbPullMasterRC(): Promise<RateCardDoc | null> {
   return stripVisaMirror(snap.data() as RateCardDoc);
 }
 
-export async function fbPushMasterRC(rc: RateCard, pushedBy: string): Promise<void> {
+export async function fbPushMasterRC(rc: RateCard, pushedBy: string): Promise<string> {
   // Legacy `_collectRC()` (index.html:41-50) mirrors `vte_visa_rates` into BOTH
   // top-level `visaRates` AND `otherRates['vte_visa_rates']`. Legacy `_applyRC()`
   // tolerates either shape (step 2 reads visaRates first, step 3 may overwrite
@@ -79,11 +79,12 @@ export async function fbPushMasterRC(rc: RateCard, pushedBy: string): Promise<vo
     ...rc.otherRates,
     vte_visa_rates: rc.visaRates,
   };
+  const pushedAt = new Date().toISOString();
   await setDoc(RC_DOC, {
     _meta: {
       version: '2.0',
       type: 'viettours_ratecard_master',
-      pushedAt: new Date().toISOString(),
+      pushedAt,
       pushedBy,
       app: 'Viettours Tour Cost Calculator',
       autoSync: true,
@@ -92,6 +93,9 @@ export async function fbPushMasterRC(rc: RateCard, pushedBy: string): Promise<vo
     visaRates: rc.visaRates,
     otherRates: otherRatesWithVisaMirror,
   });
+  // Caller records this so the self-echo from onSnapshot can be ignored
+  // (otherwise our own round-tripped write clobbers in-progress local edits).
+  return pushedAt;
 }
 
 export function fbSubscribeMasterRC(cb: (rc: RateCardDoc) => void): Unsubscribe {

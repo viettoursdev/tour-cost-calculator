@@ -236,7 +236,7 @@ export function HotelModal({ open, onClose, onPick, pax, template }: Props) {
           {filtered.map((h) => {
             const idx = hotels.indexOf(h);
             return (
-              <Paper key={`${idx}-${h.name}`} sx={{ p: 2 }} variant="outlined">
+              <Paper key={idx} sx={{ p: 2 }} variant="outlined">
                 {isPicker ? (
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
                     <Typography fontWeight={700} sx={{ flexGrow: 1 }}>
