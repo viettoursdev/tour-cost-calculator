@@ -8,6 +8,7 @@ import { DashboardView } from './DashboardView';
 import { PaymentView } from './PaymentView';
 import { ItineraryApp } from '@/components/itinerary/ItineraryApp';
 import { MenuApp } from '@/components/menu/MenuApp';
+import { VisaApp } from '@/components/visa/VisaApp';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
@@ -33,6 +34,11 @@ export function QuoteView() {
   if (template === 'menu') {
     return (
       <MenuApp onExit={() => useQuoteStore.getState().abandon()} />
+    );
+  }
+  if (template === 'visa') {
+    return (
+      <VisaApp onExit={() => useQuoteStore.getState().abandon()} />
     );
   }
 

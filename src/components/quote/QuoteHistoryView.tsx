@@ -19,6 +19,7 @@ const TEMPLATE_LABEL: Record<Template, string> = {
   dmc: 'DMC',
   itinerary: 'Chương trình',
   menu: 'Thực đơn',
+  visa: 'Visa',
 };
 
 type TemplateFilter = 'all' | Template;

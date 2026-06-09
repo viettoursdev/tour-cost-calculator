@@ -157,4 +157,5 @@ export const TEMPLATES: Record<Template, TemplateDef> = {
   dmc:       { key: 'dmc',       label: 'Breakdown báo giá DMC',    icon: '📋', desc: 'Phân tích chi phí & so sánh với giá DMC', init: TPL_DMC, sample: { name: 'DMC Package', dest: '', days: 5, nights: 4 } },
   itinerary: { key: 'itinerary', label: 'Chương trình tour',        icon: '🗺️', desc: 'Tạo lịch trình tour theo ngày, xuất Word', kind: 'alt' },
   menu:      { key: 'menu',      label: 'Thư viện thực đơn',        icon: '🍽️', desc: 'Quản lý thực đơn theo nhà hàng, xuất Word/PDF', kind: 'alt' },
+  visa:      { key: 'visa',      label: 'Quản lý Visa',             icon: '🛂',  desc: 'Bảng giá visa & hồ sơ thủ tục', kind: 'alt' },
 };

@@ -7,9 +7,8 @@ import { TEMPLATES } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { Template } from '@/types';
 
-// Tiles for templates that aren't ported yet. Source: public/legacy.html:1664-1665.
+// Tiles for templates that aren't ported yet. Source: public/legacy.html:1665.
 const COMING_SOON_TILES = [
-  { key: 'visa',        icon: '🛂',  label: 'Quản lý Visa',       desc: 'Bảng giá visa & hồ sơ thủ tục' },
   { key: 'doctranslate',icon: '📑',  label: 'Dịch hồ sơ',         desc: 'Dịch Word/PDF/scan Việt→Anh' },
 ];
 
