@@ -4,9 +4,8 @@ import { createTheme } from '@mui/material/styles';
 export const LEGACY = {
   /** Signature teal header / primary-button gradient. */
   headerGradient: 'linear-gradient(135deg,#0d7a6a,#14a08c)',
-  /** Deep teal page background (legacy hero gradient) — dark enough that white
-   *  "glass" cards stand out clearly on top. */
-  pageBg: 'linear-gradient(135deg,#0a5c50 0%,#0d7a6a 50%,#14a08c 100%)',
+  /** Teal page background — teal fading to mint so white "glass" cards pop. */
+  pageBg: 'linear-gradient(135deg,#0d7a6a 0%,#14a08c 35%,#a8e6dd 100%)',
   /** Translucent "glass" surface used for cards/toolbars on the mint page. */
   glassBg: 'rgba(255,255,255,0.92)',
   navy: '#0f3a4a',
@@ -28,4 +27,19 @@ export const theme = createTheme({
     h6: { fontWeight: 700 },
   },
   shape: { borderRadius: 8 },
+  components: {
+    // Legacy-style toggle: round white thumb, solid grey track (off) /
+    // solid teal track (on) — applied to every MUI Switch in the app.
+    MuiSwitch: {
+      styleOverrides: {
+        switchBase: {
+          color: '#fff',
+          '&.Mui-checked': { color: '#fff' },
+          '&.Mui-checked + .MuiSwitch-track': { backgroundColor: '#0d7a6a', opacity: 1 },
+        },
+        thumb: { boxShadow: '0 1px 3px rgba(0,0,0,0.25)' },
+        track: { backgroundColor: 'rgba(15,58,74,0.25)', opacity: 1 },
+      },
+    },
+  },
 });
