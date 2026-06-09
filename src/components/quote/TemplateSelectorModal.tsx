@@ -1,18 +1,11 @@
 import { useState } from 'react';
 import {
   Alert, Box, Button, Card, CardActionArea, CardContent, Dialog, DialogContent,
-  DialogTitle, Stack, Typography,
+  DialogTitle, Typography,
 } from '@mui/material';
 import { TEMPLATES } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { Template } from '@/types';
-
-// Tiles for templates that aren't ported yet. Source: public/legacy.html:1665.
-const COMING_SOON_TILES = [
-  { key: 'doctranslate',icon: '📑',  label: 'Dịch hồ sơ',         desc: 'Dịch Word/PDF/scan Việt→Anh' },
-];
-
-const LEGACY_URL = '/tour-cost-calculator/legacy.html';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
 
@@ -77,24 +70,6 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
             </Card>
           ))}
         </Box>
-
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-          Các template sau vẫn chỉ có trong bản cũ:
-        </Typography>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          {COMING_SOON_TILES.map((tile) => (
-            <Button
-              key={tile.key}
-              variant="outlined"
-              size="small"
-              href={`${LEGACY_URL}#tpl=${tile.key}`}
-              target="_blank"
-              rel="noopener"
-            >
-              {tile.icon} {tile.label}
-            </Button>
-          ))}
-        </Stack>
 
         {pendingConfirm && (
           <Alert

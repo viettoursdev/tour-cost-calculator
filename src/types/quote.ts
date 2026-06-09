@@ -3,7 +3,7 @@ export type CategoryId =
   | 'teambuild' | 'gala' | 'logistics' | 'staff' | 'insurance'
   | 'visa' | 'dmc' | 'service_fee';
 
-export type Template = 'domestic' | 'intl' | 'dmc' | 'itinerary' | 'menu' | 'visa';
+export type Template = 'domestic' | 'intl' | 'dmc' | 'itinerary' | 'menu' | 'visa' | 'doctranslate';
 
 export type OutputCurrency =
   | 'VND' | 'USD' | 'EUR' | 'JPY' | 'SGD' | 'KRW' | 'THB' | 'GBP' | 'AUD' | 'CNY';
