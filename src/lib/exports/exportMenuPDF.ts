@@ -5,6 +5,8 @@
  * Skips the gradient-fill effect — uses flat fills for the same layout.
  */
 import { jsPDF } from 'jspdf';
+import { loadVNFont } from './vnFont';
+import { VTE_LOGO } from './vteLogo';
 import type { Menu } from '@/types';
 
 type RGB = [number, number, number];
@@ -20,7 +22,8 @@ const ADJ_FILL: RGB = [252, 221, 194];
 
 export function exportMenuPDF(it: Menu, code: string): void {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const FONT = 'helvetica';
+  const hasFont = loadVNFont(pdf);
+  const FONT = hasFont ? 'DejaVu' : 'helvetica';
   const setF = (style = 'normal') => pdf.setFont(FONT, style);
   const PW = 210, PH = 297, M = 14;
   const CW = PW - 2 * M;
@@ -31,11 +34,12 @@ export function exportMenuPDF(it: Menu, code: string): void {
     if (y + h > PH - M) { pdf.addPage(); y = M; }
   };
 
-  // Header (no logo image)
+  // Header (logo + brand)
+  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 17, undefined, 'FAST'); } catch { /* ignore */ }
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M, y + 6);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
   setF('normal'); pdf.setFontSize(7); pdf.setTextColor(...MUTE);
-  pdf.text('Tour Cost Calculator', M, y + 11);
+  pdf.text('Tour Cost Calculator', M + 34, y + 13);
 
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text('MA THUC DON', PW - M, y + 5, { align: 'right' });

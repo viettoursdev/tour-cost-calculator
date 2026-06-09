@@ -6,6 +6,8 @@
 import { jsPDF } from 'jspdf';
 import { getCATS } from '@/components/quote/constants';
 import { calcVND, computeTotals, fmtVND } from '@/components/quote/calc';
+import { loadVNFont } from './vnFont';
+import { VTE_LOGO } from './vteLogo';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -22,7 +24,8 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
   const activeCATS = getCATS(template);
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const FONT = 'helvetica';
+  const hasFont = loadVNFont(pdf);
+  const FONT = hasFont ? 'DejaVu' : 'helvetica';
   const pageW = 210, mX = 15;
   let y = 18;
 
@@ -40,10 +43,11 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
   pdf.setFillColor(...teal);
   pdf.rect(0, 0, pageW, 8, 'F');
 
-  // Company name
+  // Logo + company name
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 21, undefined, 'FAST'); } catch { /* ignore */ }
   pdf.setFontSize(16); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX, y + 6);
-  y += 20;
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 40, y + 10);
+  y += 24;
 
   // Quote title band
   pdf.setFillColor(...teal);

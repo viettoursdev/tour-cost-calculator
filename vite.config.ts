@@ -11,15 +11,27 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          mui: [
-            '@mui/material',
-            '@mui/icons-material',
-            '@mui/x-data-grid',
-            '@mui/x-date-pickers',
-          ],
-          firebase: ['firebase/app', 'firebase/firestore'],
-          exports: ['xlsx', 'jspdf', 'html2canvas', 'docx', 'file-saver', 'exceljs'],
+        manualChunks(id) {
+          // Keep MUI in its own chunk.
+          if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) {
+            return 'mui';
+          }
+          if (id.includes('node_modules/firebase')) return 'firebase';
+          // Group third-party export libs (PDF, DOCX, Excel, etc.).
+          if (
+            id.includes('node_modules/xlsx')
+            || id.includes('node_modules/jspdf')
+            || id.includes('node_modules/html2canvas')
+            || id.includes('node_modules/docx')
+            || id.includes('node_modules/file-saver')
+            || id.includes('node_modules/exceljs')
+          ) {
+            return 'exports';
+          }
+          // Group our own export source files (including the large embedded
+          // DejaVu font and VTE_LOGO base64) so they're only loaded when an
+          // export path runs, not in the initial app bundle.
+          if (id.includes('/src/lib/exports/')) return 'exports';
         },
       },
     },

@@ -4,11 +4,12 @@
  * Text-only header (no logo image) — matches the existing export convention.
  */
 import {
-  AlignmentType, BorderStyle, Document, Packer, Paragraph, ShadingType,
+  AlignmentType, BorderStyle, Document, ImageRun, Packer, Paragraph, ShadingType,
   Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
   type IParagraphOptions, type ITableCellOptions,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import type { Menu } from '@/types';
 
 const FONT = 'Aptos';
@@ -90,8 +91,14 @@ export async function exportMenuDocx(it: Menu, code: string): Promise<void> {
   C.push(tbl([new TableRow({
     children: [
       cell([
-        P(tr('VIETTOURS INCENTIVES & EVENTS', { size: 22, bold: true, color: TEAL }), { after: 0 }),
-        P(tr('Tour Cost Calculator', { size: 13, color: MUTE }), { after: 0 }),
+        new Paragraph({
+          children: [new ImageRun({
+            type: 'png',
+            data: b64ToU8(VTE_LOGO),
+            transformation: { width: 81, height: 46 },
+          })],
+          spacing: { after: 0 },
+        }),
       ], { width: 5153, valign: VerticalAlign.CENTER }),
       cell([
         P(tr('MÃ THỰC ĐƠN', { size: 14, bold: true, color: MUTE }), { align: AlignmentType.RIGHT, after: 0 }),
