@@ -30,6 +30,8 @@ export interface AIWorkerBody {
   origin?: string;
   destination?: string;
   mode?: 'driving' | 'walking' | 'bicycling' | 'transit';
+  image?: string; // base64 (no data URL prefix) — for /ocr
+  text?: string;  // VI source text — for /translate
 }
 
 export interface AIWorkerResponse {
@@ -39,8 +41,10 @@ export interface AIWorkerResponse {
   error?: string;
 }
 
+export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate';
+
 export async function callAIWorker(
-  path: '/ai' | '/distance',
+  path: AIWorkerPath,
   body: AIWorkerBody,
 ): Promise<AIWorkerResponse> {
   const url = getAIWorker();
