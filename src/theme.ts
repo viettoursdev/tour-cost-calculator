@@ -4,8 +4,9 @@ import { createTheme } from '@mui/material/styles';
 export const LEGACY = {
   /** Signature teal header / primary-button gradient. */
   headerGradient: 'linear-gradient(135deg,#0d7a6a,#14a08c)',
-  /** Mint page background (legacy `body`). */
-  pageBg: 'linear-gradient(135deg,#e0fbf7 0%,#ffffff 35%,#a8e6dd 100%)',
+  /** Teal page background — deep teal fading to mint so white "glass" cards
+   *  stay readable on top. */
+  pageBg: 'linear-gradient(135deg,#0d7a6a 0%,#14a08c 35%,#a8e6dd 100%)',
   /** Translucent "glass" surface used for cards/toolbars on the mint page. */
   glassBg: 'rgba(255,255,255,0.92)',
   navy: '#0f3a4a',
