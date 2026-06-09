@@ -1,5 +1,5 @@
 import {
-  Accordion, AccordionDetails, AccordionSummary, Box, Button, Stack, Switch, Table,
+  Accordion, AccordionDetails, AccordionSummary, Box, Button, Stack, Table,
   TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -44,11 +44,23 @@ export function CatBlock({
         sx={{ background: `linear-gradient(90deg, ${cat.color}14, transparent)` }}
       >
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
-          <Switch
-            size="small" checked={enabled}
-            onChange={onToggleCat}
-            onClick={(e) => e.stopPropagation()}
-          />
+          <Box
+            role="switch"
+            aria-checked={enabled}
+            aria-label={`Bật/tắt ${cat.label}`}
+            onClick={(e) => { e.stopPropagation(); onToggleCat(); }}
+            sx={{
+              flexShrink: 0, width: 38, height: 21, borderRadius: 11, cursor: 'pointer',
+              position: 'relative', transition: 'background .2s',
+              background: enabled ? cat.color : 'rgba(15,58,74,0.15)',
+            }}
+          >
+            <Box sx={{
+              position: 'absolute', top: 2, left: enabled ? 19 : 2, width: 17, height: 17,
+              borderRadius: '50%', background: '#fff', transition: 'left .2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </Box>
           <Box sx={{ fontSize: 20 }}>{cat.icon}</Box>
           <Typography fontWeight={700} sx={{ flex: 1 }}>{cat.label}</Typography>
           <Typography variant="caption" color="text.secondary">{items.length} dòng</Typography>

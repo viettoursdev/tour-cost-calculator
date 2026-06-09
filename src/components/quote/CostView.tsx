@@ -3,6 +3,7 @@ import {
   Box, Button, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
+import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
 import { DMCComparePanel } from './DMCComparePanel';
 import { VisaPickerModal } from './VisaPickerModal';
@@ -235,6 +236,8 @@ export function CostView() {
             </Box>
           </Paper>
         )}
+
+        {!isDMC && <HistPanel />}
       </Box>
     </Box>
   );

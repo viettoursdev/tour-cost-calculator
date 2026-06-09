@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AppBar, Box, Button, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
   Stack, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Typography,
@@ -26,6 +26,33 @@ type Props = {
   onOpenSelector: () => void;
   onOpenSaveCloud: () => void;
 };
+
+/** Translucent "glass pill" used in the teal header band (legacy style). */
+function HeaderPill({ icon, children }: { icon: string; children: ReactNode }) {
+  return (
+    <Stack
+      direction="row" alignItems="center" spacing={0.75}
+      sx={{ background: 'rgba(255,255,255,0.12)', borderRadius: 1.25, px: 1.5, py: 0.6 }}
+    >
+      <Box component="span" sx={{ opacity: 0.8, fontSize: 13 }}>{icon}</Box>
+      {children}
+    </Stack>
+  );
+}
+
+/** White inline number input for the header band. */
+function WhiteNum({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
+  return (
+    <TextField
+      variant="standard" type="number" value={value}
+      onChange={(e) => onChange(Math.max(min, Number(e.target.value) || min))}
+      slotProps={{
+        input: { disableUnderline: true },
+        htmlInput: { min, style: { width: 34, color: '#fff', fontWeight: 800, fontSize: 15, textAlign: 'center', padding: 0 } },
+      }}
+    />
+  );
+}
 
 export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const info = useQuoteStore((s) => s.draft.info);
@@ -82,6 +109,13 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     e.target.value = '';
   };
 
+  const endDateStr = (() => {
+    if (!info.startDate) return '';
+    const d = new Date(info.startDate);
+    d.setDate(d.getDate() + Math.max(0, info.days - 1));
+    return d.toLocaleDateString('vi-VN');
+  })();
+
   return (
     <AppBar
       position="sticky"
@@ -93,39 +127,59 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         borderBottom: '1px solid rgba(20,150,140,0.15)',
       }}
     >
-      <Toolbar sx={{ flexWrap: 'wrap', gap: 2, py: 1 }}>
-        <TextField
-          size="small" label="Tên báo giá" value={info.name}
-          onChange={(e) => patchInfo({ name: e.target.value })}
-          sx={{ minWidth: 220 }}
-        />
-        <TextField
-          size="small" label="Điểm đến" value={info.dest}
-          onChange={(e) => patchInfo({ dest: e.target.value })}
-          sx={{ minWidth: 180 }}
-        />
-        <TextField
-          size="small" label="Số ngày" type="number" value={info.days}
-          onChange={(e) => patchInfo({ days: Math.max(1, Number(e.target.value) || 1) })}
-          slotProps={{ htmlInput: { min: 1, style: { width: 60 } } }}
-        />
-        <TextField
-          size="small" label="Số đêm" type="number" value={info.nights}
-          onChange={(e) => patchInfo({ nights: Math.max(0, Number(e.target.value) || 0) })}
-          slotProps={{ htmlInput: { min: 0, style: { width: 60 } } }}
-        />
-        <TextField
-          size="small" label="Ngày khởi hành" type="date"
-          value={info.startDate ?? ''}
-          onChange={(e) => patchInfo({ startDate: e.target.value || null })}
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
-        <TextField
-          size="small" label="Khách (pax)" type="number" value={pax}
-          onChange={(e) => setPax(Math.max(1, Number(e.target.value) || 1))}
-          slotProps={{ htmlInput: { min: 1, style: { width: 70 } } }}
-        />
+      {/* ── Tour info header band (legacy style) ── */}
+      <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 1.5 }}>
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1.25}>
+          {/* Tour name → destination */}
+          <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexWrap: 'wrap', minWidth: 220 }}>
+            <TextField
+              variant="standard" value={info.name}
+              onChange={(e) => patchInfo({ name: e.target.value })}
+              placeholder="Tên báo giá..."
+              slotProps={{ input: { disableUnderline: true } }}
+              sx={{ '& input': { color: '#fff', fontSize: 20, fontWeight: 900, p: 0, '&::placeholder': { color: 'rgba(255,255,255,0.6)', opacity: 1 } } }}
+            />
+            <Box sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 18 }}>→</Box>
+            <TextField
+              variant="standard" value={info.dest}
+              onChange={(e) => patchInfo({ dest: e.target.value })}
+              placeholder="Điểm đến..."
+              slotProps={{ input: { disableUnderline: true } }}
+              sx={{ '& input': { color: LEGACY.gold, fontSize: 15, fontWeight: 700, p: 0, '&::placeholder': { color: 'rgba(255,224,130,0.6)', opacity: 1 } } }}
+            />
+          </Stack>
 
+          <Box sx={{ flexGrow: 1 }} />
+
+          {/* Meta pills */}
+          <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
+            <HeaderPill icon="🗓️">
+              <WhiteNum value={info.days} min={1} onChange={(v) => patchInfo({ days: v, nights: Math.max(0, v - 1) })} />
+              <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>ngày</Typography>
+            </HeaderPill>
+            <HeaderPill icon="🌙">
+              <WhiteNum value={info.nights} min={0} onChange={(v) => patchInfo({ nights: v })} />
+              <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>đêm</Typography>
+            </HeaderPill>
+            <HeaderPill icon="👥">
+              <WhiteNum value={pax} min={1} onChange={(v) => setPax(v)} />
+              <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>khách</Typography>
+            </HeaderPill>
+            <HeaderPill icon="🚀">
+              <Box
+                component="input" type="date" value={info.startDate ?? ''}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => patchInfo({ startDate: e.target.value || null })}
+                sx={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 13, fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', fontWeight: 600 }}
+              />
+            </HeaderPill>
+            {info.startDate && (
+              <Typography sx={{ color: LEGACY.gold, fontSize: 13, fontWeight: 600 }}>→ {endDateStr}</Typography>
+            )}
+          </Stack>
+        </Stack>
+      </Box>
+
+      <Toolbar sx={{ flexWrap: 'wrap', gap: 2, py: 1 }}>
         <Box sx={{ flexGrow: 1 }} />
 
         {isDMC && (

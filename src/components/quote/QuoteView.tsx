@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Drawer } from '@mui/material';
+import { Box } from '@mui/material';
 import { TemplateSelectorModal } from './TemplateSelectorModal';
 import { QuoteToolbar } from './QuoteToolbar';
 import { CostView } from './CostView';
@@ -12,11 +12,8 @@ import { VisaApp } from '@/components/visa/VisaApp';
 import { DocTranslateApp } from '@/components/doctranslate/DocTranslateApp';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
-import { HistPanel } from './HistPanel';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
-
-const HIST_DRAWER_WIDTH = 300;
 
 export function QuoteView() {
   const template = useQuoteStore((s) => s.draft.template);
@@ -64,35 +61,12 @@ export function QuoteView() {
             onOpenSaveCloud={() => setSaveCloudOpen(true)}
           />
 
-          <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-            <Box sx={{ flex: 1, overflowY: 'auto' }}>
-              {view === 'cost' && <CostView />}
-              {view === 'summary' && <SummaryView />}
-              {view === 'dashboard' && <DashboardView />}
-              {view === 'payment' && <PaymentView />}
-              {view === 'history' && <QuoteHistoryView />}
-            </Box>
-
-            {template !== 'dmc' && (
-              <Drawer
-                variant="permanent"
-                anchor="right"
-                sx={{
-                  width: HIST_DRAWER_WIDTH,
-                  flexShrink: 0,
-                  display: { xs: 'none', md: 'block' },
-                  '& .MuiDrawer-paper': {
-                    width: HIST_DRAWER_WIDTH,
-                    position: 'relative',
-                    border: 'none',
-                    borderLeft: '1px solid',
-                    borderColor: 'divider',
-                  },
-                }}
-              >
-                <HistPanel />
-              </Drawer>
-            )}
+          <Box sx={{ flex: 1, overflowY: 'auto' }}>
+            {view === 'cost' && <CostView />}
+            {view === 'summary' && <SummaryView />}
+            {view === 'dashboard' && <DashboardView />}
+            {view === 'payment' && <PaymentView />}
+            {view === 'history' && <QuoteHistoryView />}
           </Box>
 
           <SaveCloudQuoteModal
