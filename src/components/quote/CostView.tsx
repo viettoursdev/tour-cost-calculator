@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box, Button, Divider, MenuItem, Paper, Select, Slider, Stack, TextField, Typography,
+  Box, Button, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
 import { CurrencySelector } from './CurrencySelector';
@@ -12,10 +12,7 @@ import { computeTotals, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { LEGACY } from '@/theme';
 import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
-
-const ROUNDING_STEPS = [1000, 10000, 50000, 100000, 500000, 1000000];
 
 export function CostView() {
   const template = useQuoteStore((s) => s.draft.template) as Template;
@@ -32,10 +29,6 @@ export function CostView() {
   const addItem = useQuoteStore((s) => s.addItem);
   const updItem = useQuoteStore((s) => s.updItem);
   const delItem = useQuoteStore((s) => s.delItem);
-  const setMargin = useQuoteStore((s) => s.setMargin);
-  const setVat = useQuoteStore((s) => s.setVat);
-  const setSvcBasis = useQuoteStore((s) => s.setSvcBasis);
-  const setRounding = useQuoteStore((s) => s.setRounding);
 
   const outputCurrency = (useQuoteStore((s) => s.draft.outputCurrency) ?? 'USD') as OutputCurrency;
   const [visaPickerOpen, setVisaPickerOpen] = useState(false);
@@ -243,72 +236,6 @@ export function CostView() {
           </Paper>
         )}
       </Box>
-
-      {!isDMC && (
-        <Paper sx={{ width: 340, position: 'sticky', top: 0, alignSelf: 'flex-start', overflow: 'hidden' }}>
-          <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 2, py: 1.25 }}>
-            <Typography variant="overline" fontWeight={800} sx={{ letterSpacing: 1 }}>TỔNG CHI PHÍ</Typography>
-          </Box>
-          <Box sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Row label="Cost"        value={fmtVND(totals.totalCost)} />
-            <Row label="Svc basis"   value={`+ ${fmtVND(svcBasis)}`} />
-            <Row label={`Profit (${margin}%)`}  value={`+ ${fmtVND(totals.totalProfit)}`} />
-            <Row label={`VAT (${vat}%)`}       value={`+ ${fmtVND(totals.totalVAT)}`} />
-            <Divider />
-            <Row label="Selling /pax (raw)" value={fmtVND(totals.sellingPPax)} muted />
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="caption" sx={{ flex: 1 }}>Rounding step</Typography>
-              <Select size="small" value={rounding} onChange={(e) => setRounding(Number(e.target.value))}>
-                {ROUNDING_STEPS.map((s) => (
-                  <MenuItem key={s} value={s}>{s.toLocaleString('vi-VN')} ₫</MenuItem>
-                ))}
-              </Select>
-            </Stack>
-            <Row label="Selling /pax" value={fmtVND(totals.roundedPPax)} strong />
-            <Row label="Grand total"  value={fmtVND(totals.grandTotal)} strong />
-          </Stack>
-
-          <Divider sx={{ my: 2 }} />
-
-          <Stack spacing={2}>
-            <Stack>
-              <Typography variant="caption">Svc basis (VND)</Typography>
-              <TextField
-                size="small" type="number" value={svcBasis}
-                onChange={(e) => setSvcBasis(Number(e.target.value) || 0)}
-                slotProps={{ htmlInput: { min: 0, step: 100000 } }}
-              />
-            </Stack>
-            <Stack>
-              <Typography variant="caption">Margin {margin}%</Typography>
-              <Slider size="small" value={margin} min={0} max={50} step={0.5}
-                onChange={(_, v) => setMargin(v as number)} />
-            </Stack>
-            <Stack>
-              <Typography variant="caption">VAT {vat}%</Typography>
-              <Slider size="small" value={vat} min={0} max={20} step={0.5}
-                onChange={(_, v) => setVat(v as number)} />
-            </Stack>
-          </Stack>
-          </Box>
-        </Paper>
-      )}
     </Box>
-  );
-}
-
-function Row({ label, value, muted, strong }: { label: string; value: string; muted?: boolean; strong?: boolean }) {
-  return (
-    <Stack direction="row" justifyContent="space-between">
-      <Typography variant="body2" color={muted ? 'text.secondary' : 'text.primary'} fontWeight={strong ? 700 : 400}>{label}</Typography>
-      <Typography
-        variant="body2"
-        color={strong ? LEGACY.teal : muted ? 'text.secondary' : 'text.primary'}
-        fontWeight={strong ? 800 : 600}
-      >
-        {value}
-      </Typography>
-    </Stack>
   );
 }
