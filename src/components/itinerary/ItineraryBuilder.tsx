@@ -16,6 +16,7 @@ import { parseFlights } from './parseFlights';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { callAIWorker } from '@/lib/aiWorker';
+import { exportItineraryDocx } from '@/lib/exports/exportItineraryDocx';
 import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import BoltIcon from '@mui/icons-material/Bolt';
@@ -257,7 +258,8 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               {saving ? 'Đang lưu...' : 'Lưu'}
             </Button>
             <Button color="inherit" variant="contained"
-              startIcon={<DescriptionIcon />} disabled
+              startIcon={<DescriptionIcon />}
+              onClick={() => void exportItineraryDocx(it, code)}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Xuất Word
             </Button>
