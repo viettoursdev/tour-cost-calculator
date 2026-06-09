@@ -38,12 +38,15 @@ export const useContractStore = create<ContractState>()(
       const now = new Date().toISOString();
       const totalAmount = Math.round((form.pricePerPax || 0) * (form.contractPax || 0));
 
-      // Recalculate payment amounts from percent
-      const payments = form.payments.map((p) =>
-        p.percent !== undefined
-          ? { ...p, amount: Math.round((totalAmount * p.percent) / 100) }
-          : p,
-      );
+      // Recalculate payment amounts from percent (only when mode is percent).
+      // Fixed-mode rows keep the user-entered amount.
+      const payments = form.payments.map((p) => {
+        const mode = p.mode ?? 'percent';
+        if (mode === 'percent' && p.percent !== undefined) {
+          return { ...p, amount: Math.round((totalAmount * p.percent) / 100) };
+        }
+        return p;
+      });
 
       const saved: Contract = isNew
         ? {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, TextField, Typography } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -8,6 +8,13 @@ export function LoginScreen() {
   const [p, setP] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Auto-clear error after 3s (legacy parity at public/legacy.html:2450).
+  useEffect(() => {
+    if (!err) return;
+    const t = setTimeout(() => setErr(null), 3000);
+    return () => clearTimeout(t);
+  }, [err]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,32 +35,47 @@ export function LoginScreen() {
         bgcolor: 'background.default',
       }}
     >
-      <Paper sx={{ p: 4, width: 360 }} component="form" onSubmit={onSubmit}>
-        <Typography variant="h6" gutterBottom>
-          Đăng nhập — Viettours
+      <Paper sx={{ p: 4, width: 380 }} component="form" onSubmit={onSubmit}>
+        <Box sx={{ textAlign: 'center', mb: 2.5 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: '#0d7a6a' }}>
+            VIETTOURS
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Bảng tính chi phí tour
+          </Typography>
+        </Box>
+        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+          Đăng nhập hệ thống
         </Typography>
         <Stack spacing={2}>
           <TextField
             label="Tài khoản"
+            placeholder="ceo / sale1 / manager1..."
             value={u}
             onChange={(e) => setU(e.target.value)}
             autoFocus
             required
             autoComplete="username"
+            slotProps={{ inputLabel: { shrink: true } }}
           />
           <TextField
             label="Mật khẩu"
             type="password"
+            placeholder="••••••"
             value={p}
             onChange={(e) => setP(e.target.value)}
             required
             autoComplete="current-password"
+            slotProps={{ inputLabel: { shrink: true } }}
           />
           {err && <Alert severity="error">{err}</Alert>}
           <Button type="submit" variant="contained" disabled={busy || !u || !p}>
             {busy ? 'Đang xử lý…' : 'Đăng nhập'}
           </Button>
         </Stack>
+        <Alert severity="info" sx={{ mt: 2.5, fontSize: 12 }}>
+          <strong>Tài khoản demo:</strong> ceo / ceo123 · manager1 / mgr123 · sale1 / sale123
+        </Alert>
       </Paper>
     </Box>
   );

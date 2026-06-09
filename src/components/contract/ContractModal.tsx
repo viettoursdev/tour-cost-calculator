@@ -192,15 +192,47 @@ export function ContractModal({ initial, onSave, onClose }: Props) {
                   <Stack spacing={1} sx={{ flex: 1 }}>
                     <TextField size="small" label="Tên đợt" value={p.label}
                       onChange={(e) => updPayment(i, 'label', e.target.value)} />
-                    <Stack direction="row" spacing={1}>
-                      <TextField size="small" label="% (tùy chọn)" type="number" value={p.percent ?? ''}
-                        onChange={(e) => updPayment(i, 'percent', e.target.value ? Number(e.target.value) : undefined)}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Button
+                        size="small"
+                        variant={(p.mode ?? 'percent') === 'percent' ? 'contained' : 'outlined'}
+                        onClick={() => {
+                          const nextMode = (p.mode ?? 'percent') === 'percent' ? 'fixed' : 'percent';
+                          if (nextMode === 'fixed') {
+                            // Convert percent → amount (lock the computed value)
+                            const computed = p.percent !== undefined
+                              ? Math.round((totalAmount * p.percent) / 100)
+                              : p.amount;
+                            updPayment(i, 'mode', nextMode);
+                            updPayment(i, 'amount', computed);
+                            updPayment(i, 'percent', undefined);
+                          } else {
+                            // Convert amount → percent
+                            const pct = totalAmount > 0
+                              ? Math.round((p.amount / totalAmount) * 10000) / 100
+                              : 0;
+                            updPayment(i, 'mode', nextMode);
+                            updPayment(i, 'percent', pct);
+                          }
+                        }}
+                        title="Đổi giữa % và số tiền"
+                        sx={{ minWidth: 44, px: 1 }}
+                      >
+                        {(p.mode ?? 'percent') === 'percent' ? '%' : '₫'}
+                      </Button>
+                      {(p.mode ?? 'percent') === 'percent' ? (
+                        <TextField size="small" label="%" type="number" value={p.percent ?? ''}
+                          onChange={(e) => updPayment(i, 'percent', e.target.value ? Number(e.target.value) : undefined)}
+                          sx={{ flex: 1 }} />
+                      ) : (
+                        <TextField size="small" label="Số tiền (₫)" type="number" value={p.amount}
+                          onChange={(e) => updPayment(i, 'amount', Number(e.target.value) || 0)}
+                          sx={{ flex: 1 }} />
+                      )}
+                      <TextField size="small" label="Hạn TT" type="date" value={p.dueDate}
+                        onChange={(e) => updPayment(i, 'dueDate', e.target.value)}
+                        slotProps={{ inputLabel: { shrink: true } }}
                         sx={{ flex: 1 }} />
-                      <TextField size="small" label="Số tiền (₫)" type="number" value={p.amount}
-                        onChange={(e) => updPayment(i, 'amount', Number(e.target.value) || 0)}
-                        sx={{ flex: 1 }} />
-                      <TextField size="small" label="Hạn (DD/MM/YYYY)" value={p.dueDate}
-                        onChange={(e) => updPayment(i, 'dueDate', e.target.value)} sx={{ flex: 1 }} />
                     </Stack>
                     <TextField size="small" label="Ghi chú" value={p.note}
                       onChange={(e) => updPayment(i, 'note', e.target.value)} />

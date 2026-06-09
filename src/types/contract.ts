@@ -11,6 +11,7 @@ export type ContractPartyB = {
 export type ContractPayment = {
   id: string;
   label: string;
+  mode?: 'percent' | 'fixed';   // default 'percent'; 'fixed' means amount is user-entered
   percent?: number;
   amount: number;
   dueDate: string;

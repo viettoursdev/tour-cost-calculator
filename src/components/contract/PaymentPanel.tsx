@@ -190,8 +190,9 @@ export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props
               <TextField size="small" label="Số tiền (₫) *" type="number" value={newP.amount}
                 onChange={(e) => setNewP((p) => ({ ...p, amount: e.target.value }))}
                 slotProps={{ htmlInput: { min: 0 } }} sx={{ flex: 1 }} />
-              <TextField size="small" label="Hạn TT" value={newP.dueDate}
+              <TextField size="small" label="Hạn TT" type="date" value={newP.dueDate}
                 onChange={(e) => setNewP((p) => ({ ...p, dueDate: e.target.value }))}
+                slotProps={{ inputLabel: { shrink: true } }}
                 sx={{ flex: 1 }} />
             </Stack>
             <TextField size="small" label="Ghi chú" value={newP.note}
