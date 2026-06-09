@@ -9,6 +9,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
+import { useItineraryStore } from '@/stores/itineraryStore';
 import { checkContractDeadlines } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
@@ -35,6 +36,7 @@ export function MainApp() {
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
+    const itinUnsub = useItineraryStore.getState().init();
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
       rcUnsub?.();
@@ -44,6 +46,7 @@ export function MainApp() {
       contractUnsub?.();
       notifUnsub?.();
       paUnsub?.();
+      itinUnsub?.();
     };
   }, [currentUser]);
 
