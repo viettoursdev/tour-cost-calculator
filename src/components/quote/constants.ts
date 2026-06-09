@@ -145,13 +145,15 @@ export type TemplateDef = {
   label: string;
   icon: string;
   desc: string;
-  init: SeedFactory;
-  sample: { name: string; dest: string; days: number; nights: number };
+  kind?: 'standard' | 'alt';
+  init?: SeedFactory;
+  sample?: { name: string; dest: string; days: number; nights: number };
 };
 
-// Source: public/legacy.html:1658-1666 (filtered to PR-3.1 scope — DMC seed exists for PR-3.9).
+// Source: public/legacy.html:1658-1666.
 export const TEMPLATES: Record<Template, TemplateDef> = {
-  domestic: { key: 'domestic', label: 'Báo giá tour nội địa',     icon: '🇻🇳', desc: 'Tour trong nước Việt Nam', init: TPL_DOMESTIC, sample: { name: 'Tour Đà Nẵng', dest: 'Đà Nẵng', days: 3, nights: 2 } },
-  intl:     { key: 'intl',     label: 'Báo giá tour nước ngoài',  icon: '🌏', desc: 'Outbound tour quốc tế',   init: TPL_INTL,     sample: { name: 'Tour Nhật Bản', dest: 'Nhật Bản', days: 5, nights: 4 } },
-  dmc:      { key: 'dmc',      label: 'Breakdown báo giá DMC',    icon: '📋', desc: 'Phân tích chi phí & so sánh với giá DMC', init: TPL_DMC, sample: { name: 'DMC Package', dest: '', days: 5, nights: 4 } },
+  domestic:  { key: 'domestic',  label: 'Báo giá tour nội địa',     icon: '🇻🇳', desc: 'Tour trong nước Việt Nam', init: TPL_DOMESTIC, sample: { name: 'Tour Đà Nẵng', dest: 'Đà Nẵng', days: 3, nights: 2 } },
+  intl:      { key: 'intl',      label: 'Báo giá tour nước ngoài',  icon: '🌏', desc: 'Outbound tour quốc tế',   init: TPL_INTL,     sample: { name: 'Tour Nhật Bản', dest: 'Nhật Bản', days: 5, nights: 4 } },
+  dmc:       { key: 'dmc',       label: 'Breakdown báo giá DMC',    icon: '📋', desc: 'Phân tích chi phí & so sánh với giá DMC', init: TPL_DMC, sample: { name: 'DMC Package', dest: '', days: 5, nights: 4 } },
+  itinerary: { key: 'itinerary', label: 'Chương trình tour',        icon: '🗺️', desc: 'Tạo lịch trình tour theo ngày, xuất Word', kind: 'alt' },
 };

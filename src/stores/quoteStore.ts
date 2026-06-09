@@ -142,6 +142,14 @@ export const useQuoteStore = create<QuoteState>()(
 
         newDraft: (template) => {
           const tpl = TEMPLATES[template];
+          // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
+          if (tpl.kind === 'alt' || !tpl.init) {
+            set({
+              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null },
+              view: 'cost',
+            });
+            return;
+          }
           const items = tpl.init(EMPTY_DRAFT.pax);
           const catEnabled = Object.fromEntries(
             CATS.map((c) => [
@@ -153,7 +161,7 @@ export const useQuoteStore = create<QuoteState>()(
             draft: {
               ...EMPTY_DRAFT,
               template,
-              info: { ...EMPTY_DRAFT.info, ...tpl.sample, startDate: null },
+              info: { ...EMPTY_DRAFT.info, ...(tpl.sample ?? {}), startDate: null },
               items,
               catEnabled,
               currentQuoteId: null,

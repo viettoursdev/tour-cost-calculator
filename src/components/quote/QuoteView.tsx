@@ -6,6 +6,7 @@ import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
 import { DashboardView } from './DashboardView';
 import { PaymentView } from './PaymentView';
+import { ItineraryApp } from '@/components/itinerary/ItineraryApp';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
@@ -22,6 +23,12 @@ export function QuoteView() {
   // If no template, show the gate non-dismissably.
   const gateOpen = template === null || selectorOpen;
   const gateDismissable = template !== null;
+
+  if (template === 'itinerary') {
+    return (
+      <ItineraryApp onExit={() => useQuoteStore.getState().abandon()} />
+    );
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

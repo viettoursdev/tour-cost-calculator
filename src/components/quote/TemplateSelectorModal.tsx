@@ -7,9 +7,8 @@ import { TEMPLATES } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { Template } from '@/types';
 
-// Tiles for templates that aren't ported yet. Source: public/legacy.html:1662-1665.
+// Tiles for templates that aren't ported yet. Source: public/legacy.html:1663-1665.
 const COMING_SOON_TILES = [
-  { key: 'itinerary',   icon: '🗺️', label: 'Chương trình tour', desc: 'Tạo lịch trình tour theo ngày, xuất Word/PDF' },
   { key: 'menu',        icon: '🍽️', label: 'Thư viện thực đơn', desc: 'Quản lý thực đơn theo nhà hàng, xuất Word/PDF' },
   { key: 'visa',        icon: '🛂',  label: 'Quản lý Visa',       desc: 'Bảng giá visa & hồ sơ thủ tục' },
   { key: 'doctranslate',icon: '📑',  label: 'Dịch hồ sơ',         desc: 'Dịch Word/PDF/scan Việt→Anh' },
