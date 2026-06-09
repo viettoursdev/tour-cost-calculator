@@ -1,11 +1,12 @@
 /**
- * Export a Payment Request ("Phieu de nghi thanh toan") as a PDF.
+ * Export a Payment Request ("Phiếu đề nghị thanh toán") as a PDF.
  * Source: public/legacy.html:4958-5116.
- * Vietnamese text is written without diacritics so Helvetica renders cleanly
- * (matches the convention from exportContractPDF / exportAcceptanceCert).
+ * Uses bundled DejaVu Sans for Vietnamese diacritics + VTE_LOGO.
  */
 import { jsPDF } from 'jspdf';
 import { numberToVietWords } from './vietWords';
+import { loadVNFont } from './vnFont';
+import { VTE_LOGO } from './vteLogo';
 import type {
   PaymentApprovalEntry, PaymentItem, QuoteInfo, User,
 } from '@/types';
@@ -38,7 +39,8 @@ export function exportPaymentRequestPDF(
   approvalEntry?: PaymentApprovalEntry,
 ): void {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const FONT = 'helvetica';
+  const hasFont = loadVNFont(pdf);
+  const FONT = hasFont ? 'DejaVu' : 'helvetica';
   const setFont = (s = 'normal') => pdf.setFont(FONT, s);
   const pageW = 210, pageH = 297, mX = 18;
   let y = 18;
@@ -47,24 +49,25 @@ export function exportPaymentRequestPDF(
   const now = new Date();
   const reqNo = `PTT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
 
-  // Top teal stripe
+  // Top teal stripe + logo
   pdf.setFillColor(...TEAL); pdf.rect(0, 0, pageW, 4, 'F');
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 21, undefined, 'FAST'); } catch { /* ignore */ }
 
-  // Header
+  // Header (right of logo)
   pdf.setFontSize(13); pdf.setTextColor(...TEAL); setFont('bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX, y + 8);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 40, y + 8);
   pdf.setFontSize(8); pdf.setTextColor(...GRAY); setFont('normal');
-  pdf.text('Cong ty TNHH Du lich va Su kien Viet - MST: 0302650371', mX, y + 13);
+  pdf.text('Công ty TNHH Du lịch và Sự kiện Việt · MST: 0302650371', mX + 40, y + 13);
   y += 28;
 
   // Title
   pdf.setFontSize(18); pdf.setTextColor(...DARK); setFont('bold');
-  pdf.text('PHIEU DE NGHI THANH TOAN', pageW / 2, y, { align: 'center' }); y += 6;
+  pdf.text('PHIẾU ĐỀ NGHỊ THANH TOÁN', pageW / 2, y, { align: 'center' }); y += 6;
   pdf.setFontSize(10); pdf.setTextColor(...GRAY); setFont('normal');
   pdf.text('PAYMENT REQUEST', pageW / 2, y, { align: 'center' }); y += 6;
   pdf.setFontSize(9); pdf.setTextColor(...DARK);
-  pdf.text(`So / No: ${reqNo}`, pageW / 2, y, { align: 'center' });
-  pdf.text(`Ngay / Date: ${now.toLocaleDateString('vi-VN')}`, pageW / 2, y + 5, { align: 'center' });
+  pdf.text(`Số / No: ${reqNo}`, pageW / 2, y, { align: 'center' });
+  pdf.text(`Ngày / Date: ${now.toLocaleDateString('vi-VN')}`, pageW / 2, y + 5, { align: 'center' });
   y += 14;
 
   pdf.setDrawColor(...TEAL); pdf.setLineWidth(0.5); pdf.line(mX, y, pageW - mX, y); y += 10;
@@ -83,21 +86,21 @@ export function exportPaymentRequestPDF(
 
   // Requester
   pdf.setFontSize(9); pdf.setTextColor(...TEAL); setFont('bold');
-  pdf.text('NGUOI DE NGHI / REQUESTER:', mX, y); y += 5;
+  pdf.text('NGƯỜI ĐỀ NGHỊ / REQUESTER:', mX, y); y += 5;
   pdf.setFontSize(10); pdf.setTextColor(...DARK); setFont('bold');
   pdf.text(form.requester || user.name, mX, y); y += 8;
   pdf.setDrawColor(230, 230, 230); pdf.setLineWidth(0.2);
   pdf.line(mX, y, pageW - mX, y); y += 6;
 
-  field('DU AN / TOUR:', `${info.name || ''}${info.dest ? ' - ' + info.dest : ''}`);
-  field('NHA CUNG CAP / NGUOI NHAN:', form.supplier);
-  field('NOI DUNG DE NGHI / CONTENT:', form.content);
-  field('HANG MUC CHI PHI / CATEGORY:', `${ci.catLabel} - ${ci.name}`);
-  field('SO TIEN DE NGHI / AMOUNT:', fmtV(form.amount) + ' VND', true);
+  field('DỰ ÁN / TOUR:', `${info.name || ''}${info.dest ? ' - ' + info.dest : ''}`);
+  field('NHÀ CUNG CẤP / NGƯỜI NHẬN:', form.supplier);
+  field('NỘI DUNG ĐỀ NGHỊ / CONTENT:', form.content);
+  field('HẠNG MỤC CHI PHÍ / CATEGORY:', `${ci.catLabel} · ${ci.name}`);
+  field('SỐ TIỀN ĐỀ NGHỊ / AMOUNT:', fmtV(form.amount) + ' ₫', true);
 
   pdf.setFontSize(9); pdf.setTextColor(...GRAY); setFont('normal');
-  pdf.text(`Bang chu: ${numberToVietWords(form.amount)} dong.`, mX, y); y += 8;
-  if (form.note) field('GHI CHU / NOTE:', form.note);
+  pdf.text(`Bằng chữ: ${numberToVietWords(form.amount)} đồng.`, mX, y); y += 8;
+  if (form.note) field('GHI CHÚ / NOTE:', form.note);
   y += 4;
 
   // Approval status section
@@ -111,7 +114,7 @@ export function exportPaymentRequestPDF(
     pdf.setDrawColor(...stC); pdf.setLineWidth(0.4);
     pdf.roundedRect(mX, y, pageW - mX * 2, h, 3, 3, 'S');
     pdf.setFontSize(8); pdf.setTextColor(...stC); setFont('bold');
-    const icon = isOk ? 'DA DUYET' : 'TU CHOI';
+    const icon = isOk ? '✓ ĐÃ DUYỆT' : '✗ TỪ CHỐI';
 
     const intendedFromDB = (stage === 1
       ? approvalEntry?.intendedApprover1Name
@@ -125,10 +128,10 @@ export function exportPaymentRequestPDF(
     pdf.text(`${label}: ${icon}`, mX + 4, y + 6);
     setFont('normal');
     const at = stageData.updatedAt ? new Date(stageData.updatedAt).toLocaleDateString('vi-VN') : '';
-    pdf.text(`${personName}${at ? ' - ' + at : ''}`, pageW - mX - 2, y + 6, { align: 'right' });
+    pdf.text(`${personName}${at ? ' · ' + at : ''}`, pageW - mX - 2, y + 6, { align: 'right' });
     if (stageData.note) {
       pdf.setFontSize(7.5); pdf.setTextColor(100, 100, 100); setFont('italic');
-      const noteLines: string[] = pdf.splitTextToSize(`Ghi chu: ${stageData.note}`, pageW - mX * 2 - 8);
+      const noteLines: string[] = pdf.splitTextToSize(`Ghi chú: ${stageData.note}`, pageW - mX * 2 - 8);
       pdf.text(noteLines, mX + 4, y + 14);
     }
     y += h + 4;
@@ -136,15 +139,15 @@ export function exportPaymentRequestPDF(
 
   if (approvalEntry) {
     const isPending = approvalEntry.finalStatus === 'pending_stage2';
-    if (approvalEntry.stage1) renderStage(1, approvalEntry.stage1, 'Duyet 1');
-    if (approvalEntry.stage2) renderStage(2, approvalEntry.stage2, 'Duyet 2');
+    if (approvalEntry.stage1) renderStage(1, approvalEntry.stage1, 'Duyệt 1');
+    if (approvalEntry.stage2) renderStage(2, approvalEntry.stage2, 'Duyệt 2');
     if (isPending) {
       pdf.setFillColor(255, 251, 235);
       pdf.roundedRect(mX, y, pageW - mX * 2, 12, 3, 3, 'F');
       pdf.setDrawColor(245, 166, 35); pdf.setLineWidth(0.4);
       pdf.roundedRect(mX, y, pageW - mX * 2, 12, 3, 3, 'S');
       pdf.setFontSize(8); pdf.setTextColor(180, 120, 0); setFont('bold');
-      pdf.text('CHO DUYET 2 / PENDING STAGE 2', pageW / 2, y + 7, { align: 'center' });
+      pdf.text('⏳ CHỜ DUYỆT 2 / PENDING STAGE 2', pageW / 2, y + 7, { align: 'center' });
       y += 16;
     }
   } else {
@@ -153,7 +156,7 @@ export function exportPaymentRequestPDF(
     pdf.setDrawColor(245, 166, 35); pdf.setLineWidth(0.5);
     pdf.roundedRect(mX, y, pageW - mX * 2, 14, 3, 3, 'S');
     pdf.setFontSize(9); pdf.setTextColor(180, 120, 0); setFont('bold');
-    pdf.text('CHO DUYET / PENDING APPROVAL', pageW / 2, y + 8, { align: 'center' });
+    pdf.text('⏳ CHỜ DUYỆT / PENDING APPROVAL', pageW / 2, y + 8, { align: 'center' });
     y += 20;
   }
 
@@ -166,9 +169,9 @@ export function exportPaymentRequestPDF(
   const apv2Name = (approvalEntry?.intendedApprover2Name || form.approver2
     || approvalEntry?.stage2?.approverName || '').split('(')[0].trim();
   pdf.setFontSize(9); pdf.setTextColor(...DARK); setFont('bold');
-  pdf.text('NGUOI DE NGHI', mX + sigW / 2, y, { align: 'center' });
-  pdf.text('NGUOI DUYET 1', mX + sigW + sigW / 2, y, { align: 'center' });
-  pdf.text('NGUOI DUYET 2', mX + sigW * 2 + sigW / 2, y, { align: 'center' });
+  pdf.text('NGƯỜI ĐỀ NGHỊ', mX + sigW / 2, y, { align: 'center' });
+  pdf.text('NGƯỜI DUYỆT 1', mX + sigW + sigW / 2, y, { align: 'center' });
+  pdf.text('NGƯỜI DUYỆT 2', mX + sigW * 2 + sigW / 2, y, { align: 'center' });
   y += 4;
   pdf.setFontSize(7.5); pdf.setTextColor(...GRAY); setFont('normal');
   pdf.text('(Requester)', mX + sigW / 2, y, { align: 'center' });
