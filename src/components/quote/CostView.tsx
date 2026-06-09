@@ -1,14 +1,16 @@
+import { useState } from 'react';
 import {
   Box, Button, Divider, MenuItem, Paper, Select, Slider, Stack, TextField, Typography,
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
 import { CurrencySelector } from './CurrencySelector';
 import { DMCComparePanel } from './DMCComparePanel';
+import { VisaPickerModal } from './VisaPickerModal';
 import { computeTotals, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
-import type { CategoryId, OutputCurrency, Template } from '@/types';
+import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
 const ROUNDING_STEPS = [1000, 10000, 50000, 100000, 500000, 1000000];
 
@@ -33,6 +35,7 @@ export function CostView() {
   const setRounding = useQuoteStore((s) => s.setRounding);
 
   const outputCurrency = (useQuoteStore((s) => s.draft.outputCurrency) ?? 'USD') as OutputCurrency;
+  const [visaPickerOpen, setVisaPickerOpen] = useState(false);
   const dmcPrices = useQuoteStore((s) => s.draft.dmcPrices);
   const dmcMargin = useQuoteStore((s) => s.draft.dmcMargin);
   const setOutputCurrency = useQuoteStore((s) => s.setOutputCurrency);
@@ -76,8 +79,16 @@ export function CostView() {
             onUpd={(it) => updItem(cat.id as CategoryId, it)}
             onAdd={() => addItem(cat.id as CategoryId)}
             onDel={(id) => delItem(cat.id as CategoryId, id)}
+            onPickFromLibrary={cat.id === 'visa' ? () => setVisaPickerOpen(true) : undefined}
+            pickFromLibraryLabel={cat.id === 'visa' ? 'Chọn từ thư viện visa' : undefined}
           />
         ))}
+
+        <VisaPickerModal
+          open={visaPickerOpen}
+          onClose={() => setVisaPickerOpen(false)}
+          onPick={(lines: Partial<Item>[]) => lines.forEach((l) => addItem('visa', l))}
+        />
 
         {isDMC && dmcMargin !== undefined && (() => {
           const marginVND = dmcMargin.type === 'percent'

@@ -18,9 +18,14 @@ type Props = {
   onUpd: (item: Item) => void;
   onAdd: () => void;
   onDel: (id: number) => void;
+  onPickFromLibrary?: () => void;
+  pickFromLibraryLabel?: string;
 };
 
-export function CatBlock({ cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel }: Props) {
+export function CatBlock({
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel,
+  onPickFromLibrary, pickFromLibraryLabel,
+}: Props) {
   const sub = enabled ? catTotal(items, rates, pax) : 0;
 
   return (
@@ -73,9 +78,17 @@ export function CatBlock({ cat, items, enabled, pax, rates, onToggleCat, onUpd, 
               </TableBody>
             </Table>
           </Box>
-          <Button fullWidth onClick={onAdd} sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
-            ＋ Thêm dòng
-          </Button>
+          <Stack direction="row" sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
+            <Button fullWidth onClick={onAdd}>＋ Thêm dòng</Button>
+            {onPickFromLibrary && (
+              <Button
+                fullWidth onClick={onPickFromLibrary}
+                sx={{ borderLeft: '1px dashed', borderColor: 'divider', color: cat.color }}
+              >
+                📋 {pickFromLibraryLabel ?? 'Chọn từ thư viện'}
+              </Button>
+            )}
+          </Stack>
         </AccordionDetails>
       )}
     </Accordion>
