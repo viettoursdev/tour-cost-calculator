@@ -8,3 +8,4 @@ export * from './notification';
 export * from './payment';
 export * from './itinerary';
 export * from './menu';
+export * from './visa';
