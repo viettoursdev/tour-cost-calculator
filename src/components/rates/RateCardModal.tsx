@@ -19,6 +19,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useRateCardStore } from '@/stores/rateCardStore';
+import type { Item } from '@/types';
 
 // Generic editor for any of the "other rate" categories (transport, staff, dmc, insurance,
 // logistics, gala, teambuild, meeting). Legacy stores each as an array of objects at
@@ -48,9 +49,35 @@ type Props = {
   onClose: () => void;
   type: string;
   label: string;
+  /** When set, the modal switches to picker mode: each row is read-only
+   *  with a "Chọn" button that emits a partial Item to the caller. */
+  onPick?: (line: Partial<Item>) => void;
 };
 
-export function RateCardModal({ open, onClose, type, label }: Props) {
+function pickRow(r: Row): { price: number; name: string; unit: string; note: string } {
+  // Average min/max when both exist; else fall back to price/cost/amount columns.
+  const min = typeof r.min === 'number' ? r.min : Number(r.min) || 0;
+  const max = typeof r.max === 'number' ? r.max : Number(r.max) || 0;
+  let price = 0;
+  if (min > 0 && max > 0) price = Math.round((min + max) / 2);
+  else if (max > 0) price = max;
+  else if (min > 0) price = min;
+  else {
+    for (const k of ['price', 'cost', 'amount', 'fee']) {
+      const v = r[k];
+      if (typeof v === 'number') { price = v; break; }
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) { price = n; break; }
+    }
+  }
+  const name = String(r.label ?? r.name ?? r.title ?? '').trim() || '(không tên)';
+  const unit = String(r.unit ?? '').trim() || '/đơn vị';
+  const note = String(r.note ?? r.desc ?? '').trim();
+  return { price, name, unit, note };
+}
+
+export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
+  const isPicker = !!onPick;
   const storageKey = `vte_rate_${type}`;
   const stored = useRateCardStore((s) => s.rates.otherRates[storageKey]);
   const updateOtherRate = useRateCardStore((s) => s.updateOtherRate);
@@ -108,10 +135,12 @@ export function RateCardModal({ open, onClose, type, label }: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
-        📋 Rate Card · {label}
-        <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-          ({storageKey})
-        </Typography>
+        📋 {isPicker ? `Chọn ${label} từ rate card` : `Rate Card · ${label}`}
+        {!isPicker && (
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            ({storageKey})
+          </Typography>
+        )}
       </DialogTitle>
       <DialogContent dividers>
         {rows.length === 0 && (
@@ -135,18 +164,40 @@ export function RateCardModal({ open, onClose, type, label }: Props) {
                 <TableRow key={idx}>
                   {columns.map((c) => (
                     <TableCell key={c}>
-                      <TextField
-                        size="small"
-                        value={r[c] ?? ''}
-                        onChange={(e) => editCell(idx, c, e.target.value)}
-                        fullWidth
-                      />
+                      {isPicker ? (
+                        <Typography variant="body2"
+                          fontWeight={c === 'label' || c === 'name' ? 700 : 400}
+                          sx={{ whiteSpace: 'nowrap' }}>
+                          {typeof r[c] === 'number' ? r[c].toLocaleString('vi-VN') : (r[c] ?? '')}
+                        </Typography>
+                      ) : (
+                        <TextField
+                          size="small"
+                          value={r[c] ?? ''}
+                          onChange={(e) => editCell(idx, c, e.target.value)}
+                          fullWidth
+                        />
+                      )}
                     </TableCell>
                   ))}
                   <TableCell>
-                    <IconButton size="small" onClick={() => deleteRow(idx)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    {isPicker ? (
+                      <Button size="small" variant="contained"
+                        onClick={() => {
+                          const { price, name, unit, note } = pickRow(r);
+                          onPick!({
+                            name, cur: 'VND', price, unit,
+                            qtyMode: 'custom', customQty: 1, note,
+                          });
+                          onClose();
+                        }}>
+                        Chọn →
+                      </Button>
+                    ) : (
+                      <IconButton size="small" onClick={() => deleteRow(idx)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -154,20 +205,22 @@ export function RateCardModal({ open, onClose, type, label }: Props) {
           </Table>
         </Box>
 
-        <Stack direction="row" spacing={2} sx={{ mt: 2, alignItems: 'center' }}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={addRow}>
-            Thêm dòng
-          </Button>
-          <TextField
-            size="small"
-            placeholder="Tên cột mới"
-            value={newCol}
-            onChange={(e) => setNewCol(e.target.value)}
-          />
-          <Button variant="outlined" onClick={addColumn} disabled={!newCol.trim()}>
-            Thêm cột
-          </Button>
-        </Stack>
+        {!isPicker && (
+          <Stack direction="row" spacing={2} sx={{ mt: 2, alignItems: 'center' }}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={addRow}>
+              Thêm dòng
+            </Button>
+            <TextField
+              size="small"
+              placeholder="Tên cột mới"
+              value={newCol}
+              onChange={(e) => setNewCol(e.target.value)}
+            />
+            <Button variant="outlined" onClick={addColumn} disabled={!newCol.trim()}>
+              Thêm cột
+            </Button>
+          </Stack>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Đóng</Button>
