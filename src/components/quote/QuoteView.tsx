@@ -7,6 +7,7 @@ import { SummaryView } from './SummaryView';
 import { DashboardView } from './DashboardView';
 import { PaymentView } from './PaymentView';
 import { ItineraryApp } from '@/components/itinerary/ItineraryApp';
+import { MenuApp } from '@/components/menu/MenuApp';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
@@ -27,6 +28,11 @@ export function QuoteView() {
   if (template === 'itinerary') {
     return (
       <ItineraryApp onExit={() => useQuoteStore.getState().abandon()} />
+    );
+  }
+  if (template === 'menu') {
+    return (
+      <MenuApp onExit={() => useQuoteStore.getState().abandon()} />
     );
   }
 
