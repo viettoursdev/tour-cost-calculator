@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { fmtOutput } from '@/lib/currency';
 import { computeTotals } from './calc';
 import { InvoiceModal } from './InvoiceModal';
+import { LEGACY } from '@/theme';
 import type { OutputCurrency } from '@/types';
 
 type Props = {
@@ -82,7 +83,16 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   };
 
   return (
-    <AppBar position="sticky" color="default" elevation={1}>
+    <AppBar
+      position="sticky"
+      color="default"
+      elevation={0}
+      sx={{
+        background: LEGACY.glassBg,
+        backdropFilter: 'blur(8px)',
+        borderBottom: '1px solid rgba(20,150,140,0.15)',
+      }}
+    >
       <Toolbar sx={{ flexWrap: 'wrap', gap: 2, py: 1 }}>
         <TextField
           size="small" label="Tên báo giá" value={info.name}
@@ -122,12 +132,13 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           <Stack direction="row" gap={1.25} alignItems="stretch">
             <Box
               sx={{
-                background: 'rgba(255,255,255,0.13)',
+                background: LEGACY.headerGradient,
                 border: '1px solid rgba(255,255,255,0.25)',
                 borderRadius: 1.75,
                 px: 2.5, py: 1.5,
                 textAlign: 'right',
                 minWidth: 150,
+                boxShadow: '0 4px 16px rgba(20,160,140,0.25)',
               }}
             >
               <Typography color="rgba(255,255,255,0.65)" fontSize={11} fontWeight={600} letterSpacing={0.5} mb={0.5}>
@@ -163,6 +174,13 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         <ToggleButtonGroup
           size="small" exclusive value={view}
           onChange={(_, v) => v && setView(v)}
+          sx={{
+            '& .MuiToggleButton-root.Mui-selected': {
+              background: LEGACY.headerGradient,
+              color: '#fff',
+              '&:hover': { background: LEGACY.headerGradient },
+            },
+          }}
         >
           <ToggleButton value="cost">{isDMC ? 'Breakdown' : 'Chi phí'}</ToggleButton>
           {!isDMC && <ToggleButton value="summary">Tổng kết</ToggleButton>}

@@ -16,6 +16,7 @@ import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { LEGACY } from '@/theme';
 
 const TABS = [
   { key: 'rates', label: 'Rate Card' },
@@ -43,7 +44,7 @@ export function AppShell() {
   const canManageUsers = hasPerm(currentUser, 'manageUsers');
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <AppBar position="static" color="primary">
+      <AppBar position="static" color="primary" sx={{ background: LEGACY.headerGradient }}>
         <Toolbar>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Viettours — Tour Cost Calculator

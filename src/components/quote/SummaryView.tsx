@@ -2,6 +2,7 @@ import { Box, Card, CardContent, Divider, Stack, Typography } from '@mui/materia
 import { catTotal, computeTotals, fmtVND } from './calc';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { LEGACY } from '@/theme';
 import type { CategoryId, Template } from '@/types';
 
 export function SummaryView() {
@@ -24,15 +25,15 @@ export function SummaryView() {
 
   return (
     <Box sx={{ p: 3, maxWidth: 900, mx: 'auto' }}>
-      <Card variant="outlined">
-        <CardContent>
-          <Typography variant="h5" gutterBottom>{info.name || '(không tên)'}</Typography>
-          <Typography variant="body2" color="text.secondary">
+      <Card variant="outlined" sx={{ overflow: 'hidden' }}>
+        <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 2.5 }}>
+          <Typography variant="h5" fontWeight={800}>{info.name || '(không tên)'}</Typography>
+          <Typography variant="body2" sx={{ opacity: 0.85 }}>
             {info.dest || '—'} · {info.days} ngày {info.nights} đêm · {pax} khách
             {info.startDate ? ` · khởi hành ${new Date(info.startDate).toLocaleDateString('vi-VN')}` : ''}
           </Typography>
-
-          <Divider sx={{ my: 2 }} />
+        </Box>
+        <CardContent>
 
           <Typography variant="overline" color="text.secondary">Chi tiết theo hạng mục</Typography>
           <Stack spacing={0.5} sx={{ mt: 1, mb: 2 }}>
@@ -70,7 +71,13 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   return (
     <Stack direction="row" justifyContent="space-between">
       <Typography variant="body2" fontWeight={strong ? 700 : 400}>{label}</Typography>
-      <Typography variant="body2" fontWeight={strong ? 800 : 600}>{value}</Typography>
+      <Typography
+        variant="body2"
+        fontWeight={strong ? 800 : 600}
+        sx={strong ? { color: LEGACY.teal } : undefined}
+      >
+        {value}
+      </Typography>
     </Stack>
   );
 }

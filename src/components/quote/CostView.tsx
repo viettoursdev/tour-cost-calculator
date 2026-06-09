@@ -12,6 +12,7 @@ import { computeTotals, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { LEGACY } from '@/theme';
 import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
 const ROUNDING_STEPS = [1000, 10000, 50000, 100000, 500000, 1000000];
@@ -244,10 +245,12 @@ export function CostView() {
       </Box>
 
       {!isDMC && (
-        <Paper sx={{ width: 340, p: 2, position: 'sticky', top: 0, alignSelf: 'flex-start' }}>
-          <Typography variant="overline" color="text.secondary">TỔNG CHI PHÍ</Typography>
-
-          <Stack spacing={1} sx={{ mt: 1 }}>
+        <Paper sx={{ width: 340, position: 'sticky', top: 0, alignSelf: 'flex-start', overflow: 'hidden' }}>
+          <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 2, py: 1.25 }}>
+            <Typography variant="overline" fontWeight={800} sx={{ letterSpacing: 1 }}>TỔNG CHI PHÍ</Typography>
+          </Box>
+          <Box sx={{ p: 2 }}>
+          <Stack spacing={1}>
             <Row label="Cost"        value={fmtVND(totals.totalCost)} />
             <Row label="Svc basis"   value={`+ ${fmtVND(svcBasis)}`} />
             <Row label={`Profit (${margin}%)`}  value={`+ ${fmtVND(totals.totalProfit)}`} />
@@ -288,6 +291,7 @@ export function CostView() {
                 onChange={(_, v) => setVat(v as number)} />
             </Stack>
           </Stack>
+          </Box>
         </Paper>
       )}
     </Box>
@@ -298,7 +302,13 @@ function Row({ label, value, muted, strong }: { label: string; value: string; mu
   return (
     <Stack direction="row" justifyContent="space-between">
       <Typography variant="body2" color={muted ? 'text.secondary' : 'text.primary'} fontWeight={strong ? 700 : 400}>{label}</Typography>
-      <Typography variant="body2" color={muted ? 'text.secondary' : 'text.primary'} fontWeight={strong ? 800 : 600}>{value}</Typography>
+      <Typography
+        variant="body2"
+        color={strong ? LEGACY.teal : muted ? 'text.secondary' : 'text.primary'}
+        fontWeight={strong ? 800 : 600}
+      >
+        {value}
+      </Typography>
     </Stack>
   );
 }

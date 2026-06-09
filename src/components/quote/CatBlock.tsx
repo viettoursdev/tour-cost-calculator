@@ -29,8 +29,20 @@ export function CatBlock({
   const sub = enabled ? catTotal(items, rates, pax) : 0;
 
   return (
-    <Accordion defaultExpanded={enabled} disableGutters sx={{ mb: 1, opacity: enabled ? 1 : 0.6 }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+    <Accordion
+      defaultExpanded={enabled}
+      disableGutters
+      sx={{
+        mb: 1,
+        opacity: enabled ? 1 : 0.6,
+        borderLeft: `4px solid ${cat.color}`,
+        overflow: 'hidden',
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        sx={{ background: `linear-gradient(90deg, ${cat.color}14, transparent)` }}
+      >
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
           <Switch
             size="small" checked={enabled}

@@ -14,6 +14,7 @@ import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { HistPanel } from './HistPanel';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { LEGACY } from '@/theme';
 
 const HIST_DRAWER_WIDTH = 300;
 
@@ -49,7 +50,7 @@ export function QuoteView() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', background: LEGACY.pageBg }}>
       <TemplateSelectorModal
         open={gateOpen}
         canCancel={gateDismissable}
