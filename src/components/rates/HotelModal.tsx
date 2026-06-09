@@ -25,6 +25,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { HOTEL_CITIES } from './constants';
+import type { Item } from '@/types';
 
 type HotelOption = { label: string; price: number; note?: string };
 type Hotel = {
@@ -57,9 +58,18 @@ function asHotels(value: unknown): Hotel[] {
   });
 }
 
-type Props = { open: boolean; onClose: () => void };
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  /** When set, the modal switches to picker mode: rows render a "Chọn" button
+   *  and price editing is hidden. The picker emits a partial Item to the caller. */
+  onPick?: (line: Partial<Item>) => void;
+  /** Pax count used to compute `customQty = ceil(pax/2)` (rooms). */
+  pax?: number;
+};
 
-export function HotelModal({ open, onClose }: Props) {
+export function HotelModal({ open, onClose, onPick, pax }: Props) {
+  const isPicker = !!onPick;
   const hotelsByCity = useRateCardStore((s) => s.rates.hotels);
   const updateHotels = useRateCardStore((s) => s.updateHotels);
 
@@ -114,6 +124,22 @@ export function HotelModal({ open, onClose }: Props) {
     );
   };
 
+  const pickOption = (h: Hotel, o: HotelOption) => {
+    if (!onPick) return;
+    const cityLabel = HOTEL_CITIES.find((c) => c.id === city)?.label ?? city;
+    const optionLabel = o.label || `${h.stars}★`;
+    onPick({
+      name: `Khách sạn ${h.name} · ${cityLabel} · ${optionLabel}`,
+      cur: 'VND',
+      price: o.price,
+      unit: '/phòng/đêm',
+      qtyMode: 'custom',
+      customQty: pax ? Math.ceil(pax / 2) : 1,
+      note: [o.note, h.note].filter(Boolean).join(' · '),
+    });
+    onClose();
+  };
+
   const deleteOption = (hIdx: number, oIdx: number) => {
     save(
       hotels.map((h, i) =>
@@ -124,7 +150,9 @@ export function HotelModal({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>🏨 Quản lý Khách sạn</DialogTitle>
+      <DialogTitle>
+        🏨 {isPicker ? 'Chọn Khách sạn từ rate card' : 'Quản lý Khách sạn'}
+      </DialogTitle>
       <DialogContent dividers>
         <Tabs
           value={city}
@@ -159,9 +187,11 @@ export function HotelModal({ open, onClose }: Props) {
               </MenuItem>
             ))}
           </Select>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={addHotel}>
-            Thêm KS
-          </Button>
+          {!isPicker && (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={addHotel}>
+              Thêm KS
+            </Button>
+          )}
         </Stack>
 
         {filtered.length === 0 && (
@@ -176,46 +206,57 @@ export function HotelModal({ open, onClose }: Props) {
             const idx = hotels.indexOf(h);
             return (
               <Paper key={`${idx}-${h.name}`} sx={{ p: 2 }} variant="outlined">
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                  <TextField
-                    size="small"
-                    label="Tên KS"
-                    value={h.name}
-                    onChange={(e) => editHotel(idx, { name: e.target.value })}
-                    sx={{ flexGrow: 1 }}
-                  />
-                  <Select
-                    size="small"
-                    value={h.stars}
-                    onChange={(e) => editHotel(idx, { stars: Number(e.target.value) })}
-                    sx={{ minWidth: 90 }}
-                  >
-                    {[3, 4, 5].map((s) => (
-                      <MenuItem key={s} value={s}>
-                        {s} ★
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  <TextField
-                    size="small"
-                    label="Ghi chú"
-                    value={h.note ?? ''}
-                    onChange={(e) => editHotel(idx, { note: e.target.value })}
-                    sx={{ flexGrow: 2 }}
-                  />
-                  <IconButton color="error" onClick={() => deleteHotel(idx)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </Stack>
+                {isPicker ? (
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <Typography fontWeight={700} sx={{ flexGrow: 1 }}>
+                      {h.name} <Typography component="span" color="text.secondary">· {h.stars}★</Typography>
+                    </Typography>
+                    {h.note && <Typography variant="caption" color="text.secondary">{h.note}</Typography>}
+                  </Stack>
+                ) : (
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <TextField
+                      size="small"
+                      label="Tên KS"
+                      value={h.name}
+                      onChange={(e) => editHotel(idx, { name: e.target.value })}
+                      sx={{ flexGrow: 1 }}
+                    />
+                    <Select
+                      size="small"
+                      value={h.stars}
+                      onChange={(e) => editHotel(idx, { stars: Number(e.target.value) })}
+                      sx={{ minWidth: 90 }}
+                    >
+                      {[3, 4, 5].map((s) => (
+                        <MenuItem key={s} value={s}>
+                          {s} ★
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    <TextField
+                      size="small"
+                      label="Ghi chú"
+                      value={h.note ?? ''}
+                      onChange={(e) => editHotel(idx, { note: e.target.value })}
+                      sx={{ flexGrow: 2 }}
+                    />
+                    <IconButton color="error" onClick={() => deleteHotel(idx)}>
+                      <DeleteIcon />
+                    </IconButton>
+                  </Stack>
+                )}
 
                 <Box sx={{ pl: 1 }}>
                   <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ flexGrow: 1 }}>
                       Phương án phòng
                     </Typography>
-                    <Button size="small" startIcon={<AddIcon />} onClick={() => addOption(idx)}>
-                      Thêm phương án
-                    </Button>
+                    {!isPicker && (
+                      <Button size="small" startIcon={<AddIcon />} onClick={() => addOption(idx)}>
+                        Thêm phương án
+                      </Button>
+                    )}
                   </Stack>
                   {h.options.length === 0 ? (
                     <Typography variant="caption" color="text.disabled">
@@ -235,36 +276,59 @@ export function HotelModal({ open, onClose }: Props) {
                         {h.options.map((o, oIdx) => (
                           <TableRow key={oIdx}>
                             <TableCell>
-                              <TextField
-                                size="small"
-                                value={o.label}
-                                onChange={(e) => editOption(idx, oIdx, { label: e.target.value })}
-                                fullWidth
-                              />
+                              {isPicker ? (
+                                <Typography variant="body2">{o.label || `${h.stars}★`}</Typography>
+                              ) : (
+                                <TextField
+                                  size="small"
+                                  value={o.label}
+                                  onChange={(e) => editOption(idx, oIdx, { label: e.target.value })}
+                                  fullWidth
+                                />
+                              )}
                             </TableCell>
                             <TableCell align="right">
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={o.price}
-                                onChange={(e) =>
-                                  editOption(idx, oIdx, { price: Number(e.target.value) })
-                                }
-                                slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right' } } }}
-                              />
+                              {isPicker ? (
+                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                  {Math.round(o.price).toLocaleString('vi-VN')} ₫
+                                </Typography>
+                              ) : (
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  value={o.price}
+                                  onChange={(e) =>
+                                    editOption(idx, oIdx, { price: Number(e.target.value) })
+                                  }
+                                  slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right' } } }}
+                                />
+                              )}
                             </TableCell>
                             <TableCell>
-                              <TextField
-                                size="small"
-                                value={o.note ?? ''}
-                                onChange={(e) => editOption(idx, oIdx, { note: e.target.value })}
-                                fullWidth
-                              />
+                              {isPicker ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  {o.note ?? ''}
+                                </Typography>
+                              ) : (
+                                <TextField
+                                  size="small"
+                                  value={o.note ?? ''}
+                                  onChange={(e) => editOption(idx, oIdx, { note: e.target.value })}
+                                  fullWidth
+                                />
+                              )}
                             </TableCell>
                             <TableCell>
-                              <IconButton size="small" onClick={() => deleteOption(idx, oIdx)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
+                              {isPicker ? (
+                                <Button size="small" variant="contained"
+                                  onClick={() => pickOption(h, o)}>
+                                  Chọn →
+                                </Button>
+                              ) : (
+                                <IconButton size="small" onClick={() => deleteOption(idx, oIdx)}>
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
