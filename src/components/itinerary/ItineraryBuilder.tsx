@@ -9,9 +9,12 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode } from './itinCode';
-import { ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, newDay } from './constants';
+import {
+  ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, newActivity, newDay, newSegment, TRANSPORT_PRESETS,
+} from './constants';
 import { parseFlights } from './parseFlights';
-import type { Flight, Itinerary, ItineraryType, User } from '@/types';
+import { SortableList } from './SortableList';
+import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import BoltIcon from '@mui/icons-material/Bolt';
 import AddIcon from '@mui/icons-material/Add';
@@ -86,6 +89,58 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     setIt((p) => ({ ...p, flights: parsed }));
     setFlightPaste('');
   };
+
+  // ── Day / Segment / Activity ops ──
+
+  const reorder = <T,>(arr: T[], from: number, to: number): T[] => {
+    const a = [...arr];
+    const [m] = a.splice(from, 1);
+    a.splice(to, 0, m);
+    return a;
+  };
+
+  const updDayById = (dayId: string, fn: (d: Day) => Day) =>
+    setIt((p) => ({ ...p, schedule: p.schedule.map((d) => (d.id === dayId ? fn(d) : d)) }));
+  const updSegById = (dayId: string, segId: string, fn: (s: Segment) => Segment) =>
+    updDayById(dayId, (d) => ({
+      ...d,
+      segments: d.segments.map((s) => (s.id === segId ? fn(s) : s)),
+    }));
+
+  const addDay = () => setIt((p) => ({
+    ...p,
+    schedule: [...p.schedule, newDay(p.schedule.length + 1)],
+  }));
+  const delDay = (id: string) => setIt((p) => ({
+    ...p,
+    schedule: p.schedule.filter((d) => d.id !== id).map((d, i) => ({ ...d, dayNum: i + 1 })),
+  }));
+  const updDay = (id: string, patch: Partial<Day>) =>
+    updDayById(id, (d) => ({ ...d, ...patch }));
+  const reorderDays = (from: number, to: number) =>
+    setIt((p) => ({
+      ...p,
+      schedule: reorder(p.schedule, from, to).map((d, i) => ({ ...d, dayNum: i + 1 })),
+    }));
+
+  const addSeg = (dayId: string) =>
+    updDayById(dayId, (d) => ({ ...d, segments: [...d.segments, newSegment('▸ NHÓM ...')] }));
+  const delSeg = (dayId: string, segId: string) =>
+    updDayById(dayId, (d) => ({ ...d, segments: d.segments.filter((s) => s.id !== segId) }));
+  const updSeg = (dayId: string, segId: string, patch: Partial<Segment>) =>
+    updSegById(dayId, segId, (s) => ({ ...s, ...patch }));
+
+  const addAct = (dayId: string, segId: string) =>
+    updSegById(dayId, segId, (s) => ({ ...s, activities: [...s.activities, newActivity()] }));
+  const delAct = (dayId: string, segId: string, actId: string) =>
+    updSegById(dayId, segId, (s) => ({ ...s, activities: s.activities.filter((a) => a.id !== actId) }));
+  const updAct = (dayId: string, segId: string, actId: string, patch: Partial<Activity>) =>
+    updSegById(dayId, segId, (s) => ({
+      ...s,
+      activities: s.activities.map((a) => (a.id === actId ? { ...a, ...patch } : a)),
+    }));
+  const reorderActs = (dayId: string, segId: string, from: number, to: number) =>
+    updSegById(dayId, segId, (s) => ({ ...s, activities: reorder(s.activities, from, to) }));
 
   const linkQuote = (qId: string) => {
     if (!qId) {
@@ -279,6 +334,147 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             ))}
           </Stack>
         </Paper>
+
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+          <Typography variant="subtitle1" fontWeight={800}>
+            📅 Lịch trình theo ngày
+            <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 1 }}>
+              · kéo ⋮⋮ để đổi thứ tự
+            </Typography>
+          </Typography>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
+            sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+            Thêm ngày
+          </Button>
+        </Stack>
+
+        <SortableList
+          onReorder={reorderDays}
+          handle=".day-handle"
+          deps={[it.schedule.length]}
+          sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+        >
+          {it.schedule.map((d) => (
+            <Paper key={d.id} data-sid={d.id} variant="outlined" sx={{ overflow: 'hidden' }}>
+              <Box sx={{ background: 'linear-gradient(135deg,#0f3a4a,#14566b)', color: '#fff', px: 1.75, py: 1.25, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Box component="span" className="day-handle" sx={{ cursor: 'grab', fontSize: 16, opacity: 0.7, userSelect: 'none' }}>⋮⋮</Box>
+                <Typography fontWeight={900} fontSize={14}>NGÀY {d.dayNum}</Typography>
+                <TextField size="small" variant="outlined"
+                  value={d.date} onChange={(e) => updDay(d.id, { date: e.target.value })}
+                  placeholder="Date (tuỳ chọn)"
+                  sx={{ width: 140, '& .MuiInputBase-input': { color: '#fff', fontSize: 12 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
+                <TextField size="small" variant="outlined" fullWidth
+                  value={d.title} onChange={(e) => updDay(d.id, { title: e.target.value })}
+                  placeholder="Điểm đến / tuyến (VD: TP.HCM → BẮC KINH)"
+                  sx={{ flex: 1, minWidth: 200, '& .MuiInputBase-input': { color: '#fff', fontWeight: 600 },
+                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
+                <IconButton size="small" sx={{ bgcolor: 'rgba(220,50,80,0.25)', color: '#fff' }}
+                  onClick={() => delDay(d.id)}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              <Box sx={{ p: 2 }}>
+                {d.segments.map((seg, si) => (
+                  <Box key={seg.id} sx={{ mb: si < d.segments.length - 1 ? 2 : 0 }}>
+                    {d.segments.length > 1 && (
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+                        <TextField size="small" fullWidth
+                          value={seg.groupLabel}
+                          onChange={(e) => updSeg(d.id, seg.id, { groupLabel: e.target.value })}
+                          placeholder="▸ NHÓM HCM — CA904"
+                          sx={{ '& .MuiInputBase-input': { fontSize: 12, fontWeight: 700, color: '#2980b9' } }} />
+                        <Button size="small" color="error" onClick={() => delSeg(d.id, seg.id)}
+                          sx={{ flexShrink: 0, fontSize: 11 }}>
+                          ✕ nhóm
+                        </Button>
+                      </Stack>
+                    )}
+
+                    <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                      <Select size="small" value="" displayEmpty
+                        onChange={(e) => {
+                          const pr = TRANSPORT_PRESETS.find((x) => x.label === e.target.value);
+                          if (pr) updSeg(d.id, seg.id, { transport: pr.tpl });
+                        }}
+                        sx={{ width: 150, flexShrink: 0, color: '#14a08c', fontWeight: 600, fontSize: 12 }}
+                      >
+                        <MenuItem value=""><em>+ Phương tiện</em></MenuItem>
+                        {TRANSPORT_PRESETS.map((pr) => (
+                          <MenuItem key={pr.label} value={pr.label}>{pr.icon} {pr.label}</MenuItem>
+                        ))}
+                      </Select>
+                      <TextField fullWidth size="small"
+                        value={seg.transport}
+                        onChange={(e) => updSeg(d.id, seg.id, { transport: e.target.value })}
+                        placeholder="Phương tiện · khoảng cách · thời gian"
+                        sx={{ '& .MuiInputBase-input': { fontSize: 12, color: '#14a08c', fontWeight: 600 } }} />
+                    </Stack>
+
+                    <SortableList
+                      onReorder={(f, t) => reorderActs(d.id, seg.id, f, t)}
+                      handle=".act-handle"
+                      deps={[seg.activities.length, d.id]}
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}
+                    >
+                      {seg.activities.map((a) => (
+                        <Stack key={a.id} data-sid={a.id} direction="row" spacing={0.75} alignItems="center">
+                          <Box component="span" className="act-handle" sx={{ cursor: 'grab', color: 'rgba(15,58,74,0.3)', fontSize: 13, flexShrink: 0 }}>⋮⋮</Box>
+                          <TextField size="small" sx={{ width: 80, flexShrink: 0 }}
+                            value={a.time}
+                            onChange={(e) => updAct(d.id, seg.id, a.id, { time: e.target.value })}
+                            placeholder="08:00"
+                            InputProps={{ sx: { fontSize: 12, fontWeight: 700, color: '#14a08c' } }} />
+                          <TextField fullWidth size="small"
+                            value={a.text}
+                            onChange={(e) => updAct(d.id, seg.id, a.id, { text: e.target.value })}
+                            placeholder="Nội dung hoạt động / thuyết minh..." />
+                          <IconButton size="small" color="error" onClick={() => delAct(d.id, seg.id, a.id)}>
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      ))}
+                    </SortableList>
+                    <Button size="small" onClick={() => addAct(d.id, seg.id)}
+                      sx={{ mt: 0.75, color: '#0d7a6a', fontSize: 12 }}>
+                      + hoạt động
+                    </Button>
+                  </Box>
+                ))}
+
+                <Button size="small" variant="outlined" onClick={() => addSeg(d.id)}
+                  sx={{ mt: 1, borderStyle: 'dashed', borderColor: 'rgba(41,128,185,0.3)', color: '#2980b9', fontSize: 12 }}>
+                  + Tách nhóm (ngày đầu/cuối nhiều chuyến bay)
+                </Button>
+
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed rgba(20,150,140,0.18)', display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+                  <Typography variant="caption" fontWeight={700} color="text.secondary">
+                    🍽 Bữa ăn bao gồm:
+                  </Typography>
+                  {(['B', 'L', 'D'] as const).map((m) => {
+                    const name = m === 'B' ? 'Sáng' : m === 'L' ? 'Trưa' : 'Tối';
+                    const on = d.meals[m];
+                    return (
+                      <Button key={m} size="small" variant={on ? 'contained' : 'outlined'}
+                        color="success"
+                        onClick={() => updDay(d.id, { meals: { ...d.meals, [m]: !on } })}
+                        sx={{ fontSize: 11, py: 0.25 }}>
+                        {on ? '✓ ' : ''}{name}
+                      </Button>
+                    );
+                  })}
+                  <TextField fullWidth size="small" sx={{ flex: 1, minWidth: 180 }}
+                    value={d.mealNote ?? ''}
+                    onChange={(e) => updDay(d.id, { mealNote: e.target.value })}
+                    placeholder="Ghi chú bữa ăn (VD: buffet KS, đặc sản địa phương...)" />
+                </Box>
+              </Box>
+            </Paper>
+          ))}
+        </SortableList>
+
+        <Box sx={{ height: 32 }} />
       </Box>
     </Box>
   );
