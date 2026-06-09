@@ -4,7 +4,8 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem, Ncc,
+  CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
+  Itinerary, ItineraryIndexEntry, Ncc,
   Notification, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Template, TourPayments, User,
 } from '@/types';
@@ -528,5 +529,76 @@ export function fbSubscribePaymentApprovals(
 ): Unsubscribe {
   return onSnapshot(PA_DOC, (snap) => {
     cb(snap.exists() ? (snap.data() as PaymentApprovalDoc) : {});
+  });
+}
+
+// ── Itineraries ──
+
+const ITIN_INDEX_DOC = doc(db, 'viettours', 'itinerary_index');
+const itinDoc = (id: string) => doc(db, 'tour_itineraries', id);
+
+/**
+ * Save the full itinerary doc, then upsert its metadata entry in the index.
+ * Source: legacy window.fbSaveItinerary (legacy.html:453-461).
+ */
+export async function fbSaveItinerary(itin: Itinerary, savedBy: string): Promise<void> {
+  const now = new Date().toISOString();
+  await setDoc(itinDoc(itin.id), { ...itin, updatedAt: now, updatedBy: savedBy });
+
+  const snap = await getDoc(ITIN_INDEX_DOC);
+  const list = snap.exists() ? ((snap.data().items as ItineraryIndexEntry[]) ?? []) : [];
+  const meta: ItineraryIndexEntry = {
+    id: itin.id,
+    code: itin.code ?? '',
+    title: itin.title ?? '',
+    destination: itin.destination ?? '',
+    days: itin.days ?? 0,
+    nights: itin.nights ?? 0,
+    linkedQuoteName: itin.linkedQuoteName ?? '',
+    updatedAt: now,
+    updatedBy: savedBy,
+  };
+  const idx = list.findIndex((x) => x.id === itin.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...meta };
+  else list.unshift({ ...meta, createdAt: now, createdBy: savedBy });
+  await setDoc(ITIN_INDEX_DOC, { items: list.slice(0, 500) });
+}
+
+/**
+ * One-time fetch of a full itinerary.
+ * Source: legacy window.fbGetItinerary (legacy.html:463).
+ */
+export async function fbGetItinerary(id: string): Promise<Itinerary | null> {
+  const snap = await getDoc(itinDoc(id));
+  return snap.exists() ? (snap.data() as Itinerary) : null;
+}
+
+/**
+ * Delete itinerary + remove its index entry. Best-effort: the index update runs
+ * first so the row disappears even if the per-itinerary doc delete fails.
+ * Source: legacy window.fbDeleteItinerary (legacy.html:464-467).
+ */
+export async function fbDeleteItinerary(id: string): Promise<void> {
+  const snap = await getDoc(ITIN_INDEX_DOC);
+  if (snap.exists()) {
+    const items = ((snap.data().items as ItineraryIndexEntry[]) ?? []).filter((x) => x.id !== id);
+    await setDoc(ITIN_INDEX_DOC, { items });
+  }
+  try {
+    await deleteDoc(itinDoc(id));
+  } catch {
+    /* doc may not exist; index already cleaned */
+  }
+}
+
+/**
+ * Subscribe to the itinerary index (lightweight metadata list).
+ * Source: legacy window.fbOnItineraries (legacy.html:462).
+ */
+export function fbSubscribeItineraries(
+  cb: (list: ItineraryIndexEntry[]) => void,
+): Unsubscribe {
+  return onSnapshot(ITIN_INDEX_DOC, (s) => {
+    cb(s.exists() ? ((s.data().items as ItineraryIndexEntry[]) ?? []) : []);
   });
 }
