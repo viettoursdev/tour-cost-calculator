@@ -67,7 +67,16 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   // Logo + Company block (left). Falls back to text-only if logo fails.
   try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 42, 24, undefined, 'FAST'); } catch { /* ignore */ }
   const cx = mX + 46;
-  pdf.setFontSize(14); pdf.setTextColor(...TEAL); setF('bold');
+  // Brand name: shrink-to-fit so it never overlaps the right-aligned "HÓA ĐƠN" title.
+  setF('bold');
+  pdf.setFontSize(22);
+  const titleW = pdf.getTextWidth(T('HÓA ĐƠN', 'INVOICE'));
+  const brandMaxW = pageW - mX - titleW - 6 - cx; // 6mm gap before the title
+  let brandSize = 12;
+  pdf.setFontSize(brandSize);
+  const brandW = pdf.getTextWidth(BRAND);
+  if (brandW > brandMaxW) brandSize = Math.max(7.5, (brandSize * brandMaxW) / brandW);
+  pdf.setFontSize(brandSize); pdf.setTextColor(...TEAL);
   pdf.text(BRAND, cx, y + 2);
   pdf.setFontSize(7); pdf.setTextColor(...GRAY); setF('normal');
   y += 6;
