@@ -32,11 +32,18 @@ export function CatBlock({
     <Accordion
       defaultExpanded={enabled}
       disableGutters
+      elevation={0}
       sx={{
-        mb: 1,
+        mb: 1.5,
         opacity: enabled ? 1 : 0.6,
+        borderRadius: 3,
+        border: '1px solid rgba(20,150,140,0.14)',
         borderLeft: `4px solid ${cat.color}`,
         overflow: 'hidden',
+        boxShadow: '0 2px 12px rgba(20,80,100,0.06)',
+        transition: 'box-shadow .2s, transform .2s',
+        '&:before': { display: 'none' },
+        '&:hover': { boxShadow: '0 6px 20px rgba(20,80,100,0.10)' },
       }}
     >
       <AccordionSummary
