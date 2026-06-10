@@ -78,6 +78,7 @@ type QuoteState = {
 
   exportJSON: () => string;
   importJSON: (raw: string) => { ok: true } | { ok: false; error: string };
+  applyImport: (data: Partial<QuoteDraft>) => void;
 
   saveSnapshot: (name: string) => Snapshot;
   loadSnapshot: (id: number) => void;
@@ -313,6 +314,29 @@ export const useQuoteStore = create<QuoteState>()(
           } catch (e) {
             return { ok: false, error: `Lỗi đọc file: ${(e as Error).message}` };
           }
+        },
+
+        applyImport: (data) => {
+          set((s) => ({
+            draft: {
+              ...s.draft,
+              ...(data.template !== undefined ? { template: data.template } : {}),
+              ...(data.info ? { info: data.info } : {}),
+              ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
+              ...(data.rates ? { rates: data.rates } : {}),
+              ...(data.margin != null ? { margin: data.margin } : {}),
+              ...(data.vat != null ? { vat: data.vat } : {}),
+              ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
+              ...(data.rounding != null ? { rounding: Math.max(1, Number(data.rounding) || 1) } : {}),
+              ...(data.items ? { items: data.items } : {}),
+              ...(data.catEnabled ? { catEnabled: data.catEnabled } : {}),
+              ...(data.inclusions ? { inclusions: data.inclusions } : {}),
+              ...(data.exclusions ? { exclusions: data.exclusions } : {}),
+              ...(data.payments ? { payments: data.payments } : {}),
+              currentQuoteId: null, // imported file starts a new quote
+            },
+            view: 'cost',
+          }));
         },
 
         saveSnapshot: (name) => {

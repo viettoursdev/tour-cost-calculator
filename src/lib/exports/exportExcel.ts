@@ -251,7 +251,13 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   try {
     const meta = wb.addWorksheet('_vtemeta', { state: 'veryHidden' });
     meta.getCell('A1').value = 'VTE_QUOTE_V1';
-    meta.getCell('A2').value = JSON.stringify({ template, info, pax, rates, margin, vat, svcBasis: svcBasis || 0, rounding: draft.rounding || 100000, catEnabled, items });
+    meta.getCell('A2').value = JSON.stringify({
+      template, info, pax, rates, margin, vat,
+      svcBasis: svcBasis || 0, rounding: draft.rounding || 100000, catEnabled, items,
+      ...(draft.inclusions ? { inclusions: draft.inclusions } : {}),
+      ...(draft.exclusions ? { exclusions: draft.exclusions } : {}),
+      ...(draft.payments ? { payments: draft.payments } : {}),
+    });
   } catch (_e) { /* ignore */ }
 
   // ── Save ──

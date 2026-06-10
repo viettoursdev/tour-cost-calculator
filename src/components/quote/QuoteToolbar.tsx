@@ -13,10 +13,15 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import DescriptionIcon from '@mui/icons-material/Description';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { QuoteViewKey } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
+import { importExcelQuote } from '@/lib/exports/importExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
+import { exportContractPDF } from '@/lib/exports/exportContractPDF';
+import { emptyContract } from '@/components/contract/constants';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { fmtOutput } from '@/lib/currency';
@@ -81,6 +86,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const newDraft = useQuoteStore((s) => s.newDraft);
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
+  const applyImport = useQuoteStore((s) => s.applyImport);
 
   const template = useQuoteStore((s) => s.draft.template);
   const outputCurrency = (useQuoteStore((s) => s.draft.outputCurrency) ?? 'USD') as OutputCurrency;
@@ -98,6 +104,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const excelInput = useRef<HTMLInputElement | null>(null);
 
   const openRate = (key: string, label: string) => {
     if (key === 'hotel') setRateModal({ kind: 'hotel' });
@@ -132,6 +139,44 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = await importExcelQuote(file);
+      applyImport(data);
+      alert('✅ Đã nhập báo giá từ Excel!');
+    } catch (err) {
+      alert('❌ ' + (err as Error).message);
+    }
+  };
+
+  const handleExportContract = () => {
+    if (!currentUser || !template || template === 'dmc') return;
+    const pricePerPax = totals.roundedPPax;
+    const c = emptyContract(currentUser.name);
+    exportContractPDF({
+      ...c,
+      tourName: info.name || c.tourName,
+      tourDest: info.dest || c.tourDest,
+      tourDays: info.days,
+      tourNights: info.nights,
+      contractPax: pax,
+      pricePerPax,
+      ...(draft.inclusions && draft.inclusions.length ? { includes: draft.inclusions.filter((s) => s.trim()) } : {}),
+      ...(draft.exclusions && draft.exclusions.length ? { excludes: draft.exclusions.filter((s) => s.trim()) } : {}),
+      ...(draft.payments && draft.payments.length
+        ? {
+            payments: draft.payments.map((p) => ({
+              id: p.id, label: p.label, amount: p.amount, dueDate: '',
+              note: p.note, status: 'pending' as const,
+            })),
+          }
+        : {}),
+    });
   };
 
   const endDateStr = (() => {
@@ -424,18 +469,34 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
               <ListItemText>🧾 Invoice</ListItemText>
             </MenuItem>
           )}
+          {draft.template && draft.template !== 'dmc' && currentUser && (
+            <MenuItem onClick={() => { handleExportContract(); setExportAnchor(null); }}>
+              <ListItemIcon><DescriptionIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>📜 Hợp đồng (PDF)</ListItemText>
+            </MenuItem>
+          )}
+          <Divider />
+          <MenuItem onClick={() => { excelInput.current?.click(); setExportAnchor(null); }}>
+            <ListItemIcon><UploadFileIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>📥 Nhập file Excel → tạo báo giá</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => { handleImportClick(); setExportAnchor(null); }}>
+            <ListItemIcon><FileUploadIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>📤 Nhập file JSON</ListItemText>
+          </MenuItem>
           <Divider />
           <MenuItem onClick={() => { handleExport(); setExportAnchor(null); }}>
             <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
             <ListItemText>📋 JSON (backup)</ListItemText>
           </MenuItem>
         </Menu>
-        <Button size="small" variant="outlined" startIcon={<FileUploadIcon />} onClick={handleImportClick}>
-          Nhập JSON
-        </Button>
         <input
           ref={fileInput} type="file" accept="application/json"
           hidden onChange={handleImportFile}
+        />
+        <input
+          ref={excelInput} type="file" accept=".xlsx"
+          hidden onChange={handleImportExcel}
         />
         <Button
           size="small" variant="contained" startIcon={<CloudUploadIcon />} onClick={onOpenSaveCloud}
