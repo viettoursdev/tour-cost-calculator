@@ -454,11 +454,11 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         >
           {/* Excel & data files */}
           <MenuItem onClick={() => {
-            if (canExport && currentUser) void exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
+            if (template && currentUser) void exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
             setExportAnchor(null);
           }}>
             <ListItemIcon><TableChartIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>Excel báo giá</ListItemText>
+            <ListItemText>{isDMC ? 'Excel breakdown DMC' : 'Excel báo giá'}</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => { excelInput.current?.click(); setExportAnchor(null); }}>
             <ListItemIcon><UploadFileIcon fontSize="small" /></ListItemIcon>

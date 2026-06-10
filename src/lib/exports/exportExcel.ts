@@ -15,9 +15,10 @@ type ExportParams = {
 };
 
 export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promise<void> {
-  const { info, items, rates, pax, catEnabled, margin, vat, svcBasis, template } = draft;
-  if (!template || template === 'dmc') return;
+  const { info, items, rates, pax, catEnabled, margin, vat, svcBasis, template, dmcMargin, outputCurrency } = draft;
+  if (!template) return;
 
+  const isDmc = template === 'dmc';
   const foreign = template === 'intl';
   const FONT = 'Aptos';
   const NAVY = 'FF0F3A4A', TEAL = 'FF14A08C', INK = 'FF2B3640', MUTE = 'FF8A9099', WHITE = 'FFFFFFFF';
@@ -27,7 +28,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   wb.creator = 'Viettours Tour Cost Calculator';
   wb.created = new Date();
 
-  const ws = wb.addWorksheet(foreign ? 'Báo giá Nước Ngoài' : 'Báo giá Nội Địa', {
+  const ws = wb.addWorksheet(isDmc ? 'Breakdown DMC' : foreign ? 'Báo giá Nước Ngoài' : 'Báo giá Nội Địa', {
     views: [{ showGridLines: false }],
   });
 
@@ -189,15 +190,26 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   };
 
   const sumf: ExcelJS.CellFormulaValue = { formula: `SUM(${KC}${first}:${KC}${last})` };
-  const subR = trow(r, 'Tổng chi phí (chưa gồm phí QL & VAT)', sumf, 'sub'); r++;
-  const mgR = trow(r, `Phí quản lý (${margin}%)`, { formula: `${KC}${subR}*${margin / 100}` } as ExcelJS.CellFormulaValue); r++;
   let grR: number;
-  if (foreign) {
-    trow(r, 'Thuế VAT', 'Đã bao gồm'); ws.getCell(r, ncol).font = fnt({ italic: true, color: { argb: MUTE } }); r++;
+  if (isDmc) {
+    // DMC breakdown: service charge from the DMC margin (no VAT).
+    const subR = trow(r, 'Tổng chi phí breakdown', sumf, 'sub'); r++;
+    const pct = dmcMargin?.type !== 'fixed';
+    const mgVal: ExcelJS.CellFormulaValue | number = pct
+      ? { formula: `${KC}${subR}*${(dmcMargin?.value || 0) / 100}` } as ExcelJS.CellFormulaValue
+      : Math.round((dmcMargin?.value || 0) * (outputCurrency && outputCurrency !== 'VND' && rates[outputCurrency] ? rates[outputCurrency] : 1));
+    const mgR = trow(r, pct ? `Phí dịch vụ DMC (${dmcMargin?.value || 0}%)` : 'Phí dịch vụ DMC', mgVal); r++;
     grR = trow(r, 'TỔNG CỘNG', { formula: `SUM(${KC}${subR}:${KC}${mgR})` } as ExcelJS.CellFormulaValue, 'grand'); r++;
   } else {
-    const vtR = trow(r, `Thuế VAT (${vat}%)`, { formula: `SUM(${KC}${subR}:${KC}${mgR})*${vat / 100}` } as ExcelJS.CellFormulaValue); r++;
-    grR = trow(r, 'TỔNG CỘNG', { formula: `SUM(${KC}${subR}:${KC}${vtR})` } as ExcelJS.CellFormulaValue, 'grand'); r++;
+    const subR = trow(r, 'Tổng chi phí (chưa gồm phí QL & VAT)', sumf, 'sub'); r++;
+    const mgR = trow(r, `Phí quản lý (${margin}%)`, { formula: `${KC}${subR}*${margin / 100}` } as ExcelJS.CellFormulaValue); r++;
+    if (foreign) {
+      trow(r, 'Thuế VAT', 'Đã bao gồm'); ws.getCell(r, ncol).font = fnt({ italic: true, color: { argb: MUTE } }); r++;
+      grR = trow(r, 'TỔNG CỘNG', { formula: `SUM(${KC}${subR}:${KC}${mgR})` } as ExcelJS.CellFormulaValue, 'grand'); r++;
+    } else {
+      const vtR = trow(r, `Thuế VAT (${vat}%)`, { formula: `SUM(${KC}${subR}:${KC}${mgR})*${vat / 100}` } as ExcelJS.CellFormulaValue); r++;
+      grR = trow(r, 'TỔNG CỘNG', { formula: `SUM(${KC}${subR}:${KC}${vtR})` } as ExcelJS.CellFormulaValue, 'grand'); r++;
+    }
   }
   trow(r, 'GIÁ / KHÁCH', { formula: `${KC}${grR}/${pax}` } as ExcelJS.CellFormulaValue, 'ppax'); r += 2;
 
@@ -237,14 +249,19 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
     return rw + 1;
   };
 
-  r = section(r, 'GIÁ BAO GỒM / INCLUSIONS', INC, '✓');
-  r = section(r, 'KHÔNG BAO GỒM / EXCLUSIONS', EXC, '✕');
-  r = section(r, 'ĐIỀU KHOẢN THANH TOÁN / PAYMENT TERMS', PAY, '•');
-  r++;
+  // Customer-facing inclusion/payment terms are not relevant to an internal DMC breakdown.
+  if (!isDmc) {
+    r = section(r, 'GIÁ BAO GỒM / INCLUSIONS', INC, '✓');
+    r = section(r, 'KHÔNG BAO GỒM / EXCLUSIONS', EXC, '✕');
+    r = section(r, 'ĐIỀU KHOẢN THANH TOÁN / PAYMENT TERMS', PAY, '•');
+    r++;
+  }
   const fc = ws.getCell(r, 2);
-  fc.value = foreign
-    ? 'Báo giá có hiệu lực 07 ngày kể từ ngày xuất. Giá có thể thay đổi theo tỷ giá tại thời điểm xuất vé.'
-    : 'Báo giá có hiệu lực 07 ngày kể từ ngày xuất.';
+  fc.value = isDmc
+    ? 'Bảng breakdown chi phí nội bộ DMC.'
+    : foreign
+      ? 'Báo giá có hiệu lực 07 ngày kể từ ngày xuất. Giá có thể thay đổi theo tỷ giá tại thời điểm xuất vé.'
+      : 'Báo giá có hiệu lực 07 ngày kể từ ngày xuất.';
   fc.font = fnt({ size: 8, italic: true, color: { argb: MUTE } });
   ws.mergeCells(`B${r}:${LAST}${r}`);
 
@@ -266,5 +283,5 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const safeName = (info.name || 'Tour').replace(/[^a-zA-Z0-9_]/g, '_');
   const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
-  saveAs(blob, `BaoGia_${safeName}_${dateStr}.xlsx`);
+  saveAs(blob, `${isDmc ? 'BreakdownDMC' : 'BaoGia'}_${safeName}_${dateStr}.xlsx`);
 }

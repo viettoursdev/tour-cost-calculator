@@ -64,7 +64,7 @@ type QuoteState = {
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
   setRate: (cur: string, rate: number) => void;
-  setRatesSynced: (rates: Record<string, number>, pushedAt?: string, pushedBy?: string) => void;
+  setRatesSynced: (rates: Record<string, number>, pushedAt?: string, pushedBy?: string, persistLocal?: boolean) => void;
   setMargin: (n: number) => void;
   setVat: (n: number) => void;
   setSvcBasis: (n: number) => void;
@@ -249,13 +249,15 @@ export const useQuoteStore = create<QuoteState>()(
           }, 600);
         },
 
-        setRatesSynced: (rates, pushedAt, pushedBy) => {
+        setRatesSynced: (rates, pushedAt, pushedBy, persistLocal = true) => {
           // Always record sync meta (for the "cập nhật lúc…" indicator).
           if (pushedAt || pushedBy) set({ fxSyncedAt: pushedAt ?? new Date().toISOString(), fxSyncedBy: pushedBy ?? null });
           // Ignore the echo of our own push; otherwise adopt the shared rates.
           if (pushedAt && pushedAt === lastFxPushAt) return;
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...rates, VND: 1 } } }));
-          writeFxRatesLS(get().draft.rates);
+          // persistLocal=false when the update CAME FROM a localStorage 'storage'
+          // event, to avoid a write→event→write feedback loop between tabs.
+          if (persistLocal) writeFxRatesLS(get().draft.rates);
         },
 
         syncFxNow: async () => {

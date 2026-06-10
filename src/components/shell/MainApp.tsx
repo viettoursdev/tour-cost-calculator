@@ -46,7 +46,9 @@ export function MainApp() {
     // Instant cross-tab sync within the same browser (fires only in OTHER tabs).
     const onFxStorage = (e: StorageEvent) => {
       if (e.key === 'vte_fx_rates' && e.newValue) {
-        try { useQuoteStore.getState().setRatesSynced(JSON.parse(e.newValue) as Record<string, number>); }
+        // persistLocal=false: the value is already in localStorage (it triggered
+        // this event) — re-writing it would loop between tabs.
+        try { useQuoteStore.getState().setRatesSynced(JSON.parse(e.newValue) as Record<string, number>, undefined, undefined, false); }
         catch { /* ignore */ }
       }
     };
