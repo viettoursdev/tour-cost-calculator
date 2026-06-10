@@ -3,6 +3,7 @@ import {
   AppBar, Box, Button, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
   Stack, Tab, Tabs, TextField, Toolbar, Typography,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -169,6 +170,18 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     >
       {/* ── Tour info header band (legacy style) ── */}
       <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 1.5 }}>
+        {/* Exit to homepage (template selector), above the hero title */}
+        <Button
+          onClick={onOpenSelector}
+          startIcon={<ArrowBackIcon />}
+          sx={{
+            color: 'rgba(255,255,255,0.85)', textTransform: 'none',
+            fontSize: 12.5, fontWeight: 600, p: 0, mb: 0.75, minWidth: 0,
+            '&:hover': { color: '#fff', background: 'transparent' },
+          }}
+        >
+          Trang chủ
+        </Button>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1.25}>
           {/* LEFT: tour info (name/dest + meta pills) */}
           <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap rowGap={1.25}>
