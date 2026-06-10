@@ -11,6 +11,7 @@ import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
 import { fmtVND } from '@/components/quote/calc';
 import { fbSendNotification } from '@/lib/firebase';
+import { isApprover } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import type { Contract, ContractPayment, User } from '@/types';
 
@@ -31,8 +32,8 @@ export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props
   const [approverPickerPayment, setApproverPickerPayment] = useState<string | null>(null);
   const [sendingApproval, setSendingApproval] = useState(false);
   const allUsers = useAuthStore((s) => s.users);
-  const approvers = allUsers.filter((u) => ['CEO', 'Trưởng Phòng'].includes(u.role));
-  const isRequester = currentUser && !['CEO', 'Trưởng Phòng'].includes(currentUser.role);
+  const approvers = allUsers.filter((u) => isApprover(u.role));
+  const isRequester = currentUser && !isApprover(currentUser.role);
 
   const totalAmount = Math.round((contract.pricePerPax || 0) * (contract.contractPax || 0));
   const totalPaid = payments.filter((p) => p.status === 'paid').reduce((s, p) => s + (p.receivedAmount ?? p.amount), 0);
@@ -158,7 +159,7 @@ export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props
                   </IconButton>
                 )}
                 {isRequester && canEdit && !isPaid && !p.approvalRequested && (
-                  <Tooltip title="Gửi đề nghị duyệt cho CEO / Trưởng Phòng">
+                  <Tooltip title="Gửi đề nghị duyệt cho CEO / Ban Giám Đốc / Trưởng Phòng">
                     <IconButton size="small" color="info" onClick={() => setApproverPickerPayment(p.id)}>
                       <SendIcon fontSize="small" />
                     </IconButton>
@@ -214,7 +215,7 @@ export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props
         <DialogContent sx={{ p: 0, minWidth: 300 }}>
           {approvers.length === 0 ? (
             <Box sx={{ p: 3, textAlign: 'center', color: 'text.disabled' }}>
-              <Typography variant="body2">Không tìm thấy CEO / Trưởng Phòng</Typography>
+              <Typography variant="body2">Không tìm thấy CEO / Ban Giám Đốc / Trưởng Phòng</Typography>
             </Box>
           ) : (
             <List disablePadding>

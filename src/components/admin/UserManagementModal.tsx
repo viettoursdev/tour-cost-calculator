@@ -120,7 +120,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
       <DialogTitle sx={{ background: 'linear-gradient(135deg,#dc3250,#c0392b)', color: '#fff' }}>
         <Typography variant="h6" fontWeight={800}>👤 Quản lý tài khoản</Typography>
         <Typography variant="caption" sx={{ opacity: 0.85 }}>
-          Chỉ CEO mới có quyền · {users.length} tài khoản đang hoạt động
+          Chỉ CEO / Ban Giám Đốc mới có quyền · {users.length} tài khoản đang hoạt động
         </Typography>
       </DialogTitle>
       <DialogContent dividers>

@@ -289,7 +289,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
             </Stack>
             {!canPush && (
               <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'center' }}>
-                🔒 Chỉ CEO / Trưởng Phòng / Operations / Sales / Marketing mới có thể đẩy lên cloud
+                🔒 Chỉ CEO / Ban Giám Đốc / Trưởng Phòng / Operations / Sales / Marketing mới có thể đẩy lên cloud
               </Typography>
             )}
             <Alert severity="info" sx={{ fontSize: 12 }}>

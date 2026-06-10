@@ -2,6 +2,7 @@ import type { Permissions, Role, User, PermissionKey } from '@/types';
 
 export const PERMISSIONS: Record<Role, Permissions> = {
   CEO:           { manageUsers:true,  editRateCard:true,  exportQuote:true,  importQuote:true,  viewHistory:true,  syncRateCard:true,  manageNCC:true,  manageCustomers:true,  manageContracts:true,  viewContracts:true,  manageMenu:true,  manageVisa:true },
+  'Ban Giám Đốc':{ manageUsers:true,  editRateCard:true,  exportQuote:true,  importQuote:true,  viewHistory:true,  syncRateCard:true,  manageNCC:true,  manageCustomers:true,  manageContracts:true,  viewContracts:true,  manageMenu:true,  manageVisa:true },
   'Trưởng Phòng':{ manageUsers:false, editRateCard:true,  exportQuote:true,  importQuote:true,  viewHistory:true,  syncRateCard:true,  manageNCC:true,  manageCustomers:true,  manageContracts:true,  viewContracts:true,  manageMenu:true,  manageVisa:true },
   Sales:         { manageUsers:false, editRateCard:true,  exportQuote:true,  importQuote:true,  viewHistory:true,  syncRateCard:true,  manageNCC:true,  manageCustomers:true,  manageContracts:true,  viewContracts:true,  manageMenu:true,  manageVisa:true },
   Operations:    { manageUsers:false, editRateCard:true,  exportQuote:true,  importQuote:true,  viewHistory:true,  syncRateCard:true,  manageNCC:true,  manageCustomers:true,  manageContracts:true,  viewContracts:true,  manageMenu:true,  manageVisa:true },

@@ -1,5 +1,6 @@
 export type Role =
   | 'CEO'
+  | 'Ban Giám Đốc'
   | 'Trưởng Phòng'
   | 'Sales'
   | 'Operations'

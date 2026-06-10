@@ -4,6 +4,7 @@ import {
   ListItemButton, ListItemText, Menu, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
+import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { fbSendNotification } from '@/lib/firebase';
 import { slugifyTourKey } from './paymentUtils';
@@ -23,8 +24,6 @@ type Props = {
   currentUser: User;
   approvalEntry?: PaymentApprovalEntry;
 };
-
-const APPROVER_ROLES = ['CEO', 'Trưởng Phòng'];
 
 export function PaymentRequestModal({
   open, onClose, ci, inst, instIdx, info, currentUser, approvalEntry,

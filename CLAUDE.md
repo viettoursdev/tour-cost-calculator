@@ -151,14 +151,15 @@ When debugging hydration-time bugs, dump these in DevTools console first.
 
 ## Role Hierarchy
 
-`CEO → Trưởng Phòng → Sales = Operations = Marketing → Admin → Accountant → Standard`
+`CEO → Ban Giám Đốc → Trưởng Phòng → Sales = Operations = Marketing → Admin → Accountant → Standard`
 
 Defined in `src/auth/ROLES.ts` and `src/auth/PERMISSIONS.ts`.
 
+- `Ban Giám Đốc`: full permissions like CEO (incl. `manageUsers`); sits just below CEO. Also a payment approver.
 - `Admin`: view-only on contracts and history, no create/edit/delete
 - `Accountant`: view history only, no exports or rate card edits
 
-Check with `hasPerm(user, 'permName')`.
+Check with `hasPerm(user, 'permName')`. Payment-approver roles: `APPROVER_ROLES` / `isApprover()` in `src/auth/ROLES.ts` (CEO, Ban Giám Đốc, Trưởng Phòng).
 
 ## Deploy
 

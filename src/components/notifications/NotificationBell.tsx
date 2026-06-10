@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { isApprover } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
@@ -29,7 +30,7 @@ export function NotificationBell() {
 
   if (!currentUser) return null;
 
-  const canApprove = ['CEO', 'Trưởng Phòng'].includes(currentUser.role);
+  const canApprove = isApprover(currentUser.role);
 
   const handleMarkAllRead = () => {
     void markAllRead(currentUser.u);

@@ -2,6 +2,7 @@ import type { Role, User } from '@/types';
 
 export const ROLES: readonly Role[] = [
   'CEO',
+  'Ban Giám Đốc',
   'Trưởng Phòng',
   'Sales',
   'Operations',
@@ -10,6 +11,12 @@ export const ROLES: readonly Role[] = [
   'Accountant',
   'Standard',
 ];
+
+/** Roles allowed to approve payment requests (senior management). */
+export const APPROVER_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trưởng Phòng'];
+
+/** True if the role can approve payment / cost requests. */
+export const isApprover = (role: Role): boolean => APPROVER_ROLES.includes(role);
 
 // Source: public/legacy.html:5126.
 export const USER_COLORS: readonly string[] = [
