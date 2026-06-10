@@ -426,7 +426,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         >
           Rate Card
         </Button>
-        <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)}>
+        <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)} disableRestoreFocus>
           {RATE_CATEGORIES.filter((c) => isRateCategoryVisible(c.key, template)).map((c) => (
             <MenuItem key={c.key} onClick={() => openRate(c.key, c.label)}>
               <Box component="span" sx={{ mr: 1 }}>{c.icon}</Box> {c.label}
@@ -451,6 +451,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           anchorEl={exportAnchor}
           open={!!exportAnchor}
           onClose={() => setExportAnchor(null)}
+          disableRestoreFocus
           slotProps={{ paper: { sx: { minWidth: 268, borderRadius: 2, mt: 0.5, boxShadow: '0 12px 30px rgba(15,58,74,0.18)', '& .MuiMenuItem-root': { py: 1, fontWeight: 600, color: LEGACY.navy }, '& .MuiListItemIcon-root': { color: LEGACY.teal, minWidth: 34 } } } }}
         >
           {/* Excel & data files */}

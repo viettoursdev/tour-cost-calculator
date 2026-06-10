@@ -50,6 +50,7 @@ export function NotificationBell() {
         open={!!anchor}
         anchorEl={anchor}
         onClose={() => setAnchor(null)}
+        disableRestoreFocus
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
