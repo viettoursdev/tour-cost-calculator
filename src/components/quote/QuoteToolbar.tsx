@@ -576,16 +576,22 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
               </Typography>
             )}
             <Button
-              size="small" variant="outlined"
+              size="small" variant="contained"
               disabled={fxSyncing}
               onClick={async (e) => {
                 e.stopPropagation();
                 setFxSyncing(true);
-                try { await syncFxNow(); } catch { /* offline */ } finally { setFxSyncing(false); }
+                try {
+                  await syncFxNow();
+                } catch (err) {
+                  alert('❌ Lưu tỷ giá thất bại (ghi cloud bị chặn?): ' + (err instanceof Error ? err.message : String(err)));
+                } finally {
+                  setFxSyncing(false);
+                }
               }}
-              sx={{ minWidth: 0, px: 1.25, py: 0.25, fontSize: 12, fontWeight: 700, color: LEGACY.teal, borderColor: 'rgba(20,150,140,0.4)' }}
+              sx={{ minWidth: 0, px: 1.5, py: 0.3, fontSize: 12, fontWeight: 800, background: LEGACY.headerGradient }}
             >
-              {fxSyncing ? 'Đang đồng bộ…' : '🔄 Đồng bộ'}
+              {fxSyncing ? 'Đang lưu…' : '💾 Lưu tỷ giá'}
             </Button>
             <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 13 }}>{showRates ? '▲' : '▼'}</Box>
           </Stack>

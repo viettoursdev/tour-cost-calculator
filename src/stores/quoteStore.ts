@@ -108,13 +108,12 @@ type QuoteState = {
  */
 const persistKey = (username: string) => `vte_quote_draft_${username}`;
 
-// Shared FX rates sync. The CLOUD doc (viettours/fx_rates) is the source of
-// truth: the latest sync (by pushedAt) is the canonical table everyone uses,
-// and only a NEWER sync overrides it. `lastFxPushAt` is the timestamp of our
-// own most recent push — we skip any snapshot at/older than it (our own echo,
-// incl. earlier debounced pushes), and adopt any snapshot newer than it.
+// Shared FX rates. Editing is LOCAL only; pressing "Lưu tỷ giá" (syncFxNow)
+// writes the table to the cloud doc (viettours/fx_rates) — that saved version is
+// the canonical record every user adopts, and only a NEWER save overrides it.
+// `lastFxPushAt` = timestamp of our own last save, so we skip our own echo and
+// adopt any snapshot newer than it.
 let lastFxPushAt: string | null = null;
-let fxPushTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Keep only numeric currency entries — defends against polluted sources (e.g. a
 // `{rates, at}` wrapper accidentally merged in) so `[object Object]` / timestamp
@@ -251,19 +250,10 @@ export const useQuoteStore = create<QuoteState>()(
 
         setPax: (n) => set((s) => ({ draft: { ...s.draft, pax: Math.max(1, n) } })),
 
-        setRate: (cur, rate) => {
-          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } }));
-          writeFxRatesLS(get().draft.rates); // instant cache (canonical value still comes from cloud sync)
-          // Push the whole table to the shared FX doc (debounced) so all
-          // accounts stay in sync.
-          if (fxPushTimer) clearTimeout(fxPushTimer);
-          fxPushTimer = setTimeout(() => {
-            const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
-            fbPushFxRates(cleanRates(get().draft.rates), by)
-              .then((at) => { lastFxPushAt = at; })
-              .catch(() => { /* ignore offline */ });
-          }, 600);
-        },
+        // Editing only updates the local working table; nothing is saved/synced
+        // until the user presses "Lưu tỷ giá" (syncFxNow).
+        setRate: (cur, rate) =>
+          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } })),
 
         setRatesSynced: (rates, pushedAt, pushedBy, persistLocal = true) => {
           // Always record sync meta (for the "cập nhật lúc…" indicator).
@@ -278,10 +268,11 @@ export const useQuoteStore = create<QuoteState>()(
           if (persistLocal) writeFxRatesLS(get().draft.rates);
         },
 
+        // "Lưu tỷ giá": save the current table to the cloud as the canonical
+        // record for all users, and cache it locally.
         syncFxNow: async () => {
-          if (fxPushTimer) { clearTimeout(fxPushTimer); fxPushTimer = null; }
           const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
-          const at = await fbPushFxRates(cleanRates(get().draft.rates), by); // this push becomes the canonical record
+          const at = await fbPushFxRates(cleanRates(get().draft.rates), by);
           lastFxPushAt = at;
           writeFxRatesLS(get().draft.rates);
           set({ fxSyncedAt: at, fxSyncedBy: by });
