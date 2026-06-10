@@ -129,8 +129,13 @@ export const useQuoteStore = create<QuoteState>()(
             /* ignore */
           }
           if (storedDraft?.template === 'dmc') {
-            storedDraft = { ...dmcDefaults(), ...storedDraft };
-            if (storedView !== 'cost' && storedView !== 'history') storedView = 'cost';
+            // Known issue (TODO: diagnose): rehydrating a DMC draft from localStorage
+            // leaves the page visually rendered but unresponsive to clicks (no console
+            // errors, root cause not yet identified). Drop the persisted draft and force
+            // the template picker; also evict the bad key so the next setItem starts
+            // fresh. Cloud DMC quotes (viettours/dmc_quote_history) are unaffected.
+            storedDraft = null;
+            try { localStorage.removeItem(key); } catch { /* ignore */ }
           }
           set({
             draft: storedDraft ?? EMPTY_DRAFT,
