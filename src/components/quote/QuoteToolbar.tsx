@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
-  AppBar, Box, Button, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
+  AppBar, Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
   Stack, Tab, Tabs, TextField, Toolbar, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -445,29 +445,49 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           💱 Tỷ giá quy đổi (→ VND)
         </Button>
         {showRates && (
-          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 1 }} useFlexGap>
-            {Object.entries(rates)
-              .filter(([c]) => c !== 'VND')
-              .map(([c, r]) => (
-                <Chip
-                  key={c}
-                  variant="outlined"
-                  label={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="caption" fontWeight={700}>1 {c}</Typography>
-                      <TextField
-                        size="small" type="number" value={r}
-                        onChange={(e) => setRate(c, Number(e.target.value) || 0)}
-                        slotProps={{ htmlInput: { min: 0, step: 0.01, style: { width: 90 } } }}
-                        variant="standard"
-                      />
-                      <Typography variant="caption">₫</Typography>
-                    </Box>
-                  }
-                  sx={{ height: 'auto', py: 0.5 }}
-                />
-              ))}
-          </Stack>
+          <Box
+            sx={{
+              mt: 1, p: 1.5, borderRadius: 2,
+              border: '1px solid rgba(20,150,140,0.15)',
+              background: 'rgba(255,255,255,0.6)',
+            }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                gap: 1.25,
+              }}
+            >
+              {Object.entries(rates)
+                .filter(([c]) => c !== 'VND')
+                .map(([c, r]) => (
+                  <Box
+                    key={c}
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: 1,
+                      background: '#fff', border: '1px solid rgba(20,150,140,0.25)',
+                      borderRadius: 1.5, px: 1.25, py: 0.5,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: LEGACY.teal, flexShrink: 0 }}>
+                      {c}
+                    </Typography>
+                    <TextField
+                      size="small" type="number" value={r}
+                      onChange={(e) => setRate(c, Number(e.target.value) || 0)}
+                      variant="standard"
+                      slotProps={{
+                        input: { disableUnderline: true },
+                        htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right', fontWeight: 600, fontSize: 13, color: LEGACY.navy, padding: 0 } },
+                      }}
+                      sx={{ flexGrow: 1 }}
+                    />
+                    <Typography sx={{ fontSize: 12, color: 'rgba(15,58,74,0.5)', flexShrink: 0 }}>₫</Typography>
+                  </Box>
+                ))}
+            </Box>
+          </Box>
         )}
       </Box>
       {invoiceOpen && currentUser && draft.template && draft.template !== 'dmc' && (
