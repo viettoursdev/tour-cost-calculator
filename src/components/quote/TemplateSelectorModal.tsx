@@ -37,16 +37,34 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
 
   return (
     <Dialog open={open} onClose={canCancel ? onClose : undefined} fullScreen>
-      <DialogTitle>
-        🎯 Chọn yêu cầu Báo giá
+      <DialogTitle
+        sx={{
+          background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 45%,#14a08c)',
+          color: '#fff',
+          px: 5, py: 3.75,
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Decorative orbs (legacy public/legacy.html:2492–2493). */}
+        <Box sx={{ position: 'absolute', right: -40, top: -40, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
+        <Box sx={{ position: 'absolute', right: 60, bottom: -60, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
+        <Box sx={{ position: 'relative' }}>
+          <Typography sx={{ fontSize: 24, fontWeight: 900, letterSpacing: 0.2 }}>
+            🎯 Chọn yêu cầu Báo giá
+          </Typography>
+          <Typography sx={{ fontSize: 14, opacity: 0.82, mt: 0.75 }}>
+            Hệ thống sẽ cấu hình hạng mục phù hợp với loại báo giá bạn chọn
+          </Typography>
+        </Box>
         {canCancel && (
-          <Button onClick={onClose} sx={{ float: 'right' }}>Đóng</Button>
+          <Button onClick={onClose} sx={{ position: 'absolute', top: 16, right: 16, color: '#fff', background: 'rgba(255,255,255,0.16)', '&:hover': { background: 'rgba(255,255,255,0.28)' } }}>
+            Đóng
+          </Button>
         )}
       </DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Hệ thống sẽ cấu hình hạng mục phù hợp với loại báo giá bạn chọn
-        </Typography>
+      <DialogContent sx={{ background: 'linear-gradient(180deg,#f7fbfa,#ffffff)', pt: 4 }}>
+
 
         <Box
           sx={{
