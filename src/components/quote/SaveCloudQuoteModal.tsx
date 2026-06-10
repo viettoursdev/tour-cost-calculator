@@ -18,13 +18,19 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const currentUser = useAuthStore((s) => s.currentUser);
   const draftName = useQuoteStore((s) => s.draft.info.name);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
+  const template = useQuoteStore((s) => s.draft.template);
   const saveCloud = useQuoteStore((s) => s.saveCloud);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const dmcQuotes = useQuoteHistoryStore((s) => s.dmcQuotes);
   const customers = useCustomerStore((s) => s.customers);
 
+  // Follow the active quote template: DMC breakdowns live in a separate history
+  // list, so look up the existing entry in the matching source — otherwise a DMC
+  // update is wrongly treated as a brand-new quote.
+  const sourceQuotes = template === 'dmc' ? dmcQuotes : quotes;
   const existingEntry = useMemo(
-    () => (currentQuoteId ? quotes.find((q) => q.cloudId === currentQuoteId) : undefined),
-    [currentQuoteId, quotes],
+    () => (currentQuoteId ? sourceQuotes.find((q) => q.cloudId === currentQuoteId) : undefined),
+    [currentQuoteId, sourceQuotes],
   );
 
   // Pre-load existing customer if the cloud entry has one
