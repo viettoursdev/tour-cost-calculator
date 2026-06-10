@@ -46,10 +46,13 @@ export function MainApp() {
     // Instant cross-tab sync within the same browser (fires only in OTHER tabs).
     const onFxStorage = (e: StorageEvent) => {
       if (e.key === 'vte_fx_rates' && e.newValue) {
-        // persistLocal=false: the value is already in localStorage (it triggered
-        // this event) — re-writing it would loop between tabs.
-        try { useQuoteStore.getState().setRatesSynced(JSON.parse(e.newValue) as Record<string, number>, undefined, undefined, false); }
-        catch { /* ignore */ }
+        // LS stores { rates, at } — extract the rates map (not the whole wrapper).
+        // persistLocal=false: value already in LS (it triggered this event).
+        try {
+          const parsed = JSON.parse(e.newValue) as { rates?: Record<string, number> };
+          const r = (parsed?.rates ?? parsed) as Record<string, number>;
+          useQuoteStore.getState().setRatesSynced(r, undefined, undefined, false);
+        } catch { /* ignore */ }
       }
     };
     window.addEventListener('storage', onFxStorage);

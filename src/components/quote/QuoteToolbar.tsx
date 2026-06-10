@@ -593,7 +593,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         {showRates && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, px: 2.25, pb: 2.25, pt: 0.5 }}>
             {Object.entries(rates)
-              .filter(([c]) => c !== 'VND')
+              .filter(([c, r]) => c !== 'VND' && typeof r === 'number')
               .map(([c, r]) => (
                 <Box
                   key={c}

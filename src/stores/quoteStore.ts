@@ -116,6 +116,14 @@ const persistKey = (username: string) => `vte_quote_draft_${username}`;
 let lastFxPushAt: string | null = null;
 let fxPushTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Keep only numeric currency entries — defends against polluted sources (e.g. a
+// `{rates, at}` wrapper accidentally merged in) so `[object Object]` / timestamp
+// strings never end up as a "rate".
+const cleanRates = (r: Record<string, unknown>): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(r ?? {}).filter(([, v]) => typeof v === 'number' && Number.isFinite(v)),
+  ) as Record<string, number>;
+
 // localStorage cache so rates show instantly on reload / offline, independent
 // of the draft (DMC drafts are dropped on rehydrate).
 const FX_LS_KEY = 'vte_fx_rates';
@@ -124,12 +132,12 @@ export function readFxRatesLS(): Record<string, number> | null {
     const raw = localStorage.getItem(FX_LS_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw) as { rates?: Record<string, number> } | Record<string, number>;
-    if (p && typeof p === 'object' && 'rates' in p && p.rates) return p.rates as Record<string, number>;
-    return p as Record<string, number>; // legacy: plain rates object
+    const r = (p && typeof p === 'object' && 'rates' in p && p.rates) ? p.rates : p;
+    return cleanRates(r as Record<string, unknown>);
   } catch { return null; }
 }
 function writeFxRatesLS(rates: Record<string, number>): void {
-  try { localStorage.setItem(FX_LS_KEY, JSON.stringify({ rates, at: new Date().toISOString() })); } catch { /* ignore */ }
+  try { localStorage.setItem(FX_LS_KEY, JSON.stringify({ rates: cleanRates(rates), at: new Date().toISOString() })); } catch { /* ignore */ }
 }
 
 /**
@@ -251,7 +259,7 @@ export const useQuoteStore = create<QuoteState>()(
           if (fxPushTimer) clearTimeout(fxPushTimer);
           fxPushTimer = setTimeout(() => {
             const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
-            fbPushFxRates(get().draft.rates, by)
+            fbPushFxRates(cleanRates(get().draft.rates), by)
               .then((at) => { lastFxPushAt = at; })
               .catch(() => { /* ignore offline */ });
           }, 600);
@@ -264,7 +272,7 @@ export const useQuoteStore = create<QuoteState>()(
           // debounced pushes) — anything at/older than our last push — and adopt
           // any snapshot newer than it. Cross-tab updates (no pushedAt) always apply.
           if (pushedAt && lastFxPushAt && pushedAt <= lastFxPushAt) return;
-          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...rates, VND: 1 } } }));
+          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...cleanRates(rates), VND: 1 } } }));
           // persistLocal=false when the update CAME FROM a localStorage 'storage'
           // event, to avoid a write→event→write feedback loop between tabs.
           if (persistLocal) writeFxRatesLS(get().draft.rates);
@@ -273,7 +281,7 @@ export const useQuoteStore = create<QuoteState>()(
         syncFxNow: async () => {
           if (fxPushTimer) { clearTimeout(fxPushTimer); fxPushTimer = null; }
           const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
-          const at = await fbPushFxRates(get().draft.rates, by); // this push becomes the canonical record
+          const at = await fbPushFxRates(cleanRates(get().draft.rates), by); // this push becomes the canonical record
           lastFxPushAt = at;
           writeFxRatesLS(get().draft.rates);
           set({ fxSyncedAt: at, fxSyncedBy: by });
