@@ -4,14 +4,14 @@ import {
   Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import GroupIcon from '@mui/icons-material/Group';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { fmtVND } from './calc';
 import type { CloudQuoteEntry, Collaborator, Template, User } from '@/types';
+import CloudDownload from '@mui/icons-material/CloudDownload';
+import Delete from '@mui/icons-material/Delete';
 
 const TEMPLATE_LABEL: Record<Template, string> = {
   domestic: 'Nội địa',
@@ -151,12 +151,12 @@ export function QuoteHistoryView() {
         <Stack direction="row">
           <Tooltip title="Tải báo giá">
             <IconButton size="small" onClick={() => handleLoad(p.row)}>
-              <FolderOpenIcon fontSize="small" />
+              <CloudDownload fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Xoá">
             <IconButton size="small" color="error" onClick={() => handleDelete(p.row)}>
-              <DeleteOutlineIcon fontSize="small" />
+              <Delete fontSize="small" />
             </IconButton>
           </Tooltip>
         </Stack>
