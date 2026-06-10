@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Box, Button, Paper, Slider, Stack, TextField, Typography } from '@mui/material';
 import { catTotal, computeTotals, fmtVND } from './calc';
 import { getCATS } from './constants';
+import { QuoteTermsEditor } from './QuoteTermsEditor';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 import type { CategoryId, Template } from '@/types';
@@ -272,6 +273,8 @@ export function SummaryView() {
           </Paper>
         </Box>
       </Box>
+
+      <QuoteTermsEditor />
     </Box>
   );
 }

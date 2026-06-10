@@ -19,7 +19,7 @@ type ExportParams = {
 };
 
 export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportParams): void {
-  const { info, items, rates, pax, catEnabled, template, margin, vat } = draft;
+  const { info, items, rates, pax, catEnabled, template, margin, vat, inclusions, exclusions, payments } = draft;
   if (!template || template === 'dmc') return;
   const isPackage = mode === 'package';
 
@@ -195,6 +195,61 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     pdf.text('Gia ban / khach:', col1, ry);
     pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
     y += 50;
+  }
+
+  // Customer-facing terms: inclusions / exclusions / payments
+  const renderBullets = (title: string, lines: string[], accent: [number, number, number]) => {
+    const valid = lines.map((s) => s.trim()).filter(Boolean);
+    if (!valid.length) return;
+    checkPage(16);
+    y += 4;
+    pdf.setFontSize(11); pdf.setTextColor(...accent); pdf.setFont(FONT, 'bold');
+    pdf.text(title, mX, y);
+    y += 2.5;
+    pdf.setDrawColor(...accent); pdf.setLineWidth(0.4);
+    pdf.line(mX, y, pageW - mX, y);
+    y += 6;
+    valid.forEach((line) => {
+      const wrapped: string[] = pdf.splitTextToSize(line, pageW - mX * 2 - 6);
+      checkPage(wrapped.length * 4.5 + 2);
+      pdf.setFont(FONT, 'bold'); pdf.setFontSize(9); pdf.setTextColor(...accent);
+      pdf.text('•', mX + 1, y);
+      pdf.setFont(FONT, 'normal'); pdf.setTextColor(...dark);
+      pdf.text(wrapped, mX + 6, y);
+      y += wrapped.length * 4.5 + 1.5;
+    });
+  };
+  renderBullets('GIA BAO GOM / INCLUDED', inclusions ?? [], teal);
+  renderBullets('KHONG BAO GOM / EXCLUDED', exclusions ?? [], red);
+
+  const validPayments = (payments ?? []).filter((p) => p.label.trim() || p.amount || p.note.trim());
+  if (validPayments.length) {
+    checkPage(16);
+    y += 4;
+    pdf.setFontSize(11); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+    pdf.text('THONG TIN THANH TOAN / PAYMENT TERMS', mX, y);
+    y += 2.5;
+    pdf.setDrawColor(...teal); pdf.setLineWidth(0.4);
+    pdf.line(mX, y, pageW - mX, y);
+    y += 6;
+    validPayments.forEach((p) => {
+      checkPage(10);
+      pdf.setFont(FONT, 'bold'); pdf.setFontSize(10); pdf.setTextColor(...dark);
+      pdf.text(p.label || '', mX + 1, y);
+      if (p.amount) {
+        pdf.setTextColor(...teal);
+        pdf.text(fmtVND(p.amount), pageW - mX, y, { align: 'right' });
+      }
+      y += 5;
+      if (p.note && p.note.trim()) {
+        pdf.setFont(FONT, 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gray);
+        const wn: string[] = pdf.splitTextToSize(p.note.trim(), pageW - mX * 2 - 6);
+        checkPage(wn.length * 4.2 + 2);
+        pdf.text(wn, mX + 6, y);
+        y += wn.length * 4.2 + 2;
+      }
+      y += 1.5;
+    });
   }
 
   // Footer

@@ -39,6 +39,14 @@ export type QuoteInfo = {
   startDate: string | null;
 };
 
+/** A payment instalment shown on the quote (đợt 1, đợt 2…). */
+export type QuotePayment = {
+  id: string;
+  label: string;     // e.g. "Đợt 1 – Cọc giữ chỗ"
+  amount: number;    // fixed amount in VND (0 = unspecified)
+  note: string;      // condition / due, e.g. "Trong vòng 07 ngày sau khi ký HĐ"
+};
+
 export type QuoteDraft = {
   template: Template | null;
   info: QuoteInfo;
@@ -51,6 +59,10 @@ export type QuoteDraft = {
   items: Partial<Record<CategoryId, Item[]>>;
   catEnabled: Record<CategoryId, boolean>;
   currentQuoteId: string | null;
+  // Customer-facing terms (optional — absent until edited).
+  inclusions?: string[];   // Giá bao gồm
+  exclusions?: string[];   // Giá không bao gồm
+  payments?: QuotePayment[]; // Thông tin thanh toán theo đợt
   // DMC template only — undefined for regular drafts.
   outputCurrency?: OutputCurrency;
   dmcPrices?: DmcPrices;

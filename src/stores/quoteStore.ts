@@ -15,7 +15,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
-  QuoteDraft, QuoteInfo, Snapshot, Template, User,
+  QuoteDraft, QuoteInfo, QuotePayment, Snapshot, Template, User,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -64,6 +64,9 @@ type QuoteState = {
   setVat: (n: number) => void;
   setSvcBasis: (n: number) => void;
   setRounding: (n: number) => void;
+  setInclusions: (v: string[]) => void;
+  setExclusions: (v: string[]) => void;
+  setPayments: (v: QuotePayment[]) => void;
   setOutputCurrency: (cur: OutputCurrency) => void;
   setDmcPrice: (groupSize: number, value: number) => void;
   setDmcMargin: (patch: Partial<DmcMargin>) => void;
@@ -205,6 +208,9 @@ export const useQuoteStore = create<QuoteState>()(
         setVat: (n) => set((s) => ({ draft: { ...s.draft, vat: n } })),
         setSvcBasis: (n) => set((s) => ({ draft: { ...s.draft, svcBasis: n } })),
         setRounding: (n) => set((s) => ({ draft: { ...s.draft, rounding: Math.max(1, n) } })),
+        setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
+        setExclusions: (v) => set((s) => ({ draft: { ...s.draft, exclusions: v } })),
+        setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
 
         setOutputCurrency: (cur) =>
           set((s) => ({ draft: { ...s.draft, outputCurrency: cur } })),
@@ -298,6 +304,9 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.rounding != null ? { rounding: Math.max(1, Number(data.rounding) || 1) } : {}),
                 ...(data.items ? { items: data.items } : {}),
                 ...(data.catEnabled ? { catEnabled: data.catEnabled } : {}),
+                ...(data.inclusions ? { inclusions: data.inclusions } : {}),
+                ...(data.exclusions ? { exclusions: data.exclusions } : {}),
+                ...(data.payments ? { payments: data.payments } : {}),
               },
             }));
             return { ok: true };
