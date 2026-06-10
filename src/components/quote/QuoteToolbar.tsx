@@ -21,9 +21,9 @@ import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { importExcelQuote } from '@/lib/exports/importExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
 import { exportPDFImage } from '@/lib/exports/exportPDFImage';
-import { exportContractPDF } from '@/lib/exports/exportContractPDF';
 import { emptyContract } from '@/components/contract/constants';
 import { QuotePrintable } from './QuotePrintable';
+import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { fmtOutput } from '@/lib/currency';
@@ -36,7 +36,7 @@ import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/const
 import { TEMPLATES } from './constants';
 import { VTE_LOGO_WHITE } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
-import type { OutputCurrency } from '@/types';
+import type { Contract, OutputCurrency } from '@/types';
 
 type RateModalState =
   | { kind: 'none' }
@@ -105,6 +105,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [contractModal, setContractModal] = useState<Contract | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const excelInput = useRef<HTMLInputElement | null>(null);
   const printRef = useRef<HTMLDivElement | null>(null);
@@ -172,7 +173,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     if (!currentUser || !template || template === 'dmc') return;
     const pricePerPax = totals.roundedPPax;
     const c = emptyContract(currentUser.name);
-    exportContractPDF({
+    setContractModal({
       ...c,
       tourName: info.name || c.tourName,
       tourDest: info.dest || c.tourDest,
@@ -604,6 +605,13 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         template={template ?? undefined}
       />
       <VisaModal open={rateModal.kind === 'visa'} onClose={() => setRateModal({ kind: 'none' })} />
+      {contractModal && (
+        <ContractInfoModal
+          open
+          baseContract={contractModal}
+          onClose={() => setContractModal(null)}
+        />
+      )}
       {rateModal.kind === 'other' && (
         <RateCardModal
           open
