@@ -19,9 +19,9 @@ type Props = {
   currentUser: User;
 };
 
-type FormState = Pick<User, 'u' | 'p' | 'name' | 'role' | 'color'>;
+type FormState = Pick<User, 'u' | 'p' | 'name' | 'role' | 'color'> & { email: string };
 
-const EMPTY_FORM: FormState = { u: '', p: '', name: '', role: 'Sales', color: USER_COLORS[2] };
+const EMPTY_FORM: FormState = { u: '', email: '', p: '', name: '', role: 'Sales', color: USER_COLORS[2] };
 
 const MATRIX_KEYS: { key: keyof typeof PERMISSIONS['CEO']; label: string }[] = [
   { key: 'manageUsers',  label: 'QL tài khoản' },
@@ -51,7 +51,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
   };
   const startEdit = (usr: User) => {
     setEditingId(usr.u);
-    setForm({ u: usr.u, p: usr.p, name: usr.name, role: usr.role, color: usr.color });
+    setForm({ u: usr.u, email: usr.email ?? '', p: usr.p, name: usr.name, role: usr.role, color: usr.color });
     setShowForm(true);
   };
 
@@ -62,13 +62,24 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
     if (!form.u.trim()) { window.alert('Vui lòng nhập Username'); return; }
     if (!form.p.trim()) { window.alert('Vui lòng nhập Mật khẩu'); return; }
     if (!form.name.trim()) { window.alert('Vui lòng nhập Tên hiển thị'); return; }
+    const email = form.email.trim().toLowerCase();
+    if (!email) { window.alert('Vui lòng nhập Email công ty'); return; }
+    if (!email.endsWith('@viettours.com.vn')) {
+      window.alert('Email phải kết thúc bằng @viettours.com.vn');
+      return;
+    }
     const username = form.u.trim().toLowerCase();
     if (!editingId && users.some((x) => x.u === username)) {
       window.alert('Username này đã tồn tại');
       return;
     }
+    if (users.some((x) => x.u !== editingId && (x.email ?? '').toLowerCase() === email)) {
+      window.alert('Email này đã được dùng cho tài khoản khác');
+      return;
+    }
     const newUser: User = {
       u: username,
+      email,
       p: form.p,
       name: form.name.trim(),
       role: form.role,
@@ -146,6 +157,16 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
               </Stack>
               <Stack direction="row" spacing={1.5}>
                 <TextField
+                  label="Email công ty"
+                  value={form.email}
+                  onChange={(e) => setF('email', e.target.value)}
+                  size="small" fullWidth
+                  placeholder="vd: sale4@viettours.com.vn"
+                  helperText="Email công ty dùng để nhận link đăng nhập"
+                />
+              </Stack>
+              <Stack direction="row" spacing={1.5}>
+                <TextField
                   label="Tên hiển thị"
                   value={form.name}
                   onChange={(e) => setF('name', e.target.value)}
@@ -218,7 +239,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                     )}
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
-                    @{usr.u} · MK: {'•'.repeat(usr.p.length)}
+                    @{usr.u} · {usr.email ?? <Box component="span" sx={{ color: '#dc3250', fontWeight: 700 }}>Chưa có email — không thể đăng nhập</Box>}
                   </Typography>
                 </Box>
                 <IconButton size="small" color="primary" onClick={() => startEdit(usr)}>
@@ -275,7 +296,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
         </Box>
 
         <Alert severity="warning" sx={{ mt: 2 }}>
-          <strong>Lưu ý:</strong> Tài khoản đồng bộ qua Firestore và áp dụng cho mọi thiết bị đăng nhập. Mật khẩu lưu dạng văn bản thô (theo kiến trúc hiện tại — chỉ dùng nội bộ).
+          <strong>Lưu ý:</strong> Mỗi tài khoản phải có email @viettours.com.vn để nhận link đăng nhập (Phase 2). Mật khẩu lưu dạng văn bản thô (tạm thời — sẽ xoá ở Phase 4).
         </Alert>
       </DialogContent>
     </Dialog>
