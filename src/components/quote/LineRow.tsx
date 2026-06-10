@@ -1,10 +1,9 @@
-import {
-  IconButton, MenuItem, Select, Stack, Switch, TableCell, TableRow,
-  TextField, ToggleButton, Tooltip, Typography,
-} from '@mui/material';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
 import { calcVND, fmtVND } from './calc';
+import { LEGACY } from '@/theme';
 import type { Item, QtyMode } from '@/types';
 
 type Props = {
@@ -15,6 +14,111 @@ type Props = {
   onUpd: (item: Item) => void;
   onDel: () => void;
 };
+
+/** Compact bordered <select> matching legacy `.sel`. */
+const Sel = styled('select')({
+  background: '#fff',
+  border: '1px solid rgba(20,150,140,0.25)',
+  borderRadius: 7,
+  color: LEGACY.navy,
+  padding: '4px 7px',
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  outline: 'none',
+});
+
+/** Inline-edit number (legacy `EN`): formatted text → number input on click. */
+function EditNum({
+  value, onChange, min = 0, step = 1, width = 80, align = 'right', bold = false,
+}: {
+  value: number; onChange: (v: number) => void; min?: number; step?: number;
+  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const commit = () => {
+    const n = parseFloat(draft);
+    if (!isNaN(n) && n >= min) onChange(n);
+    setEditing(false);
+  };
+  if (editing) {
+    return (
+      <Box
+        component="input" autoFocus type="number" value={draft} step={step}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e: KeyboardEvent) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        sx={{
+          width, textAlign: align, background: '#fff', border: '1.5px solid #14a08c',
+          borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
+          fontFamily: 'inherit', fontSize: 14, fontWeight: bold ? 700 : 400,
+        }}
+      />
+    );
+  }
+  return (
+    <Box
+      component="span"
+      onClick={() => { setDraft(String(value)); setEditing(true); }}
+      sx={{
+        cursor: 'pointer', borderRadius: '4px', px: 0.5, display: 'inline-block',
+        textAlign: align, minWidth: width, fontWeight: bold ? 700 : 400, fontSize: 14,
+        '&:hover': { background: 'rgba(20,150,140,0.1)' },
+      }}
+    >
+      {value.toLocaleString('vi-VN')}
+    </Box>
+  );
+}
+
+/** Inline-edit text (legacy `ET`). */
+function EditText({
+  value, onChange, placeholder = '', bold = false, italic = false, color,
+}: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+  bold?: boolean; italic?: boolean; color?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const commit = () => { onChange(draft); setEditing(false); };
+  if (editing) {
+    return (
+      <Box
+        component="input" autoFocus value={draft}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e: KeyboardEvent) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        sx={{
+          width: '100%', background: '#fff', border: '1.5px solid #14a08c',
+          borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
+          fontFamily: 'inherit', fontSize: bold ? 13 : 12, fontWeight: bold ? 600 : 400,
+        }}
+      />
+    );
+  }
+  return (
+    <Box
+      component="span"
+      onClick={() => { setDraft(value); setEditing(true); }}
+      sx={{
+        cursor: 'pointer', borderRadius: '4px', px: 0.5, py: 0.25, display: 'inline-block',
+        minHeight: '1.3em', fontSize: bold ? 13 : 12, fontWeight: bold ? 600 : 400,
+        fontStyle: italic && !value ? 'italic' : 'normal',
+        color: value ? (color ?? 'inherit') : 'rgba(15,58,74,0.4)',
+        '&:hover': { background: 'rgba(20,150,140,0.1)' },
+      }}
+    >
+      {value || placeholder}
+    </Box>
+  );
+}
 
 export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
   const vnd = calcVND(item, rates, pax);
@@ -27,117 +131,115 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
     item.customQty;
 
   return (
-    <TableRow sx={{ opacity: off ? 0.45 : 1 }}>
-      <TableCell padding="checkbox">
-        <Switch size="small" checked={item.enabled} onChange={(_, c) => u({ enabled: c })} />
+    <TableRow sx={{ opacity: off ? 0.4 : 1 }}>
+      {/* Enable toggle (legacy pill) */}
+      <TableCell padding="checkbox" sx={{ textAlign: 'center' }}>
+        <Box
+          role="switch" aria-checked={item.enabled} aria-label="Bật/tắt dòng"
+          onClick={() => u({ enabled: off })}
+          sx={{
+            display: 'inline-block', width: 38, height: 21, borderRadius: 11, cursor: 'pointer',
+            position: 'relative', transition: 'background .2s',
+            background: off ? 'rgba(15,58,74,0.15)' : '#14a08c',
+          }}
+        >
+          <Box sx={{
+            position: 'absolute', top: 2, left: off ? 2 : 19, width: 17, height: 17,
+            borderRadius: '50%', background: '#fff', transition: 'left .2s',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          }} />
+        </Box>
       </TableCell>
 
-      <TableCell>
-        <TextField
-          size="small" fullWidth variant="standard"
-          value={item.name}
-          placeholder="Mô tả..."
-          onChange={(e) => u({ name: e.target.value })}
-        />
+      {/* Name */}
+      <TableCell sx={{ minWidth: 140 }}>
+        <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold />
       </TableCell>
 
-      <TableCell>
-        <TextField
-          size="small" fullWidth variant="standard"
-          value={item.note}
-          placeholder="Chi tiết / ghi chú..."
-          onChange={(e) => u({ note: e.target.value })}
-        />
+      {/* Note */}
+      <TableCell sx={{ minWidth: 180, maxWidth: 260 }}>
+        <EditText value={item.note} onChange={(v) => u({ note: v })} placeholder="Chi tiết / ghi chú..." italic color="rgba(15,58,74,0.7)" />
       </TableCell>
 
-      <TableCell>
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <Select
-            size="small" variant="standard" value={item.cur}
-            onChange={(e) => u({ cur: String(e.target.value) })}
-            sx={{ minWidth: 64 }}
-          >
-            {Object.keys(rates).map((c) => (
-              <MenuItem key={c} value={c}>{c}</MenuItem>
-            ))}
-          </Select>
-          <TextField
-            size="small" variant="standard" type="number"
-            value={item.price}
-            onChange={(e) => u({ price: Number(e.target.value) || 0 })}
-            slotProps={{ htmlInput: { min: 0, step: 0.01, style: { width: 90, textAlign: 'right' } } }}
-          />
+      {/* Currency + price */}
+      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Sel value={item.cur} onChange={(e) => u({ cur: e.target.value })}>
+            {Object.keys(rates).map((c) => <option key={c} value={c}>{c}</option>)}
+          </Sel>
+          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} step={0.01} width={86} bold />
         </Stack>
       </TableCell>
 
+      {/* Unit */}
       <TableCell>
-        <Select
-          size="small" variant="standard" value={item.unit}
-          onChange={(e) => u({ unit: String(e.target.value) })}
-          sx={{ minWidth: 110 }}
-        >
-          {UNITS.map((un) => <MenuItem key={un} value={un}>{un}</MenuItem>)}
-        </Select>
+        <Sel value={item.unit} onChange={(e) => u({ unit: e.target.value })}>
+          {UNITS.map((un) => <option key={un} value={un}>{un}</option>)}
+        </Sel>
       </TableCell>
 
+      {/* Times */}
       <TableCell align="center">
-        <TextField
-          size="small" variant="standard" type="number"
-          value={item.times}
-          onChange={(e) => u({ times: Math.max(1, Number(e.target.value) || 1) })}
-          slotProps={{ htmlInput: { min: 1, style: { width: 40, textAlign: 'center' } } }}
-        />
+        <EditNum value={item.times} onChange={(v) => u({ times: Math.max(1, v) })} min={1} width={48} align="center" />
       </TableCell>
 
+      {/* Quantity */}
       <TableCell align="center">
         <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
-          <Select
-            size="small" variant="standard" value={item.qtyMode}
-            onChange={(e) => u({ qtyMode: e.target.value as QtyMode })}
-            sx={{ minWidth: 64, fontSize: 12 }}
-          >
-            <MenuItem value="per_pax">×pax</MenuItem>
-            <MenuItem value="per_group">đoàn</MenuItem>
-            <MenuItem value="custom">tuỳ</MenuItem>
-          </Select>
+          <Sel value={item.qtyMode} onChange={(e) => u({ qtyMode: e.target.value as QtyMode })} style={{ fontSize: 11 }}>
+            <option value="per_pax">×pax</option>
+            <option value="per_group">đoàn</option>
+            <option value="custom">tuỳ</option>
+          </Sel>
           {item.qtyMode === 'custom' ? (
-            <TextField
-              size="small" variant="standard" type="number"
-              value={item.customQty}
-              onChange={(e) => u({ customQty: Math.max(1, Number(e.target.value) || 1) })}
-              slotProps={{ htmlInput: { min: 1, style: { width: 40, textAlign: 'center' } } }}
-            />
+            <EditNum value={item.customQty} onChange={(v) => u({ customQty: Math.max(1, v) })} min={1} width={44} align="center" />
           ) : (
-            <Typography variant="caption" color="text.secondary">= {qty}</Typography>
+            <Typography variant="caption" sx={{ color: 'rgba(15,58,74,0.4)' }}>= {qty}</Typography>
           )}
         </Stack>
       </TableCell>
 
-      <TableCell align="right">
+      {/* Total + FOC */}
+      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
         <Stack alignItems="flex-end" spacing={0.5}>
-          <Typography
-            fontWeight={700}
-            sx={{ color: off ? 'text.disabled' : (item.foc ? 'success.main' : catColor) }}
-          >
-            {item.foc ? 'FOC' : fmtVND(vnd)}
-          </Typography>
+          {item.foc ? (
+            <Box sx={{ background: '#27ae60', color: '#fff', fontSize: 10, fontWeight: 800, px: 0.9, py: 0.25, borderRadius: '5px', letterSpacing: 0.5 }}>
+              FOC
+            </Box>
+          ) : (
+            <Typography sx={{ fontWeight: 700, fontSize: 14, color: off ? 'rgba(15,58,74,0.3)' : catColor }}>
+              {fmtVND(vnd)}
+            </Typography>
+          )}
           <Tooltip title={item.foc ? 'Bỏ FOC – tính phí lại' : 'Đánh dấu Free of Charge'}>
-            <ToggleButton
-              size="small" value="foc"
-              selected={item.foc}
-              onChange={() => u({ foc: !item.foc })}
-              sx={{ py: 0, px: 1, fontSize: 10 }}
+            <Box
+              component="button" onClick={() => u({ foc: !item.foc })}
+              sx={{
+                background: item.foc ? 'rgba(39,174,96,0.15)' : 'rgba(15,58,74,0.05)',
+                border: `1px solid ${item.foc ? '#27ae60' : 'rgba(15,58,74,0.15)'}`,
+                color: item.foc ? '#27ae60' : 'rgba(15,58,74,0.5)',
+                borderRadius: '6px', px: 0.9, py: '1px', fontSize: 9, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3,
+              }}
             >
               {item.foc ? '✓ FOC' : 'FOC?'}
-            </ToggleButton>
+            </Box>
           </Tooltip>
         </Stack>
       </TableCell>
 
-      <TableCell padding="checkbox">
-        <IconButton size="small" onClick={onDel} color="error">
-          <DeleteOutlineIcon fontSize="small" />
-        </IconButton>
+      {/* Delete */}
+      <TableCell padding="checkbox" sx={{ textAlign: 'center' }}>
+        <Box
+          component="button" onClick={onDel} aria-label="Xoá dòng"
+          sx={{
+            background: 'none', border: 'none', color: 'rgba(220,50,80,0.45)',
+            cursor: 'pointer', fontSize: 14, px: 0.75, fontFamily: 'inherit',
+            '&:hover': { color: '#dc3250' },
+          }}
+        >
+          ✕
+        </Box>
       </TableCell>
     </TableRow>
   );
