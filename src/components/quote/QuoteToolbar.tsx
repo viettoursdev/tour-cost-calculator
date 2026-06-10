@@ -402,7 +402,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           </MenuItem>
           <MenuItem onClick={() => {
             if (draft.template && draft.template !== 'dmc' && currentUser) {
-              exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
+              exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
             }
             setExportAnchor(null);
           }}>

@@ -19,9 +19,9 @@ type Props = {
   currentUser: User;
 };
 
-type FormState = Pick<User, 'u' | 'p' | 'name' | 'role' | 'color'> & { email: string };
+type FormState = Pick<User, 'u' | 'p' | 'name' | 'role' | 'color'> & { email: string; phone: string };
 
-const EMPTY_FORM: FormState = { u: '', email: '', p: '', name: '', role: 'Sales', color: USER_COLORS[2] };
+const EMPTY_FORM: FormState = { u: '', email: '', phone: '', p: '', name: '', role: 'Sales', color: USER_COLORS[2] };
 
 const MATRIX_KEYS: { key: keyof typeof PERMISSIONS['CEO']; label: string }[] = [
   { key: 'manageUsers',  label: 'QL tài khoản' },
@@ -51,7 +51,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
   };
   const startEdit = (usr: User) => {
     setEditingId(usr.u);
-    setForm({ u: usr.u, email: usr.email ?? '', p: usr.p, name: usr.name, role: usr.role, color: usr.color });
+    setForm({ u: usr.u, email: usr.email ?? '', phone: usr.phone ?? '', p: usr.p, name: usr.name, role: usr.role, color: usr.color });
     setShowForm(true);
   };
 
@@ -77,9 +77,11 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
       window.alert('Email này đã được dùng cho tài khoản khác');
       return;
     }
+    const phone = form.phone.trim();
     const newUser: User = {
       u: username,
       email,
+      ...(phone ? { phone } : {}),
       p: form.p,
       name: form.name.trim(),
       role: form.role,
@@ -164,6 +166,14 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                   placeholder="vd: sale4@viettours.com.vn"
                   helperText="Email công ty dùng để nhận link đăng nhập"
                 />
+                <TextField
+                  label="Số điện thoại"
+                  value={form.phone}
+                  onChange={(e) => setF('phone', e.target.value)}
+                  size="small" fullWidth
+                  placeholder="vd: 0901 234 567"
+                  helperText="Hiển thị trên báo giá xuất ra"
+                />
               </Stack>
               <Stack direction="row" spacing={1.5}>
                 <TextField
@@ -240,6 +250,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
                     @{usr.u} · {usr.email ?? <Box component="span" sx={{ color: '#dc3250', fontWeight: 700 }}>Chưa có email — không thể đăng nhập</Box>}
+                    {usr.phone ? ` · ☎ ${usr.phone}` : ''}
                   </Typography>
                 </Box>
                 <IconButton size="small" color="primary" onClick={() => startEdit(usr)}>

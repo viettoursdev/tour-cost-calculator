@@ -12,7 +12,7 @@ import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
   draft: QuoteDraft;
-  savedBy: { name: string; role: string };
+  savedBy: { name: string; role: string; email?: string; phone?: string };
 };
 
 export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
@@ -45,8 +45,20 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
 
   // Logo + company name
   try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 21, undefined, 'FAST'); } catch { /* ignore */ }
-  pdf.setFontSize(16); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 40, y + 10);
+  pdf.setFontSize(15); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 40, y + 9);
+  pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
+  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', mX + 40, y + 14);
+
+  // Salesperson contact (right side)
+  pdf.setFontSize(7); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
+  pdf.text('NHAN VIEN BAO GIA', pageW - mX, y + 2, { align: 'right' });
+  pdf.setFontSize(9.5); pdf.setTextColor(...dark); pdf.setFont(FONT, 'bold');
+  pdf.text(savedBy.name, pageW - mX, y + 7, { align: 'right' });
+  pdf.setFont(FONT, 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gray);
+  let cy = y + 11.5;
+  if (savedBy.phone) { pdf.text(`DT: ${savedBy.phone}`, pageW - mX, cy, { align: 'right' }); cy += 4; }
+  if (savedBy.email) { pdf.text(savedBy.email, pageW - mX, cy, { align: 'right' }); }
   y += 24;
 
   // Quote title band
@@ -158,8 +170,9 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
   // Footer
   checkPage(15);
   pdf.setFontSize(8); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
+  const contactBits = [savedBy.phone, savedBy.email].filter(Boolean).join(' · ');
   pdf.text(
-    `Bao gia co hieu luc 07 ngay · Phu trach: ${savedBy.name} (${savedBy.role}) · ${new Date().toLocaleDateString('vi-VN')}`,
+    `Bao gia co hieu luc 07 ngay · Phu trach: ${savedBy.name} (${savedBy.role})${contactBits ? ' · ' + contactBits : ''} · ${new Date().toLocaleDateString('vi-VN')}`,
     pageW / 2, y, { align: 'center' },
   );
 
