@@ -22,6 +22,7 @@ import type { QuoteViewKey } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { importExcelQuote } from '@/lib/exports/importExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
+import { exportDMCPDF } from '@/lib/exports/exportDMCPDF';
 import { exportPDFImage } from '@/lib/exports/exportPDFImage';
 import { emptyContract } from '@/components/contract/constants';
 import { QuotePrintable } from './QuotePrintable';
@@ -474,28 +475,40 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           </MenuItem>
           <Divider />
           {/* PDF outputs */}
-          <MenuItem onClick={() => { void handleExportPDFImage(); setExportAnchor(null); }}>
-            <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>PDF Ảnh</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => { void handleExportPDFImagePkg(); setExportAnchor(null); }}>
-            <ListItemIcon><PhotoLibraryIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>PDF Ảnh (Tour trọn gói)</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => {
-            if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
-            setExportAnchor(null);
-          }}>
-            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>PDF Báo Giá</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => {
-            if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' });
-            setExportAnchor(null);
-          }}>
-            <ListItemIcon><Inventory2Icon fontSize="small" /></ListItemIcon>
-            <ListItemText>PDF Báo giá trọn gói</ListItemText>
-          </MenuItem>
+          {isDMC ? (
+            <MenuItem onClick={() => {
+              if (currentUser) exportDMCPDF({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
+              setExportAnchor(null);
+            }}>
+              <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>PDF breakdown DMC</ListItemText>
+            </MenuItem>
+          ) : (
+            <>
+              <MenuItem onClick={() => { void handleExportPDFImage(); setExportAnchor(null); }}>
+                <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>PDF Ảnh</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { void handleExportPDFImagePkg(); setExportAnchor(null); }}>
+                <ListItemIcon><PhotoLibraryIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>PDF Ảnh (Tour trọn gói)</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => {
+                if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
+                setExportAnchor(null);
+              }}>
+                <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>PDF Báo Giá</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => {
+                if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' });
+                setExportAnchor(null);
+              }}>
+                <ListItemIcon><Inventory2Icon fontSize="small" /></ListItemIcon>
+                <ListItemText>PDF Báo giá trọn gói</ListItemText>
+              </MenuItem>
+            </>
+          )}
           <Divider />
           {/* Documents */}
           <MenuItem onClick={() => { setInvoiceOpen(true); setExportAnchor(null); }} disabled={!canExport}>
