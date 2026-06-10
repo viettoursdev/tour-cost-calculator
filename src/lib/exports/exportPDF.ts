@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf';
 import { getCATS } from '@/components/quote/constants';
 import { calcVND, computeTotals, fmtVND } from '@/components/quote/calc';
+import { pricingLines } from '@/components/quote/pricing';
 import { loadVNFont } from './vnFont';
 import { VTE_LOGO } from './vteLogo';
 import type { Item, QuoteDraft } from '@/types';
@@ -22,6 +23,14 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   const { info, items, rates, pax, catEnabled, template, margin, vat, inclusions, exclusions, payments } = draft;
   if (!template || template === 'dmc') return;
   const isPackage = mode === 'package';
+
+  // Multi group-size: reconcile the active group's stored snapshot with the
+  // live top-level draft (which is fresher), then compute a price per group.
+  const groupVariants = (draft.groups && draft.groups.length)
+    ? draft.groups.map((g) => (g.id === draft.activeGroupId
+        ? { label: g.label, pax, items, catEnabled }
+        : { label: g.label, pax: g.pax, items: g.items, catEnabled: g.catEnabled }))
+    : null;
 
   const totals = computeTotals(draft);
   const roundedPPax = totals.roundedPPax;
@@ -149,8 +158,34 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   });
 
   const col1 = mX + 5, col2 = pageW - mX - 5;
-  if (isPackage) {
-    // Package total box: giá bán/khách × số khách = tổng tiền
+  if (isPackage && groupVariants) {
+    // Multi group-size package table.
+    const colPpax = pageW - mX - 62;
+    const rowH = 7;
+    const boxH = 14 + groupVariants.length * rowH + 4;
+    checkPage(boxH + 4);
+    y += 4;
+    pdf.setFillColor(...dark);
+    pdf.roundedRect(mX, y, pageW - mX * 2, boxH, 2, 2, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
+    pdf.text('GIA TRON GOI THEO MUC KHACH / PACKAGE BY GROUP SIZE', pageW / 2, y + 6, { align: 'center' });
+    pdf.setFontSize(8); pdf.setTextColor(200, 230, 224);
+    pdf.text('Muc khach', col1, y + 12);
+    pdf.text('Gia / khach', colPpax, y + 12, { align: 'right' });
+    pdf.text('Tong tien', col2, y + 12, { align: 'right' });
+    let ry = y + 12 + rowH;
+    groupVariants.forEach((g) => {
+      const gv = computeTotals({ template, info, pax: g.pax, rates, margin, vat, svcBasis: draft.svcBasis, rounding: draft.rounding, items: g.items, catEnabled: g.catEnabled, currentQuoteId: null });
+      pdf.setFont(FONT, 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
+      pdf.text(`${g.label} (${g.pax} khach)`, col1, ry);
+      pdf.text(fmtVND(gv.roundedPPax), colPpax, ry, { align: 'right' });
+      pdf.setFont(FONT, 'bold'); pdf.setTextColor(255, 224, 130);
+      pdf.text(fmtVND(gv.roundedPPax * g.pax), col2, ry, { align: 'right' });
+      ry += rowH;
+    });
+    y += boxH + 4;
+  } else if (isPackage) {
+    // Single package total box: giá bán/khách × số khách = tổng tiền
     checkPage(40);
     y += 4;
     pdf.setFillColor(...dark);
@@ -195,6 +230,31 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     pdf.text('Gia ban / khach:', col1, ry);
     pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
     y += 50;
+  }
+
+  // Pricing add-ons (package mode): single-room supplement, child, infant, tips…
+  if (isPackage) {
+    const addOns = pricingLines(draft.pricingOptions, roundedPPax);
+    if (addOns.length) {
+      checkPage(16 + addOns.length * 6);
+      y += 4;
+      pdf.setFontSize(11); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+      pdf.text('PHU THU / GIA KHAC · SUPPLEMENTS', mX, y);
+      y += 2.5;
+      pdf.setDrawColor(...teal); pdf.setLineWidth(0.4);
+      pdf.line(mX, y, pageW - mX, y);
+      y += 6;
+      addOns.forEach((l) => {
+        checkPage(7);
+        pdf.setFont(FONT, 'normal'); pdf.setFontSize(9.5); pdf.setTextColor(...dark);
+        pdf.text(`${l.label}`, mX + 1, y);
+        pdf.setTextColor(...gray); pdf.setFontSize(8);
+        pdf.text(`(${l.detail})`, mX + 70, y);
+        pdf.setFontSize(9.5); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+        pdf.text(fmtVND(l.resolved), pageW - mX, y, { align: 'right' });
+        y += 6;
+      });
+    }
   }
 
   // Customer-facing terms: inclusions / exclusions / payments
