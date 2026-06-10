@@ -82,7 +82,7 @@ type QuoteState = {
   renameSnapshot: (id: number, name: string) => void;
 
   // Cloud sync (PR-3.2)
-  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }) => Promise<CloudQuoteEntry>;
+  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachment?: { key: string; name: string }) => Promise<CloudQuoteEntry>;
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
   loadCloud: (cloudId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -357,7 +357,7 @@ export const useQuoteStore = create<QuoteState>()(
           set({ snapshots: next });
         },
 
-        saveCloud: async (name, collaborators, note, customer) => {
+        saveCloud: async (name, collaborators, note, customer, attachment) => {
           const { draft } = get();
           const u = useAuthStore.getState().currentUser;
           if (!u) throw new Error('saveCloud: no current user');
@@ -386,6 +386,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
+              ...(attachment ? { attachment } : {}),
             },
             { u: u.u, name: u.name, role: u.role },
           );

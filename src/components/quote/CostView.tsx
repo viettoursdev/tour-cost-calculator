@@ -94,7 +94,6 @@ export function CostView() {
               onAdd={() => addItem(catId)}
               onDel={(id) => delItem(catId, id)}
               onOpenRate={onOpenRate}
-              allowAttach={isDMC}
             />
           );
         })}
