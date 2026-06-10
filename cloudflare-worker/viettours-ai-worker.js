@@ -15,7 +15,7 @@
  * vào ô "AI Worker URL" trong app, bấm Lưu.
  */
 
-const MODEL = 'claude-haiku-4-5'; // Rẻ & nhanh. Đổi sang 'claude-sonnet-4-6' hoặc 'claude-opus-4-8' nếu cần chất lượng cao hơn
+const MODEL = 'claude-sonnet-4-6'; // Cân bằng chất lượng/chi phí. Đổi 'claude-haiku-4-5' (rẻ hơn) hoặc 'claude-opus-4-8' (cao nhất) nếu cần
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
 const CORS = {

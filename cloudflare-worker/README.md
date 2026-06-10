@@ -31,9 +31,9 @@ curl -X POST https://viettours-ai.<tên>.workers.dev/translate \
 
 ## Ghi chú
 
-- **Model:** mặc định `claude-haiku-4-5` (rẻ & nhanh nhất). Nếu cần **chất lượng cao hơn**,
-  sửa hằng `MODEL` trong file thành `claude-sonnet-4-6` (cân bằng) hoặc `claude-opus-4-8`
-  (cao nhất), rồi Deploy lại.
+- **Model:** mặc định `claude-sonnet-4-6` (cân bằng chất lượng/chi phí). Đổi hằng `MODEL`
+  thành `claude-haiku-4-5` (rẻ & nhanh hơn) hoặc `claude-opus-4-8` (chất lượng cao nhất),
+  rồi Deploy lại.
 - **Chi phí** do tài khoản Anthropic của bạn chịu (theo token). OCR ảnh tốn nhiều token hơn dịch text.
 - Worker này dùng chung URL cho cả **Dịch hồ sơ** và **Chương trình tour**.
 - `/distance` (Google Maps) chưa có ở đây — nếu cần tính quãng đường trong Chương trình tour,
