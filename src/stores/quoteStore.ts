@@ -112,6 +112,18 @@ const persistKey = (username: string) => `vte_quote_draft_${username}`;
 let lastFxPushAt: string | null = null;
 let fxPushTimer: ReturnType<typeof setTimeout> | null = null;
 
+// FX rates are a GLOBAL table (not per-quote): persist them in their own
+// localStorage key so they survive reload independent of the draft (DMC drafts
+// are intentionally dropped on rehydrate, which previously reset the rates).
+const FX_LS_KEY = 'vte_fx_rates';
+export function readFxRatesLS(): Record<string, number> | null {
+  try { const r = localStorage.getItem(FX_LS_KEY); return r ? (JSON.parse(r) as Record<string, number>) : null; }
+  catch { return null; }
+}
+function writeFxRatesLS(rates: Record<string, number>): void {
+  try { localStorage.setItem(FX_LS_KEY, JSON.stringify(rates)); } catch { /* ignore */ }
+}
+
 /**
  * Internal helper: clone a draft via structuredClone for snapshot saves.
  */
@@ -157,8 +169,13 @@ export const useQuoteStore = create<QuoteState>()(
             storedDraft = null;
             try { localStorage.removeItem(key); } catch { /* ignore */ }
           }
+          // Global FX rates live in their own key — apply them on top of whatever
+          // draft we end up with (so DMC drafts, which are dropped above, still
+          // keep the shared rate table after reload).
+          const fxLS = readFxRatesLS();
+          const baseDraft = storedDraft ?? EMPTY_DRAFT;
           set({
-            draft: storedDraft ?? EMPTY_DRAFT,
+            draft: fxLS ? { ...baseDraft, rates: { ...baseDraft.rates, ...fxLS, VND: 1 } } : baseDraft,
             snapshots: readUserSnapshots(user.u),
             currentUsername: user.u,
             view: storedView,
@@ -220,6 +237,7 @@ export const useQuoteStore = create<QuoteState>()(
 
         setRate: (cur, rate) => {
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } }));
+          writeFxRatesLS(get().draft.rates); // persist the global table independent of the draft
           // Push the whole table to the shared FX doc (debounced) so all
           // accounts stay in sync.
           if (fxPushTimer) clearTimeout(fxPushTimer);
@@ -233,14 +251,16 @@ export const useQuoteStore = create<QuoteState>()(
 
         setRatesSynced: (rates, pushedAt, pushedBy) => {
           // Always record sync meta (for the "cập nhật lúc…" indicator).
-          set({ fxSyncedAt: pushedAt ?? new Date().toISOString(), fxSyncedBy: pushedBy ?? null });
+          if (pushedAt || pushedBy) set({ fxSyncedAt: pushedAt ?? new Date().toISOString(), fxSyncedBy: pushedBy ?? null });
           // Ignore the echo of our own push; otherwise adopt the shared rates.
           if (pushedAt && pushedAt === lastFxPushAt) return;
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...rates, VND: 1 } } }));
+          writeFxRatesLS(get().draft.rates);
         },
 
         syncFxNow: async () => {
           if (fxPushTimer) { clearTimeout(fxPushTimer); fxPushTimer = null; }
+          writeFxRatesLS(get().draft.rates);
           const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
           const at = await fbPushFxRates(get().draft.rates, by);
           lastFxPushAt = at;

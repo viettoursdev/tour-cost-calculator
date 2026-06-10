@@ -43,6 +43,14 @@ export function MainApp() {
     const fxUnsub = fbSubscribeFxRates((d) => {
       if (d.rates) useQuoteStore.getState().setRatesSynced(d.rates, d._meta?.pushedAt, d._meta?.pushedBy);
     });
+    // Instant cross-tab sync within the same browser (fires only in OTHER tabs).
+    const onFxStorage = (e: StorageEvent) => {
+      if (e.key === 'vte_fx_rates' && e.newValue) {
+        try { useQuoteStore.getState().setRatesSynced(JSON.parse(e.newValue) as Record<string, number>); }
+        catch { /* ignore */ }
+      }
+    };
+    window.addEventListener('storage', onFxStorage);
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
@@ -59,6 +67,7 @@ export function MainApp() {
 
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
+      window.removeEventListener('storage', onFxStorage);
       fxUnsub?.();
       rcUnsub?.();
       qhUnsub?.();
