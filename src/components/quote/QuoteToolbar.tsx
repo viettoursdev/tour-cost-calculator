@@ -26,6 +26,8 @@ import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
+import { TEMPLATES } from './constants';
+import { VTE_LOGO_WHITE } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
 import type { OutputCurrency } from '@/types';
 
@@ -76,6 +78,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const setPax = useQuoteStore((s) => s.setPax);
   const setRate = useQuoteStore((s) => s.setRate);
   const setView = useQuoteStore((s) => s.setView);
+  const newDraft = useQuoteStore((s) => s.newDraft);
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
 
@@ -138,6 +141,21 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     return d.toLocaleDateString('vi-VN');
   })();
 
+  const tpl = template ? TEMPLATES[template] : null;
+  const handleNewQuote = () => {
+    if (!template) return;
+    if (confirm('Tạo báo giá mới? Toàn bộ nội dung hiện tại sẽ được làm mới.')) {
+      newDraft(template);
+    }
+  };
+  // Pill button in the teal hero band (Trang chủ / Mới).
+  const heroBtnSx = {
+    color: '#fff', textTransform: 'none', fontSize: 12.5, fontWeight: 700,
+    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
+    borderRadius: 1.25, px: 1.5, py: 0.4, minWidth: 0,
+    '&:hover': { background: 'rgba(255,255,255,0.26)' },
+  } as const;
+
   // Unified nav tabs (legacy order + icons). DMC shows only Breakdown + history.
   const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
   const TAB_DEFS: { v: QuoteViewKey; label: string }[] = isDMC
@@ -170,29 +188,31 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     >
       {/* ── Tour info header band (legacy style) ── */}
       <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 1.5 }}>
-        {/* Exit to homepage (template selector), above the hero title */}
-        <Button
-          onClick={onOpenSelector}
-          startIcon={<ArrowBackIcon />}
-          sx={{
-            color: 'rgba(255,255,255,0.85)', textTransform: 'none',
-            fontSize: 12.5, fontWeight: 600, p: 0, mb: 0.75, minWidth: 0,
-            '&:hover': { color: '#fff', background: 'transparent' },
-          }}
-        >
-          Trang chủ
-        </Button>
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1.25}>
-          {/* LEFT: tour info (name/dest + meta pills) */}
-          <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap rowGap={1.25}>
+        <Stack direction="row" spacing={2.5} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1.5}>
+          {/* COL1: logo + template badge (legacy hero) */}
+          <Stack alignItems="center" spacing={0.75} sx={{ flexShrink: 0 }}>
+            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 90, width: 'auto', display: 'block' }} />
+            {tpl && (
+              <Box sx={{
+                background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
+                borderRadius: 5, px: 1.5, py: 0.4, fontSize: 10, fontWeight: 800,
+                letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap',
+              }}>
+                {tpl.icon} {tpl.label}
+              </Box>
+            )}
+          </Stack>
+
+          {/* COL2: tour name/dest + meta pills + actions */}
+          <Stack spacing={1} sx={{ minWidth: 220 }}>
             {/* Tour name → destination */}
-            <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexWrap: 'wrap', minWidth: 200 }}>
+            <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexWrap: 'wrap' }}>
               <TextField
                 variant="standard" value={info.name}
                 onChange={(e) => patchInfo({ name: e.target.value })}
                 placeholder="Tên báo giá..."
                 slotProps={{ input: { disableUnderline: true } }}
-                sx={{ '& input': { color: '#fff', fontSize: 20, fontWeight: 900, p: 0, '&::placeholder': { color: 'rgba(255,255,255,0.6)', opacity: 1 } } }}
+                sx={{ '& input': { color: '#fff', fontSize: 22, fontWeight: 900, p: 0, '&::placeholder': { color: 'rgba(255,255,255,0.6)', opacity: 1 } } }}
               />
               <Box sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 18 }}>→</Box>
               <TextField
@@ -200,11 +220,11 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                 onChange={(e) => patchInfo({ dest: e.target.value })}
                 placeholder="Điểm đến..."
                 slotProps={{ input: { disableUnderline: true } }}
-                sx={{ '& input': { color: LEGACY.gold, fontSize: 15, fontWeight: 700, p: 0, '&::placeholder': { color: 'rgba(255,224,130,0.6)', opacity: 1 } } }}
+                sx={{ '& input': { color: LEGACY.gold, fontSize: 16, fontWeight: 700, p: 0, '&::placeholder': { color: 'rgba(255,224,130,0.6)', opacity: 1 } } }}
               />
             </Stack>
 
-            {/* Meta pills */}
+            {/* Meta pills + actions */}
             <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
               <HeaderPill icon="🗓️">
                 <WhiteNum value={info.days} min={1} onChange={(v) => patchInfo({ days: v, nights: Math.max(0, v - 1) })} />
@@ -228,6 +248,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
               {info.startDate && (
                 <Typography sx={{ color: LEGACY.gold, fontSize: 13, fontWeight: 600 }}>→ {endDateStr}</Typography>
               )}
+
+              {/* Actions: Trang chủ + Mới (legacy ↺ Đổi / 🆕 Mới) */}
+              <Button onClick={onOpenSelector} startIcon={<ArrowBackIcon />} sx={heroBtnSx}>
+                Trang chủ
+              </Button>
+              <Button onClick={handleNewQuote} startIcon={<AddCircleOutlineIcon />} sx={heroBtnSx}>
+                Mới
+              </Button>
             </Stack>
           </Stack>
 
