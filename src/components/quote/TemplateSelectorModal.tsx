@@ -58,9 +58,9 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
 
         {/* Top bar: white logo + brand · account / notifications / logout */}
         <Stack direction="row" alignItems="center" sx={{ position: 'relative', mb: 2.5 }} flexWrap="wrap" gap={1.5}>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 38, width: 'auto' }} />
-            <Typography sx={{ fontSize: 17, fontWeight: 800, letterSpacing: 0.2 }} noWrap>
+          <Stack direction="row" alignItems="center" spacing={1.75} sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 48, width: 'auto' }} />
+            <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: 0.2 }} noWrap>
               Phần mềm quản lý - Viettours
             </Typography>
           </Stack>
