@@ -136,8 +136,14 @@ export default {
           {
             type: 'text',
             text:
-              'Dịch đoạn văn bản sau từ TIẾNG VIỆT sang TIẾNG ANH. ' +
-              'Giữ nguyên định dạng, xuống dòng và thuật ngữ chuyên ngành du lịch/sự kiện. ' +
+              'Dịch đoạn văn bản sau từ TIẾNG VIỆT sang TIẾNG ANH.\n' +
+              'QUY TẮC DANH TỪ RIÊNG (bắt buộc): mọi tên riêng — tên người, tên đường/phố, ' +
+              'địa danh, tên công ty, tên khách sạn/nhà hàng — PHẢI viết bằng tiếng Việt ' +
+              'KHÔNG DẤU (bỏ hết dấu thanh sắc/huyền/hỏi/ngã/nặng và dấu mũ/móc; đ→d), ' +
+              'TUYỆT ĐỐI không dịch nghĩa các tên này. ' +
+              'Ví dụ: "Đà Nẵng" → "Da Nang"; "đường Mai Thị Lựu" → "Mai Thi Luu Street"; ' +
+              '"Nguyễn Huệ" → "Nguyen Hue"; "Khách sạn Mường Thanh" → "Muong Thanh Hotel".\n' +
+              'Giữ nguyên định dạng, xuống dòng và thuật ngữ chuyên ngành du lịch/sự kiện.\n' +
               'Chỉ trả về bản dịch tiếng Anh, không thêm chú thích.\n\n---\n' +
               body.text,
           },
