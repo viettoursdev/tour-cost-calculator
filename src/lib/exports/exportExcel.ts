@@ -6,6 +6,7 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { getCATS } from '@/components/quote/constants';
+import { qtyOf } from '@/components/quote/calc';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -115,7 +116,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   ws.getRow(H).height = 28;
 
   // ── Items ──
-  const qtyOf = (it: Item) => it.qtyMode === 'per_pax' ? pax : it.qtyMode === 'per_group' ? 1 : (it.customQty || 1);
+  const qtyForItem = (it: Item) => qtyOf(it, pax) || 1;
   let r = H + 1; const first = r; let idx = 0;
   getCATS(template).forEach(cat => {
     if (catEnabled[cat.id as keyof typeof catEnabled] === false) return;
@@ -134,7 +135,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
           ? { formula: `F${r}` }
           : { formula: `F${r}*${rateCell[it.cur] || 1}` } as ExcelJS.CellFormulaValue;
         ws.getCell(r, 7).numFmt = '#,##0';
-        ws.getCell(r, 8).value = qtyOf(it);
+        ws.getCell(r, 8).value = qtyForItem(it);
         ws.getCell(r, 9).value = +it.times || 1;
         ws.getCell(r, 10).value = (it.unit || '').replace(/^\//, '');
         ws.getCell(r, 11).value = { formula: `G${r}*H${r}*I${r}` } as ExcelJS.CellFormulaValue;
@@ -142,7 +143,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
       } else {
         const vndPrice = Math.round((+it.price || 0) * (rates[it.cur] || 1));
         ws.getCell(r, 5).value = vndPrice; ws.getCell(r, 5).numFmt = '#,##0';
-        ws.getCell(r, 6).value = qtyOf(it);
+        ws.getCell(r, 6).value = qtyForItem(it);
         ws.getCell(r, 7).value = +it.times || 1;
         ws.getCell(r, 8).value = (it.unit || '').replace(/^\//, '');
         ws.getCell(r, 9).value = { formula: `E${r}*F${r}*G${r}` } as ExcelJS.CellFormulaValue;

@@ -6,16 +6,29 @@ import { CATS } from './constants';
  * Disabled items and FOC items contribute zero.
  * Source: public/legacy.html:1686-1692.
  */
+/**
+ * Effective quantity of an item at a given pax.
+ * Room modes are derived from pax so they scale with group size:
+ *   single_room = 1 room / guest = pax;  double_room = ⌈pax/2⌉ (½ pax, .5 → up).
+ * per_pax = pax, per_group = 1, package/custom = the entered customQty.
+ */
+export function qtyOf(item: Item, pax: number): number {
+  switch (item.qtyMode) {
+    case 'per_pax': return pax;
+    case 'per_group': return 1;
+    case 'single_room': return pax;
+    case 'double_room': return Math.round(pax / 2);
+    default: return item.customQty; // 'package' | 'custom'
+  }
+}
+
 export function calcVND(item: Item, rates: Record<string, number>, pax: number): number {
   // Byte-for-byte parity with legacy.html:1687-1688: `enabled === false`, not `!enabled`.
   // Matters for JSON imports where `enabled` may be undefined — legacy treats missing as
   // enabled, so we match that semantics rather than the stricter TS-types interpretation.
   if (item.enabled === false || item.foc === true) return 0;
   const r = rates[item.cur] ?? 1;
-  const qty = item.qtyMode === 'per_pax' ? pax
-            : item.qtyMode === 'per_group' ? 1
-            : item.customQty;
-  return item.price * r * item.times * qty;
+  return item.price * r * item.times * qtyOf(item, pax);
 }
 
 /**

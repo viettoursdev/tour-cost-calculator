@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
-import { calcVND, fmtVND } from './calc';
+import { calcVND, fmtVND, qtyOf } from './calc';
 import { LEGACY } from '@/theme';
 import type { Item, QtyMode } from '@/types';
 
@@ -125,22 +125,14 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
   const off = !item.enabled;
   const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
 
-  const qty =
-    item.qtyMode === 'per_pax' ? pax :
-    item.qtyMode === 'per_group' ? 1 :
-    item.customQty;
+  const qty = qtyOf(item, pax);
 
-  // Modes whose quantity is a user-editable number (rooms / package / custom).
-  const editableQty =
-    item.qtyMode === 'custom' || item.qtyMode === 'single_room'
-    || item.qtyMode === 'double_room' || item.qtyMode === 'package';
+  // Rooms scale with pax (formula) → read-only. Only package/custom take a typed number.
+  const editableQty = item.qtyMode === 'custom' || item.qtyMode === 'package';
 
   const changeQtyMode = (m: QtyMode) => {
     const patch: Partial<Item> = { qtyMode: m };
-    // Prefill a sensible default; the number stays editable afterwards.
-    if (m === 'single_room') patch.customQty = Math.max(1, pax);            // 1 phòng / khách
-    else if (m === 'double_room') patch.customQty = Math.max(1, Math.round(pax / 2)); // ½ pax, .5 → lên 1
-    else if (m === 'package') patch.customQty = Math.max(1, item.customQty || 1);
+    if (m === 'package') patch.customQty = Math.max(1, item.customQty || 1);
     u(patch);
   };
 
