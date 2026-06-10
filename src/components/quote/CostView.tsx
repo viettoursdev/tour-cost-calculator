@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Box, Button, Paper, Stack, TextField, Typography,
 } from '@mui/material';
@@ -6,14 +5,11 @@ import { CatBlock } from './CatBlock';
 import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
 import { DMCComparePanel } from './DMCComparePanel';
-import { VisaPickerModal } from './VisaPickerModal';
-import { HotelModal } from '@/components/rates/HotelModal';
-import { RateCardModal } from '@/components/rates/RateCardModal';
 import { computeTotals, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
-import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
+import type { CategoryId, OutputCurrency, Template } from '@/types';
 
 export function CostView() {
   const template = useQuoteStore((s) => s.draft.template) as Template;
@@ -32,12 +28,6 @@ export function CostView() {
   const delItem = useQuoteStore((s) => s.delItem);
 
   const outputCurrency = (useQuoteStore((s) => s.draft.outputCurrency) ?? 'USD') as OutputCurrency;
-  const [visaPickerOpen, setVisaPickerOpen] = useState(false);
-  const [picker, setPicker] = useState<
-    | { kind: 'hotel'; catId: CategoryId }
-    | { kind: 'rate'; catId: CategoryId; type: string; label: string }
-    | null
-  >(null);
   const dmcPrices = useQuoteStore((s) => s.draft.dmcPrices);
   const dmcMargin = useQuoteStore((s) => s.draft.dmcMargin);
   const setOutputCurrency = useQuoteStore((s) => s.setOutputCurrency);
@@ -69,71 +59,20 @@ export function CostView() {
           </Stack>
         )}
 
-        {cats.map((cat) => {
-          let onPickFromLibrary: (() => void) | undefined;
-          let pickFromLibraryLabel: string | undefined;
-          if (cat.id === 'visa') {
-            onPickFromLibrary = () => setVisaPickerOpen(true);
-            pickFromLibraryLabel = 'Chọn từ thư viện visa';
-          } else if (cat.id === 'hotel') {
-            onPickFromLibrary = () => setPicker({ kind: 'hotel', catId: 'hotel' });
-            pickFromLibraryLabel = 'Chọn từ rate card khách sạn';
-          } else if (cat.rateCard) {
-            const rateCardType = cat.rateCard;
-            const catLabel = cat.label;
-            const catId = cat.id;
-            onPickFromLibrary = () => setPicker({ kind: 'rate', catId, type: rateCardType, label: catLabel });
-            pickFromLibraryLabel = 'Chọn từ rate card';
-          }
-          return (
-            <CatBlock
-              key={cat.id}
-              cat={cat}
-              items={items[cat.id as CategoryId] ?? []}
-              enabled={catEnabled[cat.id as CategoryId]}
-              pax={pax}
-              rates={rates}
-              onToggleCat={() => toggleCat(cat.id as CategoryId)}
-              onUpd={(it) => updItem(cat.id as CategoryId, it)}
-              onAdd={() => addItem(cat.id as CategoryId)}
-              onDel={(id) => delItem(cat.id as CategoryId, id)}
-              onPickFromLibrary={onPickFromLibrary}
-              pickFromLibraryLabel={pickFromLibraryLabel}
-            />
-          );
-        })}
-
-        <VisaPickerModal
-          open={visaPickerOpen}
-          onClose={() => setVisaPickerOpen(false)}
-          onPick={(lines: Partial<Item>[]) => lines.forEach((l) => addItem('visa', l))}
-        />
-
-        {picker?.kind === 'hotel' && (
-          <HotelModal
-            open
+        {cats.map((cat) => (
+          <CatBlock
+            key={cat.id}
+            cat={cat}
+            items={items[cat.id as CategoryId] ?? []}
+            enabled={catEnabled[cat.id as CategoryId]}
             pax={pax}
-            template={template}
-            onClose={() => setPicker(null)}
-            onPick={(line) => {
-              addItem(picker.catId, line);
-              setPicker(null);
-            }}
+            rates={rates}
+            onToggleCat={() => toggleCat(cat.id as CategoryId)}
+            onUpd={(it) => updItem(cat.id as CategoryId, it)}
+            onAdd={() => addItem(cat.id as CategoryId)}
+            onDel={(id) => delItem(cat.id as CategoryId, id)}
           />
-        )}
-
-        {picker?.kind === 'rate' && (
-          <RateCardModal
-            open
-            type={picker.type}
-            label={picker.label}
-            onClose={() => setPicker(null)}
-            onPick={(line) => {
-              addItem(picker.catId, line);
-              setPicker(null);
-            }}
-          />
-        )}
+        ))}
 
         {isDMC && dmcMargin !== undefined && (() => {
           const marginVND = dmcMargin.type === 'percent'
