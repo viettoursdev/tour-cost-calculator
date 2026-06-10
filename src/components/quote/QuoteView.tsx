@@ -12,6 +12,9 @@ import { VisaApp } from '@/components/visa/VisaApp';
 import { DocTranslateApp } from '@/components/doctranslate/DocTranslateApp';
 import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
+import { ContractView } from '@/components/contract/ContractView';
+import { CustomerView } from '@/components/customer/CustomerView';
+import { NCCView } from '@/components/ncc/NCCView';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 
@@ -67,6 +70,9 @@ export function QuoteView() {
             {view === 'dashboard' && <DashboardView />}
             {view === 'payment' && <PaymentView />}
             {view === 'history' && <QuoteHistoryView />}
+            {view === 'contract' && <ContractView />}
+            {view === 'customer' && <CustomerView />}
+            {view === 'ncc' && <NCCView />}
           </Box>
 
           <SaveCloudQuoteModal

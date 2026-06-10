@@ -40,9 +40,13 @@ const EMPTY_DRAFT: QuoteDraft = {
   currentQuoteId: null,
 };
 
+export type QuoteViewKey =
+  | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
+  | 'contract' | 'customer' | 'ncc';
+
 type QuoteState = {
   draft: QuoteDraft;
-  view: 'cost' | 'summary' | 'history' | 'dashboard' | 'payment';
+  view: QuoteViewKey;
   snapshots: Snapshot[];
   currentUsername: string | null;
 
@@ -51,7 +55,7 @@ type QuoteState = {
 
   newDraft: (template: Template) => void;
   abandon: () => void;
-  setView: (v: 'cost' | 'summary' | 'history' | 'dashboard' | 'payment') => void;
+  setView: (v: QuoteViewKey) => void;
 
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;

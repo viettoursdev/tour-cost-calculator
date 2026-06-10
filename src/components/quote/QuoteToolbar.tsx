@@ -16,6 +16,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
 import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
 import { fmtOutput } from '@/lib/currency';
 import { computeTotals, fmtVND } from './calc';
 import { InvoiceModal } from './InvoiceModal';
@@ -273,6 +274,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           {!isDMC && <ToggleButton value="dashboard">Dashboard</ToggleButton>}
           {!isDMC && <ToggleButton value="payment">Thanh toán</ToggleButton>}
           <ToggleButton value="history">Lịch sử</ToggleButton>
+          {!isDMC && (hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts')) && (
+            <ToggleButton value="contract">Hợp đồng</ToggleButton>
+          )}
+          {!isDMC && hasPerm(currentUser, 'manageCustomers') && (
+            <ToggleButton value="customer">Khách hàng</ToggleButton>
+          )}
+          {!isDMC && hasPerm(currentUser, 'manageNCC') && (
+            <ToggleButton value="ncc">NCC</ToggleButton>
+          )}
         </ToggleButtonGroup>
 
         <Box sx={{ flexGrow: 1 }} />

@@ -1,15 +1,12 @@
 import { useState } from 'react';
 import {
   AppBar, Avatar, Box, Button, IconButton, Stack,
-  Tab, Tabs, Toolbar, Tooltip, Typography,
+  Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import { QuoteView } from '@/components/quote/QuoteView';
-import { CustomerView } from '@/components/customer/CustomerView';
-import { NCCView } from '@/components/ncc/NCCView';
-import { ContractView } from '@/components/contract/ContractView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
@@ -17,23 +14,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { LEGACY } from '@/theme';
 
-const TABS = [
-  { key: 'quote', label: 'Báo Giá' },
-  { key: 'contract', label: 'Hợp Đồng' },
-  { key: 'customer', label: 'Khách Hàng' },
-  { key: 'ncc', label: 'NCC' },
-] as const;
-// 'payment' tab removed: PaymentView is a sub-view inside the Quote tab (same as Dashboard),
-// not a standalone top-level tab in legacy. Payment tracking is accessible from
-// the Hợp Đồng tab's accordion rows via PaymentPanel.
-
-type TabKey = (typeof TABS)[number]['key'];
-
-const isTabKey = (v: unknown): v is TabKey =>
-  typeof v === 'string' && TABS.some((t) => t.key === v);
+// Navigation is a single unified tab bar inside QuoteToolbar (legacy layout):
+// Chi phí · Tổng kết & Định giá · Dashboard · Thanh toán · Lịch sử · Hợp đồng ·
+// Khách hàng · NCC — so AppShell just renders the global account bar + QuoteView.
 
 export function AppShell() {
-  const [active, setActive] = useState<TabKey>('quote');
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
   const [userMgrOpen, setUserMgrOpen] = useState(false);
@@ -98,28 +83,9 @@ export function AppShell() {
             </Stack>
           )}
         </Toolbar>
-        <Tabs
-          value={active}
-          onChange={(_, v) => {
-            if (isTabKey(v)) setActive(v);
-          }}
-          textColor="inherit"
-          indicatorColor="secondary"
-          variant="scrollable"
-        >
-          {TABS.map((t) => (
-            <Tab key={t.key} value={t.key} label={t.label} />
-          ))}
-        </Tabs>
       </AppBar>
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-        {TABS.map((t) => {
-          if (t.key !== active) return null;
-          if (t.key === 'quote') return <QuoteView key={t.key} />;
-          if (t.key === 'customer') return <CustomerView key={t.key} />;
-          if (t.key === 'contract') return <ContractView key={t.key} />;
-          if (t.key === 'ncc') return <NCCView key={t.key} />;
-        })}
+        <QuoteView />
       </Box>
       {userMgrOpen && currentUser && (
         <UserManagementModal
