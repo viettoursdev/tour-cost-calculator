@@ -13,11 +13,15 @@ import type { Item, QuoteDraft } from '@/types';
 type ExportParams = {
   draft: QuoteDraft;
   savedBy: { name: string; role: string; email?: string; phone?: string };
+  /** 'detailed' = full breakdown + profit summary (internal);
+   *  'package'  = customer-facing trọn gói: giá/khách × số khách = tổng, no costs/margin. */
+  mode?: 'detailed' | 'package';
 };
 
-export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
+export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportParams): void {
   const { info, items, rates, pax, catEnabled, template, margin, vat } = draft;
   if (!template || template === 'dmc') return;
+  const isPackage = mode === 'package';
 
   const totals = computeTotals(draft);
   const roundedPPax = totals.roundedPPax;
@@ -113,8 +117,10 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
     checkPage(10);
     pdf.setFontSize(10); pdf.setTextColor(...dark); pdf.setFont(FONT, 'bold');
     pdf.text(`${cat.label} / ${cat.labelEn}`, mX, y);
-    pdf.setTextColor(...teal);
-    pdf.text(pax > 0 ? fmtVND(sub / pax) + '/khach' : '', pageW - mX, y, { align: 'right' });
+    if (!isPackage) {
+      pdf.setTextColor(...teal);
+      pdf.text(pax > 0 ? fmtVND(sub / pax) + '/khach' : '', pageW - mX, y, { align: 'right' });
+    }
     y += 5;
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
     catItems.forEach((it: Item) => {
@@ -127,7 +133,7 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
         pdf.setTextColor(39, 174, 96); pdf.setFont(FONT, 'bold');
         pdf.text('FOC - Mien phi', pageW - mX, y, { align: 'right' });
         pdf.setFont(FONT, 'normal');
-      } else {
+      } else if (!isPackage) {
         pdf.setTextColor(...teal);
         pdf.text(fmtVND(itVnd), pageW - mX, y, { align: 'right' });
       }
@@ -142,30 +148,54 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
     y += 2;
   });
 
-  // Pricing summary
-  checkPage(50);
-  y += 4;
-  pdf.setFillColor(...dark);
-  pdf.roundedRect(mX, y, pageW - mX * 2, 46, 2, 2, 'F');
   const col1 = mX + 5, col2 = pageW - mX - 5;
-  pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
-  pdf.text('TOM TAT LUI NHUAN / PROFIT SUMMARY', pageW / 2, y + 7, { align: 'center' });
-  pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
-  const rows: [string, string][] = [
-    [`Tong chi phi goc (${pax} khach):`, fmtVND(totals.totalCost)],
-    [`Phi dich vu (${margin}%):`, fmtVND(totals.totalProfit)],
-    [`Thue VAT (${vat}%):`, fmtVND(totals.totalVAT)],
-  ];
-  let ry = y + 14;
-  rows.forEach(([lab, val]) => {
-    pdf.text(lab, col1, ry); pdf.text(val, col2, ry, { align: 'right' });
-    ry += 6;
-  });
-  pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
-  pdf.setTextColor(255, 224, 130);
-  pdf.text('Gia ban / khach:', col1, ry);
-  pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
-  y += 50;
+  if (isPackage) {
+    // Package total box: giá bán/khách × số khách = tổng tiền
+    checkPage(40);
+    y += 4;
+    pdf.setFillColor(...dark);
+    pdf.roundedRect(mX, y, pageW - mX * 2, 36, 2, 2, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
+    pdf.text('TRON GOI / PACKAGE', pageW / 2, y + 7, { align: 'center' });
+    pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
+    let ry = y + 16;
+    pdf.text('Gia ban / khach:', col1, ry);
+    pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
+    ry += 7;
+    pdf.text('So luong khach:', col1, ry);
+    pdf.text(`${pax} khach`, col2, ry, { align: 'right' });
+    ry += 8;
+    pdf.setDrawColor(255, 224, 130); pdf.setLineWidth(0.3);
+    pdf.line(col1, ry - 4, col2, ry - 4);
+    pdf.setFont(FONT, 'bold'); pdf.setFontSize(12); pdf.setTextColor(255, 224, 130);
+    pdf.text('TONG TIEN / TOTAL:', col1, ry);
+    pdf.text(fmtVND(roundedPPax * pax), col2, ry, { align: 'right' });
+    y += 40;
+  } else {
+    // Pricing summary (internal — costs + margin)
+    checkPage(50);
+    y += 4;
+    pdf.setFillColor(...dark);
+    pdf.roundedRect(mX, y, pageW - mX * 2, 46, 2, 2, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
+    pdf.text('TOM TAT LUI NHUAN / PROFIT SUMMARY', pageW / 2, y + 7, { align: 'center' });
+    pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
+    const rows: [string, string][] = [
+      [`Tong chi phi goc (${pax} khach):`, fmtVND(totals.totalCost)],
+      [`Phi dich vu (${margin}%):`, fmtVND(totals.totalProfit)],
+      [`Thue VAT (${vat}%):`, fmtVND(totals.totalVAT)],
+    ];
+    let ry = y + 14;
+    rows.forEach(([lab, val]) => {
+      pdf.text(lab, col1, ry); pdf.text(val, col2, ry, { align: 'right' });
+      ry += 6;
+    });
+    pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
+    pdf.setTextColor(255, 224, 130);
+    pdf.text('Gia ban / khach:', col1, ry);
+    pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
+    y += 50;
+  }
 
   // Footer
   checkPage(15);
@@ -178,5 +208,5 @@ export function exportPDFQuote({ draft, savedBy }: ExportParams): void {
 
   const safeName = (info.name || 'Tour').replace(/[^a-zA-Z0-9_]/g, '_');
   const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
-  pdf.save(`BaoGia_${safeName}_${dateStr}.pdf`);
+  pdf.save(`BaoGia${isPackage ? 'TronGoi' : ''}_${safeName}_${dateStr}.pdf`);
 }

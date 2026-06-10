@@ -407,7 +407,16 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             setExportAnchor(null);
           }}>
             <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📄 PDF báo giá</ListItemText>
+            <ListItemText>📄 PDF báo giá (chi tiết)</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => {
+            if (draft.template && draft.template !== 'dmc' && currentUser) {
+              exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' });
+            }
+            setExportAnchor(null);
+          }}>
+            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>📦 PDF trọn gói (giá/khách × số khách)</ListItemText>
           </MenuItem>
           {draft.template && draft.template !== 'dmc' && currentUser && (
             <MenuItem onClick={() => { setInvoiceOpen(true); setExportAnchor(null); }}>
