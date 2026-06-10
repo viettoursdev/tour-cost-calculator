@@ -18,10 +18,12 @@ type Props = {
   onUpd: (item: Item) => void;
   onAdd: () => void;
   onDel: (id: number) => void;
+  /** Opens the rate-card picker for this category (legacy "📋 Rate card"). */
+  onOpenRate?: () => void;
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onOpenRate,
 }: Props) {
   const sub = enabled ? catTotal(items, rates, pax) : 0;
 
@@ -67,6 +69,20 @@ export function CatBlock({
           </Box>
           <Box sx={{ fontSize: 20 }}>{cat.icon}</Box>
           <Typography fontWeight={700} sx={{ flex: 1 }}>{cat.label}</Typography>
+          {onOpenRate && enabled && (
+            <Box
+              component="button"
+              onClick={(e) => { e.stopPropagation(); onOpenRate(); }}
+              sx={{
+                background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.4)',
+                borderRadius: '8px', px: 1.25, py: 0.5, fontSize: 11, color: '#d18a13',
+                fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                '&:hover': { background: 'rgba(245,166,35,0.25)' },
+              }}
+            >
+              📋 Rate card
+            </Box>
+          )}
           <Typography variant="caption" color="text.secondary">{items.length} dòng</Typography>
           {enabled
             ? <Typography fontWeight={800} sx={{ color: cat.color, mr: 1 }}>{fmtVND(sub)}</Typography>

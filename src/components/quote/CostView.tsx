@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Box, Button, Paper, Stack, TextField, Typography,
 } from '@mui/material';
@@ -5,11 +6,14 @@ import { CatBlock } from './CatBlock';
 import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
 import { DMCComparePanel } from './DMCComparePanel';
+import { VisaPickerModal } from './VisaPickerModal';
+import { HotelModal } from '@/components/rates/HotelModal';
+import { RateCardModal } from '@/components/rates/RateCardModal';
 import { computeTotals, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
-import type { CategoryId, OutputCurrency, Template } from '@/types';
+import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
 export function CostView() {
   const template = useQuoteStore((s) => s.draft.template) as Template;
@@ -33,6 +37,14 @@ export function CostView() {
   const setOutputCurrency = useQuoteStore((s) => s.setOutputCurrency);
   const setDmcPrice = useQuoteStore((s) => s.setDmcPrice);
   const setDmcMargin = useQuoteStore((s) => s.setDmcMargin);
+
+  // Rate-card picker (opened from each category's "📋 Rate card" header button).
+  const [visaPickerOpen, setVisaPickerOpen] = useState(false);
+  const [picker, setPicker] = useState<
+    | { kind: 'hotel'; catId: CategoryId }
+    | { kind: 'rate'; catId: CategoryId; type: string; label: string }
+    | null
+  >(null);
 
   const isDMC = template === 'dmc';
 
@@ -59,20 +71,58 @@ export function CostView() {
           </Stack>
         )}
 
-        {cats.map((cat) => (
-          <CatBlock
-            key={cat.id}
-            cat={cat}
-            items={items[cat.id as CategoryId] ?? []}
-            enabled={catEnabled[cat.id as CategoryId]}
+        {cats.map((cat) => {
+          const catId = cat.id as CategoryId;
+          let onOpenRate: (() => void) | undefined;
+          if (cat.id === 'visa') onOpenRate = () => setVisaPickerOpen(true);
+          else if (cat.id === 'hotel') onOpenRate = () => setPicker({ kind: 'hotel', catId: 'hotel' });
+          else if (cat.rateCard) {
+            const type = cat.rateCard;
+            const label = cat.label;
+            onOpenRate = () => setPicker({ kind: 'rate', catId, type, label });
+          }
+          return (
+            <CatBlock
+              key={cat.id}
+              cat={cat}
+              items={items[catId] ?? []}
+              enabled={catEnabled[catId]}
+              pax={pax}
+              rates={rates}
+              onToggleCat={() => toggleCat(catId)}
+              onUpd={(it) => updItem(catId, it)}
+              onAdd={() => addItem(catId)}
+              onDel={(id) => delItem(catId, id)}
+              onOpenRate={onOpenRate}
+            />
+          );
+        })}
+
+        <VisaPickerModal
+          open={visaPickerOpen}
+          onClose={() => setVisaPickerOpen(false)}
+          onPick={(lines: Partial<Item>[]) => lines.forEach((l) => addItem('visa', l))}
+        />
+
+        {picker?.kind === 'hotel' && (
+          <HotelModal
+            open
             pax={pax}
-            rates={rates}
-            onToggleCat={() => toggleCat(cat.id as CategoryId)}
-            onUpd={(it) => updItem(cat.id as CategoryId, it)}
-            onAdd={() => addItem(cat.id as CategoryId)}
-            onDel={(id) => delItem(cat.id as CategoryId, id)}
+            template={template}
+            onClose={() => setPicker(null)}
+            onPick={(line) => { addItem(picker.catId, line); setPicker(null); }}
           />
-        ))}
+        )}
+
+        {picker?.kind === 'rate' && (
+          <RateCardModal
+            open
+            type={picker.type}
+            label={picker.label}
+            onClose={() => setPicker(null)}
+            onPick={(line) => { addItem(picker.catId, line); setPicker(null); }}
+          />
+        )}
 
         {isDMC && dmcMargin !== undefined && (() => {
           const marginVND = dmcMargin.type === 'percent'
