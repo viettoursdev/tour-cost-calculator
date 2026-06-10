@@ -20,8 +20,10 @@ import type { QuoteViewKey } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { importExcelQuote } from '@/lib/exports/importExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
+import { exportPDFImage } from '@/lib/exports/exportPDFImage';
 import { exportContractPDF } from '@/lib/exports/exportContractPDF';
 import { emptyContract } from '@/components/contract/constants';
+import { QuotePrintable } from './QuotePrintable';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { fmtOutput } from '@/lib/currency';
@@ -105,6 +107,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const excelInput = useRef<HTMLInputElement | null>(null);
+  const printRef = useRef<HTMLDivElement | null>(null);
 
   const openRate = (key: string, label: string) => {
     if (key === 'hotel') setRateModal({ kind: 'hotel' });
@@ -151,6 +154,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       alert('✅ Đã nhập báo giá từ Excel!');
     } catch (err) {
       alert('❌ ' + (err as Error).message);
+    }
+  };
+
+  const handleExportPDFImage = async () => {
+    if (!printRef.current || !template || template === 'dmc') return;
+    const safe = (info.name || 'Tour').replace(/[^a-zA-Z0-9_À-ỹ]/g, '_');
+    const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
+    try {
+      await exportPDFImage(printRef.current, `BaoGiaAnh_${safe}_${dateStr}.pdf`);
+    } catch (err) {
+      alert('❌ Lỗi xuất PDF ảnh: ' + (err as Error).message);
     }
   };
 
@@ -463,6 +477,10 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
             <ListItemText>📦 PDF trọn gói (giá/khách × số khách)</ListItemText>
           </MenuItem>
+          <MenuItem onClick={() => { void handleExportPDFImage(); setExportAnchor(null); }}>
+            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>🖼️ PDF ảnh (full màu)</ListItemText>
+          </MenuItem>
           {draft.template && draft.template !== 'dmc' && currentUser && (
             <MenuItem onClick={() => { setInvoiceOpen(true); setExportAnchor(null); }}>
               <ListItemIcon><ReceiptLongIcon fontSize="small" /></ListItemIcon>
@@ -498,6 +516,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           ref={excelInput} type="file" accept=".xlsx"
           hidden onChange={handleImportExcel}
         />
+        {template && template !== 'dmc' && currentUser && (
+          <Box sx={{ position: 'fixed', left: -99999, top: 0, zIndex: -1, pointerEvents: 'none' }} aria-hidden>
+            <QuotePrintable
+              ref={printRef}
+              draft={draft}
+              savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
+            />
+          </Box>
+        )}
         <Button
           size="small" variant="contained" startIcon={<CloudUploadIcon />} onClick={onOpenSaveCloud}
           sx={{ fontWeight: 800, background: LEGACY.headerGradient }}
