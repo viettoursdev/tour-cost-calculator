@@ -9,11 +9,18 @@
 
 const LS_KEY = 'vte_ai_worker';
 
+/**
+ * Default deployed Cloudflare Worker (holds upstream keys + R2 bucket).
+ * Used when the user hasn't set a custom URL via ⚙️ AI, so file upload and
+ * translation work out of the box.
+ */
+export const DEFAULT_AI_WORKER = 'https://tour-cost-calculator.developer-9f9.workers.dev';
+
 export function getAIWorker(): string {
   try {
-    return localStorage.getItem(LS_KEY) || '';
+    return localStorage.getItem(LS_KEY) || DEFAULT_AI_WORKER;
   } catch {
-    return '';
+    return DEFAULT_AI_WORKER;
   }
 }
 
