@@ -120,7 +120,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   activeCATS.forEach(cat => {
     if (!catEnabled[cat.id as keyof typeof catEnabled]) return;
     const catItems = (items[cat.id as keyof typeof items] ?? [])
-      .filter((i: Item) => i.name && (calcVND(i, rates, pax) > 0 || i.foc === true));
+      .filter((i: Item) => i.name && !i.optional && (calcVND(i, rates, pax) > 0 || i.foc === true));
     if (catItems.length === 0) return;
     const sub = catItems.reduce((s: number, i: Item) => s + calcVND(i, rates, pax), 0);
     checkPage(10);
@@ -156,6 +156,34 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     });
     y += 2;
   });
+
+  // Optional add-on items (not counted in the total).
+  const optItems: { name: string; vnd: number }[] = [];
+  activeCATS.forEach((cat) => {
+    if (!catEnabled[cat.id as keyof typeof catEnabled]) return;
+    (items[cat.id as keyof typeof items] ?? []).forEach((i: Item) => {
+      if (i.optional && i.name && !i.foc) optItems.push({ name: i.name, vnd: calcVND(i, rates, pax) });
+    });
+  });
+  if (optItems.length) {
+    checkPage(14 + optItems.length * 5);
+    y += 2;
+    pdf.setFontSize(11); pdf.setTextColor(...gold); pdf.setFont(FONT, 'bold');
+    pdf.text('CHI PHI TUY CHON / OPTIONAL (chua gom trong gia)', mX, y);
+    y += 3;
+    pdf.setDrawColor(...gold); pdf.setLineWidth(0.5);
+    pdf.line(mX, y, pageW - mX, y);
+    y += 6;
+    pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
+    optItems.forEach((o) => {
+      checkPage(6);
+      pdf.setTextColor(...dark);
+      pdf.text(`• ${o.name.slice(0, 55)}`, mX + 4, y);
+      pdf.setTextColor(194, 65, 12);
+      pdf.text(fmtVND(o.vnd), pageW - mX, y, { align: 'right' });
+      y += 5;
+    });
+  }
 
   const col1 = mX + 5, col2 = pageW - mX - 5;
   if (isPackage && groupVariants) {

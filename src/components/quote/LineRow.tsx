@@ -199,7 +199,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
         </Stack>
       </TableCell>
 
-      {/* Total + FOC */}
+      {/* Total + FOC + Optional */}
       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
         <Stack alignItems="flex-end" spacing={0.5}>
           {item.foc ? (
@@ -207,24 +207,51 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
               FOC
             </Box>
           ) : (
-            <Typography sx={{ fontWeight: 700, fontSize: 14, color: off ? 'rgba(15,58,74,0.3)' : catColor }}>
-              {fmtVND(vnd)}
-            </Typography>
+            <Stack alignItems="flex-end" spacing={0.25}>
+              {item.optional && (
+                <Box sx={{ background: '#f5a623', color: '#fff', fontSize: 9, fontWeight: 800, px: 0.7, py: '1px', borderRadius: '4px', letterSpacing: 0.4 }}>
+                  TUỲ CHỌN
+                </Box>
+              )}
+              <Typography sx={{
+                fontWeight: 700, fontSize: 14,
+                color: off ? 'rgba(15,58,74,0.3)' : item.optional ? '#c2410c' : catColor,
+                fontStyle: item.optional ? 'italic' : 'normal',
+              }}>
+                {fmtVND(vnd)}
+              </Typography>
+            </Stack>
           )}
-          <Tooltip title={item.foc ? 'Bỏ FOC – tính phí lại' : 'Đánh dấu Free of Charge'}>
-            <Box
-              component="button" onClick={() => u({ foc: !item.foc })}
-              sx={{
-                background: item.foc ? 'rgba(39,174,96,0.15)' : 'rgba(15,58,74,0.05)',
-                border: `1px solid ${item.foc ? '#27ae60' : 'rgba(15,58,74,0.15)'}`,
-                color: item.foc ? '#27ae60' : 'rgba(15,58,74,0.5)',
-                borderRadius: '6px', px: 0.9, py: '1px', fontSize: 9, fontWeight: 700,
-                cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3,
-              }}
-            >
-              {item.foc ? '✓ FOC' : 'FOC?'}
-            </Box>
-          </Tooltip>
+          <Stack direction="row" spacing={0.5}>
+            <Tooltip title={item.foc ? 'Bỏ FOC – tính phí lại' : 'Đánh dấu Free of Charge'}>
+              <Box
+                component="button" onClick={() => u({ foc: !item.foc, ...(item.foc ? {} : { optional: false }) })}
+                sx={{
+                  background: item.foc ? 'rgba(39,174,96,0.15)' : 'rgba(15,58,74,0.05)',
+                  border: `1px solid ${item.foc ? '#27ae60' : 'rgba(15,58,74,0.15)'}`,
+                  color: item.foc ? '#27ae60' : 'rgba(15,58,74,0.5)',
+                  borderRadius: '6px', px: 0.9, py: '1px', fontSize: 9, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3,
+                }}
+              >
+                {item.foc ? '✓ FOC' : 'FOC?'}
+              </Box>
+            </Tooltip>
+            <Tooltip title={item.optional ? 'Bỏ tuỳ chọn – tính vào tổng' : 'Chi phí tuỳ chọn (không tính vào tổng)'}>
+              <Box
+                component="button" onClick={() => u({ optional: !item.optional, ...(item.optional ? {} : { foc: false }) })}
+                sx={{
+                  background: item.optional ? 'rgba(245,166,35,0.18)' : 'rgba(15,58,74,0.05)',
+                  border: `1px solid ${item.optional ? '#f5a623' : 'rgba(15,58,74,0.15)'}`,
+                  color: item.optional ? '#c2410c' : 'rgba(15,58,74,0.5)',
+                  borderRadius: '6px', px: 0.9, py: '1px', fontSize: 9, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3,
+                }}
+              >
+                {item.optional ? '✓ Optional' : 'Optional?'}
+              </Box>
+            </Tooltip>
+          </Stack>
         </Stack>
       </TableCell>
 

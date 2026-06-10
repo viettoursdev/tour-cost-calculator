@@ -29,6 +29,7 @@ export type Item = {
   unit: string;
   enabled: boolean;
   foc: boolean;
+  optional?: boolean;   // excluded from totals; shown as an optional add-on
 };
 
 export type QuoteInfo = {

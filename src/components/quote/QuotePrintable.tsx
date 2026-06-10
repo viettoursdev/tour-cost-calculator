@@ -31,6 +31,14 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
   const exclusions = (draft.exclusions ?? []).filter((s) => s.trim());
   const payments = (draft.payments ?? []).filter((p) => p.label.trim() || p.amount || p.note.trim());
 
+  const optItems: { name: string; vnd: number }[] = [];
+  activeCATS.forEach((cat) => {
+    if (!catEnabled[cat.id as keyof typeof catEnabled]) return;
+    (items[cat.id as keyof typeof items] ?? []).forEach((i: Item) => {
+      if (i.optional && i.name && !i.foc) optItems.push({ name: i.name, vnd: calcVND(i, rates, pax) });
+    });
+  });
+
   return (
     <div
       ref={ref}
@@ -83,7 +91,7 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
       </div>
       {activeCATS.map((cat) => {
         const catItems = (items[cat.id as keyof typeof items] ?? [])
-          .filter((i: Item) => i.name && (calcVND(i, rates, pax) > 0 || i.foc === true));
+          .filter((i: Item) => i.name && !i.optional && (calcVND(i, rates, pax) > 0 || i.foc === true));
         if (!catEnabled[cat.id as keyof typeof catEnabled] || catItems.length === 0) return null;
         const sub = catItems.reduce((s: number, i: Item) => s + calcVND(i, rates, pax), 0);
         return (
@@ -103,6 +111,21 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
           </div>
         );
       })}
+
+      {/* Optional add-ons (not in total) */}
+      {optItems.length > 0 && (
+        <>
+          <div style={{ color: GOLD, fontWeight: 800, fontSize: 14, borderBottom: `2px solid ${GOLD}`, paddingBottom: 4, margin: '14px 0 8px' }}>
+            ➕ CHI PHÍ TUỲ CHỌN / OPTIONAL (chưa gồm trong giá)
+          </div>
+          {optItems.map((o, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 14, color: '#3a4650' }}>
+              <span>• {o.name}</span>
+              <span style={{ color: '#c2410c', whiteSpace: 'nowrap', paddingLeft: 10 }}>{fmtVND(o.vnd)}</span>
+            </div>
+          ))}
+        </>
+      )}
 
       {/* Inclusions / exclusions */}
       {inclusions.length > 0 && (

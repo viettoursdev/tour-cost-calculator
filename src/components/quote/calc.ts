@@ -20,9 +20,10 @@ export function calcVND(item: Item, rates: Record<string, number>, pax: number):
 
 /**
  * Sum of a category's enabled+non-FOC items, in VND.
+ * Optional items are add-ons and do NOT count toward the total.
  */
 export function catTotal(items: Item[], rates: Record<string, number>, pax: number): number {
-  return items.reduce((s, it) => s + calcVND(it, rates, pax), 0);
+  return items.reduce((s, it) => s + (it.optional ? 0 : calcVND(it, rates, pax)), 0);
 }
 
 /**

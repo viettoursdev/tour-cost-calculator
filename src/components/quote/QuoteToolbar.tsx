@@ -85,7 +85,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const setPax = useQuoteStore((s) => s.setPax);
   const setRate = useQuoteStore((s) => s.setRate);
   const setView = useQuoteStore((s) => s.setView);
-  const newDraft = useQuoteStore((s) => s.newDraft);
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
   const applyImport = useQuoteStore((s) => s.applyImport);
@@ -202,13 +201,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   })();
 
   const tpl = template ? TEMPLATES[template] : null;
-  const handleNewQuote = () => {
-    if (!template) return;
-    if (confirm('Tạo báo giá mới? Toàn bộ nội dung hiện tại sẽ được làm mới.')) {
-      newDraft(template);
-    }
-  };
-  // Pill button in the teal hero band (Trang chủ / Mới).
+  // Pill button in the teal hero band (Trang chủ).
   const heroBtnSx = {
     color: '#fff', textTransform: 'none', fontSize: 12.5, fontWeight: 700,
     background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
@@ -309,12 +302,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                 <Typography sx={{ color: LEGACY.gold, fontSize: 13, fontWeight: 600 }}>→ {endDateStr}</Typography>
               )}
 
-              {/* Actions: Trang chủ + Mới (legacy ↺ Đổi / 🆕 Mới) */}
+              {/* Action: Trang chủ */}
               <Button onClick={onOpenSelector} startIcon={<ArrowBackIcon />} sx={heroBtnSx}>
                 Trang chủ
-              </Button>
-              <Button onClick={handleNewQuote} startIcon={<AddCircleOutlineIcon />} sx={heroBtnSx}>
-                Mới
               </Button>
             </Stack>
           </Stack>
