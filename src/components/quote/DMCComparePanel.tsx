@@ -7,23 +7,29 @@ import type { DmcPrices, OutputCurrency } from '@/types';
 const GROUP_SIZES = [20, 25, 30, 35, 40] as const;
 
 type Props = {
-  totalCostVND: number;          // includes dmc margin
+  totalCostVND: number;          // includes dmc margin, at the current pax
   pax: number;
   rates: Record<string, number>;
   outputCurrency: OutputCurrency;
   dmcPrices: DmcPrices;
   setDmcPrice: (groupSize: number, value: number) => void;
+  /**
+   * Recompute the breakdown total (VND, incl. margin) at a given group size.
+   * Required for an accurate per-pax: per-pax cost items scale with group size,
+   * so dividing a fixed total by group size would be wrong.
+   */
+  breakdownTotalVNDAt?: (groupSize: number) => number;
 };
 
 export function DMCComparePanel({
-  totalCostVND, pax, rates, outputCurrency, dmcPrices, setDmcPrice,
+  totalCostVND, pax, rates, outputCurrency, dmcPrices, setDmcPrice, breakdownTotalVNDAt,
 }: Props) {
   const breakdownPerPaxVND = pax > 0 ? totalCostVND / pax : 0;
 
   return (
     <Paper
       variant="outlined"
-      sx={{ p: 2.5, mt: 2.5, borderColor: 'rgba(142,68,173,0.2)', borderRadius: 2 }}
+      sx={{ p: 2.5, mt: 2.5, borderColor: 'rgba(15,58,74,0.2)', borderRadius: 2 }}
     >
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5} flexWrap="wrap" gap={1}>
         <Typography fontWeight={800} fontSize={15} color="#0f3a4a">
@@ -36,8 +42,8 @@ export function DMCComparePanel({
 
       <Box
         sx={{
-          background: 'rgba(142,68,173,0.07)',
-          border: '1px solid rgba(142,68,173,0.15)',
+          background: 'rgba(15,58,74,0.07)',
+          border: '1px solid rgba(15,58,74,0.15)',
           borderRadius: 1.5,
           p: 1.5,
           mb: 1.5,
@@ -58,7 +64,7 @@ export function DMCComparePanel({
             <Typography component="span" fontSize={12} color="rgba(15,58,74,0.5)">
               Tổng đoàn ({pax} pax):{' '}
             </Typography>
-            <strong style={{ color: '#8e44ad' }}>
+            <strong style={{ color: '#0f3a4a' }}>
               {fmtOutput(totalCostVND, outputCurrency, rates)}
             </strong>
           </Box>
@@ -66,7 +72,7 @@ export function DMCComparePanel({
             <Typography component="span" fontSize={12} color="rgba(15,58,74,0.5)">
               Per pax:{' '}
             </Typography>
-            <strong style={{ color: '#8e44ad' }}>
+            <strong style={{ color: '#0f3a4a' }}>
               {fmtOutput(breakdownPerPaxVND, outputCurrency, rates)}
             </strong>
           </Box>
@@ -75,7 +81,7 @@ export function DMCComparePanel({
 
       <Table size="small">
         <TableHead>
-          <TableRow sx={{ background: 'rgba(142,68,173,0.06)' }}>
+          <TableRow sx={{ background: 'rgba(15,58,74,0.06)' }}>
             <TableCell sx={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, color: 'rgba(15,58,74,0.55)' }}>
               Group size
             </TableCell>
@@ -98,7 +104,10 @@ export function DMCComparePanel({
             const dmcPpax = +(dmcPrices[gs] || 0);
             const dmcTotal = dmcPpax * gs;
             const rateMissing = outputCurrency !== 'VND' && !rates[outputCurrency];
-            const bdTotalDisplay = toOutputCurrency(totalCostVND, outputCurrency, rates);
+            // Accurate per-pax: recompute the breakdown total AT this group size
+            // (per-pax items scale with pax) instead of dividing a fixed total.
+            const bdTotalVNDForGs = breakdownTotalVNDAt ? breakdownTotalVNDAt(gs) : totalCostVND;
+            const bdTotalDisplay = toOutputCurrency(bdTotalVNDForGs, outputCurrency, rates);
             const bdPpaxDisplay = gs > 0 ? bdTotalDisplay / gs : 0;
             const margin = dmcPpax - bdPpaxDisplay;
             const marginPct = dmcPpax > 0 ? (margin / dmcPpax) * 100 : 0;
@@ -120,7 +129,7 @@ export function DMCComparePanel({
                 <TableCell align="right" sx={{ fontWeight: 600, color: '#0f3a4a' }}>
                   {dmcPpax > 0 ? fmtCurrency(dmcTotal, outputCurrency) : '—'}
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600, color: '#8e44ad' }}>
+                <TableCell align="right" sx={{ fontWeight: 600, color: '#0f3a4a' }}>
                   {rateMissing ? '—' : fmtCurrency(bdPpaxDisplay, outputCurrency)}
                 </TableCell>
                 <TableCell align="right">

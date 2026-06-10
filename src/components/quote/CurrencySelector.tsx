@@ -25,7 +25,7 @@ export function CurrencySelector({ value, onChange }: Props) {
         onClick={(e) => setAnchorEl(e.currentTarget)}
         endIcon={<KeyboardArrowDownIcon />}
         sx={{
-          background: 'linear-gradient(135deg, #8e44ad, #9b59b6)',
+          background: 'linear-gradient(135deg, #0f3a4a, #14617a)',
           color: '#fff',
           fontWeight: 700,
           fontSize: 13,
@@ -33,7 +33,7 @@ export function CurrencySelector({ value, onChange }: Props) {
           px: 1.5,
           py: 0.5,
           borderRadius: 1.5,
-          '&:hover': { background: 'linear-gradient(135deg, #7d3c98, #8e44ad)' },
+          '&:hover': { background: 'linear-gradient(135deg, #0a2a38, #0f3a4a)' },
         }}
       >
         💱 {value}
@@ -46,7 +46,7 @@ export function CurrencySelector({ value, onChange }: Props) {
             onClick={() => pick(c)}
             sx={{
               fontWeight: c === value ? 700 : 400,
-              color: c === value ? '#8e44ad' : 'inherit',
+              color: c === value ? '#0f3a4a' : 'inherit',
               fontSize: 13,
               minWidth: 140,
             }}

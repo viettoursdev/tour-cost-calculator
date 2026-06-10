@@ -341,8 +341,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                   minWidth: 160, boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
                 }}
               >
-                <Typography color="#8e44ad" fontSize={11} fontWeight={800} letterSpacing={0.5} textTransform="uppercase" mb={0.25}>📊 Per pax</Typography>
-                <Typography color="#8e44ad" fontWeight={900} fontSize={22} lineHeight={1}>
+                <Typography color="#0f3a4a" fontSize={11} fontWeight={800} letterSpacing={0.5} textTransform="uppercase" mb={0.25}>📊 Per pax</Typography>
+                <Typography color="#0f3a4a" fontWeight={900} fontSize={22} lineHeight={1}>
                   {pax > 0 ? fmtOutput(totalCost / pax, outputCurrency, rates) : '–'}
                 </Typography>
                 <Typography color="rgba(15,58,74,0.45)" fontSize={11} mt={0.25}>{pax} khách · {outputCurrency}</Typography>

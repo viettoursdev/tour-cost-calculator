@@ -135,10 +135,10 @@ export function CostView() {
           return (
             <Paper
               variant="outlined"
-              sx={{ borderColor: 'rgba(142,68,173,0.25)', borderRadius: 1.5, p: 1.75, mt: 1.25 }}
+              sx={{ borderColor: 'rgba(15,58,74,0.25)', borderRadius: 1.5, p: 1.75, mt: 1.25 }}
             >
               <Stack direction="row" alignItems="center" gap={1.75} flexWrap="wrap">
-                <Typography fontWeight={700} fontSize={14} color="#8e44ad" sx={{ flex: 1, minWidth: 180 }}>
+                <Typography fontWeight={700} fontSize={14} color="#0f3a4a" sx={{ flex: 1, minWidth: 180 }}>
                   💼 Profit Margin & Service Charge
                 </Typography>
                 <Stack direction="row" gap={0.75}>
@@ -152,11 +152,11 @@ export function CostView() {
                       onClick={() => setDmcMargin({ type: opt.v, value: 0 })}
                       sx={{
                         px: 1.5, py: 0.5, borderRadius: 1, fontSize: 12, fontWeight: 600, textTransform: 'none',
-                        background: dmcMargin.type === opt.v ? '#8e44ad' : 'rgba(142,68,173,0.08)',
-                        color: dmcMargin.type === opt.v ? '#fff' : '#8e44ad',
-                        border: '1.5px solid rgba(142,68,173,0.3)',
+                        background: dmcMargin.type === opt.v ? '#0f3a4a' : 'rgba(15,58,74,0.08)',
+                        color: dmcMargin.type === opt.v ? '#fff' : '#0f3a4a',
+                        border: '1.5px solid rgba(15,58,74,0.3)',
                         '&:hover': {
-                          background: dmcMargin.type === opt.v ? '#7d3c98' : 'rgba(142,68,173,0.15)',
+                          background: dmcMargin.type === opt.v ? '#0a2a38' : 'rgba(15,58,74,0.15)',
                         },
                       }}
                     >
@@ -170,23 +170,23 @@ export function CostView() {
                     size="small"
                     value={dmcMargin.value || ''}
                     onChange={(e) => setDmcMargin({ value: +e.target.value })}
-                    slotProps={{ htmlInput: { min: 0, step: dmcMargin.type === 'percent' ? 0.5 : 1, style: { textAlign: 'right', width: 80, fontWeight: 700, color: '#8e44ad' } } }}
+                    slotProps={{ htmlInput: { min: 0, step: dmcMargin.type === 'percent' ? 0.5 : 1, style: { textAlign: 'right', width: 80, fontWeight: 700, color: '#0f3a4a' } } }}
                     placeholder="0"
                   />
-                  <Typography fontSize={13} color="#8e44ad" fontWeight={700}>
+                  <Typography fontSize={13} color="#0f3a4a" fontWeight={700}>
                     {dmcMargin.type === 'percent' ? '%' : outputCurrency}
                   </Typography>
                 </Stack>
                 <Box sx={{ textAlign: 'right', minWidth: 140 }}>
                   <Typography fontSize={12} color="rgba(15,58,74,0.5)">
                     Margin:{' '}
-                    <Typography component="strong" color="#8e44ad">
+                    <Typography component="strong" color="#0f3a4a">
                       {fmtOutput(marginVND, outputCurrency, rates)}
                     </Typography>
                   </Typography>
                   <Typography fontSize={13} fontWeight={800} color="#0f3a4a" mt={0.25}>
                     Tổng + margin:{' '}
-                    <Typography component="span" color="#8e44ad">
+                    <Typography component="span" color="#0f3a4a">
                       {fmtOutput(totalWithMarginVND, outputCurrency, rates)}
                     </Typography>
                   </Typography>
@@ -208,6 +208,15 @@ export function CostView() {
               outputCurrency={outputCurrency}
               dmcPrices={dmcPrices}
               setDmcPrice={setDmcPrice}
+              breakdownTotalVNDAt={(gs) => {
+                // Recompute the breakdown cost AT this group size (per-pax items
+                // scale with pax), then add the DMC margin.
+                const t = computeTotals({ ...draftSnapshot, pax: gs });
+                const m = dmcMargin.type === 'percent'
+                  ? Math.round(t.totalCost * (dmcMargin.value || 0) / 100)
+                  : Math.round((dmcMargin.value || 0) * (outputCurrency !== 'VND' && rates[outputCurrency] ? rates[outputCurrency] : 1));
+                return t.totalCost + m;
+              }}
             />
           );
         })()}
