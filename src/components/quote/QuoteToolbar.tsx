@@ -5,7 +5,6 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -535,57 +534,52 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         </Button>
       </Toolbar>
 
-      <Box sx={{ px: 2, pb: 1 }}>
-        <Button
-          size="small"
-          startIcon={showRates ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+      {/* FX rates — legacy "glass" panel design */}
+      <Box sx={{ mx: 2, mb: 1.5, borderRadius: '12px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(20,150,140,0.18)' }}>
+        <Box
           onClick={() => setShowRates((v) => !v)}
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.25, py: 1.25, cursor: 'pointer' }}
         >
-          💱 Tỷ giá quy đổi (→ VND)
-        </Button>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Box component="span" sx={{ fontSize: 15 }}>💱</Box>
+            <Typography sx={{ fontWeight: 700, fontSize: 14, color: LEGACY.navy, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+              Tỷ giá quy đổi (→ VND)
+            </Typography>
+            <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>
+              Nhấp để {showRates ? 'ẩn' : 'chỉnh sửa'}
+            </Typography>
+          </Stack>
+          <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 13 }}>{showRates ? '▲' : '▼'}</Box>
+        </Box>
         {showRates && (
-          <Box
-            sx={{
-              mt: 1, p: 1.5, borderRadius: 2,
-              border: '1px solid rgba(20,150,140,0.15)',
-              background: 'rgba(255,255,255,0.6)',
-            }}
-          >
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                gap: 1.25,
-              }}
-            >
-              {Object.entries(rates)
-                .filter(([c]) => c !== 'VND')
-                .map(([c, r]) => (
-                  <Box
-                    key={c}
-                    sx={{
-                      display: 'flex', alignItems: 'center', gap: 1,
-                      background: '#fff', border: '1px solid rgba(20,150,140,0.25)',
-                      borderRadius: 1.5, px: 1.25, py: 0.5,
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, px: 2.25, pb: 2.25, pt: 0.5 }}>
+            {Object.entries(rates)
+              .filter(([c]) => c !== 'VND')
+              .map(([c, r]) => (
+                <Box
+                  key={c}
+                  sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    background: 'rgba(168,230,221,0.25)', border: '1px solid rgba(20,150,140,0.2)',
+                    borderRadius: '10px', px: 1.75, py: 1,
+                  }}
+                >
+                  <Typography sx={{ color: '#0d7a6a', fontSize: 13, fontWeight: 700, minWidth: 36 }}>1 {c}</Typography>
+                  <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>=</Typography>
+                  <TextField
+                    size="small" type="number" value={r}
+                    onChange={(e) => setRate(c, Number(e.target.value) || 0)}
+                    variant="standard"
+                    slotProps={{
+                      input: {
+                        disableUnderline: true,
+                        endAdornment: <Box component="span" sx={{ color: '#f5a623', fontWeight: 700, fontSize: 13, ml: 0.25 }}>₫</Box>,
+                      },
+                      htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right', fontWeight: 700, fontSize: 14, color: '#f5a623', padding: 0, width: 72 } },
                     }}
-                  >
-                    <Typography sx={{ fontSize: 12, fontWeight: 800, color: LEGACY.teal, flexShrink: 0 }}>
-                      {c}
-                    </Typography>
-                    <TextField
-                      size="small" type="number" value={r}
-                      onChange={(e) => setRate(c, Number(e.target.value) || 0)}
-                      variant="standard"
-                      slotProps={{
-                        input: { disableUnderline: true },
-                        htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right', fontWeight: 600, fontSize: 13, color: LEGACY.navy, padding: 0 } },
-                      }}
-                      sx={{ flexGrow: 1 }}
-                    />
-                    <Typography sx={{ fontSize: 12, color: 'rgba(15,58,74,0.5)', flexShrink: 0 }}>₫</Typography>
-                  </Box>
-                ))}
-            </Box>
+                  />
+                </Box>
+              ))}
           </Box>
         )}
       </Box>
