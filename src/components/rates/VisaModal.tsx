@@ -79,7 +79,9 @@ export function VisaModal({ open, onClose }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>🛂 Bảng giá Visa quốc tế</DialogTitle>
+      <DialogTitle sx={{ background: 'linear-gradient(135deg,#16a085,#1abc9c)', color: '#fff' }}>
+        <Typography variant="h6" fontWeight={800}>🛂 Bảng giá Visa quốc tế</Typography>
+      </DialogTitle>
       <DialogContent dividers>
         <Box sx={{ mb: 2 }}>
           <Typography variant="caption" color="text.secondary">

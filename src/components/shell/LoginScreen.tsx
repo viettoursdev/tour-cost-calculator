@@ -44,7 +44,7 @@ export function LoginScreen() {
             Bảng tính chi phí tour
           </Typography>
         </Box>
-        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+        <Typography sx={{ fontSize: 22, fontWeight: 800, mb: 1.5, color: '#0f3a4a' }}>
           Đăng nhập hệ thống
         </Typography>
         <Stack spacing={2}>

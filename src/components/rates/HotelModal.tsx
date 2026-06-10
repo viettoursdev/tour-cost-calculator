@@ -181,8 +181,10 @@ export function HotelModal({ open, onClose, onPick, pax, template }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        🏨 {isPicker ? 'Chọn Khách sạn từ rate card' : 'Quản lý Khách sạn'}
+      <DialogTitle sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', color: '#fff' }}>
+        <Typography variant="h6" fontWeight={800}>
+          🏨 {isPicker ? 'Chọn Khách sạn từ rate card' : 'Quản lý Khách sạn'}
+        </Typography>
       </DialogTitle>
       <DialogContent dividers>
         <Tabs

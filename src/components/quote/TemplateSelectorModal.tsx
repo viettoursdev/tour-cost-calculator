@@ -51,8 +51,8 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 2,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+            gap: 2.5,
             mb: 4,
           }}
         >

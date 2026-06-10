@@ -18,7 +18,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   if (!template || template === 'dmc') return;
 
   const foreign = template === 'intl';
-  const FONT = 'Calibri';
+  const FONT = 'Aptos';
   const NAVY = 'FF0F3A4A', TEAL = 'FF14A08C', INK = 'FF2B3640', MUTE = 'FF8A9099', WHITE = 'FFFFFFFF';
   const ZEBRA = 'FFF7F9FA', LINE = 'FFE4E8EB', SUBT = 'FFEEF2F4', HILITE = 'FFF4FAF8', YEL = 'FFFFFBE6';
 

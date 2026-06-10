@@ -140,12 +140,14 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>
+      <DialogTitle sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', color: '#fff' }}>
         <Stack direction="row" alignItems="center" spacing={1.5}>
           <Box sx={{ flex: 1 }}>
-            📋 {isPicker ? `Chọn ${label} từ rate card` : `Rate Card · ${label}`}
+            <Typography fontSize={18} fontWeight={800}>
+              📋 {isPicker ? `Chọn ${label} từ rate card` : `Rate Card · ${label}`}
+            </Typography>
             {!isPicker && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+              <Typography variant="caption" sx={{ display: 'block', mt: 0.25, opacity: 0.85 }}>
                 {editMode ? '✏️ Chế độ chỉnh sửa — click số để sửa' : '👀 Chế độ xem — bấm "Sửa" để chỉnh giá'}
               </Typography>
             )}
@@ -154,8 +156,9 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
             <Button
               size="small"
               variant={editMode ? 'contained' : 'outlined'}
-              color={editMode ? 'success' : 'primary'}
+              color={editMode ? 'success' : 'inherit'}
               onClick={() => setEditMode((v) => !v)}
+              sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.5)' }}
             >
               {editMode ? '✓ Xong' : '✏️ Sửa'}
             </Button>
@@ -165,7 +168,7 @@ export function RateCardModal({ open, onClose, type, label, onPick }: Props) {
       <DialogContent dividers>
         {rows.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Chưa có dữ liệu cho hạng mục này. Bấm <strong>+ Thêm dòng</strong> để bắt đầu.
+            Chưa có dữ liệu cho khu vực này. Bấm <strong>+ Thêm dòng</strong> để bắt đầu.
           </Typography>
         )}
 
