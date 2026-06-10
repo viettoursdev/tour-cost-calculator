@@ -28,11 +28,11 @@ function ModRow({
 }) {
   const resolved = resolveMod(mod, adultPPax);
   return (
-    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ opacity: mod.enabled ? 1 : 0.55 }}>
+    <Stack direction="row" spacing={1.25} alignItems="center">
       <Switch size="small" checked={mod.enabled} onChange={(e) => onChange({ ...mod, enabled: e.target.checked })} />
-      <Typography fontSize={13} sx={{ flex: 1, minWidth: 0 }}>{label}</Typography>
+      <Typography fontSize={13} sx={{ flex: 1, minWidth: 0, opacity: mod.enabled ? 1 : 0.6 }}>{label}</Typography>
       <Select
-        size="small" value={mod.mode} disabled={!mod.enabled}
+        size="small" value={mod.mode}
         onChange={(e) => onChange({ ...mod, mode: e.target.value as PriceMod['mode'] })}
         sx={{ width: 88 }}
       >
@@ -40,13 +40,17 @@ function ModRow({
         <MenuItem value="fixed">VND</MenuItem>
       </Select>
       <TextField
-        size="small" type="number" value={mod.value || ''} disabled={!mod.enabled}
-        onChange={(e) => onChange({ ...mod, value: Math.max(0, Number(e.target.value) || 0) })}
+        size="small" type="number" value={mod.value || ''}
+        placeholder="0"
+        onChange={(e) => {
+          const v = Math.max(0, Number(e.target.value) || 0);
+          onChange({ ...mod, value: v, enabled: v > 0 ? true : mod.enabled });
+        }}
         sx={{ width: 120 }}
         slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right' } } }}
       />
-      <Typography fontSize={13} fontWeight={700} sx={{ color: LEGACY.tealLight, width: 130, textAlign: 'right' }}>
-        {mod.enabled ? fmtVND(resolved) : '—'}
+      <Typography fontSize={13} fontWeight={700} sx={{ color: mod.enabled ? LEGACY.tealLight : 'rgba(15,58,74,0.3)', width: 130, textAlign: 'right' }}>
+        {fmtVND(resolved)}
       </Typography>
     </Stack>
   );

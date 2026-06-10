@@ -135,7 +135,9 @@ export function SummaryView() {
             {/* Profit margin */}
             <Box sx={{ mb: 2.25 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                <Typography fontSize={14} fontWeight={600}>💹 Profit margin (%)</Typography>
+                <Typography fontSize={14} fontWeight={600}>
+                  💹 Phí dịch vụ / Margin <Box component="span" sx={{ color: LEGACY.tealLight, fontWeight: 800 }}>{margin}%</Box>
+                </Typography>
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <Slider
                     size="small" value={margin} min={0} max={50} step={0.5}
@@ -145,14 +147,17 @@ export function SummaryView() {
                   <TextField
                     size="small" type="number" value={margin}
                     onChange={(e) => setMargin(Math.max(0, Number(e.target.value) || 0))}
-                    slotProps={{ htmlInput: { min: 0, style: { width: 48, textAlign: 'right', color: LEGACY.tealLight, fontWeight: 700 } } }}
+                    slotProps={{
+                      htmlInput: { min: 0, style: { width: 42, textAlign: 'right', color: LEGACY.tealLight, fontWeight: 700 } },
+                      input: { endAdornment: <Box component="span" sx={{ color: LEGACY.tealLight, fontWeight: 700, ml: 0.25 }}>%</Box> },
+                    }}
                     variant="standard"
                   />
                 </Stack>
               </Stack>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ fontSize: 12 }}>
                 <Typography fontSize={12} sx={{ color: 'rgba(15,58,74,0.5)' }}>
-                  Service Charge Basis (tuỳ chọn)
+                  Service Charge Basis (VNĐ — tuỳ chọn)
                 </Typography>
                 <TextField
                   size="small" type="number" value={svcBasis}
@@ -183,7 +188,9 @@ export function SummaryView() {
             {/* VAT */}
             <Box sx={{ mb: 2.25, pt: 1.75, borderTop: '1px solid rgba(20,150,140,0.1)' }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                <Typography fontSize={14} fontWeight={600}>🧾 Thuế VAT</Typography>
+                <Typography fontSize={14} fontWeight={600}>
+                  🧾 Thuế VAT <Box component="span" sx={{ color: '#f5a623', fontWeight: 800 }}>{vat}%</Box>
+                </Typography>
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <Slider
                     size="small" value={vat} min={0} max={15} step={0.5}
@@ -193,7 +200,10 @@ export function SummaryView() {
                   <TextField
                     size="small" type="number" value={vat}
                     onChange={(e) => setVat(Math.max(0, Number(e.target.value) || 0))}
-                    slotProps={{ htmlInput: { min: 0, style: { width: 48, textAlign: 'right', color: '#f5a623', fontWeight: 700 } } }}
+                    slotProps={{
+                      htmlInput: { min: 0, style: { width: 42, textAlign: 'right', color: '#f5a623', fontWeight: 700 } },
+                      input: { endAdornment: <Box component="span" sx={{ color: '#f5a623', fontWeight: 700, ml: 0.25 }}>%</Box> },
+                    }}
                     variant="standard"
                   />
                 </Stack>
