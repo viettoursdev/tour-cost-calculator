@@ -29,6 +29,16 @@ curl -X POST https://tour-cost-calculator.<tên>.workers.dev/translate \
 # → {"text":"Hello, this is the Da Nang tour quotation."}
 ```
 
+## Nếu deploy qua Git (kết nối repo trong Cloudflare)
+
+Trong **Build configuration** của Worker:
+- **Build command:** để **TRỐNG** (worker không cần build).
+- **Deploy command:** (chỉ định thẳng entry để wrangler khỏi phải dò config)
+  ```
+  npx wrangler deploy cloudflare-worker/viettours-ai-worker.js --name tour-cost-calculator --compatibility-date 2025-06-01
+  ```
+- Sau khi deploy lần đầu, thêm Secret `ANTHROPIC_API_KEY` ở **Settings → Variables and Secrets**.
+
 ## Ghi chú
 
 - **Model:** mặc định `claude-sonnet-4-6` (cân bằng chất lượng/chi phí). Đổi hằng `MODEL`

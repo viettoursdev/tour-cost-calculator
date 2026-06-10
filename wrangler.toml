@@ -1,5 +1,5 @@
 # Cloudflare Worker config cho phần dịch/OCR (KHÔNG liên quan tới website GitHub Pages).
-# Cloudflare Workers Builds đọc file này khi chạy `npx wrangler deploy`.
+# Entry-point được truyền thẳng trong Deploy command (xem cloudflare-worker/README.md),
+# nên KHÔNG đặt `main` ở đây để tránh xung đột "entry khai báo 2 nơi".
 name = "tour-cost-calculator"
-main = "cloudflare-worker/viettours-ai-worker.js"
 compatibility_date = "2025-06-01"
