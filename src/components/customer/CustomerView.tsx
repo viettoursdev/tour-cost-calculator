@@ -36,6 +36,8 @@ export function CustomerView() {
       return (
         c.name?.toLowerCase().includes(q) ||
         c.note?.toLowerCase().includes(q) ||
+        c.address?.toLowerCase().includes(q) ||
+        c.taxCode?.toLowerCase().includes(q) ||
         (c.contacts ?? []).some(
           (ct) =>
             ct.name?.toLowerCase().includes(q) ||
@@ -245,6 +247,18 @@ function CustomerCard({
         variant="outlined"
         sx={{ mb: 1.5, fontSize: 11 }}
       />
+
+      {/* Address + tax code */}
+      {(c.address || c.taxCode) && (
+        <Stack sx={{ mb: 1 }} spacing={0.25}>
+          {c.address && (
+            <Typography variant="caption" color="text.secondary">📍 {c.address}</Typography>
+          )}
+          {c.taxCode && (
+            <Typography variant="caption" color="text.secondary">🧾 MST: {c.taxCode}</Typography>
+          )}
+        </Stack>
+      )}
 
       {/* Contacts preview */}
       {(c.contacts ?? [])

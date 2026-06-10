@@ -9,6 +9,8 @@ export type Customer = {
   id: string;
   name: string;
   type: 'company' | 'individual';
+  address?: string;   // địa chỉ
+  taxCode?: string;   // mã số thuế
   contacts: CustomerContact[];
   note: string;
   createdAt: string;

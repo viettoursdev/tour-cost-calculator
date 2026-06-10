@@ -42,11 +42,11 @@ export function ContractInfoModal({ open, onClose, baseContract }: Props) {
     setPicked(c);
     if (!c) return;
     const contact = c.contacts[0];
-    const { address, taxCode } = parseNote(c.note ?? '');
+    const legacy = parseNote(c.note ?? '');
     setForm({
       name: c.name,
-      address,
-      taxCode,
+      address: c.address || legacy.address,
+      taxCode: c.taxCode || legacy.taxCode,
       tel: contact?.phone ?? '',
       rep: contact?.name ?? '',
       title: contact?.position || 'Giám đốc',
@@ -62,20 +62,19 @@ export function ContractInfoModal({ open, onClose, baseContract }: Props) {
       exportContractPDF({ ...baseContract, partyB: { ...form } });
 
       // 2) Save back into the customer list (update if an existing one was picked).
-      const noteBits: string[] = [];
-      if (form.address.trim()) noteBits.push(`Địa chỉ: ${form.address.trim()}`);
-      if (form.taxCode.trim()) noteBits.push(`MST: ${form.taxCode.trim()}`);
       const customer: Customer = {
         id: picked?.id ?? '',
         name: form.name.trim(),
         type: 'company',
+        address: form.address.trim(),
+        taxCode: form.taxCode.trim(),
         contacts: [{
           name: form.rep.trim(),
           phone: form.tel.trim(),
           email: form.email.trim(),
           position: form.title.trim(),
         }],
-        note: noteBits.join('\n'),
+        note: picked?.note ?? '',
         createdAt: picked?.createdAt ?? new Date().toISOString(),
         createdBy: picked?.createdBy ?? '',
       };

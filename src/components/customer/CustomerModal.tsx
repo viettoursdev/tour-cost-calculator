@@ -13,6 +13,8 @@ const EMPTY_CUSTOMER: Customer = {
   id: '',
   name: '',
   type: 'company',
+  address: '',
+  taxCode: '',
   contacts: [{ ...EMPTY_CONTACT }],
   note: '',
   createdAt: '',
@@ -92,6 +94,23 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
             required
             disabled={!canEdit}
             error={canEdit && !form.name.trim()}
+          />
+
+          {/* Address + tax code */}
+          <TextField
+            label="Địa chỉ"
+            value={form.address ?? ''}
+            onChange={(e) => setF('address', e.target.value)}
+            placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..."
+            disabled={!canEdit}
+            multiline
+          />
+          <TextField
+            label="Mã số thuế"
+            value={form.taxCode ?? ''}
+            onChange={(e) => setF('taxCode', e.target.value)}
+            placeholder="VD: 0312345678"
+            disabled={!canEdit}
           />
 
           {/* Contacts */}
