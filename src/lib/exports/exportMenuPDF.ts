@@ -20,7 +20,7 @@ const WHITE: RGB = [255, 255, 255];
 const SUG_FILL: RGB = [218, 240, 233];
 const ADJ_FILL: RGB = [252, 221, 194];
 
-export function exportMenuPDF(it: Menu, code: string): void {
+export function exportMenuPDF(it: Menu, code: string, includePrices = true): void {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const hasFont = loadVNFont(pdf);
   const FONT = hasFont ? 'DejaVu' : 'helvetica';
@@ -106,7 +106,7 @@ export function exportMenuPDF(it: Menu, code: string): void {
       const sW = wrap(meal.suggestedDishes);
       const aW = wrap(meal.adjustedDishes);
       const rows = Math.max(sW.length, aW.length);
-      const lineH = 4.2, headH = 6, priceH = 6, pad = 2;
+      const lineH = 4.2, headH = 6, priceH = includePrices ? 6 : 0, pad = 2;
       const boxH = headH + rows * lineH + priceH + pad;
       ensure(boxH + 2);
 
@@ -123,11 +123,13 @@ export function exportMenuPDF(it: Menu, code: string): void {
       sW.forEach((l, i) => pdf.text(l, x1 + 2, yy + i * lineH));
       aW.forEach((l, i) => pdf.text(l, x2 + 2, yy + i * lineH));
 
-      const py = y + headH + rows * lineH + 5;
-      setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...TEAL);
-      pdf.text('Don gia: ' + money(meal.suggestedPrice, sCur), x1 + 2, py);
-      pdf.setTextColor(...PURP);
-      pdf.text('Don gia: ' + money(meal.adjustedPrice, aCur), x2 + 2, py);
+      if (includePrices) {
+        const py = y + headH + rows * lineH + 5;
+        setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...TEAL);
+        pdf.text('Don gia: ' + money(meal.suggestedPrice, sCur), x1 + 2, py);
+        pdf.setTextColor(...PURP);
+        pdf.text('Don gia: ' + money(meal.adjustedPrice, aCur), x2 + 2, py);
+      }
 
       y += boxH + 2;
 
@@ -148,7 +150,7 @@ export function exportMenuPDF(it: Menu, code: string): void {
   });
 
   const keys = Object.keys(totals).filter((k) => totals[k] > 0);
-  if (keys.length) {
+  if (includePrices && keys.length) {
     ensure(12 + keys.length * 6);
     setF('bold'); pdf.setFontSize(10); pdf.setTextColor(...NAVY);
     pdf.text('TONG HOP DON GIA (theo dieu chinh)', M, y + 4);

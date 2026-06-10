@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Box, Button, Chip, FormControlLabel, IconButton, MenuItem, Paper, Select, Stack, Switch, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -38,6 +38,7 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
 export function MenuBuilder({ initial, user, onBack }: Props) {
   const [it, setIt] = useState<Menu>(() => initial ?? freshMenu());
   const [saving, setSaving] = useState(false);
+  const [includePrices, setIncludePrices] = useState(true);
   const restaurants = useRestaurantStore((s) => s.list);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const itins = useItineraryStore((s) => s.list);
@@ -168,16 +169,28 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
               <span style={{ marginLeft: 8, opacity: 0.7 }}>· tự lưu</span>
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={includePrices}
+                  onChange={(e) => setIncludePrices(e.target.checked)}
+                  sx={{ '& .MuiSwitch-thumb': { color: '#fff' }, '& .Mui-checked + .MuiSwitch-track': { backgroundColor: '#ffe082', opacity: 1 } }}
+                />
+              }
+              label="Kèm giá"
+              sx={{ color: '#fff', mr: 0.5, '& .MuiFormControlLabel-label': { fontSize: 13, fontWeight: 600 } }}
+            />
             <Button color="inherit" variant="contained"
               startIcon={<DescriptionIcon />}
-              onClick={() => void exportMenuDocx(it, code)}
+              onClick={() => void exportMenuDocx(it, code, includePrices)}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Word
             </Button>
             <Button color="inherit" variant="contained"
               startIcon={<PictureAsPdfIcon />}
-              onClick={() => exportMenuPDF(it, code)}
+              onClick={() => exportMenuPDF(it, code, includePrices)}
               sx={{ bgcolor: '#fff', color: '#c0392b' }}>
               PDF
             </Button>

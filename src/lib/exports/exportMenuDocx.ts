@@ -84,7 +84,7 @@ function dishParas(txt: string, color: string): Paragraph[] {
   ], { after: 24 }));
 }
 
-export async function exportMenuDocx(it: Menu, code: string): Promise<void> {
+export async function exportMenuDocx(it: Menu, code: string, includePrices = true): Promise<void> {
   const C: (Paragraph | Table)[] = [];
 
   // Header: brand text + code
@@ -151,12 +151,16 @@ export async function exportMenuDocx(it: Menu, code: string): Promise<void> {
       const half = Math.floor(CW / 2);
       const colSug: Paragraph[] = [P(tr('📋 ĐỀ XUẤT TỪ NHÀ HÀNG', { size: 13, bold: true, color: TEAL }), { after: 40 })];
       dishParas(meal.suggestedDishes, TEAL).forEach((p) => colSug.push(p));
-      colSug.push(P(tr('Đơn giá: ' + money(meal.suggestedPrice, sCur),
-        { size: 16, bold: true, color: TEAL }), { before: 30, after: 0 }));
+      if (includePrices) {
+        colSug.push(P(tr('Đơn giá: ' + money(meal.suggestedPrice, sCur),
+          { size: 16, bold: true, color: TEAL }), { before: 30, after: 0 }));
+      }
       const colAdj: Paragraph[] = [P(tr('✏️ ĐIỀU CHỈNH THEO FEEDBACK', { size: 13, bold: true, color: PURP }), { after: 40 })];
       dishParas(meal.adjustedDishes, PURP).forEach((p) => colAdj.push(p));
-      colAdj.push(P(tr('Đơn giá: ' + money(meal.adjustedPrice, aCur),
-        { size: 16, bold: true, color: PURP }), { before: 30, after: 0 }));
+      if (includePrices) {
+        colAdj.push(P(tr('Đơn giá: ' + money(meal.adjustedPrice, aCur),
+          { size: 16, bold: true, color: PURP }), { before: 30, after: 0 }));
+      }
 
       C.push(tbl([new TableRow({
         children: [
@@ -181,7 +185,7 @@ export async function exportMenuDocx(it: Menu, code: string): Promise<void> {
   });
 
   const curKeys = Object.keys(totals).filter((k) => totals[k] > 0);
-  if (curKeys.length) {
+  if (includePrices && curKeys.length) {
     C.push(P(tr('TỔNG HỢP ĐƠN GIÁ (theo điều chỉnh)', { size: 18, bold: true, color: NAVY }), {
       before: 120, after: 50,
       border: { bottom: { style: BorderStyle.SINGLE, size: 5, color: TEAL, space: 2 } },
