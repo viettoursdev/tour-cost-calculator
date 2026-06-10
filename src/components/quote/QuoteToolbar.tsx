@@ -19,8 +19,18 @@ import { useAuthStore } from '@/stores/authStore';
 import { fmtOutput } from '@/lib/currency';
 import { computeTotals, fmtVND } from './calc';
 import { InvoiceModal } from './InvoiceModal';
+import { HotelModal } from '@/components/rates/HotelModal';
+import { VisaModal } from '@/components/rates/VisaModal';
+import { RateCardModal } from '@/components/rates/RateCardModal';
+import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { LEGACY } from '@/theme';
 import type { OutputCurrency } from '@/types';
+
+type RateModalState =
+  | { kind: 'none' }
+  | { kind: 'hotel' }
+  | { kind: 'visa' }
+  | { kind: 'other'; type: string; label: string };
 
 type Props = {
   onOpenSelector: () => void;
@@ -78,8 +88,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
   const [showRates, setShowRates] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
+  const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
+
+  const openRate = (key: string, label: string) => {
+    if (key === 'hotel') setRateModal({ kind: 'hotel' });
+    else if (key === 'visa') setRateModal({ kind: 'visa' });
+    else setRateModal({ kind: 'other', type: key, label });
+    setRateAnchor(null);
+  };
 
   const handleExport = () => {
     const json = exportJSON();
@@ -258,6 +277,27 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
         <Box sx={{ flexGrow: 1 }} />
 
+        {/* Rate Card dropdown (legacy "📋 Rate Card") */}
+        <Button
+          size="small" variant="outlined"
+          startIcon={<Box component="span">📋</Box>}
+          endIcon={<ExpandMoreIcon />}
+          onClick={(e) => setRateAnchor(e.currentTarget)}
+          sx={{
+            color: '#d18a13', borderColor: 'rgba(245,166,35,0.5)',
+            '&:hover': { borderColor: '#d18a13', background: 'rgba(245,166,35,0.08)' },
+          }}
+        >
+          Rate Card
+        </Button>
+        <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)}>
+          {RATE_CATEGORIES.filter((c) => isRateCategoryVisible(c.key, template)).map((c) => (
+            <MenuItem key={c.key} onClick={() => openRate(c.key, c.label)}>
+              <Box component="span" sx={{ mr: 1 }}>{c.icon}</Box> {c.label}
+            </MenuItem>
+          ))}
+        </Menu>
+
         <Button size="small" variant="outlined" startIcon={<AddCircleOutlineIcon />} onClick={onOpenSelector}>
           Báo giá mới
         </Button>
@@ -362,6 +402,22 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           draft={draft}
           totals={totals}
           user={currentUser}
+        />
+      )}
+
+      {/* Rate Card management modals (opened from the Rate Card dropdown) */}
+      <HotelModal
+        open={rateModal.kind === 'hotel'}
+        onClose={() => setRateModal({ kind: 'none' })}
+        template={template ?? undefined}
+      />
+      <VisaModal open={rateModal.kind === 'visa'} onClose={() => setRateModal({ kind: 'none' })} />
+      {rateModal.kind === 'other' && (
+        <RateCardModal
+          open
+          onClose={() => setRateModal({ kind: 'none' })}
+          type={rateModal.type}
+          label={rateModal.label}
         />
       )}
     </AppBar>

@@ -6,7 +6,6 @@ import {
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
-import { RatesPanel } from '@/components/rates/RatesPanel';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { CustomerView } from '@/components/customer/CustomerView';
 import { NCCView } from '@/components/ncc/NCCView';
@@ -19,7 +18,6 @@ import { hasPerm } from '@/auth/PERMISSIONS';
 import { LEGACY } from '@/theme';
 
 const TABS = [
-  { key: 'rates', label: 'Rate Card' },
   { key: 'quote', label: 'Báo Giá' },
   { key: 'contract', label: 'Hợp Đồng' },
   { key: 'customer', label: 'Khách Hàng' },
@@ -35,7 +33,7 @@ const isTabKey = (v: unknown): v is TabKey =>
   typeof v === 'string' && TABS.some((t) => t.key === v);
 
 export function AppShell() {
-  const [active, setActive] = useState<TabKey>('rates');
+  const [active, setActive] = useState<TabKey>('quote');
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
   const [userMgrOpen, setUserMgrOpen] = useState(false);
@@ -117,7 +115,6 @@ export function AppShell() {
       <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
         {TABS.map((t) => {
           if (t.key !== active) return null;
-          if (t.key === 'rates') return <RatesPanel key={t.key} />;
           if (t.key === 'quote') return <QuoteView key={t.key} />;
           if (t.key === 'customer') return <CustomerView key={t.key} />;
           if (t.key === 'contract') return <ContractView key={t.key} />;

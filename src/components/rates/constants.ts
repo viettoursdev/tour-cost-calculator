@@ -82,3 +82,25 @@ export const RATE_CATEGORIES: RateCategory[] = [
   { key: 'teambuild', label: 'Team Building', icon: '🏕️' },
   { key: 'meeting', label: 'Meeting / Hội nghị', icon: '💼' },
 ];
+
+/**
+ * Per-template visibility for rate-card categories.
+ * Source: public/legacy.html:8707-8716. Categories not listed default to "always show".
+ * `template === null` (no draft yet) shows everything.
+ */
+export function isRateCategoryVisible(key: string, template: string | null): boolean {
+  if (!template) return true;
+  switch (key) {
+    case 'insurance':
+    case 'logistics':
+    case 'gala':
+      return template !== 'dmc';
+    case 'dmc':
+      return template === 'intl';
+    case 'teambuild':
+    case 'meeting':
+      return template === 'domestic';
+    default:
+      return true;
+  }
+}
