@@ -14,6 +14,7 @@ import { exportContractDocx } from '@/lib/exports/exportContractDocx';
 import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canViewAll } from '@/auth/ROLES';
 import { CONTRACT_STATUS, emptyContract, contractFromQuote, ContractStatusKey } from './constants';
 import { ContractModal } from './ContractModal';
 import { PaymentPanel } from './PaymentPanel';
@@ -34,6 +35,12 @@ export function ContractView() {
 
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageContracts');
+  // Ban Giám Đốc trở lên xem toàn bộ; dưới ngưỡng chỉ thấy HĐ do mình tạo.
+  const viewAll = !!currentUser && canViewAll(currentUser.role, 'contracts');
+  const ownContracts = useMemo(
+    () => (viewAll ? contracts : contracts.filter((c) => c.createdBy === currentUser?.name)),
+    [contracts, viewAll, currentUser?.name],
+  );
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -45,7 +52,7 @@ export function ContractView() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return contracts.filter((c) => {
+    return ownContracts.filter((c) => {
       if (filterStatus && (c.contractStatus || 'draft') !== filterStatus) return false;
       if (!q) return true;
       return (
@@ -55,10 +62,10 @@ export function ContractView() {
         c.tourDest?.toLowerCase().includes(q)
       );
     });
-  }, [contracts, search, filterStatus]);
+  }, [ownContracts, search, filterStatus]);
 
-  const totalValue = contracts.reduce((s, c) => s + Math.round((+c.pricePerPax || 0) * (+c.contractPax || 0)), 0);
-  const totalPaid = contracts.reduce(
+  const totalValue = ownContracts.reduce((s, c) => s + Math.round((+c.pricePerPax || 0) * (+c.contractPax || 0)), 0);
+  const totalPaid = ownContracts.reduce(
     (s, c) => s + (c.payments ?? []).filter((p) => p.status === 'paid').reduce((ss, p) => ss + ((p.receivedAmount ?? +p.amount) || 0), 0),
     0,
   );
@@ -76,7 +83,7 @@ export function ContractView() {
         <Box>
           <Typography variant="h6" fontWeight={800}>📄 Danh sách Hợp đồng</Typography>
           <Typography variant="caption" color="text.secondary">
-            {loading ? 'Đang tải...' : `${contracts.length} hợp đồng · Tổng: ${fmtVND(totalValue)} · Đã TT: ${fmtVND(totalPaid)}`}
+            {loading ? 'Đang tải...' : `${ownContracts.length} hợp đồng · Tổng: ${fmtVND(totalValue)} · Đã TT: ${fmtVND(totalPaid)}`}
             {syncing && <Chip label="☁️ Đang đồng bộ..." size="small" sx={{ ml: 1 }} />}
           </Typography>
         </Box>
@@ -92,7 +99,7 @@ export function ContractView() {
       {/* Stats chips */}
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
         {Object.entries(CONTRACT_STATUS).map(([k, s]) => {
-          const cnt = contracts.filter((c) => (c.contractStatus || 'draft') === k).length;
+          const cnt = ownContracts.filter((c) => (c.contractStatus || 'draft') === k).length;
           if (cnt === 0) return null;
           return (
             <Chip
@@ -131,7 +138,7 @@ export function ContractView() {
         <Box sx={{ textAlign: 'center', py: 8, color: 'text.disabled' }}>
           <Typography variant="h2">📄</Typography>
           <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
-            {contracts.length === 0 ? 'Chưa có hợp đồng nào' : 'Không tìm thấy kết quả'}
+            {ownContracts.length === 0 ? 'Chưa có hợp đồng nào' : 'Không tìm thấy kết quả'}
           </Typography>
         </Box>
       )}

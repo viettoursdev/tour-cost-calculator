@@ -7,6 +7,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import { useItineraryStore } from '@/stores/itineraryStore';
+import { useAuthStore } from '@/stores/authStore';
+import { canViewAll } from '@/auth/ROLES';
 
 type Props = {
   onNew: () => void;
@@ -29,10 +31,14 @@ function fmtDt(s?: string): string {
 export function ItineraryHome({ onNew, onOpen, onBack }: Props) {
   const list = useItineraryStore((s) => s.list);
   const loading = useItineraryStore((s) => s.loading);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  // Operations trở lên xem toàn bộ; dưới ngưỡng chỉ thấy chương trình do mình tạo.
+  const viewAll = !!currentUser && canViewAll(currentUser.role, 'itinerary');
   const [search, setSearch] = useState('');
   const [delId, setDelId] = useState<string | null>(null);
 
   const filtered = list.filter((x) => {
+    if (!viewAll && x.createdBy !== currentUser?.name) return false;
     const q = search.toLowerCase();
     if (!q) return true;
     return (

@@ -8,6 +8,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canViewAll } from '@/auth/ROLES';
 import { CustomerModal } from './CustomerModal';
 import type { Customer } from '@/types';
 
@@ -22,6 +23,8 @@ export function CustomerView() {
   const del = useCustomerStore((s) => s.delete);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageCustomers');
+  // Sales trở lên xem toàn bộ; dưới ngưỡng chỉ thấy khách hàng do mình tạo.
+  const viewAll = !!currentUser && canViewAll(currentUser.role, 'customers');
 
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('');
@@ -31,6 +34,7 @@ export function CustomerView() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return customers.filter((c) => {
+      if (!viewAll && c.createdBy !== currentUser?.name) return false;
       if (filterType && c.type !== filterType) return false;
       if (!q) return true;
       return (
@@ -47,7 +51,7 @@ export function CustomerView() {
         )
       );
     });
-  }, [customers, search, filterType]);
+  }, [customers, search, filterType, viewAll, currentUser?.name]);
 
   const handleSave = async (form: Customer) => {
     await save(form);

@@ -161,6 +161,19 @@ Defined in `src/auth/ROLES.ts` and `src/auth/PERMISSIONS.ts`.
 
 Check with `hasPerm(user, 'permName')`. Payment-approver roles: `APPROVER_ROLES` / `isApprover()` in `src/auth/ROLES.ts` (CEO, Ban Giám Đốc, Trưởng Phòng).
 
+### Shared-data sync + view scope
+
+Shared areas (`SharedArea` in `src/auth/ROLES.ts`): contracts, menu, itinerary,
+rateCard, ncc, customers. `ROLE_RANK` gives seniority (CEO 8 … Standard 0).
+
+- **Sync** (continuous Firestore subscription, wired in `MainApp.tsx`): everyone
+  EXCEPT `NO_SYNC_ROLES` = Marketing, Admin, Accountant (`syncsSharedData(role)`).
+- **View/manage full list** (`canViewAll(role, area)` — min rank): contracts →
+  Ban Giám Đốc+, ncc/menu/itinerary → Operations+, customers → Sales+, rateCard →
+  everyone synced. Below the threshold a synced user sees/edits only items whose
+  `createdBy` matches their own name. Applied in NCCView, CustomerView,
+  ContractView, MenuHome, ItineraryHome.
+
 ## Deploy
 
 GitHub Pages via `.github/workflows/deploy.yml` on push to `main`:

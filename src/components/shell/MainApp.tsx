@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { syncsSharedData } from '@/auth/ROLES';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -31,20 +32,26 @@ export function MainApp() {
       useQuoteStore.getState().reset();
       return;
     }
-    const rcUnsub = useRateCardStore.getState().init();
+    // Shared data areas (Hợp đồng, Thực đơn, Chương trình, Rate Card, NCC,
+    // Khách hàng) sync continuously for everyone EXCEPT Marketing/Admin/Accountant.
+    const sync = syncsSharedData(currentUser.role);
+
     useQuoteStore.getState().init(currentUser);
     const qhUnsub = useQuoteHistoryStore.getState().init(currentUser);
-    const custUnsub = useCustomerStore.getState().init();
-    const nccUnsub = useNccStore.getState().init();
-    const contractUnsub = useContractStore.getState().init();
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
-    const itinUnsub = useItineraryStore.getState().init();
-    const menuUnsub = useMenuStore.getState().init();
-    const restUnsub = useRestaurantStore.getState().init();
     const vpUnsub = useVisaProductsStore.getState().init();
     const vprocUnsub = useVisaProcStore.getState().init();
+
+    const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
+    const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
+    const nccUnsub = sync ? useNccStore.getState().init() : undefined;
+    const contractUnsub = sync ? useContractStore.getState().init() : undefined;
+    const itinUnsub = sync ? useItineraryStore.getState().init() : undefined;
+    const menuUnsub = sync ? useMenuStore.getState().init() : undefined;
+    const restUnsub = sync ? useRestaurantStore.getState().init() : undefined;
+
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
       rcUnsub?.();

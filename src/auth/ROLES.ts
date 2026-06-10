@@ -18,6 +18,46 @@ export const APPROVER_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trư
 /** True if the role can approve payment / cost requests. */
 export const isApprover = (role: Role): boolean => APPROVER_ROLES.includes(role);
 
+/** Seniority rank (higher = more senior). Used for "from level X upward" rules. */
+export const ROLE_RANK: Record<Role, number> = {
+  CEO: 8,
+  'Ban Giám Đốc': 7,
+  'Trưởng Phòng': 6,
+  Operations: 5,
+  Sales: 4,
+  Marketing: 3,
+  Admin: 2,
+  Accountant: 1,
+  Standard: 0,
+};
+
+/** Shared data areas synced + permission-gated across the Báo giá workspace. */
+export type SharedArea = 'contracts' | 'menu' | 'itinerary' | 'rateCard' | 'ncc' | 'customers';
+
+/** Roles that do NOT receive the continuous sync of the shared data areas. */
+export const NO_SYNC_ROLES: readonly Role[] = ['Marketing', 'Admin', 'Accountant'];
+
+/** Whether a role gets the shared data synced at all. */
+export const syncsSharedData = (role: Role): boolean => !NO_SYNC_ROLES.includes(role);
+
+/**
+ * Minimum rank required to view/manage the FULL shared list of an area.
+ * Below this, a synced user only sees/edits items they created themselves.
+ * (Rate Card has no threshold — everyone who syncs can use it.)
+ */
+const VIEW_ALL_MIN_RANK: Record<SharedArea, number> = {
+  contracts: ROLE_RANK['Ban Giám Đốc'], // Ban Giám Đốc trở lên
+  ncc: ROLE_RANK.Operations,            // Operations trở lên
+  menu: ROLE_RANK.Operations,           // Operations trở lên
+  itinerary: ROLE_RANK.Operations,      // Operations trở lên
+  customers: ROLE_RANK.Sales,           // Sales trở lên
+  rateCard: 0,                          // no threshold
+};
+
+/** True if the role may view/manage the entire shared list for an area. */
+export const canViewAll = (role: Role, area: SharedArea): boolean =>
+  ROLE_RANK[role] >= VIEW_ALL_MIN_RANK[area];
+
 // Source: public/legacy.html:5126.
 export const USER_COLORS: readonly string[] = [
   '#dc3250', '#f5a623', '#14a08c', '#1abc9c', '#3498db',

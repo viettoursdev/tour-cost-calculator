@@ -8,6 +8,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useNccStore } from '@/stores/nccStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canViewAll } from '@/auth/ROLES';
 import { NCCModal } from './NCCModal';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
@@ -22,6 +23,8 @@ export function NCCView() {
   const del = useNccStore((s) => s.delete);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageNCC');
+  // Operations trở lên xem toàn bộ; dưới ngưỡng chỉ thấy NCC do mình tạo.
+  const viewAll = !!currentUser && canViewAll(currentUser.role, 'ncc');
 
   const [search, setSearch] = useState('');
   const [filterSector, setFilterSector] = useState('');
@@ -31,6 +34,7 @@ export function NCCView() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return suppliers.filter((s) => {
+      if (!viewAll && s.createdBy !== currentUser?.name) return false;
       if (filterSector && !s.sectors.includes(filterSector)) return false;
       if (!q) return true;
       return (
@@ -46,7 +50,7 @@ export function NCCView() {
         )
       );
     });
-  }, [suppliers, search, filterSector]);
+  }, [suppliers, search, filterSector, viewAll, currentUser?.name]);
 
   const handleSave = async (form: Ncc) => {
     await save(form);
