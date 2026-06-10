@@ -3,8 +3,9 @@ import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/mater
 import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
 import { calcVND, fmtVND, qtyOf } from './calc';
+import { fmtOutput } from '@/lib/currency';
 import { LEGACY } from '@/theme';
-import type { Item, QtyMode } from '@/types';
+import type { Item, OutputCurrency, QtyMode } from '@/types';
 
 type Props = {
   item: Item;
@@ -13,6 +14,8 @@ type Props = {
   catColor: string;
   onUpd: (item: Item) => void;
   onDel: () => void;
+  /** When set (DMC: "hiển thị tổng theo"), line totals show in this currency. */
+  displayCurrency?: OutputCurrency;
 };
 
 /** Compact bordered <select> matching legacy `.sel`. */
@@ -120,10 +123,13 @@ function EditText({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurrency }: Props) {
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
   const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
+  // Line total in the chosen display currency (DMC) or VND.
+  const fmtMoney = (n: number) =>
+    displayCurrency && displayCurrency !== 'VND' ? fmtOutput(n, displayCurrency, rates) : fmtVND(n);
 
   const qty = qtyOf(item, pax);
 
@@ -227,7 +233,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
                 color: off ? 'rgba(15,58,74,0.3)' : item.optional ? '#c2410c' : catColor,
                 fontStyle: item.optional ? 'italic' : 'normal',
               }}>
-                {fmtVND(vnd)}
+                {fmtMoney(vnd)}
               </Typography>
             </Stack>
           )}

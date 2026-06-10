@@ -5,8 +5,9 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { LineRow } from './LineRow';
 import { catTotal, fmtVND } from './calc';
+import { fmtOutput } from '@/lib/currency';
 import type { CategoryDef } from './constants';
-import type { Item } from '@/types';
+import type { Item, OutputCurrency } from '@/types';
 
 type Props = {
   cat: CategoryDef;
@@ -20,12 +21,16 @@ type Props = {
   onDel: (id: number) => void;
   /** Opens the rate-card picker for this category (legacy "📋 Rate card"). */
   onOpenRate?: () => void;
+  /** When set (DMC: "hiển thị tổng theo"), totals show in this currency. */
+  displayCurrency?: OutputCurrency;
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onOpenRate,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onOpenRate, displayCurrency,
 }: Props) {
   const sub = enabled ? catTotal(items, rates, pax) : 0;
+  const fmtMoney = (n: number) =>
+    displayCurrency && displayCurrency !== 'VND' ? fmtOutput(n, displayCurrency, rates) : fmtVND(n);
 
   return (
     <Accordion
@@ -85,7 +90,7 @@ export function CatBlock({
           )}
           <Typography variant="caption" color="text.secondary">{items.length} dòng</Typography>
           {enabled
-            ? <Typography fontWeight={800} sx={{ color: cat.color, mr: 1 }}>{fmtVND(sub)}</Typography>
+            ? <Typography fontWeight={800} sx={{ color: cat.color, mr: 1 }}>{fmtMoney(sub)}</Typography>
             : <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>Đã tắt</Typography>}
         </Stack>
       </AccordionSummary>
@@ -117,6 +122,7 @@ export function CatBlock({
                     catColor={cat.color}
                     onUpd={onUpd}
                     onDel={() => onDel(item.id)}
+                    displayCurrency={displayCurrency}
                   />
                 ))}
               </TableBody>

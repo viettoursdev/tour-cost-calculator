@@ -97,6 +97,7 @@ export function CostView() {
               onAdd={() => addItem(catId)}
               onDel={(id) => delItem(catId, id)}
               onOpenRate={onOpenRate}
+              displayCurrency={isDMC ? outputCurrency : undefined}
             />
           );
         })}
