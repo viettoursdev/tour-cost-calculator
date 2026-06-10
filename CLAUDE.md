@@ -123,6 +123,7 @@ service cloud.firestore {
 | Document/Collection | Content |
 |--------------------|---------|
 | `viettours/master_rate_card` | Shared rate card (hotels, transport, staff, etc.) |
+| `viettours/fx_rates` | Shared FX rates (→ VND), synced live to all accounts |
 | `viettours/user_accounts` | All user accounts |
 | `viettours/ncc_master` | Supplier list |
 | `viettours/contracts_master` | All contracts |

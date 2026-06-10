@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { syncsSharedData } from '@/auth/ROLES';
+import { fbSubscribeFxRates } from '@/lib/firebase';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -38,6 +39,10 @@ export function MainApp() {
 
     useQuoteStore.getState().init(currentUser);
     const qhUnsub = useQuoteHistoryStore.getState().init(currentUser);
+    // FX rates are shared across ALL accounts (not gated by syncsSharedData).
+    const fxUnsub = fbSubscribeFxRates((d) => {
+      if (d.rates) useQuoteStore.getState().setRatesSynced(d.rates, d._meta?.pushedAt);
+    });
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
@@ -54,6 +59,7 @@ export function MainApp() {
 
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     return () => {
+      fxUnsub?.();
       rcUnsub?.();
       qhUnsub?.();
       custUnsub?.();

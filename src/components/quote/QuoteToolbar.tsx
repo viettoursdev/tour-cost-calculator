@@ -534,7 +534,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         </Button>
       </Toolbar>
 
-      {/* FX rates — legacy "glass" panel design */}
+      {/* FX rates — legacy "glass" panel; only for intl + DMC quotes */}
+      {(template === 'intl' || template === 'dmc') && (
       <Box sx={{ mx: 2, mb: 1.5, borderRadius: '12px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(20,150,140,0.18)' }}>
         <Box
           onClick={() => setShowRates((v) => !v)}
@@ -583,6 +584,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           </Box>
         )}
       </Box>
+      )}
       {invoiceOpen && currentUser && draft.template && draft.template !== 'dmc' && (
         <InvoiceModal
           open={invoiceOpen}

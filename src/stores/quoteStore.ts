@@ -7,6 +7,7 @@ import {
   fbUpdateCollaborators,
   fbDeleteDMCQuote, fbGetDMCQuoteProject, fbSaveDMCQuote, fbSaveDMCQuoteState,
   fbUpdateDMCCollaborators,
+  fbPushFxRates,
   generateQuoteCode,
 } from '@/lib/firebase';
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
@@ -60,6 +61,7 @@ type QuoteState = {
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
   setRate: (cur: string, rate: number) => void;
+  setRatesSynced: (rates: Record<string, number>, pushedAt?: string) => void;
   setMargin: (n: number) => void;
   setVat: (n: number) => void;
   setSvcBasis: (n: number) => void;
@@ -102,6 +104,10 @@ type QuoteState = {
  * leakage on shared devices.
  */
 const persistKey = (username: string) => `vte_quote_draft_${username}`;
+
+// Shared FX rates sync: debounce pushes + ignore our own echoed snapshot.
+let lastFxPushAt: string | null = null;
+let fxPushTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Internal helper: clone a draft via structuredClone for snapshot saves.
@@ -207,8 +213,24 @@ export const useQuoteStore = create<QuoteState>()(
 
         setPax: (n) => set((s) => ({ draft: { ...s.draft, pax: Math.max(1, n) } })),
 
-        setRate: (cur, rate) =>
-          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } })),
+        setRate: (cur, rate) => {
+          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } }));
+          // Push the whole table to the shared FX doc (debounced) so all
+          // accounts stay in sync.
+          if (fxPushTimer) clearTimeout(fxPushTimer);
+          fxPushTimer = setTimeout(() => {
+            const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
+            fbPushFxRates(get().draft.rates, by)
+              .then((at) => { lastFxPushAt = at; })
+              .catch(() => { /* ignore offline */ });
+          }, 600);
+        },
+
+        setRatesSynced: (rates, pushedAt) => {
+          // Ignore the echo of our own push; otherwise adopt the shared rates.
+          if (pushedAt && pushedAt === lastFxPushAt) return;
+          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...rates, VND: 1 } } }));
+        },
 
         setMargin: (n) => set((s) => ({ draft: { ...s.draft, margin: n } })),
         setVat: (n) => set((s) => ({ draft: { ...s.draft, vat: n } })),

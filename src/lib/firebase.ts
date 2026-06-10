@@ -45,6 +45,7 @@ const QUOTE_HISTORY_DOC = doc(db, 'viettours', 'quote_history');
 const CUSTOMER_DOC = doc(db, 'viettours', 'customer_list');
 const NCC_DOC = doc(db, 'viettours', 'ncc_master');
 const CONTRACTS_DOC = doc(db, 'viettours', 'contracts_master');
+const FX_RATES_DOC = doc(db, 'viettours', 'fx_rates');
 const notifDoc = (username: string) => doc(db, 'user_notifications', username);
 const quoteProjectDoc = (cloudId: string) => doc(db, 'quote_projects', cloudId);
 
@@ -454,6 +455,25 @@ export async function fbPushNotifications(
   notifications: Notification[],
 ): Promise<void> {
   await setDoc(notifDoc(username), { notifications });
+}
+
+// ── Shared FX rates (synced across all accounts) ──
+
+export type FxRatesDoc = {
+  rates: Record<string, number>;
+  _meta?: { pushedAt?: string; pushedBy?: string };
+};
+
+export function fbSubscribeFxRates(cb: (doc: FxRatesDoc) => void): Unsubscribe {
+  return onSnapshot(FX_RATES_DOC, (snap) => {
+    if (snap.exists()) cb(snap.data() as FxRatesDoc);
+  });
+}
+
+export async function fbPushFxRates(rates: Record<string, number>, pushedBy: string): Promise<string> {
+  const pushedAt = new Date().toISOString();
+  await setDoc(FX_RATES_DOC, { rates, _meta: { pushedAt, pushedBy } });
+  return pushedAt;
 }
 
 // ── Notification Center: shared comment threads + multi-send ──
