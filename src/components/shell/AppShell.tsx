@@ -36,7 +36,7 @@ export function AppShell() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AppBar position="static" color="primary" sx={{ background: LEGACY.headerGradient }}>
-        <Toolbar sx={{ gap: 1 }}>
+        <Toolbar variant="dense" sx={{ gap: 1, minHeight: 52 }}>
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 800 }} noWrap>
             Phần mềm quản lý - Viettours
           </Typography>

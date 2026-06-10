@@ -4,6 +4,7 @@ import {
   DialogTitle, IconButton, Stack, Tooltip, Typography,
 } from '@mui/material';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { TEMPLATES } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -47,7 +48,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
         sx={{
           background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 45%,#14a08c)',
           color: '#fff',
-          px: 5, py: 3.25,
+          px: 5, py: 2.25,
           position: 'relative',
           overflow: 'hidden',
         }}
@@ -56,16 +57,29 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
         <Box sx={{ position: 'absolute', right: -40, top: -40, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', pointerEvents: 'none' }} />
         <Box sx={{ position: 'absolute', right: 60, bottom: -60, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
 
-        {/* Top bar: white logo + brand · account / notifications / logout */}
-        <Stack direction="row" alignItems="center" sx={{ position: 'relative', mb: 2.5 }} flexWrap="wrap" gap={1.5}>
+        {/* Top bar: white logo + brand (with subtitle) · account / notifications / logout */}
+        <Stack direction="row" alignItems="center" sx={{ position: 'relative' }} flexWrap="wrap" gap={1.5}>
           <Stack direction="row" alignItems="center" spacing={1.75} sx={{ flexGrow: 1, minWidth: 0 }}>
             <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 48, width: 'auto' }} />
-            <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: 0.2 }} noWrap>
-              Phần mềm quản lý - Viettours
-            </Typography>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: 0.2 }} noWrap>
+                Phần mềm quản lý - Viettours
+              </Typography>
+              <Typography sx={{ fontSize: 13, opacity: 0.82 }}>
+                Hệ thống sẽ cấu hình yêu cầu dịch vụ phù hợp lựa chọn
+              </Typography>
+            </Box>
           </Stack>
           {currentUser && (
             <Stack direction="row" alignItems="center" spacing={1}>
+              {canCancel && (
+                <Button
+                  onClick={onClose} startIcon={<ArrowBackIcon />}
+                  sx={{ color: '#fff', textTransform: 'none', fontWeight: 700, background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.3)', '&:hover': { background: 'rgba(255,255,255,0.28)' } }}
+                >
+                  Đóng
+                </Button>
+              )}
               {/* Account */}
               <Stack
                 direction="row" alignItems="center" spacing={1}
@@ -97,20 +111,6 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
             </Stack>
           )}
         </Stack>
-
-        <Box sx={{ position: 'relative' }}>
-          <Typography sx={{ fontSize: 24, fontWeight: 900, letterSpacing: 0.2 }}>
-            🎯 Chọn yêu cầu Báo giá
-          </Typography>
-          <Typography sx={{ fontSize: 14, opacity: 0.82, mt: 0.75 }}>
-            Hệ thống sẽ cấu hình yêu cầu dịch vụ phù hợp lựa chọn
-          </Typography>
-        </Box>
-        {canCancel && (
-          <Button onClick={onClose} sx={{ position: 'absolute', bottom: 20, right: 24, color: '#fff', background: 'rgba(255,255,255,0.16)', '&:hover': { background: 'rgba(255,255,255,0.28)' } }}>
-            Đóng
-          </Button>
-        )}
       </DialogTitle>
       <DialogContent sx={{ background: 'linear-gradient(180deg,#f7fbfa,#ffffff)', pt: 4}}>
 

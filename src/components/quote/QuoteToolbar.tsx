@@ -250,11 +250,11 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       }}
     >
       {/* ── Tour info header band (legacy style) ── */}
-      <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 1.5 }}>
-        <Stack direction="row" spacing={2.5} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1.5}>
+      <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 0.85 }}>
+        <Stack direction="row" spacing={2.5} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
           {/* COL1: logo + template badge (legacy hero) */}
-          <Stack alignItems="center" spacing={0.75} sx={{ flexShrink: 0 }}>
-            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 90, width: 'auto', display: 'block' }} />
+          <Stack alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
+            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 54, width: 'auto', display: 'block' }} />
             {tpl && (
               <Box sx={{
                 background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
