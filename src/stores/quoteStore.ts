@@ -108,32 +108,28 @@ type QuoteState = {
  */
 const persistKey = (username: string) => `vte_quote_draft_${username}`;
 
-// Shared FX rates sync: debounce pushes + ignore our own echoed snapshot.
+// Shared FX rates sync. The CLOUD doc (viettours/fx_rates) is the source of
+// truth: the latest sync (by pushedAt) is the canonical table everyone uses,
+// and only a NEWER sync overrides it. `lastFxPushAt` is the timestamp of our
+// own most recent push — we skip any snapshot at/older than it (our own echo,
+// incl. earlier debounced pushes), and adopt any snapshot newer than it.
 let lastFxPushAt: string | null = null;
 let fxPushTimer: ReturnType<typeof setTimeout> | null = null;
-// Timestamp (ISO) of the rate table we currently hold — used to reject a STALE
-// Firestore snapshot from clobbering a newer local edit (e.g. when cloud writes
-// are blocked by rules). ISO strings compare chronologically.
-let localFxAt: string | null = null;
 
-// FX rates are a GLOBAL table (not per-quote): persist them in their own
-// localStorage key so they survive reload independent of the draft (DMC drafts
-// are intentionally dropped on rehydrate, which previously reset the rates).
+// localStorage cache so rates show instantly on reload / offline, independent
+// of the draft (DMC drafts are dropped on rehydrate).
 const FX_LS_KEY = 'vte_fx_rates';
-export function readFxRatesLS(): { rates: Record<string, number>; at: string | null } | null {
+export function readFxRatesLS(): Record<string, number> | null {
   try {
     const raw = localStorage.getItem(FX_LS_KEY);
     if (!raw) return null;
-    const p = JSON.parse(raw) as { rates?: Record<string, number>; at?: string } | Record<string, number>;
-    if (p && typeof p === 'object' && 'rates' in p && p.rates) {
-      return { rates: p.rates as Record<string, number>, at: (p as { at?: string }).at ?? null };
-    }
-    return { rates: p as Record<string, number>, at: null }; // legacy: plain rates object
+    const p = JSON.parse(raw) as { rates?: Record<string, number> } | Record<string, number>;
+    if (p && typeof p === 'object' && 'rates' in p && p.rates) return p.rates as Record<string, number>;
+    return p as Record<string, number>; // legacy: plain rates object
   } catch { return null; }
 }
-function writeFxRatesLS(rates: Record<string, number>, at: string): void {
-  localFxAt = at;
-  try { localStorage.setItem(FX_LS_KEY, JSON.stringify({ rates, at })); } catch { /* ignore */ }
+function writeFxRatesLS(rates: Record<string, number>): void {
+  try { localStorage.setItem(FX_LS_KEY, JSON.stringify({ rates, at: new Date().toISOString() })); } catch { /* ignore */ }
 }
 
 /**
@@ -185,10 +181,9 @@ export const useQuoteStore = create<QuoteState>()(
           // draft we end up with (so DMC drafts, which are dropped above, still
           // keep the shared rate table after reload).
           const fxLS = readFxRatesLS();
-          localFxAt = fxLS?.at ?? null;
           const baseDraft = storedDraft ?? EMPTY_DRAFT;
           set({
-            draft: fxLS ? { ...baseDraft, rates: { ...baseDraft.rates, ...fxLS.rates, VND: 1 } } : baseDraft,
+            draft: fxLS ? { ...baseDraft, rates: { ...baseDraft.rates, ...fxLS, VND: 1 } } : baseDraft,
             snapshots: readUserSnapshots(user.u),
             currentUsername: user.u,
             view: storedView,
@@ -250,7 +245,7 @@ export const useQuoteStore = create<QuoteState>()(
 
         setRate: (cur, rate) => {
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } }));
-          writeFxRatesLS(get().draft.rates, new Date().toISOString()); // persist global table + edit time
+          writeFxRatesLS(get().draft.rates); // instant cache (canonical value still comes from cloud sync)
           // Push the whole table to the shared FX doc (debounced) so all
           // accounts stay in sync.
           if (fxPushTimer) clearTimeout(fxPushTimer);
@@ -265,24 +260,22 @@ export const useQuoteStore = create<QuoteState>()(
         setRatesSynced: (rates, pushedAt, pushedBy, persistLocal = true) => {
           // Always record sync meta (for the "cập nhật lúc…" indicator).
           if (pushedAt || pushedBy) set({ fxSyncedAt: pushedAt ?? new Date().toISOString(), fxSyncedBy: pushedBy ?? null });
-          // Ignore the echo of our own push.
-          if (pushedAt && pushedAt === lastFxPushAt) return;
-          // Reject a STALE Firestore doc that's older than our local edit (e.g. when
-          // cloud writes are blocked) so it can't clobber newer local rates.
-          if (pushedAt && localFxAt && pushedAt < localFxAt) return;
+          // The latest sync is canonical: skip our own push echo (incl. earlier
+          // debounced pushes) — anything at/older than our last push — and adopt
+          // any snapshot newer than it. Cross-tab updates (no pushedAt) always apply.
+          if (pushedAt && lastFxPushAt && pushedAt <= lastFxPushAt) return;
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...rates, VND: 1 } } }));
           // persistLocal=false when the update CAME FROM a localStorage 'storage'
           // event, to avoid a write→event→write feedback loop between tabs.
-          if (persistLocal) writeFxRatesLS(get().draft.rates, pushedAt ?? new Date().toISOString());
+          if (persistLocal) writeFxRatesLS(get().draft.rates);
         },
 
         syncFxNow: async () => {
           if (fxPushTimer) { clearTimeout(fxPushTimer); fxPushTimer = null; }
-          writeFxRatesLS(get().draft.rates, new Date().toISOString());
           const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
-          const at = await fbPushFxRates(get().draft.rates, by);
+          const at = await fbPushFxRates(get().draft.rates, by); // this push becomes the canonical record
           lastFxPushAt = at;
-          writeFxRatesLS(get().draft.rates, at); // align local timestamp with server's
+          writeFxRatesLS(get().draft.rates);
           set({ fxSyncedAt: at, fxSyncedBy: by });
         },
 
