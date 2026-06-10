@@ -1,5 +1,5 @@
 # Cloudflare Worker config cho phần dịch/OCR (KHÔNG liên quan tới website GitHub Pages).
 # Cloudflare Workers Builds đọc file này khi chạy `npx wrangler deploy`.
-name = "viettours-ai"
+name = "tour-cost-calculator"
 main = "cloudflare-worker/viettours-ai-worker.js"
 compatibility_date = "2025-06-01"

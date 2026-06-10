@@ -8,14 +8,14 @@ Backend cho tính năng **Dịch hồ sơ** (và **Chương trình tour**) của
 ## Cách deploy (≈5 phút, không cần cài gì)
 
 1. Vào https://dash.cloudflare.com → **Workers & Pages** → **Create** → **Create Worker**.
-2. Đặt tên (vd `viettours-ai`) → **Deploy** (tạo worker rỗng).
+2. Đặt tên `tour-cost-calculator` (phải khớp `name` trong `wrangler.toml`) → **Deploy**.
 3. Bấm **Edit code** → xoá hết → dán toàn bộ nội dung file [`viettours-ai-worker.js`](./viettours-ai-worker.js) → **Deploy**.
 4. Vào tab **Settings → Variables and Secrets** → **Add**:
    - Type: **Secret**
    - Name: `ANTHROPIC_API_KEY`
    - Value: API key Anthropic của bạn (`sk-ant-...`, lấy ở https://console.anthropic.com → API Keys)
    - **Save / Deploy**.
-5. Copy URL worker (vd `https://viettours-ai.<tên>.workers.dev`).
+5. Copy URL worker (vd `https://tour-cost-calculator.<tên>.workers.dev`).
 6. Mở app → tab **Dịch hồ sơ** (hoặc **Chương trình tour**) → dán URL vào ô **AI Worker URL** → **Lưu**.
 
 Xong! Giờ chọn file (.docx / .pdf / ảnh) và bấm **Dịch sang tiếng Anh**.
@@ -23,7 +23,7 @@ Xong! Giờ chọn file (.docx / .pdf / ảnh) và bấm **Dịch sang tiếng A
 ## Kiểm tra nhanh
 
 ```bash
-curl -X POST https://viettours-ai.<tên>.workers.dev/translate \
+curl -X POST https://tour-cost-calculator.<tên>.workers.dev/translate \
   -H "Content-Type: application/json" \
   -d '{"text":"Xin chào, đây là báo giá tour Đà Nẵng."}'
 # → {"text":"Hello, this is the Da Nang tour quotation."}

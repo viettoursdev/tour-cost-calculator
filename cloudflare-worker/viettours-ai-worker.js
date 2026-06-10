@@ -11,7 +11,7 @@
  * Secret cần thêm trong Cloudflare (Settings → Variables and Secrets):
  *   ANTHROPIC_API_KEY = sk-ant-...   (loại "Secret")
  *
- * Sau khi Deploy, copy URL (vd https://viettours-ai.<tên>.workers.dev) và dán
+ * Sau khi Deploy, copy URL (vd https://tour-cost-calculator.<tên>.workers.dev) và dán
  * vào ô "AI Worker URL" trong app, bấm Lưu.
  */
 
