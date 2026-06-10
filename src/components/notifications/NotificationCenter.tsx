@@ -161,11 +161,24 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
   const isMember = !!thread && thread.members.includes(user.u);
 
   const addComment = async () => {
-    if (!notif.threadId || !text.trim()) return;
+    if (!notif.threadId || !text.trim() || !thread) return;
     setBusy(true);
-    const c: NotifComment = { id: genId(), by: user.u, byName: user.name, text: text.trim(), at: new Date().toISOString() };
+    const body = text.trim();
+    const c: NotifComment = { id: genId(), by: user.u, byName: user.name, text: body, at: new Date().toISOString() };
     try {
       await fbAddThreadComment(notif.threadId, c);
+      // Notify only the collaboration group (other thread members).
+      const others = thread.members.filter((u) => u !== user.u);
+      if (others.length) {
+        await fbSendNotificationMany(others, {
+          type: 'collab_comment',
+          title: `💬 Bình luận mới: ${thread.title}`,
+          message: `${user.name}: ${body.slice(0, 140)}`,
+          createdBy: user.name,
+          ...(thread.link ? { link: thread.link } : {}),
+          threadId: notif.threadId,
+        });
+      }
       setText('');
     } finally {
       setBusy(false);
