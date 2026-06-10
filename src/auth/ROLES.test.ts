@@ -38,6 +38,13 @@ describe('DEFAULT_USERS', () => {
       expect(u.p.trim().length).toBeGreaterThan(0);
     }
   });
+
+  it('every seed has a @viettours.com.vn email', () => {
+    for (const u of DEFAULT_USERS) {
+      expect(u.email).toBeDefined();
+      expect(u.email!.toLowerCase()).toMatch(/@viettours\.com\.vn$/);
+    }
+  });
 });
 
 describe('USER_COLORS', () => {
