@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { fbPullUsers, fbPushUsers } from '@/lib/firebase';
+import { fbPullUsers, fbPushUsers, authReady } from '@/lib/firebase';
 import { PERMISSIONS } from '@/auth/PERMISSIONS';
 import type { User } from '@/types';
 
@@ -31,6 +31,10 @@ export const useAuthStore = create<AuthState>()(
       hasHydrated: false,
 
       init: async () => {
+        // Wait for anonymous auth before touching Firestore — otherwise the
+        // first cloud read/write can race ahead of the token on a fresh load
+        // and fail with "Missing or insufficient permissions" under auth-gated rules.
+        try { await authReady; } catch { /* sign-in may be disabled; let the op surface the error */ }
         try {
           const cloud = await fbPullUsers();
           const validRoles = new Set(Object.keys(PERMISSIONS));
