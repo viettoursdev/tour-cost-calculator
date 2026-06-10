@@ -98,13 +98,25 @@ API Key:       AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw
 Auth Domain:   viettours-cost-calculator.firebaseapp.com
 ```
 
-Open rules required for these paths (apply manually in Firebase Console):
+**Auth-gated rules** (apply manually in Firebase Console → database `viettours`).
+The app signs in **anonymously** at startup (`src/lib/firebase.ts`), so rules can
+require `request.auth != null` instead of being fully public. The **Anonymous**
+provider must be enabled in Authentication → Sign-in method.
 
 ```
-match /user_notifications/{username}    { allow read, write: if true; }
-match /dmc_quote_projects/{quoteId}      { allow read, write: if true; }
-match /notification_threads/{threadId}   { allow read, write: if true; }
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
 ```
+
+> Note: this only blocks unauthenticated traffic. Because the web API key is public,
+> the real fix for sensitive data (plaintext passwords in `user_accounts`) is per-user
+> Firebase Auth + granular rules (Phase 4) and/or hashing passwords.
 
 ### Firestore Document Map
 

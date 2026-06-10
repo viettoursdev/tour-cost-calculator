@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import {
   deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type DocumentReference,
   type Unsubscribe,
@@ -22,6 +23,21 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, 'viettours');
+
+// Anonymous Firebase Auth so Firestore rules can require `request.auth != null`
+// instead of being fully public. Fired at module load (before any store attaches
+// a listener) so the Firestore SDK waits for the token on its first request.
+// Requires the Anonymous provider to be enabled in the Firebase console.
+const auth = getAuth(app);
+export const authReady: Promise<void> = signInAnonymously(auth)
+  .then(() => undefined)
+  .catch((e) => {
+    console.error(
+      '[firebase] Đăng nhập ẩn danh thất bại — nếu rules yêu cầu auth, Firestore sẽ bị từ chối. '
+      + 'Hãy bật Authentication → Sign-in method → Anonymous trong Firebase console.',
+      e,
+    );
+  });
 
 const USERS_DOC = doc(db, 'viettours', 'user_accounts');
 const RC_DOC = doc(db, 'viettours', 'master_rate_card');
