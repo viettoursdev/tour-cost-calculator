@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AppBar, Box, Button, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
-  Stack, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Typography,
+  Stack, Tab, Tabs, TextField, Toolbar, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -13,6 +13,7 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { useQuoteStore } from '@/stores/quoteStore';
+import type { QuoteViewKey } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
 import { useAuthStore } from '@/stores/authStore';
@@ -136,6 +137,25 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     return d.toLocaleDateString('vi-VN');
   })();
 
+  // Unified nav tabs (legacy order + icons). DMC shows only Breakdown + history.
+  const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
+  const TAB_DEFS: { v: QuoteViewKey; label: string }[] = isDMC
+    ? [
+        { v: 'cost', label: '📊 Bảng chi phí Breakdown' },
+        { v: 'history', label: '🕐 Lịch sử Breakdown' },
+      ]
+    : [
+        { v: 'cost', label: '📊 Bảng chi phí' },
+        { v: 'summary', label: '💰 Tổng kết & Định giá' },
+        { v: 'dashboard', label: '📈 Dashboard biên lợi' },
+        { v: 'payment', label: '🧾 Quản lý thanh toán' },
+        { v: 'history', label: '🕐 Lịch sử báo giá' },
+        ...(canContract ? [{ v: 'contract' as QuoteViewKey, label: '📜 Hợp đồng' }] : []),
+        ...(hasPerm(currentUser, 'manageCustomers') ? [{ v: 'customer' as QuoteViewKey, label: '👥 Khách hàng' }] : []),
+        ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'ncc' as QuoteViewKey, label: '🏢 Nhà Cung Cấp' }] : []),
+      ];
+  const tabValue = TAB_DEFS.some((t) => t.v === view) ? view : false;
+
   return (
     <AppBar
       position="sticky"
@@ -257,34 +277,38 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         </Stack>
       </Box>
 
-      <Toolbar sx={{ flexWrap: 'wrap', gap: 1.5, py: 1 }}>
-        <ToggleButtonGroup
-          size="small" exclusive value={view}
-          onChange={(_, v) => v && setView(v)}
-          sx={{
-            '& .MuiToggleButton-root.Mui-selected': {
-              background: LEGACY.headerGradient,
-              color: '#fff',
-              '&:hover': { background: LEGACY.headerGradient },
-            },
-          }}
-        >
-          <ToggleButton value="cost">{isDMC ? 'Breakdown' : 'Chi phí'}</ToggleButton>
-          {!isDMC && <ToggleButton value="summary">Tổng kết &amp; Định giá</ToggleButton>}
-          {!isDMC && <ToggleButton value="dashboard">Dashboard</ToggleButton>}
-          {!isDMC && <ToggleButton value="payment">Thanh toán</ToggleButton>}
-          <ToggleButton value="history">Lịch sử</ToggleButton>
-          {!isDMC && (hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts')) && (
-            <ToggleButton value="contract">Hợp đồng</ToggleButton>
-          )}
-          {!isDMC && hasPerm(currentUser, 'manageCustomers') && (
-            <ToggleButton value="customer">Khách hàng</ToggleButton>
-          )}
-          {!isDMC && hasPerm(currentUser, 'manageNCC') && (
-            <ToggleButton value="ncc">NCC</ToggleButton>
-          )}
-        </ToggleButtonGroup>
+      {/* ── Unified nav tab bar (legacy style: icons, underline, spacious) ── */}
+      <Tabs
+        value={tabValue}
+        onChange={(_, v) => setView(v as QuoteViewKey)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{
+          px: 2,
+          minHeight: 48,
+          borderBottom: '1px solid rgba(20,150,140,0.12)',
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            fontSize: 14,
+            fontWeight: 600,
+            minHeight: 48,
+            px: 2.25,
+            color: 'rgba(15,58,74,0.6)',
+          },
+          '& .MuiTab-root.Mui-selected': { color: LEGACY.teal, fontWeight: 800 },
+          '& .MuiTabs-indicator': {
+            height: 3,
+            borderRadius: '3px 3px 0 0',
+            backgroundColor: LEGACY.teal,
+          },
+        }}
+      >
+        {TAB_DEFS.map((t) => (
+          <Tab key={t.v} value={t.v} label={t.label} />
+        ))}
+      </Tabs>
 
+      <Toolbar sx={{ flexWrap: 'wrap', gap: 1.5, py: 1, minHeight: 'auto' }}>
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Rate Card dropdown (legacy "📋 Rate Card") */}
