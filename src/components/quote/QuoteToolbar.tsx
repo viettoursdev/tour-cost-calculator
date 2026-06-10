@@ -86,6 +86,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const patchInfo = useQuoteStore((s) => s.patchInfo);
   const setPax = useQuoteStore((s) => s.setPax);
   const setRate = useQuoteStore((s) => s.setRate);
+  const syncFxNow = useQuoteStore((s) => s.syncFxNow);
+  const fxSyncedAt = useQuoteStore((s) => s.fxSyncedAt);
+  const fxSyncedBy = useQuoteStore((s) => s.fxSyncedBy);
   const setView = useQuoteStore((s) => s.setView);
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
@@ -103,6 +106,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const totalCost = totals.totalCost;
 
   const [showRates, setShowRates] = useState(false);
+  const [fxSyncing, setFxSyncing] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
@@ -541,7 +545,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           onClick={() => setShowRates((v) => !v)}
           sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.25, py: 1.25, cursor: 'pointer' }}
         >
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
             <Box component="span" sx={{ fontSize: 15 }}>💱</Box>
             <Typography sx={{ fontWeight: 700, fontSize: 14, color: LEGACY.navy, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               Tỷ giá quy đổi (→ VND)
@@ -550,7 +554,27 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
               Nhấp để {showRates ? 'ẩn' : 'chỉnh sửa'}
             </Typography>
           </Stack>
-          <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 13 }}>{showRates ? '▲' : '▼'}</Box>
+          <Stack direction="row" alignItems="center" spacing={1.25}>
+            {fxSyncedAt && (
+              <Typography sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 11 }}>
+                ☁️ Cập nhật {new Date(fxSyncedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                {fxSyncedBy ? ` · ${fxSyncedBy}` : ''}
+              </Typography>
+            )}
+            <Button
+              size="small" variant="outlined"
+              disabled={fxSyncing}
+              onClick={async (e) => {
+                e.stopPropagation();
+                setFxSyncing(true);
+                try { await syncFxNow(); } catch { /* offline */ } finally { setFxSyncing(false); }
+              }}
+              sx={{ minWidth: 0, px: 1.25, py: 0.25, fontSize: 12, fontWeight: 700, color: LEGACY.teal, borderColor: 'rgba(20,150,140,0.4)' }}
+            >
+              {fxSyncing ? 'Đang đồng bộ…' : '🔄 Đồng bộ'}
+            </Button>
+            <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 13 }}>{showRates ? '▲' : '▼'}</Box>
+          </Stack>
         </Box>
         {showRates && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, px: 2.25, pb: 2.25, pt: 0.5 }}>

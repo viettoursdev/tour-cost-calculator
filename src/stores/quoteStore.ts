@@ -50,9 +50,12 @@ type QuoteState = {
   view: QuoteViewKey;
   snapshots: Snapshot[];
   currentUsername: string | null;
+  fxSyncedAt: string | null;
+  fxSyncedBy: string | null;
 
   init: (user: User) => void;
   reset: () => void;
+  syncFxNow: () => Promise<void>;
 
   newDraft: (template: Template) => void;
   abandon: () => void;
@@ -61,7 +64,7 @@ type QuoteState = {
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
   setRate: (cur: string, rate: number) => void;
-  setRatesSynced: (rates: Record<string, number>, pushedAt?: string) => void;
+  setRatesSynced: (rates: Record<string, number>, pushedAt?: string, pushedBy?: string) => void;
   setMargin: (n: number) => void;
   setVat: (n: number) => void;
   setSvcBasis: (n: number) => void;
@@ -128,6 +131,8 @@ export const useQuoteStore = create<QuoteState>()(
         view: 'cost',
         snapshots: [],
         currentUsername: null,
+        fxSyncedAt: null,
+        fxSyncedBy: null,
 
         init: (user) => {
           const key = persistKey(user.u);
@@ -226,10 +231,20 @@ export const useQuoteStore = create<QuoteState>()(
           }, 600);
         },
 
-        setRatesSynced: (rates, pushedAt) => {
+        setRatesSynced: (rates, pushedAt, pushedBy) => {
+          // Always record sync meta (for the "cập nhật lúc…" indicator).
+          set({ fxSyncedAt: pushedAt ?? new Date().toISOString(), fxSyncedBy: pushedBy ?? null });
           // Ignore the echo of our own push; otherwise adopt the shared rates.
           if (pushedAt && pushedAt === lastFxPushAt) return;
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...rates, VND: 1 } } }));
+        },
+
+        syncFxNow: async () => {
+          if (fxPushTimer) { clearTimeout(fxPushTimer); fxPushTimer = null; }
+          const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
+          const at = await fbPushFxRates(get().draft.rates, by);
+          lastFxPushAt = at;
+          set({ fxSyncedAt: at, fxSyncedBy: by });
         },
 
         setMargin: (n) => set((s) => ({ draft: { ...s.draft, margin: n } })),

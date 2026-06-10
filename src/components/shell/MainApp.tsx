@@ -41,7 +41,7 @@ export function MainApp() {
     const qhUnsub = useQuoteHistoryStore.getState().init(currentUser);
     // FX rates are shared across ALL accounts (not gated by syncsSharedData).
     const fxUnsub = fbSubscribeFxRates((d) => {
-      if (d.rates) useQuoteStore.getState().setRatesSynced(d.rates, d._meta?.pushedAt);
+      if (d.rates) useQuoteStore.getState().setRatesSynced(d.rates, d._meta?.pushedAt, d._meta?.pushedBy);
     });
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
