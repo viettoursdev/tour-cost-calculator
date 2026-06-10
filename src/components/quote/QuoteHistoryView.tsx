@@ -9,9 +9,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { fmtVND } from './calc';
+import { workerFileUrl } from '@/lib/aiWorker';
 import type { CloudQuoteEntry, Collaborator, Template, User } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import Delete from '@mui/icons-material/Delete';
+import AttachFile from '@mui/icons-material/AttachFile';
 
 const TEMPLATE_LABEL: Record<Template, string> = {
   domestic: 'Nội địa',
@@ -140,6 +142,29 @@ export function QuoteHistoryView() {
           />
         </Tooltip>
       ),
+    },
+    {
+      field: 'attachment',
+      headerName: 'File',
+      width: 64,
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (p) =>
+        p.row.attachment ? (
+          <Tooltip title={`Mở: ${p.row.attachment.name}`}>
+            <IconButton
+              size="small"
+              component="a"
+              href={workerFileUrl(p.row.attachment.key)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <AttachFile fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : null,
     },
     {
       field: 'actions',
