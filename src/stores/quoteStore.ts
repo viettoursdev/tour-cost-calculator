@@ -15,7 +15,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
-  QuoteDraft, QuoteInfo, QuotePayment, Snapshot, Template, User,
+  QuoteDraft, QuoteInfo, QuotePayment, QuotePricingOptions, Snapshot, Template, User,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -67,6 +67,7 @@ type QuoteState = {
   setInclusions: (v: string[]) => void;
   setExclusions: (v: string[]) => void;
   setPayments: (v: QuotePayment[]) => void;
+  setPricingOptions: (v: QuotePricingOptions) => void;
   setOutputCurrency: (cur: OutputCurrency) => void;
   setDmcPrice: (groupSize: number, value: number) => void;
   setDmcMargin: (patch: Partial<DmcMargin>) => void;
@@ -212,6 +213,7 @@ export const useQuoteStore = create<QuoteState>()(
         setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
         setExclusions: (v) => set((s) => ({ draft: { ...s.draft, exclusions: v } })),
         setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
+        setPricingOptions: (v) => set((s) => ({ draft: { ...s.draft, pricingOptions: v } })),
 
         setOutputCurrency: (cur) =>
           set((s) => ({ draft: { ...s.draft, outputCurrency: cur } })),
@@ -308,6 +310,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.inclusions ? { inclusions: data.inclusions } : {}),
                 ...(data.exclusions ? { exclusions: data.exclusions } : {}),
                 ...(data.payments ? { payments: data.payments } : {}),
+                ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
               },
             }));
             return { ok: true };
@@ -333,6 +336,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.inclusions ? { inclusions: data.inclusions } : {}),
               ...(data.exclusions ? { exclusions: data.exclusions } : {}),
               ...(data.payments ? { payments: data.payments } : {}),
+              ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
               currentQuoteId: null, // imported file starts a new quote
             },
             view: 'cost',

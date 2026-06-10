@@ -47,6 +47,22 @@ export type QuotePayment = {
   note: string;      // condition / due, e.g. "Trong vòng 07 ngày sau khi ký HĐ"
 };
 
+/** A pricing modifier: % of adult package price, or a fixed VND amount. */
+export type PriceMod = {
+  enabled: boolean;
+  mode: 'percent' | 'fixed';
+  value: number;     // percent (of adult price/pax) or fixed VND
+};
+
+/** Optional pricing add-ons shown in Tổng kết & on the package PDF. */
+export type QuotePricingOptions = {
+  singleSupp: PriceMod;   // Phụ thu phòng đơn
+  infant: PriceMod;       // Trẻ em dưới 2 tuổi
+  child: PriceMod;        // Trẻ em 2–12 tuổi
+  tips: PriceMod;         // Tips / khách
+  extras: { id: string; label: string; mode: 'percent' | 'fixed'; value: number }[];
+};
+
 export type QuoteDraft = {
   template: Template | null;
   info: QuoteInfo;
@@ -63,6 +79,7 @@ export type QuoteDraft = {
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm
   payments?: QuotePayment[]; // Thông tin thanh toán theo đợt
+  pricingOptions?: QuotePricingOptions; // Phụ thu / trẻ em / tips…
   // DMC template only — undefined for regular drafts.
   outputCurrency?: OutputCurrency;
   dmcPrices?: DmcPrices;

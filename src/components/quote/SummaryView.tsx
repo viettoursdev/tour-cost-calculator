@@ -3,6 +3,7 @@ import { Box, Button, Paper, Slider, Stack, TextField, Typography } from '@mui/m
 import { catTotal, computeTotals, fmtVND } from './calc';
 import { getCATS } from './constants';
 import { QuoteTermsEditor } from './QuoteTermsEditor';
+import { QuotePricingOptionsEditor } from './QuotePricingOptionsEditor';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 import type { CategoryId, Template } from '@/types';
@@ -274,6 +275,7 @@ export function SummaryView() {
         </Box>
       </Box>
 
+      <QuotePricingOptionsEditor />
       <QuoteTermsEditor />
     </Box>
   );
