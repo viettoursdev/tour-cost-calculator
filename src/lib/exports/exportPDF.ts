@@ -56,21 +56,24 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setFillColor(...teal);
   pdf.rect(0, 0, pageW, 8, 'F');
 
-  // Logo + company name
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 21, undefined, 'FAST'); } catch { /* ignore */ }
-  pdf.setFontSize(15); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 40, y + 9);
+  // Logo + company name. Company block is width-capped on the left so it can
+  // never run into the salesperson block on the right.
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 20, undefined, 'FAST'); } catch { /* ignore */ }
+  const brandX = mX + 37;
+  const brandMaxW = 95; // keeps clear of the right-side contact column
+  pdf.setFontSize(12); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 8, { maxWidth: brandMaxW });
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', mX + 40, y + 14);
+  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 14, { maxWidth: brandMaxW });
 
   // Salesperson contact (right side)
   pdf.setFontSize(7); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('NHAN VIEN BAO GIA', pageW - mX, y + 2, { align: 'right' });
+  pdf.text('NHÂN VIÊN BÁO GIÁ', pageW - mX, y + 2, { align: 'right' });
   pdf.setFontSize(9.5); pdf.setTextColor(...dark); pdf.setFont(FONT, 'bold');
   pdf.text(savedBy.name, pageW - mX, y + 7, { align: 'right' });
   pdf.setFont(FONT, 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gray);
   let cy = y + 11.5;
-  if (savedBy.phone) { pdf.text(`DT: ${savedBy.phone}`, pageW - mX, cy, { align: 'right' }); cy += 4; }
+  if (savedBy.phone) { pdf.text(`ĐT: ${savedBy.phone}`, pageW - mX, cy, { align: 'right' }); cy += 4; }
   if (savedBy.email) { pdf.text(savedBy.email, pageW - mX, cy, { align: 'right' }); }
   y += 24;
 
@@ -78,20 +81,20 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setFillColor(...teal);
   pdf.roundedRect(mX, y, pageW - mX * 2, 26, 3, 3, 'F');
   pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
-  pdf.text('BAO GIA TOUR / QUOTATION', pageW / 2, y + 7, { align: 'center' });
+  pdf.text('BÁO GIÁ TOUR / QUOTATION', pageW / 2, y + 7, { align: 'center' });
   pdf.setFontSize(16);
   const tourTitle = (info.name || 'Tour').slice(0, 50); // truncate long names
   pdf.text(tourTitle, pageW / 2, y + 15, { align: 'center' });
   pdf.setFontSize(10); pdf.setTextColor(255, 224, 130); pdf.setFont(FONT, 'normal');
-  pdf.text(`${info.dest || ''} - ${info.days}N${info.nights}D - ${pax} khach`, pageW / 2, y + 22, { align: 'center' });
+  pdf.text(`${info.dest || ''} · ${info.days}N${info.nights}Đ · ${pax} khách`, pageW / 2, y + 22, { align: 'center' });
   y += 34;
 
   if (info.startDate) {
     pdf.setFontSize(9); pdf.setTextColor(...dark); pdf.setFont(FONT, 'normal');
     const startD = new Date(info.startDate);
     const endD = new Date(startD.getTime() + (info.days - 1) * 86400000);
-    const fmtD = (d: Date) => d.toLocaleDateString('en-GB');
-    pdf.text(`Khoi hanh: ${fmtD(startD)}  ->  Ket thuc: ${fmtD(endD)}`, pageW / 2, y, { align: 'center' });
+    const fmtD = (d: Date) => d.toLocaleDateString('vi-VN');
+    pdf.text(`Khởi hành: ${fmtD(startD)}  →  Kết thúc: ${fmtD(endD)}`, pageW / 2, y, { align: 'center' });
     y += 7;
   }
 
@@ -101,17 +104,17 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setDrawColor(...gold); pdf.setLineWidth(0.5);
   pdf.roundedRect(mX, y, pageW - mX * 2, 24, 3, 3, 'S');
   pdf.setFontSize(9); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('GIA TRON GOI / KHACH · PACKAGE PRICE / PAX', pageW / 2, y + 8, { align: 'center' });
+  pdf.text('GIÁ TRỌN GÓI / KHÁCH · PACKAGE PRICE / PAX', pageW / 2, y + 8, { align: 'center' });
   pdf.setFontSize(22); pdf.setTextColor(...red);
   pdf.text(fmtVND(roundedPPax), pageW / 2, y + 18, { align: 'center' });
   y += 30;
   pdf.setFontSize(9); pdf.setTextColor(...dark); pdf.setFont(FONT, 'normal');
-  pdf.text(`Tong doan ${pax} khach: ${fmtVND(roundedPPax * pax)}`, pageW / 2, y, { align: 'center' });
+  pdf.text(`Tổng đoàn ${pax} khách: ${fmtVND(roundedPPax * pax)}`, pageW / 2, y, { align: 'center' });
   y += 12;
 
   // Services section
   pdf.setFontSize(11); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('DICH VU BAO GOM / INCLUDED SERVICES', mX, y);
+  pdf.text('DỊCH VỤ BAO GỒM / INCLUDED SERVICES', mX, y);
   y += 3;
   pdf.setDrawColor(...teal); pdf.setLineWidth(0.5);
   pdf.line(mX, y, pageW - mX, y);
@@ -128,7 +131,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     pdf.text(`${cat.label} / ${cat.labelEn}`, mX, y);
     if (!isPackage) {
       pdf.setTextColor(...teal);
-      pdf.text(pax > 0 ? fmtVND(sub / pax) + '/khach' : '', pageW - mX, y, { align: 'right' });
+      pdf.text(pax > 0 ? fmtVND(sub / pax) + '/khách' : '', pageW - mX, y, { align: 'right' });
     }
     y += 5;
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
@@ -140,7 +143,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
       pdf.text(nameText, mX + 4, y);
       if (it.foc) {
         pdf.setTextColor(39, 174, 96); pdf.setFont(FONT, 'bold');
-        pdf.text('FOC - Mien phi', pageW - mX, y, { align: 'right' });
+        pdf.text('FOC - Miễn phí', pageW - mX, y, { align: 'right' });
         pdf.setFont(FONT, 'normal');
       } else if (!isPackage) {
         pdf.setTextColor(...teal);
@@ -169,7 +172,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     checkPage(14 + optItems.length * 5);
     y += 2;
     pdf.setFontSize(11); pdf.setTextColor(...gold); pdf.setFont(FONT, 'bold');
-    pdf.text('CHI PHI TUY CHON / OPTIONAL (chua gom trong gia)', mX, y);
+    pdf.text('CHI PHÍ TUỲ CHỌN / OPTIONAL (chưa gồm trong giá)', mX, y);
     y += 3;
     pdf.setDrawColor(...gold); pdf.setLineWidth(0.5);
     pdf.line(mX, y, pageW - mX, y);
@@ -196,16 +199,16 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     pdf.setFillColor(...dark);
     pdf.roundedRect(mX, y, pageW - mX * 2, boxH, 2, 2, 'F');
     pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
-    pdf.text('GIA TRON GOI THEO MUC KHACH / PACKAGE BY GROUP SIZE', pageW / 2, y + 6, { align: 'center' });
+    pdf.text('GIÁ TRỌN GÓI THEO MỨC KHÁCH / PACKAGE BY GROUP SIZE', pageW / 2, y + 6, { align: 'center' });
     pdf.setFontSize(8); pdf.setTextColor(200, 230, 224);
-    pdf.text('Muc khach', col1, y + 12);
-    pdf.text('Gia / khach', colPpax, y + 12, { align: 'right' });
-    pdf.text('Tong tien', col2, y + 12, { align: 'right' });
+    pdf.text('Mức khách', col1, y + 12);
+    pdf.text('Giá / khách', colPpax, y + 12, { align: 'right' });
+    pdf.text('Tổng tiền', col2, y + 12, { align: 'right' });
     let ry = y + 12 + rowH;
     groupVariants.forEach((g) => {
       const gv = computeTotals({ template, info, pax: g.pax, rates, margin, vat, svcBasis: draft.svcBasis, rounding: draft.rounding, items: g.items, catEnabled: g.catEnabled, currentQuoteId: null });
       pdf.setFont(FONT, 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-      pdf.text(`${g.label} (${g.pax} khach)`, col1, ry);
+      pdf.text(`${g.label} (${g.pax} khách)`, col1, ry);
       pdf.text(fmtVND(gv.roundedPPax), colPpax, ry, { align: 'right' });
       pdf.setFont(FONT, 'bold'); pdf.setTextColor(255, 224, 130);
       pdf.text(fmtVND(gv.roundedPPax * g.pax), col2, ry, { align: 'right' });
@@ -219,19 +222,19 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     pdf.setFillColor(...dark);
     pdf.roundedRect(mX, y, pageW - mX * 2, 36, 2, 2, 'F');
     pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
-    pdf.text('TRON GOI / PACKAGE', pageW / 2, y + 7, { align: 'center' });
+    pdf.text('TRỌN GÓI / PACKAGE', pageW / 2, y + 7, { align: 'center' });
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
     let ry = y + 16;
-    pdf.text('Gia ban / khach:', col1, ry);
+    pdf.text('Giá bán / khách:', col1, ry);
     pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
     ry += 7;
-    pdf.text('So luong khach:', col1, ry);
-    pdf.text(`${pax} khach`, col2, ry, { align: 'right' });
+    pdf.text('Số lượng khách:', col1, ry);
+    pdf.text(`${pax} khách`, col2, ry, { align: 'right' });
     ry += 8;
     pdf.setDrawColor(255, 224, 130); pdf.setLineWidth(0.3);
     pdf.line(col1, ry - 4, col2, ry - 4);
     pdf.setFont(FONT, 'bold'); pdf.setFontSize(12); pdf.setTextColor(255, 224, 130);
-    pdf.text('TONG TIEN / TOTAL:', col1, ry);
+    pdf.text('TỔNG TIỀN / TOTAL:', col1, ry);
     pdf.text(fmtVND(roundedPPax * pax), col2, ry, { align: 'right' });
     y += 40;
   } else {
@@ -241,12 +244,12 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     pdf.setFillColor(...dark);
     pdf.roundedRect(mX, y, pageW - mX * 2, 46, 2, 2, 'F');
     pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'bold'); pdf.setFontSize(9);
-    pdf.text('TOM TAT LUI NHUAN / PROFIT SUMMARY', pageW / 2, y + 7, { align: 'center' });
+    pdf.text('TỔNG BÁO GIÁ / QUOTATION SUMMARY', pageW / 2, y + 7, { align: 'center' });
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
     const rows: [string, string][] = [
-      [`Tong chi phi goc (${pax} khach):`, fmtVND(totals.totalCost)],
-      [`Phi dich vu (${margin}%):`, fmtVND(totals.totalProfit)],
-      [`Thue VAT (${vat}%):`, fmtVND(totals.totalVAT)],
+      [`Tổng chi phí gốc (${pax} khách):`, fmtVND(totals.totalCost)],
+      [`Phí dịch vụ (${margin}%):`, fmtVND(totals.totalProfit)],
+      [`Thuế VAT (${vat}%):`, fmtVND(totals.totalVAT)],
     ];
     let ry = y + 14;
     rows.forEach(([lab, val]) => {
@@ -255,7 +258,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     });
     pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
     pdf.setTextColor(255, 224, 130);
-    pdf.text('Gia ban / khach:', col1, ry);
+    pdf.text('Giá bán / khách:', col1, ry);
     pdf.text(fmtVND(roundedPPax), col2, ry, { align: 'right' });
     y += 50;
   }
@@ -267,7 +270,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
       checkPage(16 + addOns.length * 6);
       y += 4;
       pdf.setFontSize(11); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-      pdf.text('PHU THU / GIA KHAC · SUPPLEMENTS', mX, y);
+      pdf.text('PHỤ THU / GIÁ KHÁC · SUPPLEMENTS', mX, y);
       y += 2.5;
       pdf.setDrawColor(...teal); pdf.setLineWidth(0.4);
       pdf.line(mX, y, pageW - mX, y);
@@ -307,15 +310,15 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
       y += wrapped.length * 4.5 + 1.5;
     });
   };
-  renderBullets('GIA BAO GOM / INCLUDED', inclusions ?? [], teal);
-  renderBullets('KHONG BAO GOM / EXCLUDED', exclusions ?? [], red);
+  renderBullets('GIÁ BAO GỒM / INCLUDED', inclusions ?? [], teal);
+  renderBullets('KHÔNG BAO GỒM / EXCLUDED', exclusions ?? [], red);
 
   const validPayments = (payments ?? []).filter((p) => p.label.trim() || p.amount || p.note.trim());
   if (validPayments.length) {
     checkPage(16);
     y += 4;
     pdf.setFontSize(11); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-    pdf.text('THONG TIN THANH TOAN / PAYMENT TERMS', mX, y);
+    pdf.text('THÔNG TIN THANH TOÁN / PAYMENT TERMS', mX, y);
     y += 2.5;
     pdf.setDrawColor(...teal); pdf.setLineWidth(0.4);
     pdf.line(mX, y, pageW - mX, y);
@@ -345,7 +348,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setFontSize(8); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
   const contactBits = [savedBy.phone, savedBy.email].filter(Boolean).join(' · ');
   pdf.text(
-    `Bao gia co hieu luc 07 ngay · Phu trach: ${savedBy.name} (${savedBy.role})${contactBits ? ' · ' + contactBits : ''} · ${new Date().toLocaleDateString('vi-VN')}`,
+    `Báo giá có hiệu lực 07 ngày · Phụ trách: ${savedBy.name} (${savedBy.role})${contactBits ? ' · ' + contactBits : ''} · ${new Date().toLocaleDateString('vi-VN')}`,
     pageW / 2, y, { align: 'center' },
   );
 
