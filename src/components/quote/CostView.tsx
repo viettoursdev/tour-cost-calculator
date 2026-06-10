@@ -3,6 +3,7 @@ import {
   Box, Button, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
+import { GroupSizeTabs } from './GroupSizeTabs';
 import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
 import { DMCComparePanel } from './DMCComparePanel';
@@ -70,6 +71,8 @@ export function CostView() {
             </Stack>
           </Stack>
         )}
+
+        {!isDMC && <GroupSizeTabs />}
 
         {cats.map((cat) => {
           const catId = cat.id as CategoryId;

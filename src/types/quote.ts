@@ -63,6 +63,15 @@ export type QuotePricingOptions = {
   extras: { id: string; label: string; mode: 'percent' | 'fixed'; value: number }[];
 };
 
+/** A group-size variant: its own pax, line items and category toggles. */
+export type QuoteGroup = {
+  id: string;
+  label: string;   // e.g. "20 khách"
+  pax: number;
+  items: Partial<Record<CategoryId, Item[]>>;
+  catEnabled: Record<CategoryId, boolean>;
+};
+
 export type QuoteDraft = {
   template: Template | null;
   info: QuoteInfo;
@@ -80,6 +89,10 @@ export type QuoteDraft = {
   exclusions?: string[];   // Giá không bao gồm
   payments?: QuotePayment[]; // Thông tin thanh toán theo đợt
   pricingOptions?: QuotePricingOptions; // Phụ thu / trẻ em / tips…
+  // Multi group-size mode. When groups is present (length ≥ 1), the top-level
+  // pax/items/catEnabled mirror the active group (activeGroupId).
+  groups?: QuoteGroup[];
+  activeGroupId?: string;
   // DMC template only — undefined for regular drafts.
   outputCurrency?: OutputCurrency;
   dmcPrices?: DmcPrices;

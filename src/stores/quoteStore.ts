@@ -68,6 +68,10 @@ type QuoteState = {
   setExclusions: (v: string[]) => void;
   setPayments: (v: QuotePayment[]) => void;
   setPricingOptions: (v: QuotePricingOptions) => void;
+  addGroup: () => void;
+  switchGroup: (id: string) => void;
+  renameGroup: (id: string, label: string) => void;
+  removeGroup: (id: string) => void;
   setOutputCurrency: (cur: OutputCurrency) => void;
   setDmcPrice: (groupSize: number, value: number) => void;
   setDmcMargin: (patch: Partial<DmcMargin>) => void;
@@ -215,6 +219,61 @@ export const useQuoteStore = create<QuoteState>()(
         setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
         setPricingOptions: (v) => set((s) => ({ draft: { ...s.draft, pricingOptions: v } })),
 
+        addGroup: () => set((s) => {
+          const d = s.draft;
+          const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+          let groups = d.groups ? [...d.groups] : [];
+          if (groups.length === 0) {
+            // First time: wrap the current draft as group #1.
+            groups = [{ id: genId(), label: `${d.pax} khách`, pax: d.pax, items: structuredClone(d.items), catEnabled: { ...d.catEnabled } }];
+          } else {
+            // Persist current edits into the active group before adding.
+            groups = groups.map((g) => (g.id === d.activeGroupId
+              ? { ...g, pax: d.pax, items: structuredClone(d.items), catEnabled: { ...d.catEnabled } }
+              : g));
+          }
+          if (groups.length >= 4) return {};
+          const ng = { id: genId(), label: `${d.pax} khách`, pax: d.pax, items: structuredClone(d.items), catEnabled: { ...d.catEnabled } };
+          groups.push(ng);
+          return { draft: { ...d, groups, activeGroupId: ng.id, pax: ng.pax, items: ng.items, catEnabled: ng.catEnabled } };
+        }),
+
+        switchGroup: (id) => set((s) => {
+          const d = s.draft;
+          if (!d.groups) return {};
+          const groups = d.groups.map((g) => (g.id === d.activeGroupId
+            ? { ...g, pax: d.pax, items: structuredClone(d.items), catEnabled: { ...d.catEnabled } }
+            : g));
+          const tgt = groups.find((g) => g.id === id);
+          if (!tgt) return {};
+          return { draft: { ...d, groups, activeGroupId: id, pax: tgt.pax, items: structuredClone(tgt.items), catEnabled: { ...tgt.catEnabled } } };
+        }),
+
+        renameGroup: (id, label) => set((s) => ({
+          draft: { ...s.draft, groups: (s.draft.groups ?? []).map((g) => (g.id === id ? { ...g, label } : g)) },
+        })),
+
+        removeGroup: (id) => set((s) => {
+          const d = s.draft;
+          if (!d.groups) return {};
+          const remaining = d.groups.filter((g) => g.id !== id);
+          // Collapse back to single-group mode when ≤1 group remains.
+          if (remaining.length <= 1) {
+            const keep = remaining[0];
+            const { groups: _g, activeGroupId: _a, ...rest } = d;
+            void _g; void _a;
+            if (keep && d.activeGroupId === id) {
+              return { draft: { ...rest, pax: keep.pax, items: structuredClone(keep.items), catEnabled: { ...keep.catEnabled } } };
+            }
+            return { draft: { ...rest } };
+          }
+          if (d.activeGroupId === id) {
+            const tgt = remaining[0];
+            return { draft: { ...d, groups: remaining, activeGroupId: tgt.id, pax: tgt.pax, items: structuredClone(tgt.items), catEnabled: { ...tgt.catEnabled } } };
+          }
+          return { draft: { ...d, groups: remaining } };
+        }),
+
         setOutputCurrency: (cur) =>
           set((s) => ({ draft: { ...s.draft, outputCurrency: cur } })),
 
@@ -311,6 +370,8 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.exclusions ? { exclusions: data.exclusions } : {}),
                 ...(data.payments ? { payments: data.payments } : {}),
                 ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
+                ...(data.groups ? { groups: data.groups } : {}),
+                ...(data.activeGroupId ? { activeGroupId: data.activeGroupId } : {}),
               },
             }));
             return { ok: true };
