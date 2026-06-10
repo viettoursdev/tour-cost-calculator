@@ -5,6 +5,7 @@
 import { forwardRef } from 'react';
 import { calcVND, computeTotals, fmtVND } from './calc';
 import { getCATS } from './constants';
+import { pricingLines } from './pricing';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Item, QuoteDraft } from '@/types';
 
@@ -15,9 +16,11 @@ const GOLD = '#f5a623';
 type Props = {
   draft: QuoteDraft;
   savedBy: { name: string; role: string; email?: string; phone?: string };
+  /** Package mode: hide per-item prices, show group-size table + supplements. */
+  pkg?: boolean;
 };
 
-export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedBy }, ref) => {
+export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedBy, pkg = false }, ref) => {
   const { info, items, rates, pax, catEnabled, template } = draft;
   const totals = computeTotals(draft);
   const roundedPPax = totals.roundedPPax;
@@ -30,6 +33,13 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
   const inclusions = (draft.inclusions ?? []).filter((s) => s.trim());
   const exclusions = (draft.exclusions ?? []).filter((s) => s.trim());
   const payments = (draft.payments ?? []).filter((p) => p.label.trim() || p.amount || p.note.trim());
+
+  const groupVariants = (draft.groups && draft.groups.length)
+    ? draft.groups.map((g) => (g.id === draft.activeGroupId
+        ? { label: g.label, pax, items, catEnabled }
+        : { label: g.label, pax: g.pax, items: g.items, catEnabled: g.catEnabled }))
+    : null;
+  const addOns = pkg ? pricingLines(draft.pricingOptions, roundedPPax) : [];
 
   const optItems: { name: string; vnd: number }[] = [];
   activeCATS.forEach((cat) => {
@@ -78,12 +88,30 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
         )}
       </div>
 
-      {/* Price box */}
-      <div style={{ background: '#fff8e1', border: `1px solid ${GOLD}`, borderRadius: 8, padding: '12px 20px', textAlign: 'center', marginBottom: 18 }}>
-        <div style={{ color: TEAL, fontWeight: 700, fontSize: 12 }}>GIÁ TRỌN GÓI / KHÁCH · PACKAGE PRICE / PAX</div>
-        <div style={{ color: '#dc3250', fontWeight: 900, fontSize: 30 }}>{fmtVND(roundedPPax)}</div>
-        <div style={{ color: DARK, fontSize: 12 }}>Tổng đoàn {pax} khách: {fmtVND(roundedPPax * pax)}</div>
-      </div>
+      {/* Price box — single, or group-size table in package mode */}
+      {pkg && groupVariants ? (
+        <div style={{ background: DARK, color: '#fff', borderRadius: 8, padding: '14px 20px', marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, textAlign: 'center', marginBottom: 8, color: '#cfe6e0' }}>
+            GIÁ TRỌN GÓI THEO MỨC KHÁCH / PACKAGE BY GROUP SIZE
+          </div>
+          {groupVariants.map((g, i) => {
+            const gv = computeTotals({ ...draft, pax: g.pax, items: g.items, catEnabled: g.catEnabled });
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderTop: i ? '1px solid rgba(255,255,255,0.12)' : 'none' }}>
+                <span style={{ fontWeight: 700 }}>{g.label} ({g.pax} khách)</span>
+                <span style={{ color: '#a8e6dd' }}>{fmtVND(gv.roundedPPax)}/khách</span>
+                <span style={{ color: '#ffe082', fontWeight: 800 }}>{fmtVND(gv.roundedPPax * g.pax)}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ background: '#fff8e1', border: `1px solid ${GOLD}`, borderRadius: 8, padding: '12px 20px', textAlign: 'center', marginBottom: 18 }}>
+          <div style={{ color: TEAL, fontWeight: 700, fontSize: 12 }}>GIÁ TRỌN GÓI / KHÁCH · PACKAGE PRICE / PAX</div>
+          <div style={{ color: '#dc3250', fontWeight: 900, fontSize: 30 }}>{fmtVND(roundedPPax)}</div>
+          <div style={{ color: DARK, fontSize: 12 }}>Tổng đoàn {pax} khách: {fmtVND(roundedPPax * pax)}</div>
+        </div>
+      )}
 
       {/* Services */}
       <div style={{ color: TEAL, fontWeight: 800, fontSize: 14, borderBottom: `2px solid ${TEAL}`, paddingBottom: 4, marginBottom: 8 }}>
@@ -98,19 +126,36 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
           <div key={cat.id} style={{ marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: DARK }}>
               <span>{cat.icon} {cat.label}</span>
-              <span style={{ color: TEAL }}>{pax > 0 ? `${fmtVND(sub / pax)}/khách` : ''}</span>
+              {!pkg && <span style={{ color: TEAL }}>{pax > 0 ? `${fmtVND(sub / pax)}/khách` : ''}</span>}
             </div>
             {catItems.map((it: Item) => (
               <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 14, color: '#3a4650' }}>
                 <span>• {it.name}{it.note ? <span style={{ color: '#9aa2aa' }}> — {it.note}</span> : null}</span>
-                <span style={{ color: it.foc ? '#27ae60' : TEAL, fontWeight: it.foc ? 700 : 400, whiteSpace: 'nowrap', paddingLeft: 10 }}>
-                  {it.foc ? 'FOC - Miễn phí' : fmtVND(calcVND(it, rates, pax))}
-                </span>
+                {(it.foc || !pkg) && (
+                  <span style={{ color: it.foc ? '#27ae60' : TEAL, fontWeight: it.foc ? 700 : 400, whiteSpace: 'nowrap', paddingLeft: 10 }}>
+                    {it.foc ? 'FOC - Miễn phí' : fmtVND(calcVND(it, rates, pax))}
+                  </span>
+                )}
               </div>
             ))}
           </div>
         );
       })}
+
+      {/* Supplements (package mode) */}
+      {addOns.length > 0 && (
+        <>
+          <div style={{ color: TEAL, fontWeight: 800, fontSize: 14, borderBottom: `2px solid ${TEAL}`, paddingBottom: 4, margin: '14px 0 8px' }}>
+            ➕ PHỤ THU / GIÁ KHÁC · SUPPLEMENTS
+          </div>
+          {addOns.map((l) => (
+            <div key={l.key} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 14, color: '#3a4650' }}>
+              <span>{l.label} <span style={{ color: '#9aa2aa', fontSize: 12 }}>({l.detail})</span></span>
+              <span style={{ color: TEAL, fontWeight: 700, whiteSpace: 'nowrap', paddingLeft: 10 }}>{fmtVND(l.resolved)}</span>
+            </div>
+          ))}
+        </>
+      )}
 
       {/* Optional add-ons (not in total) */}
       {optItems.length > 0 && (

@@ -7,7 +7,6 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import TableChartIcon from '@mui/icons-material/TableChart';
@@ -15,6 +14,10 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import DescriptionIcon from '@mui/icons-material/Description';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ImageIcon from '@mui/icons-material/Image';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import DataObjectIcon from '@mui/icons-material/DataObject';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { QuoteViewKey } from '@/stores/quoteStore';
 import { exportExcelQuote } from '@/lib/exports/exportExcel';
@@ -96,6 +99,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const currentUser = useAuthStore((s) => s.currentUser);
 
   const isDMC = template === 'dmc';
+  const canExport = !!(template && template !== 'dmc' && currentUser);
   const totals = computeTotals(draft);
   const totalCost = totals.totalCost;
 
@@ -108,6 +112,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const fileInput = useRef<HTMLInputElement | null>(null);
   const excelInput = useRef<HTMLInputElement | null>(null);
   const printRef = useRef<HTMLDivElement | null>(null);
+  const printRefPkg = useRef<HTMLDivElement | null>(null);
 
   const openRate = (key: string, label: string) => {
     if (key === 'hotel') setRateModal({ kind: 'hotel' });
@@ -157,16 +162,18 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     }
   };
 
-  const handleExportPDFImage = async () => {
-    if (!printRef.current || !template || template === 'dmc') return;
+  const runPDFImage = async (node: HTMLElement | null, prefix: string) => {
+    if (!node || !template || template === 'dmc') return;
     const safe = (info.name || 'Tour').replace(/[^a-zA-Z0-9_À-ỹ]/g, '_');
     const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
     try {
-      await exportPDFImage(printRef.current, `BaoGiaAnh_${safe}_${dateStr}.pdf`);
+      await exportPDFImage(node, `${prefix}_${safe}_${dateStr}.pdf`);
     } catch (err) {
       alert('❌ Lỗi xuất PDF ảnh: ' + (err as Error).message);
     }
   };
+  const handleExportPDFImage = () => runPDFImage(printRef.current, 'BaoGiaAnh');
+  const handleExportPDFImagePkg = () => runPDFImage(printRefPkg.current, 'BaoGiaAnhTronGoi');
 
   const handleExportContract = () => {
     if (!currentUser || !template || template === 'dmc') return;
@@ -440,63 +447,61 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           anchorEl={exportAnchor}
           open={!!exportAnchor}
           onClose={() => setExportAnchor(null)}
+          slotProps={{ paper: { sx: { minWidth: 268, borderRadius: 2, mt: 0.5, boxShadow: '0 12px 30px rgba(15,58,74,0.18)', '& .MuiMenuItem-root': { py: 1, fontWeight: 600, color: LEGACY.navy }, '& .MuiListItemIcon-root': { color: LEGACY.teal, minWidth: 34 } } } }}
         >
+          {/* Excel & data files */}
           <MenuItem onClick={() => {
-            if (draft.template && draft.template !== 'dmc' && currentUser) {
-              void exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
-            }
+            if (canExport && currentUser) void exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
             setExportAnchor(null);
           }}>
             <ListItemIcon><TableChartIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📊 Excel báo giá</ListItemText>
+            <ListItemText>Excel báo giá</ListItemText>
           </MenuItem>
-          <MenuItem onClick={() => {
-            if (draft.template && draft.template !== 'dmc' && currentUser) {
-              exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
-            }
-            setExportAnchor(null);
-          }}>
-            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📄 PDF báo giá (chi tiết)</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => {
-            if (draft.template && draft.template !== 'dmc' && currentUser) {
-              exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' });
-            }
-            setExportAnchor(null);
-          }}>
-            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📦 PDF trọn gói (giá/khách × số khách)</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => { void handleExportPDFImage(); setExportAnchor(null); }}>
-            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>🖼️ PDF ảnh (full màu)</ListItemText>
-          </MenuItem>
-          {draft.template && draft.template !== 'dmc' && currentUser && (
-            <MenuItem onClick={() => { setInvoiceOpen(true); setExportAnchor(null); }}>
-              <ListItemIcon><ReceiptLongIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>🧾 Invoice</ListItemText>
-            </MenuItem>
-          )}
-          {draft.template && draft.template !== 'dmc' && currentUser && (
-            <MenuItem onClick={() => { handleExportContract(); setExportAnchor(null); }}>
-              <ListItemIcon><DescriptionIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>📜 Hợp đồng (PDF)</ListItemText>
-            </MenuItem>
-          )}
-          <Divider />
           <MenuItem onClick={() => { excelInput.current?.click(); setExportAnchor(null); }}>
             <ListItemIcon><UploadFileIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📥 Nhập file Excel → tạo báo giá</ListItemText>
+            <ListItemText>Nhập file Excel</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => { handleImportClick(); setExportAnchor(null); }}>
-            <ListItemIcon><FileUploadIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📤 Nhập file JSON</ListItemText>
+            <ListItemIcon><DataObjectIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Nhập file JSON</ListItemText>
           </MenuItem>
-          <Divider />
           <MenuItem onClick={() => { handleExport(); setExportAnchor(null); }}>
             <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>📋 JSON (backup)</ListItemText>
+            <ListItemText>Xuất file JSON</ListItemText>
+          </MenuItem>
+          <Divider />
+          {/* PDF outputs */}
+          <MenuItem onClick={() => { void handleExportPDFImage(); setExportAnchor(null); }}>
+            <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>PDF Ảnh</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => { void handleExportPDFImagePkg(); setExportAnchor(null); }}>
+            <ListItemIcon><PhotoLibraryIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>PDF Ảnh (Tour trọn gói)</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => {
+            if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
+            setExportAnchor(null);
+          }}>
+            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>PDF Báo Giá</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => {
+            if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' });
+            setExportAnchor(null);
+          }}>
+            <ListItemIcon><Inventory2Icon fontSize="small" /></ListItemIcon>
+            <ListItemText>PDF Báo giá trọn gói</ListItemText>
+          </MenuItem>
+          <Divider />
+          {/* Documents */}
+          <MenuItem onClick={() => { setInvoiceOpen(true); setExportAnchor(null); }} disabled={!canExport}>
+            <ListItemIcon><ReceiptLongIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Invoice</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => { handleExportContract(); setExportAnchor(null); }} disabled={!canExport}>
+            <ListItemIcon><DescriptionIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Hợp đồng</ListItemText>
           </MenuItem>
         </Menu>
         <input
@@ -511,6 +516,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           <Box sx={{ position: 'fixed', left: -99999, top: 0, zIndex: -1, pointerEvents: 'none' }} aria-hidden>
             <QuotePrintable
               ref={printRef}
+              draft={draft}
+              savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
+            />
+            <QuotePrintable
+              ref={printRefPkg}
+              pkg
               draft={draft}
               savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
             />
