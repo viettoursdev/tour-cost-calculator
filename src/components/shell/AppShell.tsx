@@ -13,6 +13,7 @@ import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { LEGACY } from '@/theme';
+import { VTE_LOGO_WHITE } from '@/lib/exports/vteLogo';
 
 // Navigation is a single unified tab bar inside QuoteToolbar (legacy layout):
 // Chi phí · Tổng kết & Định giá · Dashboard · Thanh toán · Lịch sử · Hợp đồng ·
@@ -37,9 +38,15 @@ export function AppShell() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AppBar position="static" color="primary" sx={{ background: LEGACY.headerGradient }}>
         <Toolbar sx={{ gap: 1 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 800 }}>
-            Viettours — Tour Cost Calculator
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Box
+              component="img" src={VTE_LOGO_WHITE} alt="Viettours"
+              sx={{ height: 38, width: 'auto', display: 'block' }}
+            />
+            <Typography variant="h6" sx={{ fontWeight: 800 }} noWrap>
+              Phần mềm quản lý - Viettours
+            </Typography>
+          </Stack>
           {currentUser && (
             <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
               {/* Tài khoản */}
