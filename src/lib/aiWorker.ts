@@ -43,6 +43,25 @@ export interface AIWorkerResponse {
 
 export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate';
 
+/** Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }. */
+export async function uploadFileToWorker(file: File): Promise<{ key: string; name: string }> {
+  const base = getAIWorker();
+  if (!base) throw new Error('Chưa cấu hình AI Worker URL (bấm ⚙️ AI để nhập)');
+  const url =
+    base.replace(/\/+$/, '') +
+    `/upload?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`;
+  const r = await fetch(url, { method: 'POST', body: file });
+  const d = (await r.json().catch(() => ({}))) as { key?: string; name?: string; error?: string };
+  if (!r.ok || d.error) throw new Error(d.error || 'Upload lỗi ' + r.status);
+  if (!d.key) throw new Error('Worker không trả về key');
+  return { key: d.key, name: d.name || file.name };
+}
+
+/** Public URL to view/download a file stored on R2 via the worker `/file/<key>`. */
+export function workerFileUrl(key: string): string {
+  return getAIWorker().replace(/\/+$/, '') + '/file/' + encodeURIComponent(key);
+}
+
 export async function callAIWorker(
   path: AIWorkerPath,
   body: AIWorkerBody,

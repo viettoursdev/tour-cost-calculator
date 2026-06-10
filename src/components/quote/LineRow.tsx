@@ -3,6 +3,7 @@ import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/mater
 import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
 import { calcVND, fmtVND } from './calc';
+import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { LEGACY } from '@/theme';
 import type { Item, QtyMode } from '@/types';
 
@@ -13,6 +14,8 @@ type Props = {
   catColor: string;
   onUpd: (item: Item) => void;
   onDel: () => void;
+  /** Cho phép đính kèm 1 file vào dòng (dùng cho Breakdown DMC). */
+  allowAttach?: boolean;
 };
 
 /** Compact bordered <select> matching legacy `.sel`. */
@@ -120,10 +123,26 @@ function EditText({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, allowAttach }: Props) {
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
   const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
+
+  const [uploading, setUploading] = useState(false);
+  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    setUploading(true);
+    try {
+      const meta = await uploadFileToWorker(f);
+      u({ file: meta });
+    } catch (err) {
+      alert('⚠ Tải file lỗi: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const qty =
     item.qtyMode === 'per_pax' ? pax :
@@ -156,9 +175,50 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
         <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold />
       </TableCell>
 
-      {/* Note */}
+      {/* Note + file đính kèm (DMC) */}
       <TableCell sx={{ minWidth: 180, maxWidth: 260 }}>
         <EditText value={item.note} onChange={(v) => u({ note: v })} placeholder="Chi tiết / ghi chú..." italic color="rgba(15,58,74,0.7)" />
+        {allowAttach && (
+          <Box sx={{ mt: 0.5 }}>
+            {item.file ? (
+              <Stack direction="row" alignItems="center" spacing={0.5}>
+                <Box
+                  component="a" href={workerFileUrl(item.file.key)} target="_blank" rel="noreferrer"
+                  title={item.file.name}
+                  sx={{
+                    fontSize: 11, fontWeight: 600, color: LEGACY.teal, textDecoration: 'none',
+                    maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    '&:hover': { textDecoration: 'underline' },
+                  }}
+                >
+                  📎 {item.file.name}
+                </Box>
+                <Box
+                  component="button" onClick={() => u({ file: undefined })} title="Gỡ file"
+                  sx={{ background: 'none', border: 'none', color: 'rgba(220,50,80,0.5)', cursor: 'pointer', fontSize: 12, p: 0, '&:hover': { color: '#dc3250' } }}
+                >
+                  ✕
+                </Box>
+              </Stack>
+            ) : (
+              <Box
+                component="label"
+                sx={{
+                  display: 'inline-flex', alignItems: 'center', gap: 0.25, fontSize: 11,
+                  color: 'rgba(15,58,74,0.55)', cursor: uploading ? 'default' : 'pointer',
+                  '&:hover': { color: uploading ? 'rgba(15,58,74,0.55)' : LEGACY.teal },
+                }}
+              >
+                {uploading ? '⏳ Đang tải lên...' : '📎 Đính kèm file'}
+                <Box
+                  component="input" type="file" hidden disabled={uploading}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+                  onChange={onPickFile}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
       </TableCell>
 
       {/* Currency + price */}

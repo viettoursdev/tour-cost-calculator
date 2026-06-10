@@ -3,13 +3,16 @@
  * --------------------------------------------------------------------------
  * Backend proxy giữ API key, phục vụ cho app tour-cost-calculator.
  *
- * Endpoints (đều POST, body JSON):
- *   POST /ocr        { image: "<base64 không có tiền tố data:>" }  -> { text }
- *   POST /translate  { text:  "<văn bản tiếng Việt>" }             -> { text }  (dịch sang tiếng Anh)
- *   POST /ai         { prompt: "<prompt>" }                         -> { text }  (dùng cho Chương trình tour)
+ * Endpoints:
+ *   POST /ocr        { image: "<base64 không tiền tố data:>" }  -> { text }
+ *   POST /translate  { text:  "<văn bản tiếng Việt>" }          -> { text }   (dịch sang tiếng Anh)
+ *   POST /ai         { prompt: "<prompt>" }                      -> { text }   (Chương trình tour)
+ *   POST /upload?name=<tên>&type=<mime>  (body = file nhị phân)  -> { key, name }   (lưu lên R2)
+ *   GET  /file/<key>                                              -> nội dung file  (tải/xem từ R2)
  *
- * Secret cần thêm trong Cloudflare (Settings → Variables and Secrets):
- *   ANTHROPIC_API_KEY = sk-ant-...   (loại "Secret")
+ * Cấu hình trong Cloudflare:
+ *   - Secret:  ANTHROPIC_API_KEY = sk-ant-...   (Settings → Variables and Secrets)
+ *   - R2 bind: tạo R2 bucket rồi bind với Variable name = FILES  (Settings → Bindings → R2)
  *
  * Sau khi Deploy, copy URL (vd https://tour-cost-calculator.<tên>.workers.dev) và dán
  * vào ô "AI Worker URL" trong app, bấm Lưu.
@@ -67,9 +70,40 @@ async function callClaude(env, content, maxTokens = 8000) {
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/\/+$/, '');
+
+    // ── GET /file/<key> — tải/xem file từ R2 ──
+    if (request.method === 'GET' && path.startsWith('/file/')) {
+      if (!env.FILES) return json({ error: 'Worker chưa bind R2 bucket (Variable name FILES)' }, 500);
+      const key = decodeURIComponent(path.slice('/file/'.length));
+      const obj = await env.FILES.get(key);
+      if (!obj) return json({ error: 'Không tìm thấy file' }, 404);
+      const headers = new Headers(CORS);
+      obj.writeHttpMetadata(headers);
+      headers.set('etag', obj.httpEtag);
+      return new Response(obj.body, { headers });
+    }
+
     if (request.method !== 'POST') return json({ error: 'Chỉ hỗ trợ POST' }, 405);
 
-    const path = new URL(request.url).pathname.replace(/\/+$/, '');
+    // ── POST /upload?name=&type= — lưu file lên R2 (body nhị phân) ──
+    if (path.endsWith('/upload')) {
+      if (!env.FILES) return json({ error: 'Worker chưa bind R2 bucket (Variable name FILES)' }, 500);
+      const name = url.searchParams.get('name') || 'file';
+      const type = url.searchParams.get('type') || 'application/octet-stream';
+      const key = crypto.randomUUID();
+      await env.FILES.put(key, await request.arrayBuffer(), {
+        httpMetadata: {
+          contentType: type,
+          contentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
+        },
+        customMetadata: { name },
+      });
+      return json({ key, name });
+    }
+
     let body;
     try {
       body = await request.json();

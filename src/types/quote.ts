@@ -29,6 +29,8 @@ export type Item = {
   unit: string;
   enabled: boolean;
   foc: boolean;
+  /** File đính kèm (lưu trên R2 qua AI Worker). Chỉ giữ key + tên trong báo giá. */
+  file?: { key: string; name: string };
 };
 
 export type QuoteInfo = {

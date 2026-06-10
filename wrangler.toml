@@ -3,3 +3,10 @@
 # nên KHÔNG đặt `main` ở đây để tránh xung đột "entry khai báo 2 nơi".
 name = "tour-cost-calculator"
 compatibility_date = "2025-06-01"
+
+# R2 bucket lưu file đính kèm (endpoint /upload, /file). Tạo bucket tên "viettours-files"
+# trong Cloudflare → R2. Nếu deploy qua Git mà binding không áp dụng, thêm thủ công ở
+# Worker → Settings → Bindings → R2 (Variable name = FILES).
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "viettours-files"

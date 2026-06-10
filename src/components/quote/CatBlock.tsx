@@ -20,10 +20,12 @@ type Props = {
   onDel: (id: number) => void;
   /** Opens the rate-card picker for this category (legacy "📋 Rate card"). */
   onOpenRate?: () => void;
+  /** Cho phép đính kèm file vào từng dòng (Breakdown DMC). */
+  allowAttach?: boolean;
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onOpenRate,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onOpenRate, allowAttach,
 }: Props) {
   const sub = enabled ? catTotal(items, rates, pax) : 0;
 
@@ -117,6 +119,7 @@ export function CatBlock({
                     catColor={cat.color}
                     onUpd={onUpd}
                     onDel={() => onDel(item.id)}
+                    allowAttach={allowAttach}
                   />
                 ))}
               </TableBody>
