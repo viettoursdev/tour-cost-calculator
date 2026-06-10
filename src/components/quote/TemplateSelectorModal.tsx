@@ -63,15 +63,16 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           </Button>
         )}
       </DialogTitle>
-      <DialogContent sx={{ background: 'linear-gradient(180deg,#f7fbfa,#ffffff)', pt: 4 }}>
+      <DialogContent sx={{ background: 'linear-gradient(180deg,#f7fbfa,#ffffff)', pt: 4}}>
 
 
         <Box
           sx={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-            gap: 2.5,
+            gap: 4,
             mb: 4,
+            mt: 4
           }}
         >
           {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => (
