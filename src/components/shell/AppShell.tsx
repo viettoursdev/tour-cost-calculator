@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
-  AppBar, Box, Button, IconButton, ListItemIcon, ListItemText, Menu, MenuItem,
+  AppBar, Avatar, Box, Button, IconButton, Stack,
   Tab, Tabs, Toolbar, Tooltip, Typography,
 } from '@mui/material';
-import SettingsIcon from '@mui/icons-material/Settings';
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import { RatesPanel } from '@/components/rates/RatesPanel';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { CustomerView } from '@/components/customer/CustomerView';
@@ -38,50 +38,66 @@ export function AppShell() {
   const [active, setActive] = useState<TabKey>('rates');
   const currentUser = useAuthStore((s) => s.currentUser);
   const logout = useAuthStore((s) => s.logout);
-  const [settingsAnchor, setSettingsAnchor] = useState<HTMLElement | null>(null);
   const [userMgrOpen, setUserMgrOpen] = useState(false);
   const [rateSyncOpen, setRateSyncOpen] = useState(false);
   const canManageUsers = hasPerm(currentUser, 'manageUsers');
+
+  // Legacy-style translucent pill button on the teal header bar.
+  const pillSx = {
+    color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 13,
+    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
+    borderRadius: 2, px: 1.5, minWidth: 0,
+    '&:hover': { background: 'rgba(255,255,255,0.26)' },
+  } as const;
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AppBar position="static" color="primary" sx={{ background: LEGACY.headerGradient }}>
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+        <Toolbar sx={{ gap: 1 }}>
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 800 }}>
             Viettours — Tour Cost Calculator
           </Typography>
           {currentUser && (
-            <>
-              <Typography variant="body2" sx={{ mr: 2 }}>
-                {currentUser.name} ({currentUser.role})
-              </Typography>
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+              {/* Tài khoản */}
+              <Stack
+                direction="row" alignItems="center" spacing={1}
+                sx={{
+                  background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
+                  borderRadius: 5, pl: 0.5, pr: 1.5, py: 0.5,
+                }}
+              >
+                <Avatar sx={{ width: 28, height: 28, bgcolor: '#dc3250', fontSize: 13, fontWeight: 800 }}>
+                  {currentUser.name.charAt(0).toUpperCase()}
+                </Avatar>
+                <Box sx={{ lineHeight: 1.1 }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{currentUser.name}</Typography>
+                  <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{currentUser.role}</Typography>
+                </Box>
+              </Stack>
+
+              <Button startIcon={<CloudSyncIcon />} sx={pillSx} onClick={() => setRateSyncOpen(true)}>
+                Master RC
+              </Button>
+              {canManageUsers && (
+                <Button startIcon={<PeopleIcon />} sx={pillSx} onClick={() => setUserMgrOpen(true)}>
+                  TK
+                </Button>
+              )}
               <NotificationBell />
-              <Tooltip title="Cài đặt">
-                <IconButton color="inherit" onClick={(e) => setSettingsAnchor(e.currentTarget)}>
-                  <SettingsIcon />
+              <Tooltip title="Đăng xuất">
+                <IconButton
+                  onClick={logout}
+                  sx={{
+                    color: '#fff', background: 'rgba(255,255,255,0.14)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    '&:hover': { background: 'rgba(220,50,80,0.5)' },
+                  }}
+                >
+                  <PowerSettingsNewIcon />
                 </IconButton>
               </Tooltip>
-              <Menu
-                anchorEl={settingsAnchor}
-                open={!!settingsAnchor}
-                onClose={() => setSettingsAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              >
-                {canManageUsers && (
-                  <MenuItem onClick={() => { setUserMgrOpen(true); setSettingsAnchor(null); }}>
-                    <ListItemIcon><PeopleIcon fontSize="small" /></ListItemIcon>
-                    <ListItemText>👤 Quản lý tài khoản</ListItemText>
-                  </MenuItem>
-                )}
-                <MenuItem onClick={() => { setRateSyncOpen(true); setSettingsAnchor(null); }}>
-                  <ListItemIcon><CloudSyncIcon fontSize="small" /></ListItemIcon>
-                  <ListItemText>🗂️ Đồng bộ Rate Card</ListItemText>
-                </MenuItem>
-              </Menu>
-              <Button color="inherit" onClick={logout}>
-                Đăng xuất
-              </Button>
-            </>
+            </Stack>
           )}
         </Toolbar>
         <Tabs

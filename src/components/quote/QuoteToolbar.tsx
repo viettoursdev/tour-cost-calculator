@@ -17,7 +17,7 @@ import { exportExcelQuote } from '@/lib/exports/exportExcel';
 import { exportPDFQuote } from '@/lib/exports/exportPDF';
 import { useAuthStore } from '@/stores/authStore';
 import { fmtOutput } from '@/lib/currency';
-import { computeTotals } from './calc';
+import { computeTotals, fmtVND } from './calc';
 import { InvoiceModal } from './InvoiceModal';
 import { LEGACY } from '@/theme';
 import type { OutputCurrency } from '@/types';
@@ -130,101 +130,114 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       {/* ── Tour info header band (legacy style) ── */}
       <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 1.5 }}>
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1.25}>
-          {/* Tour name → destination */}
-          <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexWrap: 'wrap', minWidth: 220 }}>
-            <TextField
-              variant="standard" value={info.name}
-              onChange={(e) => patchInfo({ name: e.target.value })}
-              placeholder="Tên báo giá..."
-              slotProps={{ input: { disableUnderline: true } }}
-              sx={{ '& input': { color: '#fff', fontSize: 20, fontWeight: 900, p: 0, '&::placeholder': { color: 'rgba(255,255,255,0.6)', opacity: 1 } } }}
-            />
-            <Box sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 18 }}>→</Box>
-            <TextField
-              variant="standard" value={info.dest}
-              onChange={(e) => patchInfo({ dest: e.target.value })}
-              placeholder="Điểm đến..."
-              slotProps={{ input: { disableUnderline: true } }}
-              sx={{ '& input': { color: LEGACY.gold, fontSize: 15, fontWeight: 700, p: 0, '&::placeholder': { color: 'rgba(255,224,130,0.6)', opacity: 1 } } }}
-            />
+          {/* LEFT: tour info (name/dest + meta pills) */}
+          <Stack direction="row" alignItems="center" spacing={2} flexWrap="wrap" useFlexGap rowGap={1.25}>
+            {/* Tour name → destination */}
+            <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexWrap: 'wrap', minWidth: 200 }}>
+              <TextField
+                variant="standard" value={info.name}
+                onChange={(e) => patchInfo({ name: e.target.value })}
+                placeholder="Tên báo giá..."
+                slotProps={{ input: { disableUnderline: true } }}
+                sx={{ '& input': { color: '#fff', fontSize: 20, fontWeight: 900, p: 0, '&::placeholder': { color: 'rgba(255,255,255,0.6)', opacity: 1 } } }}
+              />
+              <Box sx={{ color: 'rgba(255,255,255,0.45)', fontSize: 18 }}>→</Box>
+              <TextField
+                variant="standard" value={info.dest}
+                onChange={(e) => patchInfo({ dest: e.target.value })}
+                placeholder="Điểm đến..."
+                slotProps={{ input: { disableUnderline: true } }}
+                sx={{ '& input': { color: LEGACY.gold, fontSize: 15, fontWeight: 700, p: 0, '&::placeholder': { color: 'rgba(255,224,130,0.6)', opacity: 1 } } }}
+              />
+            </Stack>
+
+            {/* Meta pills */}
+            <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
+              <HeaderPill icon="🗓️">
+                <WhiteNum value={info.days} min={1} onChange={(v) => patchInfo({ days: v, nights: Math.max(0, v - 1) })} />
+                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>ngày</Typography>
+              </HeaderPill>
+              <HeaderPill icon="🌙">
+                <WhiteNum value={info.nights} min={0} onChange={(v) => patchInfo({ nights: v })} />
+                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>đêm</Typography>
+              </HeaderPill>
+              <HeaderPill icon="👥">
+                <WhiteNum value={pax} min={1} onChange={(v) => setPax(v)} />
+                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>khách</Typography>
+              </HeaderPill>
+              <HeaderPill icon="🚀">
+                <Box
+                  component="input" type="date" value={info.startDate ?? ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => patchInfo({ startDate: e.target.value || null })}
+                  sx={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 13, fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', fontWeight: 600 }}
+                />
+              </HeaderPill>
+              {info.startDate && (
+                <Typography sx={{ color: LEGACY.gold, fontSize: 13, fontWeight: 600 }}>→ {endDateStr}</Typography>
+              )}
+            </Stack>
           </Stack>
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* Meta pills */}
-          <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
-            <HeaderPill icon="🗓️">
-              <WhiteNum value={info.days} min={1} onChange={(v) => patchInfo({ days: v, nights: Math.max(0, v - 1) })} />
-              <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>ngày</Typography>
-            </HeaderPill>
-            <HeaderPill icon="🌙">
-              <WhiteNum value={info.nights} min={0} onChange={(v) => patchInfo({ nights: v })} />
-              <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>đêm</Typography>
-            </HeaderPill>
-            <HeaderPill icon="👥">
-              <WhiteNum value={pax} min={1} onChange={(v) => setPax(v)} />
-              <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>khách</Typography>
-            </HeaderPill>
-            <HeaderPill icon="🚀">
+          {/* RIGHT: price summary cards */}
+          {isDMC ? (
+            <Stack direction="row" gap={1.25} alignItems="stretch">
               <Box
-                component="input" type="date" value={info.startDate ?? ''}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => patchInfo({ startDate: e.target.value || null })}
-                sx={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 13, fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', fontWeight: 600 }}
-              />
-            </HeaderPill>
-            {info.startDate && (
-              <Typography sx={{ color: LEGACY.gold, fontSize: 13, fontWeight: 600 }}>→ {endDateStr}</Typography>
-            )}
-          </Stack>
+                sx={{
+                  background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 1.75, px: 2.25, py: 1, textAlign: 'right', minWidth: 140,
+                }}
+              >
+                <Typography color="rgba(255,255,255,0.7)" fontSize={11} fontWeight={600} mb={0.25}>Tổng breakdown</Typography>
+                <Typography color={LEGACY.gold} fontWeight={800} fontSize={18}>
+                  {fmtOutput(totalCost, outputCurrency, rates)}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  background: '#fff', borderRadius: 1.75, px: 2.25, py: 1, textAlign: 'right',
+                  minWidth: 160, boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+                }}
+              >
+                <Typography color="#8e44ad" fontSize={11} fontWeight={800} letterSpacing={0.5} textTransform="uppercase" mb={0.25}>📊 Per pax</Typography>
+                <Typography color="#8e44ad" fontWeight={900} fontSize={22} lineHeight={1}>
+                  {pax > 0 ? fmtOutput(totalCost / pax, outputCurrency, rates) : '–'}
+                </Typography>
+                <Typography color="rgba(15,58,74,0.45)" fontSize={11} mt={0.25}>{pax} khách · {outputCurrency}</Typography>
+              </Box>
+            </Stack>
+          ) : (
+            <Stack direction="row" gap={1.25} alignItems="stretch">
+              <Box
+                sx={{
+                  background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 1.75, px: 2.25, py: 1, textAlign: 'right', minWidth: 130,
+                }}
+              >
+                <Typography color="rgba(255,255,255,0.7)" fontSize={11} fontWeight={600} mb={0.25}>Giá vốn / khách</Typography>
+                <Typography color="#fff" fontWeight={800} fontSize={18}>
+                  {fmtVND(pax > 0 ? totals.totalCost / pax : 0)}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  background: '#fff', borderRadius: 1.75, px: 2.25, py: 1, textAlign: 'right',
+                  minWidth: 160, boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+                }}
+              >
+                <Typography color="#dc3250" fontSize={11} fontWeight={800} letterSpacing={0.5} textTransform="uppercase" mb={0.25}>Giá bán / khách</Typography>
+                <Typography color="#dc3250" fontWeight={900} fontSize={22} lineHeight={1}>
+                  {fmtVND(totals.roundedPPax)}
+                </Typography>
+                <Typography color="rgba(15,58,74,0.45)" fontSize={11} mt={0.25}>Đoàn: {fmtVND(totals.grandTotal)}</Typography>
+              </Box>
+            </Stack>
+          )}
         </Stack>
       </Box>
 
-      <Toolbar sx={{ flexWrap: 'wrap', gap: 2, py: 1 }}>
-        <Box sx={{ flexGrow: 1 }} />
-
-        {isDMC && (
-          <Stack direction="row" gap={1.25} alignItems="stretch">
-            <Box
-              sx={{
-                background: LEGACY.headerGradient,
-                border: '1px solid rgba(255,255,255,0.25)',
-                borderRadius: 1.75,
-                px: 2.5, py: 1.5,
-                textAlign: 'right',
-                minWidth: 150,
-                boxShadow: '0 4px 16px rgba(20,160,140,0.25)',
-              }}
-            >
-              <Typography color="rgba(255,255,255,0.65)" fontSize={11} fontWeight={600} letterSpacing={0.5} mb={0.5}>
-                Tổng breakdown
-              </Typography>
-              <Typography color="#ffe082" fontWeight={800} fontSize={20}>
-                {fmtOutput(totalCost, outputCurrency, rates)}
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                background: 'linear-gradient(135deg, #fff 0%, #fff8e1 100%)',
-                borderRadius: 1.75,
-                px: 2.5, py: 1.5,
-                textAlign: 'right',
-                minWidth: 180,
-                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
-              }}
-            >
-              <Typography color="#8e44ad" fontSize={11} fontWeight={800} letterSpacing={1} textTransform="uppercase" mb={0.5}>
-                📊 Per pax
-              </Typography>
-              <Typography color="#8e44ad" fontWeight={900} fontSize={24} lineHeight={1}>
-                {pax > 0 ? fmtOutput(totalCost / pax, outputCurrency, rates) : '–'}
-              </Typography>
-              <Typography color="rgba(15,58,74,0.45)" fontSize={11} mt={0.5}>
-                {pax} khách · {outputCurrency}
-              </Typography>
-            </Box>
-          </Stack>
-        )}
-
+      <Toolbar sx={{ flexWrap: 'wrap', gap: 1.5, py: 1 }}>
         <ToggleButtonGroup
           size="small" exclusive value={view}
           onChange={(_, v) => v && setView(v)}
@@ -243,12 +256,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           <ToggleButton value="history">Lịch sử</ToggleButton>
         </ToggleButtonGroup>
 
-        <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={onOpenSelector}>
+        <Box sx={{ flexGrow: 1 }} />
+
+        <Button size="small" variant="outlined" startIcon={<AddCircleOutlineIcon />} onClick={onOpenSelector}>
           Báo giá mới
         </Button>
         {/* Export dropdown */}
         <Button
           size="small"
+          variant="outlined"
           startIcon={<FileDownloadIcon />}
           endIcon={<ExpandMoreIcon />}
           onClick={(e) => setExportAnchor(e.currentTarget)}
@@ -290,15 +306,18 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             <ListItemText>📋 JSON (backup)</ListItemText>
           </MenuItem>
         </Menu>
-        <Button size="small" startIcon={<FileUploadIcon />} onClick={handleImportClick}>
+        <Button size="small" variant="outlined" startIcon={<FileUploadIcon />} onClick={handleImportClick}>
           Nhập JSON
         </Button>
         <input
           ref={fileInput} type="file" accept="application/json"
           hidden onChange={handleImportFile}
         />
-        <Button size="small" startIcon={<CloudUploadIcon />} onClick={onOpenSaveCloud}>
-          Lưu cloud
+        <Button
+          size="small" variant="contained" startIcon={<CloudUploadIcon />} onClick={onOpenSaveCloud}
+          sx={{ fontWeight: 800, background: LEGACY.headerGradient }}
+        >
+          Lưu
         </Button>
       </Toolbar>
 
