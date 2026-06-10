@@ -101,8 +101,9 @@ Auth Domain:   viettours-cost-calculator.firebaseapp.com
 Open rules required for these paths (apply manually in Firebase Console):
 
 ```
-match /user_notifications/{username} { allow read, write: if true; }
-match /dmc_quote_projects/{quoteId}  { allow read, write: if true; }
+match /user_notifications/{username}    { allow read, write: if true; }
+match /dmc_quote_projects/{quoteId}      { allow read, write: if true; }
+match /notification_threads/{threadId}   { allow read, write: if true; }
 ```
 
 ### Firestore Document Map
@@ -118,6 +119,7 @@ match /dmc_quote_projects/{quoteId}  { allow read, write: if true; }
 | `quote_projects/{id}` | Full state per regular quote version (max 20) |
 | `dmc_quote_projects/{id}` | Full state per DMC quote version |
 | `user_notifications/{username}` | Per-user notification queue |
+| `notification_threads/{threadId}` | Shared comment thread for a collaboration group |
 
 ## localStorage Keys
 

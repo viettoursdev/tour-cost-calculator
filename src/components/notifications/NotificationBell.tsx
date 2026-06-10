@@ -7,7 +7,9 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { fbSendNotification, fbSetApprovalStage } from '@/lib/firebase';
+import { NotificationCenter } from './NotificationCenter';
 import type { Notification, TourPaymentApprovalData } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -23,6 +25,7 @@ export function NotificationBell() {
   const markRead      = useNotificationStore((s) => s.markRead);
   const currentUser   = useAuthStore((s) => s.currentUser);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [centerOpen, setCenterOpen] = useState(false);
 
   if (!currentUser) return null;
 
@@ -57,6 +60,14 @@ export function NotificationBell() {
             )}
           </Stack>
           <Divider />
+          <Button
+            fullWidth startIcon={<OpenInFullIcon />} size="small"
+            onClick={() => { setCenterOpen(true); setAnchor(null); }}
+            sx={{ justifyContent: 'flex-start', px: 1.5, py: 1, color: '#0d7a6a', fontWeight: 700, borderRadius: 0 }}
+          >
+            Mở trung tâm thông báo
+          </Button>
+          <Divider />
           <Box sx={{ overflowY: 'auto', flex: 1 }}>
             {notifications.length === 0 ? (
               <Box sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>
@@ -78,6 +89,8 @@ export function NotificationBell() {
           </Box>
         </Box>
       </Popover>
+
+      <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} />
     </>
   );
 }

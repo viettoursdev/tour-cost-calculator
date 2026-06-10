@@ -6,7 +6,7 @@ import {
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
-  Notification, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
+  Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc,
 } from '@/types';
@@ -438,6 +438,44 @@ export async function fbPushNotifications(
   notifications: Notification[],
 ): Promise<void> {
   await setDoc(notifDoc(username), { notifications });
+}
+
+// ── Notification Center: shared comment threads + multi-send ──
+
+const notifThreadDoc = (id: string) => doc(db, 'notification_threads', id);
+
+/** Create the thread if missing, else merge in any newly-added members/link. */
+export async function fbEnsureNotifThread(thread: NotifThread): Promise<void> {
+  const snap = await getDoc(notifThreadDoc(thread.id));
+  if (snap.exists()) {
+    const ex = snap.data() as NotifThread;
+    const members = Array.from(new Set([...(ex.members ?? []), ...thread.members]));
+    await setDoc(notifThreadDoc(thread.id), {
+      ...ex, members, link: thread.link ?? ex.link ?? null, title: thread.title || ex.title,
+    });
+  } else {
+    await setDoc(notifThreadDoc(thread.id), thread);
+  }
+}
+
+export function fbSubscribeNotifThread(id: string, cb: (t: NotifThread | null) => void): Unsubscribe {
+  return onSnapshot(notifThreadDoc(id), (snap) => cb(snap.exists() ? (snap.data() as NotifThread) : null));
+}
+
+/** Append a comment to a shared thread (read-modify-write). */
+export async function fbAddThreadComment(id: string, comment: NotifComment): Promise<void> {
+  const snap = await getDoc(notifThreadDoc(id));
+  if (!snap.exists()) return;
+  const t = snap.data() as NotifThread;
+  await setDoc(notifThreadDoc(id), { ...t, comments: [...(t.comments ?? []), comment] });
+}
+
+/** Send the same notification to multiple recipients. */
+export async function fbSendNotificationMany(
+  targets: string[],
+  notif: Omit<Notification, 'id' | 'read' | 'createdAt'>,
+): Promise<void> {
+  await Promise.all(Array.from(new Set(targets)).map((u) => fbSendNotification(u, notif)));
 }
 
 // ── Tour Payments ──
