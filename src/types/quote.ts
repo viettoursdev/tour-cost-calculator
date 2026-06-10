@@ -1,7 +1,7 @@
 export type CategoryId =
   | 'flight' | 'hotel' | 'transport' | 'meal' | 'sight' | 'meeting'
   | 'teambuild' | 'gala' | 'logistics' | 'staff' | 'insurance'
-  | 'visa' | 'dmc' | 'service_fee';
+  | 'visa' | 'dmc' | 'service_fee' | 'event' | 'other';
 
 export type Template = 'domestic' | 'intl' | 'dmc' | 'itinerary' | 'menu' | 'visa' | 'doctranslate';
 
@@ -15,7 +15,7 @@ export type DmcMargin = {
 
 export type DmcPrices = Record<number, number>;  // keys at runtime: 20, 25, 30, 35, 40
 
-export type QtyMode = 'per_pax' | 'per_group' | 'custom';
+export type QtyMode = 'per_pax' | 'per_group' | 'custom' | 'single_room' | 'double_room' | 'package';
 
 export type Item = {
   id: number;

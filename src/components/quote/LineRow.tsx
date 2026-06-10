@@ -130,6 +130,20 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
     item.qtyMode === 'per_group' ? 1 :
     item.customQty;
 
+  // Modes whose quantity is a user-editable number (rooms / package / custom).
+  const editableQty =
+    item.qtyMode === 'custom' || item.qtyMode === 'single_room'
+    || item.qtyMode === 'double_room' || item.qtyMode === 'package';
+
+  const changeQtyMode = (m: QtyMode) => {
+    const patch: Partial<Item> = { qtyMode: m };
+    // Prefill a sensible default; the number stays editable afterwards.
+    if (m === 'single_room') patch.customQty = Math.max(1, pax);            // 1 phòng / khách
+    else if (m === 'double_room') patch.customQty = Math.max(1, Math.round(pax / 2)); // ½ pax, .5 → lên 1
+    else if (m === 'package') patch.customQty = Math.max(1, item.customQty || 1);
+    u(patch);
+  };
+
   return (
     <TableRow sx={{ opacity: off ? 0.4 : 1 }}>
       {/* Enable toggle (legacy pill) */}
@@ -186,12 +200,15 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel }: Props) {
       {/* Quantity */}
       <TableCell align="center">
         <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="center">
-          <Sel value={item.qtyMode} onChange={(e) => u({ qtyMode: e.target.value as QtyMode })} style={{ fontSize: 11 }}>
+          <Sel value={item.qtyMode} onChange={(e) => changeQtyMode(e.target.value as QtyMode)} style={{ fontSize: 11 }}>
             <option value="per_pax">×pax</option>
             <option value="per_group">đoàn</option>
+            <option value="single_room">phòng đơn</option>
+            <option value="double_room">phòng đôi</option>
+            <option value="package">gói</option>
             <option value="custom">tuỳ</option>
           </Sel>
-          {item.qtyMode === 'custom' ? (
+          {editableQty ? (
             <EditNum value={item.customQty} onChange={(v) => u({ customQty: Math.max(1, v) })} min={1} width={44} align="center" />
           ) : (
             <Typography variant="caption" sx={{ color: 'rgba(15,58,74,0.4)' }}>= {qty}</Typography>

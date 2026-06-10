@@ -72,7 +72,7 @@ export function CostView() {
           </Stack>
         )}
 
-        {!isDMC && <GroupSizeTabs />}
+        <GroupSizeTabs />
 
         {cats.map((cat) => {
           const catId = cat.id as CategoryId;

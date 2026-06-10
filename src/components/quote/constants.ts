@@ -25,6 +25,7 @@ export const CATS: CategoryDef[] = [
   { id: 'transport',  icon: '🚌',  label: 'Vận chuyển',        labelEn: 'Transportation',    color: '#9b59b6', rateCard: 'transport' },
   { id: 'meal',       icon: '🍽️', label: 'Ăn uống',           labelEn: 'Meals',             color: '#14a08c' },
   { id: 'sight',      icon: '🎟️', label: 'Tham quan',         labelEn: 'Sightseeing',       color: '#e74c3c' },
+  { id: 'event',      icon: '🎉',  label: 'Sự kiện',           labelEn: 'Event',             color: '#e84393', dmcOnly: true },
   { id: 'meeting',    icon: '📊',  label: 'Meeting / Hội nghị', labelEn: 'Meeting / Conference', color: '#34495e', rateCard: 'meeting', domesticOnly: true },
   { id: 'teambuild',  icon: '🎯',  label: 'Team Building',     labelEn: 'Team Building',     color: '#27ae60', rateCard: 'teambuild', domesticOnly: true },
   { id: 'gala',       icon: '🎆',  label: 'Gala Dinner',       labelEn: 'Gala Dinner',       color: '#c0392b', rateCard: 'gala' },
@@ -34,9 +35,10 @@ export const CATS: CategoryDef[] = [
   { id: 'visa',       icon: '🛂',  label: 'Visa',              labelEn: 'Visa',              color: '#1abc9c', rateCard: 'visa' },
   { id: 'dmc',        icon: '🌐',  label: 'DMC – Package đối tác', labelEn: 'DMC Package',   color: '#8e44ad', rateCard: 'dmc' },
   { id: 'service_fee',icon: '💼',  label: 'Phí dịch vụ',       labelEn: 'Service Fee',       color: '#7f8c8d', dmcOnly: true },
+  { id: 'other',      icon: '🧩',  label: 'Chi phí khác',      labelEn: 'Other costs',       color: '#95a5a6', dmcOnly: true },
 ];
 
-export const DMC_CAT_IDS: CategoryId[] = ['hotel', 'transport', 'meal', 'sight', 'staff', 'service_fee'];
+export const DMC_CAT_IDS: CategoryId[] = ['hotel', 'transport', 'meal', 'sight', 'event', 'staff', 'service_fee', 'other'];
 
 // Source: public/legacy.html:1586-1589
 export function getCATS(template: Template): CategoryDef[] {
