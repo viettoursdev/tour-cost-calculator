@@ -5,6 +5,7 @@ describe('ROLES', () => {
   it('matches the documented hierarchy order', () => {
     expect(ROLES).toEqual([
       'CEO',
+      'Ban Giám Đốc',
       'Trưởng Phòng',
       'Sales',
       'Operations',
