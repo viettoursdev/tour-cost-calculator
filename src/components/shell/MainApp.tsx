@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { syncsSharedData } from '@/auth/ROLES';
+import { getSignInMethod, startActivityTracker } from '@/auth/sessionTimeout';
 import { fbSubscribeFxRates } from '@/lib/firebase';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -29,6 +30,15 @@ export function MainApp() {
   useEffect(() => {
     void authInit();
   }, [authInit]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    if (getSignInMethod(currentUser.u) !== 'link') return;
+    const stop = startActivityTracker(currentUser.u, () => {
+      void useAuthStore.getState().expireSession();
+    });
+    return stop;
+  }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser) {
