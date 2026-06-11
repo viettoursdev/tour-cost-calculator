@@ -91,6 +91,40 @@ describe('paymentStore', () => {
     expect(slot2.data.payments).toEqual({ k: { supplier: 'B' } });
   });
 
+  it('"Thêm đợt thanh toán" button flow appends an installment with a fresh slot', () => {
+    const key = 'hotel-4star';
+    const amount = 121_920_000;
+    // Mirror PaymentView.addInstallment(ci.key, ci.amount)
+    const addInstallment = () => {
+      const cur =
+        usePaymentStore.getState().getTour('tourA').payments[key] ??
+        { supplier: '', installments: [], note: '' };
+      const paidSum = (cur.installments ?? []).reduce((s, i) => s + (+i.amount || 0), 0);
+      const remaining = Math.max(0, amount - paidSum);
+      const next = {
+        label: `Đợt ${(cur.installments ?? []).length + 1}`,
+        amount: remaining,
+        status: 'unpaid' as const,
+        paidDate: '',
+      };
+      usePaymentStore.getState().setPayments('tourA', {
+        ...usePaymentStore.getState().getTour('tourA').payments,
+        [key]: { ...cur, installments: [...(cur.installments ?? []), next] },
+      });
+    };
+
+    addInstallment();
+    const slotA = usePaymentStore.getState().slots.tourA;
+    expect(slotA.data.payments[key].installments).toHaveLength(1);
+    expect(slotA.data.payments[key].installments![0].amount).toBe(amount);
+
+    addInstallment();
+    const slotB = usePaymentStore.getState().slots.tourA;
+    expect(slotB).not.toBe(slotA); // selector sees a change → PaymentView re-renders
+    expect(slotB.data.payments[key].installments).toHaveLength(2);
+    expect(slotB.data.payments[key].installments![1].amount).toBe(0); // first one took the full amount
+  });
+
   it('setCustomItems writes-through and debounces fb push by 1s', () => {
     usePaymentStore.getState().setCustomItems('tourA', [
       { key: 'x', catId: 'hotel', catLabel: '', catIcon: '', catColor: '', name: 'n', amount: 1 },
