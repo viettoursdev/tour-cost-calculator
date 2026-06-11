@@ -39,3 +39,45 @@ export function isExpired(username: string, now: number = Date.now()): boolean {
   if (last === null) return false;
   return now - last >= IDLE_TIMEOUT_MS;
 }
+
+export const CHECK_INTERVAL_MS = 60 * 1000;
+
+export function startActivityTracker(
+  username: string,
+  onExpire: () => void,
+): () => void {
+  if (readLastActive(username) === null) {
+    // Force-write the initial timestamp, bypassing the throttle map so a
+    // recent touch on a different tab doesn't suppress it.
+    localStorage.setItem(`vte_session_last_active_${username}`, String(Date.now()));
+  }
+
+  let fired = false;
+  const fireIfExpired = () => {
+    if (fired) return;
+    if (isExpired(username)) {
+      fired = true;
+      onExpire();
+    }
+  };
+
+  const onActivity = () => {
+    touchLastActive(username);
+    fireIfExpired();
+  };
+
+  window.addEventListener('pointerdown', onActivity);
+  window.addEventListener('keydown', onActivity);
+  window.addEventListener('focus', fireIfExpired);
+  document.addEventListener('visibilitychange', fireIfExpired);
+
+  const intervalId = window.setInterval(fireIfExpired, CHECK_INTERVAL_MS);
+
+  return () => {
+    window.removeEventListener('pointerdown', onActivity);
+    window.removeEventListener('keydown', onActivity);
+    window.removeEventListener('focus', fireIfExpired);
+    document.removeEventListener('visibilitychange', fireIfExpired);
+    window.clearInterval(intervalId);
+  };
+}
