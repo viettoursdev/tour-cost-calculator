@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Avatar, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
+  Avatar, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
   ListItemButton, ListItemText, Menu, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
 import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { fbSendNotification } from '@/lib/firebase';
+import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { slugifyTourKey } from './paymentUtils';
 import { fmtVND } from './calc';
 import { exportPaymentRequestPDF, type PaymentRequestForm } from '@/lib/exports/exportPaymentRequestPDF';
@@ -46,9 +47,26 @@ export function PaymentRequestModal({
     approver2Username: '',
     requester: currentUser.name,
     note: '',
+    attachments: [],
   };
   const [form, setForm] = useState<PaymentRequestForm>(initialForm);
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const uploaded = await Promise.all(files.map((f) => uploadFileToWorker(f)));
+      setForm((p) => ({ ...p, attachments: [...(p.attachments ?? []), ...uploaded] }));
+    } catch (err) {
+      window.alert('❌ Tải file lỗi: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploading(false);
+    }
+  };
   const [anchor1, setAnchor1] = useState<HTMLElement | null>(null);
   const [anchor2, setAnchor2] = useState<HTMLElement | null>(null);
 
@@ -74,7 +92,7 @@ export function PaymentRequestModal({
   }, [open]);
 
   const isReassign = !!(approvalEntry?.stage1 || approvalEntry?.finalStatus);
-  const canSend = !!form.approver1Username && !!form.approver2Username && form.amount > 0 && !sending;
+  const canSend = !!form.approver1Username && !!form.approver2Username && form.amount > 0 && !sending && !uploading;
 
   const setField = <K extends keyof PaymentRequestForm>(k: K, v: PaymentRequestForm[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -106,6 +124,7 @@ export function PaymentRequestModal({
         approver1Name: form.approver1,
         approver2Username: form.approver2Username,
         approver2Name: form.approver2,
+        ...(form.attachments?.length ? { attachments: form.attachments } : {}),
       };
       await fbSendNotification(form.approver1Username, {
         type: 'payment_approval',
@@ -247,6 +266,52 @@ export function PaymentRequestModal({
             size="small" fullWidth
             placeholder="VD: CK qua VCB - 0123456789 - Nguyễn Văn A"
           />
+
+          {/* Tài liệu đính kèm (hoá đơn, hợp đồng, UNC… — nhiều file) */}
+          <Box>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+              Tài liệu đính kèm (hoá đơn, hợp đồng… — nhiều file)
+            </Typography>
+            <Stack spacing={0.75}>
+              {(form.attachments ?? []).map((att, i) => (
+                <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
+                  <Box
+                    component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
+                    title={att.name}
+                    sx={{
+                      flexGrow: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: '#0d7a6a',
+                      textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      '&:hover': { textDecoration: 'underline' },
+                    }}
+                  >
+                    📎 {att.name}
+                  </Box>
+                  <Button
+                    size="small" color="error"
+                    onClick={() => setForm((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }))}
+                  >
+                    Gỡ
+                  </Button>
+                </Stack>
+              ))}
+              <Box>
+                <Button
+                  component="label" variant="outlined" size="small"
+                  startIcon={uploading ? <CircularProgress size={14} /> : <span>📎</span>}
+                  disabled={uploading || sending}
+                >
+                  {uploading
+                    ? 'Đang tải lên…'
+                    : (form.attachments?.length ? 'Thêm file' : 'Đính kèm file (PDF/ảnh/Excel…)')}
+                  <Box
+                    component="input" type="file" hidden multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+                    onChange={onPickFiles}
+                  />
+                </Button>
+              </Box>
+            </Stack>
+          </Box>
 
           <Box sx={{ bgcolor: 'rgba(168,230,221,0.2)', borderRadius: 1.5, p: 1.5, fontSize: 13 }}>
             <Stack direction="row" justifyContent="space-between"><span>Hạng mục:</span><strong>{ci.name}</strong></Stack>

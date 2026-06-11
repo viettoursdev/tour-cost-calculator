@@ -10,6 +10,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { fbSendNotification, fbSetApprovalStage } from '@/lib/firebase';
+import { workerFileUrl } from '@/lib/aiWorker';
 import { NotificationCenter } from './NotificationCenter';
 import type { Notification, TourPaymentApprovalData } from '@/types';
 
@@ -114,6 +115,7 @@ function NotificationItem({
   const [acted, setActed] = useState(false);
 
   const borderColor = TYPE_COLOR[notif.type] ?? '#95a5a6';
+  const attachments = (notif.data as Partial<TourPaymentApprovalData> | undefined)?.attachments ?? [];
   const isTourPaymentApproval =
     notif.type === 'payment_approval'
     && (notif.data as { approvalKey?: string } | undefined)?.approvalKey != null
@@ -270,6 +272,28 @@ function NotificationItem({
       <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>
         {new Date(notif.createdAt).toLocaleString('vi-VN')} · {notif.createdBy}
       </Typography>
+
+      {attachments.length > 0 && (
+        <Stack spacing={0.25} sx={{ mt: 0.75 }}>
+          {attachments.map((a) => (
+            <Box
+              key={a.key}
+              component="a"
+              href={workerFileUrl(a.key)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              sx={{
+                fontSize: 12, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                '&:hover': { textDecoration: 'underline' },
+              }}
+            >
+              📎 {a.name}
+            </Box>
+          ))}
+        </Stack>
+      )}
 
       {isApprovalRequest && (
         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>

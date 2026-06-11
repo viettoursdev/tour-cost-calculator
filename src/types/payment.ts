@@ -82,4 +82,6 @@ export interface TourPaymentApprovalData {
   approver1Name: string;
   approver2Username: string;
   approver2Name: string;
+  /** Tài liệu đính kèm phiếu đề nghị (lưu trên R2 qua AI Worker). */
+  attachments?: { key: string; name: string }[];
 }

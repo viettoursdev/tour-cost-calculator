@@ -21,6 +21,7 @@ export interface PaymentRequestForm {
   approver2Username: string;
   requester: string;
   note: string;
+  attachments?: { key: string; name: string }[];
 }
 
 type RGB = [number, number, number];
