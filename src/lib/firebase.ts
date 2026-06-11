@@ -58,7 +58,9 @@ export async function fbSignOut(): Promise<void> {
   await signOut(auth);
 }
 
-export function fbOnIdTokenChanged(cb: (user: FbUser | null) => void): AuthUnsubscribe {
+export function fbOnIdTokenChanged(
+  cb: (user: FbUser | null) => void | Promise<void>,
+): AuthUnsubscribe {
   return onIdTokenChanged(auth, cb);
 }
 
