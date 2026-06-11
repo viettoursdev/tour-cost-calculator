@@ -5,6 +5,14 @@ import {
   fbSignOut, fbOnIdTokenChanged,
 } from '@/lib/firebase';
 import { PERMISSIONS } from '@/auth/PERMISSIONS';
+import {
+  clearSessionTracking,
+  getSignInMethod,
+  isExpired,
+  setSignInMethod,
+  touchLastActive,
+  type SignInMethod,
+} from '@/auth/sessionTimeout';
 import type { User } from '@/types';
 
 const ALLOWED_DOMAIN = '@viettours.com.vn';
@@ -36,6 +44,16 @@ function isCompanyEmail(email: string): boolean {
   return normalizeEmail(email).endsWith(ALLOWED_DOMAIN);
 }
 
+function persistSessionStart(username: string, method: SignInMethod | null): void {
+  if (method === null) {
+    // Already-running session (e.g. token refresh on reload). Keep whatever
+    // method/lastActive was stored previously; don't touch them.
+    return;
+  }
+  setSignInMethod(username, method);
+  touchLastActive(username);
+}
+
 type SignInResult = { ok: true } | { ok: false; error: string };
 
 type AuthState = {
@@ -44,6 +62,7 @@ type AuthState = {
   hasHydrated: boolean;
   pendingEmail: string | null;
   pendingCrossDeviceUrl: string | null;
+  pendingSignInMethod: SignInMethod | null;
   authError: string | null;
 
   init: () => Promise<void>;
@@ -52,6 +71,7 @@ type AuthState = {
   signInWithPassword: (email: string, password: string) => Promise<SignInResult>;
   cancelPendingSignIn: () => void;
   signOut: () => Promise<void>;
+  expireSession: () => Promise<void>;
   saveUsers: (users: User[]) => Promise<void>;
 };
 
@@ -61,6 +81,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   hasHydrated: false,
   pendingEmail: null,
   pendingCrossDeviceUrl: null,
+  pendingSignInMethod: null,
   authError: null,
 
   init: async () => {
@@ -74,11 +95,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           set({ pendingCrossDeviceUrl: window.location.href });
         } else {
           try {
+            set({ pendingSignInMethod: 'link' });
             await fbCompleteSignInLink(stashed, window.location.href);
             localStorage.removeItem(PENDING_EMAIL_KEY);
             set({ pendingEmail: null });
           } catch (e) {
-            set({ authError: `Link đăng nhập đã hết hạn hoặc đã được dùng. Hãy yêu cầu link mới. (${(e as Error).message})` });
+            set({ authError: `Link đăng nhập đã hết hạn hoặc đã được dùng. Hãy yêu cầu link mới. (${(e as Error).message})`, pendingSignInMethod: null });
             localStorage.removeItem(PENDING_EMAIL_KEY);
           } finally {
             window.history.replaceState({}, '', window.location.pathname);
@@ -103,6 +125,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       }
       const verifiedEmail = (fbUser.email ?? '').toLowerCase();
       const match = cloud.find((u) => (u.email ?? '').toLowerCase() === verifiedEmail);
+
+      const finalizeRejection = async (msg: string) => {
+        await fbSignOut();
+        set({ currentUser: null, users: cloud, hasHydrated: true, authError: msg, pendingSignInMethod: null });
+      };
+
       if (!match) {
         // Bootstrap path: auto-provision the developer CEO on first sign-in.
         if (verifiedEmail === BOOTSTRAP_CEO_EMAIL) {
@@ -113,23 +141,28 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           } catch (e) {
             console.warn('Bootstrap CEO write to user_accounts failed:', (e as Error).message);
           }
-          set({ currentUser: dev, users: next, hasHydrated: true, authError: null });
+          persistSessionStart(dev.u, get().pendingSignInMethod);
+          set({ currentUser: dev, users: next, hasHydrated: true, authError: null, pendingSignInMethod: null });
           return;
         }
-        // Authed but not in user_accounts → reject.
-        await fbSignOut();
-        set({
-          currentUser: null,
-          users: cloud,
-          hasHydrated: true,
-          authError: 'Email chưa được cấp quyền. Liên hệ admin.',
-        });
+        await finalizeRejection('Email chưa được cấp quyền. Liên hệ admin.');
         return;
       }
       if (!(match.role in PERMISSIONS)) {
         console.warn(`User ${match.u} has unknown role: ${match.role}`);
       }
-      set({ currentUser: match, users: cloud, hasHydrated: true, authError: null });
+
+      // Existing-session expiry check: if a prior link session for this user is
+      // already past the idle window, sign them out before letting them in.
+      // Password sessions are exempt.
+      if (getSignInMethod(match.u) === 'link' && isExpired(match.u)) {
+        clearSessionTracking(match.u);
+        await finalizeRejection('Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại.');
+        return;
+      }
+
+      persistSessionStart(match.u, get().pendingSignInMethod);
+      set({ currentUser: match, users: cloud, hasHydrated: true, authError: null, pendingSignInMethod: null });
     });
   },
 
@@ -142,7 +175,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       await fbSendSignInLink(email);
       localStorage.setItem(PENDING_EMAIL_KEY, email);
-      set({ pendingEmail: email, authError: null });
+      set({ pendingEmail: email, authError: null, pendingSignInMethod: 'link' });
       return { ok: true };
     } catch (e) {
       return { ok: false, error: `Không gửi được link: ${(e as Error).message}` };
@@ -157,6 +190,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return { ok: false, error: 'Vui lòng dùng email công ty (@viettours.com.vn)' };
     }
     try {
+      set({ pendingSignInMethod: 'link' });
       await fbCompleteSignInLink(email, url);
       set({ pendingCrossDeviceUrl: null, pendingEmail: null });
       window.history.replaceState({}, '', window.location.pathname);
@@ -173,6 +207,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return { ok: false, error: 'Vui lòng dùng email công ty (@viettours.com.vn)' };
     }
     try {
+      set({ pendingSignInMethod: 'password' });
       await fbSignInWithPassword(email, password);
       set({ authError: null });
       return { ok: true };
@@ -187,8 +222,22 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   signOut: async () => {
+    const u = get().currentUser?.u;
     await fbSignOut();
-    set({ currentUser: null, authError: null });
+    if (u) clearSessionTracking(u);
+    set({ currentUser: null, authError: null, pendingSignInMethod: null });
+  },
+
+  expireSession: async () => {
+    const u = get().currentUser?.u;
+    if (!u) return;
+    await fbSignOut();
+    clearSessionTracking(u);
+    set({
+      currentUser: null,
+      authError: 'Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại.',
+      pendingSignInMethod: null,
+    });
   },
 
   saveUsers: async (users) => {

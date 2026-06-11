@@ -6,6 +6,13 @@ import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
 import * as fb from '@/lib/firebase';
 import type { User } from '@/types';
+import {
+  getSignInMethod,
+  setSignInMethod,
+  readLastActive,
+  clearSessionTracking,
+  IDLE_TIMEOUT_MS,
+} from '@/auth/sessionTimeout';
 
 const reset = snapshotInitial(useAuthStore);
 
@@ -13,6 +20,7 @@ beforeEach(() => {
   reset();
   vi.clearAllMocks();
   localStorage.clear();
+  clearSessionTracking('ceo');
   vi.mocked(fb.fbIsSignInLink).mockReturnValue(false);
   vi.mocked(fb.fbOnIdTokenChanged).mockImplementation(() => () => {});
 });
@@ -236,5 +244,122 @@ describe('saveUsers', () => {
     await useAuthStore.getState().saveUsers(next);
     expect(useAuthStore.getState().users).toEqual(next);
     expect(vi.mocked(fb.fbPushUsers).mock.calls[0][0]).toEqual(next);
+  });
+});
+
+describe('sign-in method persistence', () => {
+  it('records "link" method when requestSignInLink resolves and a user signs in', async () => {
+    const u = user();
+    vi.mocked(fb.fbPullUsers).mockResolvedValue([u]);
+    let idCb: ((fbUser: { email: string } | null) => Promise<void>) | null = null;
+    vi.mocked(fb.fbOnIdTokenChanged).mockImplementation((cb) => {
+      idCb = cb as typeof idCb;
+      return () => {};
+    });
+
+    await useAuthStore.getState().init();
+    await useAuthStore.getState().requestSignInLink('ceo@viettours.com.vn');
+    await idCb!({ email: 'ceo@viettours.com.vn' });
+
+    expect(getSignInMethod('ceo')).toBe('link');
+    expect(readLastActive('ceo')).toBe(Date.now());
+  });
+
+  it('records "password" method when signInWithPassword resolves and a user signs in', async () => {
+    const u = user();
+    vi.mocked(fb.fbPullUsers).mockResolvedValue([u]);
+    let idCb: ((fbUser: { email: string } | null) => Promise<void>) | null = null;
+    vi.mocked(fb.fbOnIdTokenChanged).mockImplementation((cb) => {
+      idCb = cb as typeof idCb;
+      return () => {};
+    });
+
+    await useAuthStore.getState().init();
+    await useAuthStore.getState().signInWithPassword('ceo@viettours.com.vn', 'pw');
+    await idCb!({ email: 'ceo@viettours.com.vn' });
+
+    expect(getSignInMethod('ceo')).toBe('password');
+  });
+
+  it('clears session tracking on signOut', async () => {
+    setSignInMethod('ceo', 'link');
+    localStorage.setItem('vte_session_last_active_ceo', String(Date.now()));
+    useAuthStore.setState({ currentUser: user() });
+    await useAuthStore.getState().signOut();
+    expect(getSignInMethod('ceo')).toBeNull();
+    expect(readLastActive('ceo')).toBeNull();
+  });
+});
+
+describe('expireSession action', () => {
+  it('signs out, sets Vietnamese authError, clears tracking', async () => {
+    setSignInMethod('ceo', 'link');
+    localStorage.setItem('vte_session_last_active_ceo', String(Date.now()));
+    useAuthStore.setState({ currentUser: user() });
+
+    await useAuthStore.getState().expireSession();
+
+    expect(fb.fbSignOut).toHaveBeenCalled();
+    expect(useAuthStore.getState().currentUser).toBeNull();
+    expect(useAuthStore.getState().authError).toBe(
+      'Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại.',
+    );
+    expect(getSignInMethod('ceo')).toBeNull();
+    expect(readLastActive('ceo')).toBeNull();
+  });
+
+  it('is a no-op when there is no currentUser', async () => {
+    await useAuthStore.getState().expireSession();
+    expect(fb.fbSignOut).not.toHaveBeenCalled();
+  });
+});
+
+describe('init-time expiry check', () => {
+  it('signs out and sets authError when a link session is already expired', async () => {
+    const u = user();
+    vi.mocked(fb.fbPullUsers).mockResolvedValue([u]);
+    setSignInMethod('ceo', 'link');
+    localStorage.setItem(
+      'vte_session_last_active_ceo',
+      String(Date.now() - IDLE_TIMEOUT_MS - 1000),
+    );
+
+    let idCb: ((fbUser: { email: string } | null) => Promise<void>) | null = null;
+    vi.mocked(fb.fbOnIdTokenChanged).mockImplementation((cb) => {
+      idCb = cb as typeof idCb;
+      return () => {};
+    });
+
+    await useAuthStore.getState().init();
+    await idCb!({ email: 'ceo@viettours.com.vn' });
+
+    expect(fb.fbSignOut).toHaveBeenCalled();
+    expect(useAuthStore.getState().currentUser).toBeNull();
+    expect(useAuthStore.getState().authError).toBe(
+      'Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại.',
+    );
+    expect(getSignInMethod('ceo')).toBeNull();
+  });
+
+  it('does NOT sign out when a password session is past 48h (password is exempt)', async () => {
+    const u = user();
+    vi.mocked(fb.fbPullUsers).mockResolvedValue([u]);
+    setSignInMethod('ceo', 'password');
+    localStorage.setItem(
+      'vte_session_last_active_ceo',
+      String(Date.now() - IDLE_TIMEOUT_MS - 1000),
+    );
+
+    let idCb: ((fbUser: { email: string } | null) => Promise<void>) | null = null;
+    vi.mocked(fb.fbOnIdTokenChanged).mockImplementation((cb) => {
+      idCb = cb as typeof idCb;
+      return () => {};
+    });
+
+    await useAuthStore.getState().init();
+    await idCb!({ email: 'ceo@viettours.com.vn' });
+
+    expect(fb.fbSignOut).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().currentUser?.u).toBe('ceo');
   });
 });
