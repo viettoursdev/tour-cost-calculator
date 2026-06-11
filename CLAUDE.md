@@ -76,9 +76,9 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 ## Key Design Decisions
 
-**No Firebase Auth.** Custom username/password in Firestore (`viettours/user_accounts`). Passwords plaintext (internal tool). `authStore.login()` calls `init()` to sync users before checking credentials.
+**Firebase Auth — magic link in production, Email+Password panel in DEV builds only for testing.** `sendSignInLinkToEmail` restricted to `@viettours.com.vn`. `authStore.init()` completes any in-flight magic link and subscribes via `onIdTokenChanged`; the verified email is matched (case-insensitive) against `User.email` in `viettours/user_accounts` to resolve `currentUser`. Legacy plaintext `User.p` is unused and slated for Phase 4 cleanup. Console setup steps live in `docs/firebase-setup.md`; project switch workflow in `docs/firebase-migration.md`.
 
-**Named Firestore database.** Must use `viettours`. `getFirestore(app, 'viettours')` at `src/lib/firebase.ts:13` — there is no `(default)` DB in this Firebase project.
+**Default Firestore database.** The new project `tour-cost-calculator-4336c` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
 
 **Per-user persisted quote draft (gotcha).** `quoteStore` registers persist middleware with a placeholder name and overrides the storage adapter at write time to use `vte_quote_draft_{username}`. The `getItem` handler returns `null` on initial hydration; the real hydration happens in `quoteStore.init(user)` which reads `localStorage` directly. Don't "fix" this by giving persist a static name — you'll cross-leak users.
 
@@ -91,32 +91,14 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 ## Firebase
 
 ```
-Project ID:    viettours-cost-calculator
-Database name: viettours
+Project ID:    tour-cost-calculator-4336c
+Database name: (default)
 Location:      asia-southeast1
-API Key:       AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw
-Auth Domain:   viettours-cost-calculator.firebaseapp.com
+API Key:       AIzaSyBZBJIoq_WXw_-2ykCiGQniJHTuWxRwge8
+Auth Domain:   tour-cost-calculator-4336c.firebaseapp.com
 ```
 
-**Auth-gated rules** (apply manually in Firebase Console → database `viettours`).
-The app signs in **anonymously** at startup (`src/lib/firebase.ts`), so rules can
-require `request.auth != null` instead of being fully public. The **Anonymous**
-provider must be enabled in Authentication → Sign-in method.
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
-
-> Note: this only blocks unauthenticated traffic. Because the web API key is public,
-> the real fix for sensitive data (plaintext passwords in `user_accounts`) is per-user
-> Firebase Auth + granular rules (Phase 4) and/or hashing passwords.
+Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tools deploy --only firestore:rules`. Every collection requires `request.auth != null` plus a `@viettours.com.vn` email — anonymous and external-domain clients are denied across the board.
 
 ### Firestore Document Map
 
@@ -139,7 +121,8 @@ service cloud.firestore {
 | Key | Content |
 |-----|---------|
 | `vte_users` | Zustand-persisted user list (`authStore`) |
-| `vte_s` (sessionStorage) | Current session user |
+| `vte_pending_signin_email` | Email a magic link was sent to (`authStore`, cleared on completion) |
+| Firebase Auth IndexedDB | Session token (managed by `firebase/auth`, persists across browser restarts) |
 | `vte_quote_draft_{username}` | Per-user persisted quote draft (`quoteStore`) |
 | `vte_hotels_v2_{city}` | Hotel rate cards per city |
 | `vte_visa_rates` | Visa rate overrides |
