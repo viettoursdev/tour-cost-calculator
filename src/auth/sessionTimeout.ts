@@ -47,9 +47,7 @@ export function startActivityTracker(
   onExpire: () => void,
 ): () => void {
   if (readLastActive(username) === null) {
-    // Force-write the initial timestamp, bypassing the throttle map so a
-    // recent touch on a different tab doesn't suppress it.
-    localStorage.setItem(`vte_session_last_active_${username}`, String(Date.now()));
+    touchLastActive(username);
   }
 
   let fired = false;
