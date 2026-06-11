@@ -82,8 +82,9 @@ export async function callAIWorker(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error('Worker lỗi ' + r.status);
-  const d = (await r.json()) as AIWorkerResponse;
-  if (d.error) throw new Error(d.error);
+  // Đọc body trước để giữ lại thông báo lỗi thật từ worker (vd "Request not allowed"),
+  // thay vì chỉ báo mã HTTP chung chung.
+  const d = (await r.json().catch(() => ({}))) as AIWorkerResponse;
+  if (!r.ok || d.error) throw new Error(d.error || 'Worker lỗi ' + r.status);
   return d;
 }
