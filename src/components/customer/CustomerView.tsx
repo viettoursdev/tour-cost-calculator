@@ -14,6 +14,7 @@ import { canViewAll } from '@/auth/ROLES';
 import { CustomerModal } from './CustomerModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
 import { customerToNcc } from '@/lib/contactConvert';
+import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import type { Customer } from '@/types';
 
 type FilterType = '' | 'company' | 'individual';
@@ -32,6 +33,7 @@ export function CustomerView() {
 
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('');
+  const [sort, setSort] = useState<SortMode>('oldest');
   const [modal, setModal] = useState<ModalState>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useCustomerStore((s) => s.importMany);
@@ -44,7 +46,7 @@ export function CustomerView() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return customers.filter((c) => {
+    const base = customers.filter((c) => {
       if (!viewAll && c.createdBy !== currentUser?.name) return false;
       if (filterType && c.type !== filterType) return false;
       if (!q) return true;
@@ -62,7 +64,8 @@ export function CustomerView() {
         )
       );
     });
-  }, [customers, search, filterType, viewAll, currentUser?.name]);
+    return sortList(base, sort);
+  }, [customers, search, filterType, viewAll, currentUser?.name, sort]);
 
   const handleSave = async (form: Customer) => {
     await save(form);
@@ -135,6 +138,16 @@ export function CustomerView() {
           <MenuItem value="">Tất cả</MenuItem>
           <MenuItem value="company">🏢 Công ty</MenuItem>
           <MenuItem value="individual">👤 Cá nhân</MenuItem>
+        </Select>
+        <Select
+          size="small"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortMode)}
+          sx={{ minWidth: 180 }}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+          ))}
         </Select>
         {(search || filterType) && (
           <Button

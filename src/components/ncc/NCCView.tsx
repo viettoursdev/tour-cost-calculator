@@ -14,6 +14,7 @@ import { canViewAll } from '@/auth/ROLES';
 import { NCCModal } from './NCCModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
 import { nccToCustomer } from '@/lib/contactConvert';
+import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
 
@@ -32,6 +33,7 @@ export function NCCView() {
 
   const [search, setSearch] = useState('');
   const [filterSector, setFilterSector] = useState('');
+  const [sort, setSort] = useState<SortMode>('oldest');
   const [modal, setModal] = useState<ModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ncc | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -44,7 +46,7 @@ export function NCCView() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return suppliers.filter((s) => {
+    const base = suppliers.filter((s) => {
       if (!viewAll && s.createdBy !== currentUser?.name) return false;
       if (filterSector && !s.sectors.includes(filterSector)) return false;
       if (!q) return true;
@@ -61,7 +63,8 @@ export function NCCView() {
         )
       );
     });
-  }, [suppliers, search, filterSector, viewAll, currentUser?.name]);
+    return sortList(base, sort);
+  }, [suppliers, search, filterSector, viewAll, currentUser?.name, sort]);
 
   const handleSave = async (form: Ncc) => {
     await save(form);
@@ -124,6 +127,16 @@ export function NCCView() {
           <MenuItem value="">Tất cả lĩnh vực</MenuItem>
           {NCC_SECTORS.map((s) => (
             <MenuItem key={s} value={s}>{s}</MenuItem>
+          ))}
+        </Select>
+        <Select
+          size="small"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortMode)}
+          sx={{ minWidth: 180 }}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
           ))}
         </Select>
         {(search || filterSector) && (

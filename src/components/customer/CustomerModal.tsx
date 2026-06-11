@@ -5,6 +5,8 @@ import {
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import { NameCardScanButton } from '@/components/common/NameCardScanButton';
+import type { NameCardFields } from '@/lib/nameCard';
 import type { Customer, CustomerContact } from '@/types';
 
 const EMPTY_CONTACT: CustomerContact = { name: '', phone: '', email: '', position: '' };
@@ -47,6 +49,28 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
   const delContact = (i: number) =>
     setForm((p) => ({ ...p, contacts: p.contacts.filter((_, j) => j !== i) }));
 
+  const applyNameCard = (f: NameCardFields) =>
+    setForm((p) => {
+      const next = { ...p };
+      if (!next.name.trim()) next.name = f.company || f.name || '';
+      if (!next.address?.trim() && f.address) next.address = f.address;
+      if (!next.taxCode?.trim() && f.taxCode) next.taxCode = f.taxCode;
+      const c: CustomerContact = {
+        name: f.name || '',
+        phone: f.phone || '',
+        email: f.email || '',
+        position: f.position || '',
+      };
+      if (c.name || c.phone || c.email || c.position) {
+        const contacts = [...next.contacts];
+        const idx = contacts.findIndex((x) => !x.name && !x.phone && !x.email && !x.position);
+        if (idx >= 0) contacts[idx] = c;
+        else contacts.push(c);
+        next.contacts = contacts;
+      }
+      return next;
+    });
+
   const handleSave = () => {
     if (!form.name.trim()) {
       window.alert('Vui lòng nhập tên khách hàng');
@@ -67,6 +91,27 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
 
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {/* Quét name card */}
+          {canEdit && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                flexWrap: 'wrap',
+                p: 1,
+                borderRadius: 1,
+                border: '1px dashed',
+                borderColor: 'divider',
+              }}
+            >
+              <NameCardScanButton onScanned={applyNameCard} />
+              <Typography variant="caption" color="text.secondary">
+                Đính kèm ảnh danh thiếp — hệ thống tự nhận diện & điền các trường.
+              </Typography>
+            </Box>
+          )}
+
           {/* Type toggle */}
           <Box>
             <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>

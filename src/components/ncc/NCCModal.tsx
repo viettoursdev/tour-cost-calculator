@@ -5,6 +5,8 @@ import {
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import { NameCardScanButton } from '@/components/common/NameCardScanButton';
+import type { NameCardFields } from '@/lib/nameCard';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc, NccContact } from '@/types';
 
@@ -55,6 +57,31 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
   const delContact = (i: number) =>
     setForm((p) => ({ ...p, contacts: p.contacts.filter((_, j) => j !== i) }));
 
+  const applyNameCard = (f: NameCardFields) =>
+    setForm((p) => {
+      const next = { ...p };
+      // Tên NCC ưu tiên tên công ty; chỉ điền khi đang trống.
+      if (!next.name.trim()) next.name = f.company || f.name || '';
+      if (!next.location?.trim() && f.address) next.location = f.address;
+      // Người liên hệ: điền vào contact trống đầu tiên, nếu không có thì thêm mới.
+      const c: NccContact = {
+        name: f.name || '',
+        phone: f.phone || '',
+        email: f.email || '',
+        position: f.position || '',
+      };
+      if (c.name || c.phone || c.email || c.position) {
+        const contacts = [...next.contacts];
+        const idx = contacts.findIndex((x) => !x.name && !x.phone && !x.email && !x.position);
+        if (idx >= 0) contacts[idx] = c;
+        else contacts.push(c);
+        next.contacts = contacts;
+      }
+      // MST không có field riêng ở NCC → ghi vào note.
+      if (f.taxCode) next.note = next.note ? `${next.note} · MST: ${f.taxCode}` : `MST: ${f.taxCode}`;
+      return next;
+    });
+
   const handleSave = () => {
     if (!form.name.trim()) {
       window.alert('Vui lòng nhập tên NCC');
@@ -77,6 +104,27 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
 
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          {/* Quét name card */}
+          {canEdit && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                flexWrap: 'wrap',
+                p: 1,
+                borderRadius: 1,
+                border: '1px dashed',
+                borderColor: 'divider',
+              }}
+            >
+              <NameCardScanButton onScanned={applyNameCard} />
+              <Typography variant="caption" color="text.secondary">
+                Đính kèm ảnh danh thiếp — hệ thống tự nhận diện & điền các trường.
+              </Typography>
+            </Box>
+          )}
+
           {/* Name */}
           <TextField
             label="Tên NCC *"
