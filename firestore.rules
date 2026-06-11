@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isEmployee() {
+      // email_verified is intentionally NOT required. Magic-link sign-ins
+      // are auto-verified; Email+Password sign-ins (DEV testing) start
+      // unverified and the verification flow adds friction with no real
+      // security gain. The domain regex below is the load-bearing check,
+      // and Firebase Auth accounts in this project are created only by
+      // an admin in the Console.
+      return request.auth != null
+        && request.auth.token.email.lower().matches('.*@viettours[.]com[.]vn$');
+    }
+
+    // Shared single-doc collections (rate card, users, contracts, history…).
+    match /viettours/{docId}             { allow read, write: if isEmployee(); }
+    // Per-quote project documents.
+    match /quote_projects/{id}           { allow read, write: if isEmployee(); }
+    match /dmc_quote_projects/{id}       { allow read, write: if isEmployee(); }
+    // Per-user notification queue.
+    match /user_notifications/{username} { allow read, write: if isEmployee(); }
+
+    // Default deny anything else.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
