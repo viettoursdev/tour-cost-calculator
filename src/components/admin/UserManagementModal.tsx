@@ -60,7 +60,6 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
 
   const handleSave = () => {
     if (!form.u.trim()) { window.alert('Vui lòng nhập Username'); return; }
-    if (!form.p.trim()) { window.alert('Vui lòng nhập Mật khẩu'); return; }
     if (!form.name.trim()) { window.alert('Vui lòng nhập Tên hiển thị'); return; }
     const email = form.email.trim().toLowerCase();
     if (!email) { window.alert('Vui lòng nhập Email công ty'); return; }
@@ -78,11 +77,12 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
       return;
     }
     const phone = form.phone.trim();
+    const legacyPassword = editingId ? (users.find((x) => x.u === editingId)?.p ?? '') : '';
     const newUser: User = {
       u: username,
       email,
       ...(phone ? { phone } : {}),
-      p: form.p,
+      p: legacyPassword,
       name: form.name.trim(),
       role: form.role,
       color: form.color,
@@ -148,13 +148,6 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                   disabled={!!editingId}
                   size="small" fullWidth
                   placeholder="vd: sale4"
-                />
-                <TextField
-                  label="Mật khẩu"
-                  value={form.p}
-                  onChange={(e) => setF('p', e.target.value)}
-                  size="small" fullWidth
-                  placeholder="••••••"
                 />
               </Stack>
               <Stack direction="row" spacing={1.5}>

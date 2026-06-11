@@ -22,7 +22,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const hasItems = useQuoteStore((s) => Object.keys(s.draft.items).length > 0);
   const newDraft = useQuoteStore((s) => s.newDraft);
   const currentUser = useAuthStore((s) => s.currentUser);
-  const logout = useAuthStore((s) => s.logout);
+  const signOut = useAuthStore((s) => s.signOut);
   const [pendingConfirm, setPendingConfirm] = useState<Template | null>(null);
 
   const handlePick = (key: Template) => {
@@ -98,7 +98,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
               {/* Logout */}
               <Tooltip title="Đăng xuất">
                 <IconButton
-                  onClick={logout}
+                  onClick={() => { void signOut(); }}
                   sx={{
                     color: '#fff', background: 'rgba(255,255,255,0.14)',
                     border: '1px solid rgba(255,255,255,0.3)',

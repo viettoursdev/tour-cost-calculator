@@ -20,7 +20,7 @@ import { LEGACY } from '@/theme';
 
 export function AppShell() {
   const currentUser = useAuthStore((s) => s.currentUser);
-  const logout = useAuthStore((s) => s.logout);
+  const signOut = useAuthStore((s) => s.signOut);
   const [userMgrOpen, setUserMgrOpen] = useState(false);
   const [rateSyncOpen, setRateSyncOpen] = useState(false);
   const canManageUsers = hasPerm(currentUser, 'manageUsers');
@@ -70,7 +70,7 @@ export function AppShell() {
               <NotificationBell />
               <Tooltip title="Đăng xuất">
                 <IconButton
-                  onClick={logout}
+                  onClick={() => { void signOut(); }}
                   sx={{
                     color: '#fff', background: 'rgba(255,255,255,0.14)',
                     border: '1px solid rgba(255,255,255,0.3)',
