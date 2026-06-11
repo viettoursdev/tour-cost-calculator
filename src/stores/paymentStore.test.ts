@@ -79,6 +79,18 @@ describe('paymentStore', () => {
     expect(savedBy).toBe('Tony');
   });
 
+  it('setPayments creates a fresh slot + data reference so selectors re-render', () => {
+    usePaymentStore.getState().setPayments('tourA', { k: { supplier: 'A' } });
+    const slot1 = usePaymentStore.getState().slots.tourA;
+    usePaymentStore.getState().setPayments('tourA', { k: { supplier: 'B' } });
+    const slot2 = usePaymentStore.getState().slots.tourA;
+    // Regression: slot was mutated in place before, so Object.is selectors
+    // (PaymentView) never saw the change and the UI didn't update.
+    expect(slot2).not.toBe(slot1);
+    expect(slot2.data).not.toBe(slot1.data);
+    expect(slot2.data.payments).toEqual({ k: { supplier: 'B' } });
+  });
+
   it('setCustomItems writes-through and debounces fb push by 1s', () => {
     usePaymentStore.getState().setCustomItems('tourA', [
       { key: 'x', catId: 'hotel', catLabel: '', catIcon: '', catColor: '', name: 'n', amount: 1 },

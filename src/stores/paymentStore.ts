@@ -113,31 +113,29 @@ export const usePaymentStore = create<PaymentState>()(
     },
 
     setPayments: (tourKey, next) => {
-      const slots = { ...get().slots };
-      const slot = slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
-      slot.data = { ...slot.data, payments: next };
-      slots[tourKey] = slot;
+      // New slot + data references so the zustand selector (Object.is on the slot)
+      // detects the change and re-renders immediately — independent of the cloud
+      // round-trip (which may fail/lag). Cloud push stays debounced below.
+      const prev = get().slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
       writeLocal(LS_PAYMENTS_PREFIX + tourKey, next);
-      if (slot.pushTimer) clearTimeout(slot.pushTimer);
-      slot.pushTimer = setTimeout(() => {
+      if (prev.pushTimer) clearTimeout(prev.pushTimer);
+      const pushTimer = setTimeout(() => {
         const u = useAuthStore.getState().currentUser;
         const savedBy = u?.name ?? 'unknown';
         const latest = get().slots[tourKey]?.data ?? EMPTY;
         fbSaveTourPayments(tourKey, latest.payments, latest.customItems, savedBy).catch(() => {
-          /* swallow — last-write-wins */
+          /* swallow — local state + localStorage keep the edit; last-write-wins */
         });
       }, 1000);
-      set({ slots });
+      const slot: Slot = { ...prev, data: { ...prev.data, payments: next }, pushTimer };
+      set({ slots: { ...get().slots, [tourKey]: slot } });
     },
 
     setCustomItems: (tourKey, next) => {
-      const slots = { ...get().slots };
-      const slot = slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
-      slot.data = { ...slot.data, customItems: next };
-      slots[tourKey] = slot;
+      const prev = get().slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
       writeLocal(LS_CUSTOM_PREFIX + tourKey, next);
-      if (slot.pushTimer) clearTimeout(slot.pushTimer);
-      slot.pushTimer = setTimeout(() => {
+      if (prev.pushTimer) clearTimeout(prev.pushTimer);
+      const pushTimer = setTimeout(() => {
         const u = useAuthStore.getState().currentUser;
         const savedBy = u?.name ?? 'unknown';
         const latest = get().slots[tourKey]?.data ?? EMPTY;
@@ -145,7 +143,8 @@ export const usePaymentStore = create<PaymentState>()(
           /* swallow */
         });
       }, 1000);
-      set({ slots });
+      const slot: Slot = { ...prev, data: { ...prev.data, customItems: next }, pushTimer };
+      set({ slots: { ...get().slots, [tourKey]: slot } });
     },
 
     getTour: (tourKey) => get().slots[tourKey]?.data ?? EMPTY,
