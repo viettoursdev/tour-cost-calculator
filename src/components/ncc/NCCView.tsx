@@ -5,12 +5,15 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useNccStore } from '@/stores/nccStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewAll } from '@/auth/ROLES';
 import { NCCModal } from './NCCModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
+import { nccToCustomer } from '@/lib/contactConvert';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
 
@@ -33,6 +36,11 @@ export function NCCView() {
   const [deleteTarget, setDeleteTarget] = useState<Ncc | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useNccStore((s) => s.importMany);
+  // Chuyển sang Khách hàng: cần quyền quản lý Khách hàng để thêm vào danh sách đích.
+  const custSave = useCustomerStore((s) => s.save);
+  const customers = useCustomerStore((s) => s.customers);
+  const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageCustomers');
+  const [convertTarget, setConvertTarget] = useState<Ncc | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -64,6 +72,15 @@ export function NCCView() {
     if (!deleteTarget) return;
     await del(deleteTarget.id);
     setDeleteTarget(null);
+  };
+
+  const handleConvert = async () => {
+    if (!convertTarget) return;
+    const moved = convertTarget.name;
+    await custSave(nccToCustomer(convertTarget));
+    await del(convertTarget.id);
+    setConvertTarget(null);
+    window.alert(`✅ Đã chuyển "${moved}" sang danh sách Khách hàng.`);
   };
 
   return (
@@ -138,8 +155,10 @@ export function NCCView() {
               key={s.id}
               ncc={s}
               canEdit={canEdit}
+              canConvert={canConvert}
               onEdit={() => setModal({ ncc: s })}
               onDelete={() => setDeleteTarget(s)}
+              onConvert={() => setConvertTarget(s)}
               onClick={() => setModal({ ncc: s })}
             />
           ))}
@@ -193,6 +212,32 @@ export function NCCView() {
           <Button variant="contained" color="error" onClick={handleDelete}>Xoá</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Convert → Customer confirm */}
+      <Dialog open={!!convertTarget} onClose={() => setConvertTarget(null)}>
+        <DialogTitle>Chuyển sang Khách hàng?</DialogTitle>
+        <DialogContent>
+          <Alert severity="info">
+            Chuyển <strong>{convertTarget?.name}</strong> từ <strong>Nhà cung cấp</strong> sang
+            danh sách <strong>Khách hàng</strong> (giữ contacts &amp; ghi chú). Mục này sẽ bị{' '}
+            <strong>xoá khỏi Nhà cung cấp</strong>.
+            {convertTarget &&
+              customers.some(
+                (c) => c.name.trim().toLowerCase() === convertTarget.name.trim().toLowerCase(),
+              ) && (
+                <Box sx={{ mt: 1, fontWeight: 700 }}>
+                  ⚠️ Đã có Khách hàng trùng tên — thao tác sẽ tạo thêm một bản mới.
+                </Box>
+              )}
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConvertTarget(null)}>Huỷ</Button>
+          <Button variant="contained" onClick={handleConvert} startIcon={<SwapHorizIcon />}>
+            Chuyển
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -202,14 +247,18 @@ export function NCCView() {
 function NccCard({
   ncc: s,
   canEdit,
+  canConvert,
   onEdit,
   onDelete,
+  onConvert,
   onClick,
 }: {
   ncc: Ncc;
   canEdit: boolean;
+  canConvert: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onConvert: () => void;
   onClick: () => void;
 }) {
   return (
@@ -238,6 +287,13 @@ function NccCard({
                 <EditIcon fontSize="small" />
               </IconButton>
             </Tooltip>
+            {canConvert && (
+              <Tooltip title="Chuyển sang Khách hàng">
+                <IconButton size="small" color="primary" onClick={onConvert}>
+                  <SwapHorizIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Xoá">
               <IconButton size="small" color="error" onClick={onDelete}>
                 <DeleteOutlineIcon fontSize="small" />
