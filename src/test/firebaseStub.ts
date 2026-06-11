@@ -76,3 +76,20 @@ export const fbSaveVisaProc = vi.fn(async () => {});
 export const fbGetVisaProc = vi.fn(async () => null);
 export const fbDeleteVisaProc = vi.fn(async () => {});
 export const fbSubscribeVisaProcs = vi.fn(() => () => {});
+
+// ── Auth ──
+export const auth = {};
+export const fbSendSignInLink = vi.fn(async (_email: string) => {});
+export const fbIsSignInLink = vi.fn((_url: string) => false);
+export const fbCompleteSignInLink = vi.fn(async (_email: string, _url: string) => ({
+  uid: 'stub-uid',
+  email: 'stub@viettours.com.vn',
+  emailVerified: true,
+} as unknown as import('firebase/auth').User));
+export const fbSignInWithPassword = vi.fn(async (_email: string, _password: string) => ({
+  uid: 'stub-uid',
+  email: 'stub@viettours.com.vn',
+  emailVerified: false,
+} as unknown as import('firebase/auth').User));
+export const fbSignOut = vi.fn(async () => {});
+export const fbOnIdTokenChanged = vi.fn((_cb: (u: unknown) => void | Promise<void>) => () => {});
