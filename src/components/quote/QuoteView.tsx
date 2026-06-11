@@ -21,11 +21,19 @@ import { LEGACY } from '@/theme';
 export function QuoteView() {
   const template = useQuoteStore((s) => s.draft.template);
   const view = useQuoteStore((s) => s.view);
+  // `currentUsername` is null until `quoteStore.init(user)` has run from
+  // MainApp's post-commit effect. Without this guard, the first render after
+  // login sees the placeholder `template: null` from EMPTY_DRAFT and briefly
+  // opens the fullScreen template-selector Dialog, which then immediately
+  // closes when init sets template from localStorage. That rapid open→close
+  // leaves MUI's Dialog wrapper stuck mounted at z-index 1300 (backdrop
+  // opacity 0, visibility hidden) covering the whole page and eating clicks.
+  const hydrated = useQuoteStore((s) => s.currentUsername !== null);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [saveCloudOpen, setSaveCloudOpen] = useState(false);
 
   // If no template, show the gate non-dismissably.
-  const gateOpen = template === null || selectorOpen;
+  const gateOpen = hydrated && (template === null || selectorOpen);
   const gateDismissable = template !== null;
 
   if (template === 'itinerary') {
