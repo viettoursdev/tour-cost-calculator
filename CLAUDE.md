@@ -78,6 +78,8 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 **Firebase Auth — magic link in production, Email+Password panel in DEV builds only for testing.** `sendSignInLinkToEmail` restricted to `@viettours.com.vn`. `authStore.init()` completes any in-flight magic link and subscribes via `onIdTokenChanged`; the verified email is matched (case-insensitive) against `User.email` in `viettours/user_accounts` to resolve `currentUser`. Legacy plaintext `User.p` is unused and slated for Phase 4 cleanup. Console setup steps live in `docs/firebase-setup.md`; project switch workflow in `docs/firebase-migration.md`.
 
+**48h inactivity sign-out (magic-link only).** Magic-link sessions auto-sign-out after 48 hours of no user interaction. `src/auth/sessionTimeout.ts` owns the per-user `vte_session_last_active_{username}` timestamp; `startActivityTracker` listens to `pointerdown`/`keydown` (throttled to one write per 30s) and runs a 60-second interval check plus an immediate check on `focus`/`visibilitychange`. `authStore.expireSession()` signs the user out and shows "Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại." DEV password sign-ins are intentionally exempt — they stay signed in indefinitely for testing convenience.
+
 **Default Firestore database.** The new project `tour-cost-calculator-4336c` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
 
 **Per-user persisted quote draft (gotcha).** `quoteStore` registers persist middleware with a placeholder name and overrides the storage adapter at write time to use `vte_quote_draft_{username}`. The `getItem` handler returns `null` on initial hydration; the real hydration happens in `quoteStore.init(user)` which reads `localStorage` directly. Don't "fix" this by giving persist a static name — you'll cross-leak users.
@@ -122,6 +124,8 @@ Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tool
 |-----|---------|
 | `vte_users` | Zustand-persisted user list (`authStore`) |
 | `vte_pending_signin_email` | Email a magic link was sent to (`authStore`, cleared on completion) |
+| `vte_session_method_{username}` | `'link'` or `'password'` — which sign-in method started this session (`authStore` / `sessionTimeout`) |
+| `vte_session_last_active_{username}` | Epoch ms of the user's last interaction. Drives the 48h inactivity sign-out for `link` sessions only. |
 | Firebase Auth IndexedDB | Session token (managed by `firebase/auth`, persists across browser restarts) |
 | `vte_quote_draft_{username}` | Per-user persisted quote draft (`quoteStore`) |
 | `vte_hotels_v2_{city}` | Hotel rate cards per city |
