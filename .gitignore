@@ -7,3 +7,9 @@ vite.config.js
 vite.config.d.ts
 .playwright-mcp/
 vite-after-mo-click.png
+
+# Firebase migration (Stage 2)
+# These contain credentials and Firestore data. Never commit.
+old-service-account.json
+new-service-account.json
+firestore-dump.json
