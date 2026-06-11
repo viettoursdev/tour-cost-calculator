@@ -10,6 +10,24 @@ import type { User } from '@/types';
 const ALLOWED_DOMAIN = '@viettours.com.vn';
 const PENDING_EMAIL_KEY = 'vte_pending_signin_email';
 
+// First time this email signs in we auto-provision it as CEO and push the
+// addition to viettours/user_accounts. Anyone with mailbox access to this
+// address gets full permissions, so it must be a tightly-held company
+// mailbox (not a shared/aspirational alias). Subsequent sign-ins go through
+// the normal cloud-match path.
+const BOOTSTRAP_CEO_EMAIL = 'developer@viettours.com.vn';
+
+function makeBootstrapCEO(email: string): User {
+  return {
+    u: 'developer',
+    email,
+    p: '',
+    role: 'CEO',
+    name: 'Developer',
+    color: '#dc3250',
+  };
+}
+
 function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase();
 }
@@ -86,6 +104,18 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const verifiedEmail = (fbUser.email ?? '').toLowerCase();
       const match = cloud.find((u) => (u.email ?? '').toLowerCase() === verifiedEmail);
       if (!match) {
+        // Bootstrap path: auto-provision the developer CEO on first sign-in.
+        if (verifiedEmail === BOOTSTRAP_CEO_EMAIL) {
+          const dev = makeBootstrapCEO(verifiedEmail);
+          const next = [...cloud, dev];
+          try {
+            await fbPushUsers(next);
+          } catch (e) {
+            console.warn('Bootstrap CEO write to user_accounts failed:', (e as Error).message);
+          }
+          set({ currentUser: dev, users: next, hasHydrated: true, authError: null });
+          return;
+        }
         // Authed but not in user_accounts → reject.
         await fbSignOut();
         set({

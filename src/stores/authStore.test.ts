@@ -129,6 +129,33 @@ describe('init — onIdTokenChanged subscriber', () => {
     expect(useAuthStore.getState().currentUser).toBeNull();
     expect(useAuthStore.getState().authError).toMatch(/chưa được cấp quyền/);
   });
+
+  it('developer@viettours.com.vn auto-provisions as CEO when not in user_accounts', async () => {
+    vi.mocked(fb.fbPullUsers).mockResolvedValueOnce([]);
+    await useAuthStore.getState().init();
+    const cb = vi.mocked(fb.fbOnIdTokenChanged).mock.calls[0][0];
+    await cb({ email: 'developer@viettours.com.vn', emailVerified: true } as Parameters<typeof cb>[0]);
+    const state = useAuthStore.getState();
+    expect(state.currentUser?.u).toBe('developer');
+    expect(state.currentUser?.role).toBe('CEO');
+    expect(state.authError).toBeNull();
+    expect(fb.fbSignOut).not.toHaveBeenCalled();
+    expect(fb.fbPushUsers).toHaveBeenCalledTimes(1);
+    const pushed = vi.mocked(fb.fbPushUsers).mock.calls[0][0];
+    expect(pushed.find((u) => u.email === 'developer@viettours.com.vn')?.role).toBe('CEO');
+  });
+
+  it('developer@viettours.com.vn signs in normally if already in user_accounts', async () => {
+    vi.mocked(fb.fbPullUsers).mockResolvedValueOnce([
+      user({ u: 'developer', email: 'developer@viettours.com.vn', name: 'Dev', role: 'CEO' }),
+    ]);
+    await useAuthStore.getState().init();
+    const cb = vi.mocked(fb.fbOnIdTokenChanged).mock.calls[0][0];
+    await cb({ email: 'developer@viettours.com.vn', emailVerified: true } as Parameters<typeof cb>[0]);
+    expect(useAuthStore.getState().currentUser?.u).toBe('developer');
+    // Not bootstrapped — found in cloud, no second write.
+    expect(fb.fbPushUsers).not.toHaveBeenCalled();
+  });
 });
 
 describe('completeCrossDeviceSignIn', () => {
