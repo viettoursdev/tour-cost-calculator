@@ -184,7 +184,7 @@ export function CustomerView() {
         title="📥 Nhập danh sách khách hàng"
         note="Loại mặc định là Công ty."
         columns={[
-          { key: 'name', label: 'Tên khách hàng', aliases: ['ten', 'ten khach hang', 'company', 'cong ty', 'customer'] },
+          { key: 'name', label: 'Tên NCC / Công ty / Khách hàng', aliases: ['ten', 'ten khach hang', 'ten cong ty', 'ten ncc', 'company', 'cong ty', 'customer', 'khach hang', 'name'] },
           { key: 'taxCode', label: 'Mã số thuế', aliases: ['mst', 'tax', 'taxcode'] },
           { key: 'address', label: 'Địa chỉ', aliases: ['dia chi', 'address'] },
           { key: 'contact', label: 'Người liên hệ', aliases: ['nguoi lien he', 'lien he', 'contact', 'ho ten'] },

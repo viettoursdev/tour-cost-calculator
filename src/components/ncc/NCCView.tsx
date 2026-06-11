@@ -162,7 +162,7 @@ export function NCCView() {
         title="📥 Nhập danh sách Nhà cung cấp"
         note={`Lĩnh vực gợi ý: ${NCC_SECTORS.join(', ')}.`}
         columns={[
-          { key: 'name', label: 'Tên NCC', aliases: ['ten', 'ten ncc', 'name', 'supplier', 'nha cung cap', 'company'] },
+          { key: 'name', label: 'Tên NCC / Công ty / Khách hàng', aliases: ['ten', 'ten ncc', 'ten cong ty', 'name', 'supplier', 'nha cung cap', 'company', 'cong ty', 'khach hang'] },
           { key: 'sector', label: 'Lĩnh vực', aliases: ['linh vuc', 'sector', 'nganh', 'loai'] },
           { key: 'location', label: 'Khu vực', aliases: ['khu vuc', 'location', 'dia diem', 'city'] },
           { key: 'contact', label: 'Người liên hệ', aliases: ['nguoi lien he', 'lien he', 'contact', 'ho ten'] },
