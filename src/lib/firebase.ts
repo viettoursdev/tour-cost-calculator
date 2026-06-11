@@ -5,8 +5,8 @@ import {
   type Auth, type User as FbUser, type Unsubscribe as AuthUnsubscribe,
 } from 'firebase/auth';
 import {
-  deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type DocumentReference,
-  type Unsubscribe,
+  deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc,
+  type DocumentReference, type DocumentSnapshot, type DocumentData, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
@@ -33,6 +33,24 @@ export const db = getFirestore(app);
 // email matches @viettours.com.vn so anonymous and external-domain clients
 // are denied. The next task (authStore rewrite) wires these wrappers in.
 export const auth: Auth = getAuth(app);
+
+/**
+ * Subscribe to a Firestore document with a shared error handler. Firestore
+ * fires `permission-denied` transiently while the auth token is torn down on
+ * sign-out / token refresh — swallow that quietly instead of letting it surface
+ * as an uncaught snapshot error; log everything else.
+ */
+function snapErr(e: Error): void {
+  if ((e as { code?: string }).code === 'permission-denied') return;
+  console.warn('Firestore snapshot error:', e.message);
+}
+
+function subDoc(
+  ref: DocumentReference,
+  onNext: (snap: DocumentSnapshot<DocumentData>) => void,
+): Unsubscribe {
+  return onSnapshot(ref, onNext, snapErr);
+}
 
 const ACTION_URL = `${window.location.origin}${import.meta.env.BASE_URL}?mode=auth`;
 
@@ -141,7 +159,7 @@ export async function fbPushMasterRC(rc: RateCard, pushedBy: string): Promise<st
 }
 
 export function fbSubscribeMasterRC(cb: (rc: RateCardDoc) => void): Unsubscribe {
-  return onSnapshot(RC_DOC, (snap) => {
+  return subDoc(RC_DOC, (snap) => {
     if (snap.exists()) cb(stripVisaMirror(snap.data() as RateCardDoc));
   });
 }
@@ -193,7 +211,7 @@ function makeQuoteHistoryApi(
   return {
     /** Source: public/legacy.html:233. */
     fbSubscribeQuoteHistory(cb: (quotes: CloudQuoteEntry[]) => void): Unsubscribe {
-      return onSnapshot(historyDoc, (snap) => {
+      return subDoc(historyDoc, (snap) => {
         cb(snap.exists() ? ((snap.data().quotes as CloudQuoteEntry[]) ?? []) : []);
       });
     },
@@ -353,7 +371,7 @@ export const fbGetDMCQuoteProject        = _dmc.fbGetQuoteProject;
 export function fbSubscribeCustomers(
   cb: (list: Customer[]) => void,
 ): Unsubscribe {
-  return onSnapshot(CUSTOMER_DOC, (snap) => {
+  return subDoc(CUSTOMER_DOC, (snap) => {
     cb(snap.exists() ? ((snap.data().customers as Customer[]) ?? []) : []);
   });
 }
@@ -380,7 +398,7 @@ export async function fbPushCustomers(
  * Legacy window.fbOnNCC reads data.suppliers.
  */
 export function fbSubscribeNcc(cb: (list: Ncc[]) => void): Unsubscribe {
-  return onSnapshot(NCC_DOC, (snap) => {
+  return subDoc(NCC_DOC, (snap) => {
     cb(snap.exists() ? ((snap.data().suppliers as Ncc[]) ?? []) : []);
   });
 }
@@ -407,7 +425,7 @@ export async function fbPushNcc(
  * Source: legacy window.fbOnContracts (legacy.html:353).
  */
 export function fbSubscribeContracts(cb: (list: Contract[]) => void): Unsubscribe {
-  return onSnapshot(CONTRACTS_DOC, (snap) => {
+  return subDoc(CONTRACTS_DOC, (snap) => {
     cb(snap.exists() ? ((snap.data().contracts as Contract[]) ?? []) : []);
   });
 }
@@ -469,7 +487,7 @@ export function fbSubscribeNotifications(
   username: string,
   cb: (list: Notification[]) => void,
 ): Unsubscribe {
-  return onSnapshot(notifDoc(username), (snap) => {
+  return subDoc(notifDoc(username), (snap) => {
     cb(snap.exists() ? ((snap.data().notifications as Notification[]) ?? []) : []);
   });
 }
@@ -492,7 +510,7 @@ export type FxRatesDoc = {
 };
 
 export function fbSubscribeFxRates(cb: (doc: FxRatesDoc) => void): Unsubscribe {
-  return onSnapshot(FX_RATES_DOC, (snap) => {
+  return subDoc(FX_RATES_DOC, (snap) => {
     if (snap.exists()) cb(snap.data() as FxRatesDoc);
   });
 }
@@ -522,7 +540,7 @@ export async function fbEnsureNotifThread(thread: NotifThread): Promise<void> {
 }
 
 export function fbSubscribeNotifThread(id: string, cb: (t: NotifThread | null) => void): Unsubscribe {
-  return onSnapshot(notifThreadDoc(id), (snap) => cb(snap.exists() ? (snap.data() as NotifThread) : null));
+  return subDoc(notifThreadDoc(id), (snap) => cb(snap.exists() ? (snap.data() as NotifThread) : null));
 }
 
 /** Append a comment to a shared thread (read-modify-write). */
@@ -571,7 +589,7 @@ export function fbSubscribeTourPayments(
   tourKey: string,
   cb: (data: TourPayments | null) => void,
 ): Unsubscribe {
-  return onSnapshot(tourPaymentsDoc(tourKey), (snap) => {
+  return subDoc(tourPaymentsDoc(tourKey), (snap) => {
     if (!snap.exists()) return cb(null);
     const data = snap.data();
     cb({
@@ -635,7 +653,7 @@ export async function fbSetApprovalStage(
 export function fbSubscribePaymentApprovals(
   cb: (data: PaymentApprovalDoc) => void,
 ): Unsubscribe {
-  return onSnapshot(PA_DOC, (snap) => {
+  return subDoc(PA_DOC, (snap) => {
     cb(snap.exists() ? (snap.data() as PaymentApprovalDoc) : {});
   });
 }
@@ -706,7 +724,7 @@ export async function fbDeleteItinerary(id: string): Promise<void> {
 export function fbSubscribeItineraries(
   cb: (list: ItineraryIndexEntry[]) => void,
 ): Unsubscribe {
-  return onSnapshot(ITIN_INDEX_DOC, (s) => {
+  return subDoc(ITIN_INDEX_DOC, (s) => {
     cb(s.exists() ? ((s.data().items as ItineraryIndexEntry[]) ?? []) : []);
   });
 }
@@ -720,7 +738,7 @@ const REST_DOC = doc(db, 'viettours', 'restaurant_list');
  * Source: legacy window.fbOnRestaurants (legacy.html:472).
  */
 export function fbSubscribeRestaurants(cb: (list: Restaurant[]) => void): Unsubscribe {
-  return onSnapshot(REST_DOC, (s) => {
+  return subDoc(REST_DOC, (s) => {
     cb(s.exists() ? ((s.data().restaurants as Restaurant[]) ?? []) : []);
   });
 }
@@ -788,7 +806,7 @@ export async function fbDeleteMenu(id: string): Promise<void> {
 }
 
 export function fbSubscribeMenus(cb: (list: MenuIndexEntry[]) => void): Unsubscribe {
-  return onSnapshot(MENU_INDEX_DOC, (s) => {
+  return subDoc(MENU_INDEX_DOC, (s) => {
     cb(s.exists() ? ((s.data().items as MenuIndexEntry[]) ?? []) : []);
   });
 }
@@ -804,7 +822,7 @@ const VISA_PRODUCTS_DOC = doc(db, 'viettours', 'visa_products');
 export function fbSubscribeVisaProducts(
   cb: (data: VisaProductsDoc | null) => void,
 ): Unsubscribe {
-  return onSnapshot(VISA_PRODUCTS_DOC, (s) => {
+  return subDoc(VISA_PRODUCTS_DOC, (s) => {
     cb(s.exists() ? (s.data() as VisaProductsDoc) : null);
   });
 }
@@ -879,7 +897,7 @@ export async function fbDeleteVisaProc(id: string): Promise<void> {
 export function fbSubscribeVisaProcs(
   cb: (list: VisaProcIndexEntry[]) => void,
 ): Unsubscribe {
-  return onSnapshot(VISA_PROC_INDEX_DOC, (s) => {
+  return subDoc(VISA_PROC_INDEX_DOC, (s) => {
     cb(s.exists() ? ((s.data().items as VisaProcIndexEntry[]) ?? []) : []);
   });
 }

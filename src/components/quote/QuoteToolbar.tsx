@@ -545,7 +545,10 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           </Box>
         )}
         <Button
-          size="small" variant="contained" startIcon={<CloudUploadIcon />} onClick={onOpenSaveCloud}
+          size="small" variant="contained" startIcon={<CloudUploadIcon />}
+          // Blur first so the trigger isn't a focused descendant of #root when the
+          // dialog applies aria-hidden (avoids the a11y "aria-hidden on focused" warning).
+          onClick={(e) => { e.currentTarget.blur(); onOpenSaveCloud(); }}
           sx={{ fontWeight: 800, background: LEGACY.headerGradient }}
         >
           Lưu
