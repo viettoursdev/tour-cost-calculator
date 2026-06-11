@@ -11,6 +11,7 @@ type CustomerState = {
   syncing: boolean;
   init: () => Unsubscribe;
   save: (form: Customer) => Promise<void>;
+  importMany: (rows: Customer[]) => Promise<number>;
   delete: (id: string) => Promise<void>;
 };
 
@@ -54,6 +55,37 @@ export const useCustomerStore = create<CustomerState>()(
       } finally {
         set({ syncing: false });
       }
+    },
+
+    importMany: async (rows) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return 0;
+      const { customers } = get();
+      const existing = new Set(customers.map((c) => c.name.trim().toLowerCase()));
+      const now = new Date().toISOString();
+      const toAdd: Customer[] = [];
+      for (const r of rows) {
+        const key = (r.name || '').trim().toLowerCase();
+        if (!key || existing.has(key)) continue; // skip blank + duplicate-by-name
+        existing.add(key);
+        toAdd.push({
+          ...r,
+          id: r.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + toAdd.length,
+          createdAt: now,
+          createdBy: u.name,
+        });
+      }
+      if (!toAdd.length) return 0;
+      const next = [...customers, ...toAdd];
+      set({ customers: next, syncing: true });
+      try {
+        await fbPushCustomers(next, { name: u.name, role: u.role });
+      } catch (e) {
+        window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
+      } finally {
+        set({ syncing: false });
+      }
+      return toAdd.length;
     },
 
     delete: async (id) => {

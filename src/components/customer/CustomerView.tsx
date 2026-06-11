@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewAll } from '@/auth/ROLES';
 import { CustomerModal } from './CustomerModal';
+import { ImportListModal } from '@/components/common/ImportListModal';
 import type { Customer } from '@/types';
 
 type FilterType = '' | 'company' | 'individual';
@@ -29,6 +30,8 @@ export function CustomerView() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('');
   const [modal, setModal] = useState<ModalState>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const importMany = useCustomerStore((s) => s.importMany);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
 
   const filtered = useMemo(() => {
@@ -80,13 +83,18 @@ export function CustomerView() {
           </Typography>
         </Box>
         {canEdit && (
-          <Button
-            variant="contained"
-            startIcon={<span>➕</span>}
-            onClick={() => setModal({ customer: null })}
-          >
-            Thêm khách hàng
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<span>📥</span>} onClick={() => setImportOpen(true)}>
+              Nhập danh sách
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<span>➕</span>}
+              onClick={() => setModal({ customer: null })}
+            >
+              Thêm khách hàng
+            </Button>
+          </Stack>
         )}
       </Stack>
 
@@ -169,6 +177,29 @@ export function CustomerView() {
           onClose={() => setModal(null)}
         />
       )}
+
+      <ImportListModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="📥 Nhập danh sách khách hàng"
+        note="Loại mặc định là Công ty."
+        columns={[
+          { key: 'name', label: 'Tên khách hàng', aliases: ['ten', 'ten khach hang', 'company', 'cong ty', 'customer'] },
+          { key: 'taxCode', label: 'Mã số thuế', aliases: ['mst', 'tax', 'taxcode'] },
+          { key: 'address', label: 'Địa chỉ', aliases: ['dia chi', 'address'] },
+          { key: 'contact', label: 'Người liên hệ', aliases: ['nguoi lien he', 'lien he', 'contact', 'ho ten'] },
+          { key: 'phone', label: 'Điện thoại', aliases: ['dien thoai', 'phone', 'sdt', 'tel', 'mobile'] },
+          { key: 'email', label: 'Email', aliases: ['e-mail', 'mail'] },
+          { key: 'position', label: 'Chức vụ', aliases: ['chuc vu', 'position', 'title'] },
+          { key: 'note', label: 'Ghi chú', aliases: ['ghi chu', 'note', 'notes'] },
+        ]}
+        onImport={(rows) => importMany(rows.map((r): Customer => ({
+          id: '', name: r.name, type: 'company',
+          address: r.address || '', taxCode: r.taxCode || '',
+          contacts: [{ name: r.contact || '', phone: r.phone || '', email: r.email || '', position: r.position || '' }],
+          note: r.note || '', createdAt: '', createdBy: '',
+        })))}
+      />
 
       {/* Delete confirm dialog */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>

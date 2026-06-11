@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewAll } from '@/auth/ROLES';
 import { NCCModal } from './NCCModal';
+import { ImportListModal } from '@/components/common/ImportListModal';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
 
@@ -30,6 +31,8 @@ export function NCCView() {
   const [filterSector, setFilterSector] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ncc | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const importMany = useNccStore((s) => s.importMany);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -77,9 +80,10 @@ export function NCCView() {
           </Typography>
         </Box>
         {canEdit && (
-          <Button variant="contained" onClick={() => setModal({ ncc: null })}>
-            ➕ Thêm NCC
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" onClick={() => setImportOpen(true)}>📥 Nhập danh sách</Button>
+            <Button variant="contained" onClick={() => setModal({ ncc: null })}>➕ Thêm NCC</Button>
+          </Stack>
         )}
       </Stack>
 
@@ -151,6 +155,30 @@ export function NCCView() {
           onClose={() => setModal(null)}
         />
       )}
+
+      <ImportListModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="📥 Nhập danh sách Nhà cung cấp"
+        note={`Lĩnh vực gợi ý: ${NCC_SECTORS.join(', ')}.`}
+        columns={[
+          { key: 'name', label: 'Tên NCC', aliases: ['ten', 'ten ncc', 'name', 'supplier', 'nha cung cap', 'company'] },
+          { key: 'sector', label: 'Lĩnh vực', aliases: ['linh vuc', 'sector', 'nganh', 'loai'] },
+          { key: 'location', label: 'Khu vực', aliases: ['khu vuc', 'location', 'dia diem', 'city'] },
+          { key: 'contact', label: 'Người liên hệ', aliases: ['nguoi lien he', 'lien he', 'contact', 'ho ten'] },
+          { key: 'phone', label: 'Điện thoại', aliases: ['dien thoai', 'phone', 'sdt', 'tel', 'mobile'] },
+          { key: 'email', label: 'Email', aliases: ['e-mail', 'mail'] },
+          { key: 'position', label: 'Chức vụ', aliases: ['chuc vu', 'position', 'title'] },
+          { key: 'note', label: 'Ghi chú', aliases: ['ghi chu', 'note', 'notes'] },
+        ]}
+        onImport={(rows) => importMany(rows.map((r): Ncc => ({
+          id: '', name: r.name,
+          sectors: r.sector ? r.sector.split(/[;,/]/).map((s) => s.trim()).filter(Boolean) : [],
+          location: r.location || '',
+          contacts: [{ name: r.contact || '', phone: r.phone || '', email: r.email || '', position: r.position || '' }],
+          note: r.note || '', createdAt: '', createdBy: '',
+        })))}
+      />
 
       {/* Delete confirm */}
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
