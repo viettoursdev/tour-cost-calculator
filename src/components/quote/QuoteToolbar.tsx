@@ -37,7 +37,7 @@ import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { TEMPLATES } from './constants';
-import { VTE_LOGO_WHITE } from '@/lib/exports/vteLogo';
+import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
 import type { Contract, OutputCurrency } from '@/types';
 
@@ -255,7 +255,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         <Stack direction="row" spacing={2.5} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
           {/* COL1: logo + template badge (legacy hero) */}
           <Stack alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
-            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 54, width: 'auto', display: 'block' }} />
+            <Box component="img" src={VTE_LOGO} alt="Viettours" sx={{ height: 42, width: 'auto', display: 'block', filter: 'brightness(0) invert(1)' }} />
             {tpl && (
               <Box sx={{
                 background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',

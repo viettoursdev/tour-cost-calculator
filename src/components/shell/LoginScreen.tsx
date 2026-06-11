@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuthStore } from '@/stores/authStore';
+import { VTE_LOGO } from '@/lib/exports/vteLogo';
 
 const RESEND_SECONDS = 60;
 
@@ -71,10 +72,8 @@ export function LoginScreen() {
   const paperSx = { p: 4, width: 420 };
   const header = (
     <Box sx={{ textAlign: 'center', mb: 2.5 }}>
-      <Typography variant="h5" sx={{ fontWeight: 800, color: '#0d7a6a' }}>
-        VIETTOURS
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
+      <Box component="img" src={VTE_LOGO} alt="Viettours" sx={{ height: 40, width: 'auto', mb: 0.75 }} />
+      <Typography variant="caption" color="text.secondary" display="block">
         Bảng tính chi phí tour
       </Typography>
     </Box>

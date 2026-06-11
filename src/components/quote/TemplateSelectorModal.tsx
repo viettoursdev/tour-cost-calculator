@@ -9,7 +9,7 @@ import { TEMPLATES } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
-import { VTE_LOGO_WHITE } from '@/lib/exports/vteLogo';
+import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Template } from '@/types';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
@@ -60,7 +60,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
         {/* Top bar: white logo + brand (with subtitle) · account / notifications / logout */}
         <Stack direction="row" alignItems="center" sx={{ position: 'relative' }} flexWrap="wrap" gap={1.5}>
           <Stack direction="row" alignItems="center" spacing={1.75} sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Box component="img" src={VTE_LOGO_WHITE} alt="Viettours" sx={{ height: 48, width: 'auto' }} />
+            <Box component="img" src={VTE_LOGO} alt="Viettours" sx={{ height: 38, width: 'auto', filter: 'brightness(0) invert(1)' }} />
             <Box sx={{ minWidth: 0 }}>
               <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: 0.2 }} noWrap>
                 Phần mềm quản lý - Viettours
