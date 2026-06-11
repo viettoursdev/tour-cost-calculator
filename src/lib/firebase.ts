@@ -1,5 +1,9 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import {
+  getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
+  signInWithEmailAndPassword, signOut, onIdTokenChanged,
+  type Auth, type User as FbUser, type Unsubscribe as AuthUnsubscribe,
+} from 'firebase/auth';
 import {
   deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc, type DocumentReference,
   type Unsubscribe,
@@ -13,31 +17,50 @@ import type {
 } from '@/types';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyAL-pifSBDDrbek3s2uwkeIYw5Y1GZO9Iw',
-  authDomain: 'viettours-cost-calculator.firebaseapp.com',
-  projectId: 'viettours-cost-calculator',
-  storageBucket: 'viettours-cost-calculator.firebasestorage.app',
-  messagingSenderId: '304145851784',
-  appId: '1:304145851784:web:e4977ff4e343ab74e4c63d',
+  apiKey: "AIzaSyBZBJIoq_WXw_-2ykCiGQniJHTuWxRwge8",
+  authDomain: "tour-cost-calculator-4336c.firebaseapp.com",
+  projectId: "tour-cost-calculator-4336c",
+  storageBucket: "tour-cost-calculator-4336c.firebasestorage.app",
+  messagingSenderId: "763125494718",
+  appId: "1:763125494718:web:7d754d9031e4decaabffef",
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, 'viettours');
+export const db = getFirestore(app);
 
-// Anonymous Firebase Auth so Firestore rules can require `request.auth != null`
-// instead of being fully public. Fired at module load (before any store attaches
-// a listener) so the Firestore SDK waits for the token on its first request.
-// Requires the Anonymous provider to be enabled in the Firebase console.
-const auth = getAuth(app);
-export const authReady: Promise<void> = signInAnonymously(auth)
-  .then(() => undefined)
-  .catch((e) => {
-    console.error(
-      '[firebase] Đăng nhập ẩn danh thất bại — nếu rules yêu cầu auth, Firestore sẽ bị từ chối. '
-      + 'Hãy bật Authentication → Sign-in method → Anonymous trong Firebase console.',
-      e,
-    );
-  });
+// Firebase Auth — magic link (production) + Email+Password (DEV testing).
+// Both methods set request.auth on Firestore rules; the rules also check the
+// email matches @viettours.com.vn so anonymous and external-domain clients
+// are denied. The next task (authStore rewrite) wires these wrappers in.
+export const auth: Auth = getAuth(app);
+
+const ACTION_URL = `${window.location.origin}${import.meta.env.BASE_URL}?mode=auth`;
+
+export async function fbSendSignInLink(email: string): Promise<void> {
+  await sendSignInLinkToEmail(auth, email, { url: ACTION_URL, handleCodeInApp: true });
+}
+
+export function fbIsSignInLink(url: string): boolean {
+  return isSignInWithEmailLink(auth, url);
+}
+
+export async function fbCompleteSignInLink(email: string, url: string): Promise<FbUser> {
+  const cred = await signInWithEmailLink(auth, email, url);
+  return cred.user;
+}
+
+export async function fbSignInWithPassword(email: string, password: string): Promise<FbUser> {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  return cred.user;
+}
+
+export async function fbSignOut(): Promise<void> {
+  await signOut(auth);
+}
+
+export function fbOnIdTokenChanged(cb: (user: FbUser | null) => void): AuthUnsubscribe {
+  return onIdTokenChanged(auth, cb);
+}
 
 const USERS_DOC = doc(db, 'viettours', 'user_accounts');
 const RC_DOC = doc(db, 'viettours', 'master_rate_card');
