@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Autocomplete, Box, Button, Chip, IconButton, MenuItem, Popover, Select,
+  Alert, Autocomplete, Badge, Box, Button, Chip, IconButton, MenuItem, Popover, Select,
   Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
@@ -26,6 +26,57 @@ const TEMPLATE_LABEL: Record<Template, string> = {
 };
 
 type TemplateFilter = 'all' | Template;
+
+/** Cell hiển thị file đính kèm: 0 → trống, 1 → link, nhiều → badge + popover. */
+function AttachmentsCell({ row }: { row: CloudQuoteEntry }) {
+  const files = row.attachments ?? (row.attachment ? [row.attachment] : []);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  if (files.length === 0) return null;
+  if (files.length === 1) {
+    return (
+      <Tooltip title={`Mở: ${files[0].name}`}>
+        <IconButton size="small" component="a" href={workerFileUrl(files[0].key)} target="_blank" rel="noreferrer">
+          <AttachFile fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    );
+  }
+  return (
+    <>
+      <Tooltip title={`${files.length} file đính kèm`}>
+        <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)}>
+          <Badge badgeContent={files.length} color="primary">
+            <AttachFile fontSize="small" />
+          </Badge>
+        </IconButton>
+      </Tooltip>
+      <Popover
+        open={!!anchorEl}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Stack sx={{ py: 0.5, minWidth: 220, maxWidth: 360 }}>
+          {files.map((f) => (
+            <MenuItem
+              key={f.key}
+              component="a"
+              href={workerFileUrl(f.key)}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setAnchorEl(null)}
+              sx={{ gap: 1 }}
+            >
+              <AttachFile fontSize="small" color="action" />
+              <Typography variant="body2" noWrap>{f.name}</Typography>
+            </MenuItem>
+          ))}
+        </Stack>
+      </Popover>
+    </>
+  );
+}
 
 export function QuoteHistoryView() {
   const template = useQuoteStore((s) => s.draft.template);
@@ -151,20 +202,7 @@ export function QuoteHistoryView() {
       filterable: false,
       align: 'center',
       headerAlign: 'center',
-      renderCell: (p) =>
-        p.row.attachment ? (
-          <Tooltip title={`Mở: ${p.row.attachment.name}`}>
-            <IconButton
-              size="small"
-              component="a"
-              href={workerFileUrl(p.row.attachment.key)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <AttachFile fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        ) : null,
+      renderCell: (p) => <AttachmentsCell row={p.row} />,
     },
     {
       field: 'actions',

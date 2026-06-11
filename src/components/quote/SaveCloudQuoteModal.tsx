@@ -47,21 +47,22 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   });
   const [customer, setCustomer] = useState<Customer | null>(existingCustomer);
   const [note, setNote] = useState('');
-  const [attachment, setAttachment] = useState<{ key: string; name: string } | null>(
-    existingEntry?.attachment ?? null,
+  const [attachments, setAttachments] = useState<{ key: string; name: string }[]>(
+    () => existingEntry?.attachments ?? (existingEntry?.attachment ? [existingEntry.attachment] : []),
   );
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!f) return;
+    if (!files.length) return;
     setUploading(true);
     setError(null);
     try {
-      setAttachment(await uploadFileToWorker(f));
+      const uploaded = await Promise.all(files.map((f) => uploadFileToWorker(f)));
+      setAttachments((prev) => [...prev, ...uploaded]);
     } catch (err) {
       setError('Tải file lỗi: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -79,7 +80,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     setError(null);
     try {
       const collaborators: Collaborator[] = collabUsers.map((u) => ({ u: u.u, name: u.name }));
-      await saveCloud(name, collaborators, note, customer ?? undefined, attachment ?? undefined);
+      await saveCloud(name, collaborators, note, customer ?? undefined, attachments);
       onClose();
     } catch (e) {
       setError((e as Error).message || 'Lỗi không xác định');
@@ -163,41 +164,51 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
             placeholder="VD: Đã cập nhật giá khách sạn 4*"
           />
 
-          {/* File đính kèm (1 file/báo giá) — dòng cuối sau ghi chú */}
+          {/* File đính kèm (nhiều file/báo giá) — dòng cuối sau ghi chú */}
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-              File đính kèm (optional)
+              File đính kèm (nhiều file, optional)
             </Typography>
-            {attachment ? (
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Box
-                  component="a" href={workerFileUrl(attachment.key)} target="_blank" rel="noreferrer"
-                  title={attachment.name}
-                  sx={{
-                    flexGrow: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: LEGACY.teal,
-                    textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    '&:hover': { textDecoration: 'underline' },
-                  }}
+            <Stack spacing={0.75}>
+              {attachments.map((att, i) => (
+                <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
+                  <Box
+                    component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
+                    title={att.name}
+                    sx={{
+                      flexGrow: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: LEGACY.teal,
+                      textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      '&:hover': { textDecoration: 'underline' },
+                    }}
+                  >
+                    📎 {att.name}
+                  </Box>
+                  <Button
+                    size="small" color="error" disabled={busy}
+                    onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    Gỡ
+                  </Button>
+                </Stack>
+              ))}
+              <Box>
+                <Button
+                  component="label" variant="outlined" size="small" startIcon={<span>📎</span>}
+                  disabled={uploading || busy}
                 >
-                  📎 {attachment.name}
-                </Box>
-                <Button size="small" color="error" disabled={busy} onClick={() => setAttachment(null)}>
-                  Gỡ
+                  {uploading
+                    ? 'Đang tải lên…'
+                    : attachments.length
+                      ? 'Thêm file'
+                      : 'Đính kèm file (PDF/Word/Excel/ảnh…)'}
+                  <Box
+                    component="input" type="file" hidden multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+                    onChange={onPickFiles}
+                  />
                 </Button>
-              </Stack>
-            ) : (
-              <Button
-                component="label" variant="outlined" size="small" startIcon={<span>📎</span>}
-                disabled={uploading || busy}
-              >
-                {uploading ? 'Đang tải lên…' : 'Đính kèm file (PDF/Word…)'}
-                <Box
-                  component="input" type="file" hidden
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
-                  onChange={onPickFile}
-                />
-              </Button>
-            )}
+              </Box>
+            </Stack>
           </Box>
 
           {existingEntry && (

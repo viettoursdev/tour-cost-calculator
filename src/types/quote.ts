@@ -140,8 +140,10 @@ export type CloudQuoteEntry = {
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
-  /** File đính kèm cho cả báo giá (lưu trên R2 qua AI Worker). */
+  /** @deprecated Dùng `attachments`. File đính kèm đơn (dữ liệu cũ). */
   attachment?: { key: string; name: string };
+  /** Nhiều file đính kèm cho báo giá (lưu trên R2 qua AI Worker). */
+  attachments?: { key: string; name: string }[];
 };
 
 export type CloudQuoteProject = {

@@ -181,6 +181,7 @@ type SaveEntry = {
   customerName?: string;
   collaborators?: Collaborator[];
   attachment?: { key: string; name: string };
+  attachments?: { key: string; name: string }[];
 };
 
 type SavedBy = { u: string; name: string; role: string };
@@ -209,6 +210,7 @@ function makeQuoteHistoryApi(
       if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
       if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
       if (entry.attachment !== undefined) optionalFields.attachment = entry.attachment;
+      if (entry.attachments !== undefined) optionalFields.attachments = entry.attachments;
 
       let saved: CloudQuoteEntry;
       if (idx >= 0) {
