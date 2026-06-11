@@ -196,6 +196,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       window.history.replaceState({}, '', window.location.pathname);
       return { ok: true };
     } catch (e) {
+      set({ pendingSignInMethod: null });
       return { ok: false, error: `Không thể hoàn tất đăng nhập: ${(e as Error).message}` };
     }
   },
@@ -212,6 +213,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ authError: null });
       return { ok: true };
     } catch (e) {
+      set({ pendingSignInMethod: null });
       return { ok: false, error: `Sai email hoặc mật khẩu (${(e as Error).message})` };
     }
   },
