@@ -8,9 +8,12 @@ import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
+import { NotificationToaster } from '@/components/notifications/NotificationToaster';
 import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
 import { useAuthStore } from '@/stores/authStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { LEGACY } from '@/theme';
 
@@ -24,6 +27,8 @@ export function AppShell() {
   const [userMgrOpen, setUserMgrOpen] = useState(false);
   const [rateSyncOpen, setRateSyncOpen] = useState(false);
   const canManageUsers = hasPerm(currentUser, 'manageUsers');
+  const centerOpen = useNotificationStore((s) => s.centerOpen);
+  const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
 
   // Legacy-style translucent pill button on the teal header bar.
   const pillSx = {
@@ -101,6 +106,10 @@ export function AppShell() {
           currentUser={currentUser}
         />
       )}
+
+      {/* Single global instance — opened from any bell or a toast click. */}
+      <NotificationToaster />
+      <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} />
     </Box>
   );
 }

@@ -9,6 +9,9 @@ import type { Unsubscribe } from 'firebase/firestore';
 type NotificationState = {
   notifications: Notification[];
   unreadCount: number;
+  /** Global open-state for the full-screen Notification Center (single instance). */
+  centerOpen: boolean;
+  setCenterOpen: (v: boolean) => void;
   init: (username: string) => Unsubscribe;
   markAllRead: (username: string) => Promise<void>;
   markRead: (username: string, id: string) => Promise<void>;
@@ -18,6 +21,8 @@ export const useNotificationStore = create<NotificationState>()(
   subscribeWithSelector((set, get) => ({
     notifications: [],
     unreadCount: 0,
+    centerOpen: false,
+    setCenterOpen: (v) => set({ centerOpen: v }),
 
     init: (username) =>
       fbSubscribeNotifications(username, (list) => {

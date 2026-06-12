@@ -1,0 +1,84 @@
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Snackbar } from '@mui/material';
+import { useNotificationStore } from '@/stores/notificationStore';
+
+const TYPE_ICON: Record<string, string> = {
+  payment_approval: '🧾', payment_due: '💰', announcement: '📢',
+  collab_comment: '💬', collab_invite: '🤝', task: '✅',
+};
+
+const SOUND_KEY = 'vte_notif_sound';
+
+/** Short "ting" via WebAudio — no asset needed. Respects the mute flag. */
+function playPing(): void {
+  try {
+    if (localStorage.getItem(SOUND_KEY) === 'off') return;
+    const Ctx =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.36);
+    osc.onended = () => void ctx.close();
+  } catch {
+    /* ignore (autoplay blocked / no AudioContext) */
+  }
+}
+
+/**
+ * Toast + sound on every newly-arriving unread notification. Mounted ONCE
+ * (AppShell). Clicking the toast opens the Notification Center.
+ */
+export function NotificationToaster() {
+  const notifications = useNotificationStore((s) => s.notifications);
+  const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
+  const [toast, setToast] = useState<{ id: string; title: string; type: string } | null>(null);
+  const seen = useRef<Set<string>>(new Set());
+  const primed = useRef(false);
+
+  useEffect(() => {
+    // First pass after sign-in records existing ids without toasting, so we
+    // don't fire a burst for the initial backlog.
+    if (!primed.current) {
+      notifications.forEach((n) => seen.current.add(n.id));
+      primed.current = true;
+      return;
+    }
+    const fresh = notifications.find((n) => !seen.current.has(n.id) && !n.read);
+    notifications.forEach((n) => seen.current.add(n.id));
+    if (fresh) {
+      setToast({ id: fresh.id, title: fresh.title, type: fresh.type });
+      playPing();
+    }
+  }, [notifications]);
+
+  if (!toast) return null;
+  const icon = TYPE_ICON[toast.type] ?? '🔔';
+  return (
+    <Snackbar
+      open
+      autoHideDuration={6000}
+      onClose={() => setToast(null)}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+    >
+      <Alert
+        severity="info"
+        variant="filled"
+        onClose={() => setToast(null)}
+        onClick={() => { setCenterOpen(true); setToast(null); }}
+        sx={{ cursor: 'pointer', bgcolor: '#0d7a6a', fontWeight: 600, maxWidth: 380 }}
+      >
+        {icon} {toast.title}
+      </Alert>
+    </Snackbar>
+  );
+}

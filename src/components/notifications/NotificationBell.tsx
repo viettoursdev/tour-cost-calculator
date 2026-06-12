@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Badge, Box, Button, Chip, Divider, IconButton, Popover, Stack, Tooltip, Typography,
 } from '@mui/material';
@@ -11,7 +11,6 @@ import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/firebase';
 import { workerFileUrl } from '@/lib/aiWorker';
-import { NotificationCenter } from './NotificationCenter';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -28,14 +27,33 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
   paid:           { label: '💸 Đã thanh toán',     color: '#16a085' },
 };
 
+const TYPE_SHORT: Record<string, string> = {
+  payment_approval: '🧾 Duyệt chi', payment_due: '💰 Thanh toán', announcement: '📢 Thông báo',
+  collab_comment: '💬 Cộng tác', collab_invite: '🤝 Mời', task: '✅ Yêu cầu',
+};
+const SOUND_KEY = 'vte_notif_sound';
+
 export function NotificationBell() {
   const notifications = useNotificationStore((s) => s.notifications);
   const unreadCount   = useNotificationStore((s) => s.unreadCount);
   const markAllRead   = useNotificationStore((s) => s.markAllRead);
   const markRead      = useNotificationStore((s) => s.markRead);
   const currentUser   = useAuthStore((s) => s.currentUser);
+  const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const [centerOpen, setCenterOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => localStorage.getItem(SOUND_KEY) !== 'off');
+
+  const unreadByType = useMemo(() => {
+    const m: Record<string, number> = {};
+    notifications.forEach((n) => { if (!n.read) m[n.type] = (m[n.type] ?? 0) + 1; });
+    return m;
+  }, [notifications]);
+
+  const toggleSound = () => {
+    const next = !soundOn;
+    setSoundOn(next);
+    try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off'); } catch { /* ignore */ }
+  };
 
   if (!currentUser) return null;
 
@@ -64,12 +82,30 @@ export function NotificationBell() {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <Box sx={{ width: 380, maxHeight: 520, display: 'flex', flexDirection: 'column' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ p: 1.5 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 1.5, pt: 1.5, pb: 0.5 }}>
             <Typography variant="subtitle1" fontWeight={700}>Thông báo</Typography>
-            {unreadCount > 0 && (
-              <Button size="small" onClick={handleMarkAllRead}>Đọc hết</Button>
-            )}
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Tooltip title={soundOn ? 'Tắt âm báo' : 'Bật âm báo'}>
+                <IconButton size="small" onClick={toggleSound}>{soundOn ? '🔔' : '🔕'}</IconButton>
+              </Tooltip>
+              {unreadCount > 0 && (
+                <Button size="small" onClick={handleMarkAllRead}>Đọc hết</Button>
+              )}
+            </Stack>
           </Stack>
+          {Object.keys(unreadByType).length > 0 && (
+            <Stack direction="row" sx={{ px: 1.5, pb: 1, flexWrap: 'wrap', gap: 0.5 }}>
+              {Object.entries(unreadByType).map(([t, c]) => (
+                <Chip
+                  key={t} size="small" label={`${TYPE_SHORT[t] ?? '🔔'} ${c}`}
+                  sx={{
+                    height: 20, fontSize: 11, fontWeight: 700,
+                    bgcolor: (TYPE_COLOR[t] ?? '#95a5a6') + '22', color: TYPE_COLOR[t] ?? '#95a5a6',
+                  }}
+                />
+              ))}
+            </Stack>
+          )}
           <Divider />
           <Button
             fullWidth startIcon={<OpenInFullIcon />} size="small"
@@ -100,8 +136,6 @@ export function NotificationBell() {
           </Box>
         </Box>
       </Popover>
-
-      <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} />
     </>
   );
 }
