@@ -44,7 +44,7 @@ export function TrackItemsModal({ open, onClose, items, onToggle }: Props) {
       <DialogContent dividers sx={{ maxHeight: '60vh' }}>
         {items.length === 0 && (
           <Box sx={{ textAlign: 'center', p: 4, color: 'text.disabled' }}>
-            Chưa có chi phí nào. Hãy nhập trong tab "Bảng chi phí" trước.
+            Chưa có chi phí nào. Hãy nhập trong tab "Bảng báo giá" trước.
           </Box>
         )}
         {groups.map(([catId, grp]) => {

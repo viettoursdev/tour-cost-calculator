@@ -1,4 +1,4 @@
-import type { CategoryId } from './quote';
+import type { CategoryId, FileAttachment } from './quote';
 
 export type InstallmentStatus = 'paid' | 'unpaid';
 
@@ -83,7 +83,7 @@ export interface TourPaymentApprovalData {
   approver2Username: string;
   approver2Name: string;
   /** Tài liệu đính kèm phiếu đề nghị (lưu trên R2 qua AI Worker). */
-  attachments?: { key: string; name: string }[];
+  attachments?: FileAttachment[];
   /** Activity/thread chung của phiếu (để cập nhật trạng thái 2 chiều + comment). */
   threadId?: string;
   /** cloudId của báo giá liên quan — dùng deep-link mở tab Thanh toán. */

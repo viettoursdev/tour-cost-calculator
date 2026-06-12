@@ -8,7 +8,7 @@ import { numberToVietWords } from './vietWords';
 import { loadVNFont } from './vnFont';
 import { VTE_LOGO } from './vteLogo';
 import type {
-  PaymentApprovalEntry, PaymentItem, QuoteInfo, User,
+  FileAttachment, PaymentApprovalEntry, PaymentItem, QuoteInfo, User,
 } from '@/types';
 
 export interface PaymentRequestForm {
@@ -21,7 +21,7 @@ export interface PaymentRequestForm {
   approver2Username: string;
   requester: string;
   note: string;
-  attachments?: { key: string; name: string }[];
+  attachments?: FileAttachment[];
 }
 
 type RGB = [number, number, number];

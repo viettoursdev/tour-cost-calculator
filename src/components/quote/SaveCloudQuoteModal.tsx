@@ -9,7 +9,8 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { LEGACY } from '@/theme';
-import type { Collaborator, Customer, User } from '@/types';
+import type { Collaborator, Customer, FileAttachment, User } from '@/types';
+import { attMeta } from '@/lib/util';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -47,7 +48,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   });
   const [customer, setCustomer] = useState<Customer | null>(existingCustomer);
   const [note, setNote] = useState('');
-  const [attachments, setAttachments] = useState<{ key: string; name: string }[]>(
+  const [attachments, setAttachments] = useState<FileAttachment[]>(
     () => existingEntry?.attachments ?? (existingEntry?.attachment ? [existingEntry.attachment] : []),
   );
   const [uploading, setUploading] = useState(false);
@@ -61,7 +62,10 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     setUploading(true);
     setError(null);
     try {
-      const uploaded = await Promise.all(files.map((f) => uploadFileToWorker(f)));
+      const at = new Date().toISOString();
+      const by = currentUser?.name ?? '';
+      const uploaded = (await Promise.all(files.map((f) => uploadFileToWorker(f))))
+        .map((u) => ({ ...u, uploadedBy: by, uploadedAt: at }));
       setAttachments((prev) => [...prev, ...uploaded]);
     } catch (err) {
       setError('Tải file lỗi: ' + (err instanceof Error ? err.message : String(err)));
@@ -172,16 +176,23 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
             <Stack spacing={0.75}>
               {attachments.map((att, i) => (
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
-                  <Box
-                    component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
-                    title={att.name}
-                    sx={{
-                      flexGrow: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: LEGACY.teal,
-                      textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      '&:hover': { textDecoration: 'underline' },
-                    }}
-                  >
-                    📎 {att.name}
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Box
+                      component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
+                      title={att.name}
+                      sx={{
+                        display: 'block', fontSize: 13, fontWeight: 600, color: LEGACY.teal,
+                        textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        '&:hover': { textDecoration: 'underline' },
+                      }}
+                    >
+                      📎 {att.name}
+                    </Box>
+                    {attMeta(att) && (
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1.3 }}>
+                        {attMeta(att)}
+                      </Typography>
+                    )}
                   </Box>
                   <Button
                     size="small" color="error" disabled={busy}

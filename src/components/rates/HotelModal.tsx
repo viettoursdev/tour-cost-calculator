@@ -137,7 +137,7 @@ export function HotelModal({ open, onClose, onPick, pax, template }: Props) {
       name: `Khách sạn ${h.name} · ${cityLabel} · ${optionLabel}`,
       cur: 'VND',
       price: o.price,
-      unit: '/phòng/đêm',
+      unit: '/đêm',
       qtyMode: 'custom',
       customQty: pax ? Math.ceil(pax / 2) : 1,
       note: [o.note, h.note].filter(Boolean).join(' · '),

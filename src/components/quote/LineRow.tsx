@@ -123,6 +123,66 @@ function EditText({
   );
 }
 
+/** Render note text: preserve newlines (pre-wrap by container) + `**bold**`. */
+function renderNote(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((seg, i) =>
+    seg.startsWith('**') && seg.endsWith('**') && seg.length > 4 ? (
+      <Box key={i} component="strong" sx={{ fontWeight: 800 }}>{seg.slice(2, -2)}</Box>
+    ) : (
+      <span key={i}>{seg}</span>
+    ),
+  );
+}
+
+/**
+ * Multi-line rich note editor for the "Chi tiết / ghi chú" column.
+ * - Enter = xuống dòng; Ctrl/⌘+Enter hoặc rời ô = lưu; Esc = huỷ.
+ * - `**chữ**` hiển thị in đậm; nội dung dài tự xuống dòng, hiện đầy đủ.
+ */
+function EditNote({
+  value, onChange, placeholder = '',
+}: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const commit = () => { onChange(draft); setEditing(false); };
+  if (editing) {
+    return (
+      <Box
+        component="textarea" autoFocus value={draft}
+        rows={Math.min(12, Math.max(3, draft.split('\n').length + 1))}
+        onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e: KeyboardEvent) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        sx={{
+          width: '100%', minHeight: 64, resize: 'vertical', background: '#fff',
+          border: '1.5px solid #14a08c', borderRadius: '6px', color: LEGACY.navy,
+          outline: 'none', padding: '6px 8px', fontFamily: 'inherit', fontSize: 12.5,
+          lineHeight: 1.5, boxSizing: 'border-box',
+        }}
+      />
+    );
+  }
+  return (
+    <Box
+      onClick={() => { setDraft(value); setEditing(true); }}
+      sx={{
+        cursor: 'text', borderRadius: '4px', px: 0.5, py: 0.4, minHeight: '1.4em',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12.5, lineHeight: 1.5,
+        fontStyle: value ? 'normal' : 'italic',
+        color: value ? 'rgba(15,58,74,0.78)' : 'rgba(15,58,74,0.4)',
+        '&:hover': { background: 'rgba(20,150,140,0.1)' },
+      }}
+    >
+      {value ? renderNote(value) : placeholder}
+    </Box>
+  );
+}
+
 export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurrency }: Props) {
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
@@ -168,9 +228,13 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
         <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold />
       </TableCell>
 
-      {/* Note */}
-      <TableCell sx={{ minWidth: 180, maxWidth: 260 }}>
-        <EditText value={item.note} onChange={(v) => u({ note: v })} placeholder="Chi tiết / ghi chú..." italic color="rgba(15,58,74,0.7)" />
+      {/* Note (chi tiết / ghi chú — đa dòng, in đậm, hiện đầy đủ) */}
+      <TableCell sx={{ minWidth: 260, maxWidth: 460, verticalAlign: 'top' }}>
+        <EditNote
+          value={item.note}
+          onChange={(v) => u({ note: v })}
+          placeholder="Chi tiết / ghi chú… (Enter để xuống dòng · **chữ** = in đậm · Ctrl/⌘+Enter để lưu)"
+        />
       </TableCell>
 
       {/* Currency + price */}
@@ -186,7 +250,9 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
       {/* Unit */}
       <TableCell>
         <Sel value={item.unit} onChange={(e) => u({ unit: e.target.value })}>
-          {UNITS.map((un) => <option key={un} value={un}>{un}</option>)}
+          {(UNITS.includes(item.unit) ? UNITS : [item.unit, ...UNITS]).map((un) => (
+            <option key={un} value={un}>{un}</option>
+          ))}
         </Sel>
       </TableCell>
 

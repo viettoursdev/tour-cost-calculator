@@ -6,6 +6,7 @@
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { getCATS } from '@/components/quote/constants';
+import { plainNote } from '@/lib/util';
 import { qtyOf } from '@/components/quote/calc';
 import type { Item, QuoteDraft } from '@/types';
 
@@ -128,7 +129,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
       ws.getCell(r, 1).value = r === first ? 1 : { formula: `A${r - 1}+1` } as ExcelJS.CellFormulaValue;
       ws.getCell(r, 2).value = j === 0 ? cat.label : '';
       ws.getCell(r, 3).value = it.name || '';
-      ws.getCell(r, 4).value = it.note || '';
+      ws.getCell(r, 4).value = plainNote(it.note);
       if (foreign) {
         ws.getCell(r, 5).value = it.cur;
         ws.getCell(r, 6).value = +it.price || 0; ws.getCell(r, 6).numFmt = '#,##0.##';

@@ -5,6 +5,15 @@ export type CategoryId =
 
 export type Template = 'domestic' | 'intl' | 'dmc' | 'itinerary' | 'menu' | 'visa' | 'doctranslate';
 
+/** File đính kèm lưu trên R2 (qua AI Worker). `uploadedBy`/`uploadedAt` ghi
+ *  lại tài khoản và thời điểm thao tác lưu file (dữ liệu cũ có thể thiếu). */
+export type FileAttachment = {
+  key: string;
+  name: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+};
+
 export type OutputCurrency =
   | 'VND' | 'USD' | 'EUR' | 'JPY' | 'SGD' | 'KRW' | 'THB' | 'GBP' | 'AUD' | 'CNY';
 
@@ -141,9 +150,9 @@ export type CloudQuoteEntry = {
   updatedAt: string;
   updatedBy: string;
   /** @deprecated Dùng `attachments`. File đính kèm đơn (dữ liệu cũ). */
-  attachment?: { key: string; name: string };
+  attachment?: FileAttachment;
   /** Nhiều file đính kèm cho báo giá (lưu trên R2 qua AI Worker). */
-  attachments?: { key: string; name: string }[];
+  attachments?: FileAttachment[];
 };
 
 export type CloudQuoteProject = {

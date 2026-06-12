@@ -10,6 +10,7 @@ import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { fmtVND } from './calc';
 import { workerFileUrl } from '@/lib/aiWorker';
+import { attMeta } from '@/lib/util';
 import type { CloudQuoteEntry, Collaborator, Template, User } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import Delete from '@mui/icons-material/Delete';
@@ -66,10 +67,17 @@ function AttachmentsCell({ row }: { row: CloudQuoteEntry }) {
               target="_blank"
               rel="noreferrer"
               onClick={() => setAnchorEl(null)}
-              sx={{ gap: 1 }}
+              sx={{ gap: 1, alignItems: 'flex-start' }}
             >
-              <AttachFile fontSize="small" color="action" />
-              <Typography variant="body2" noWrap>{f.name}</Typography>
+              <AttachFile fontSize="small" color="action" sx={{ mt: 0.4 }} />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" noWrap>{f.name}</Typography>
+                {attMeta(f) && (
+                  <Typography variant="caption" color="text.disabled" noWrap sx={{ display: 'block' }}>
+                    {attMeta(f)}
+                  </Typography>
+                )}
+              </Box>
             </MenuItem>
           ))}
         </Stack>

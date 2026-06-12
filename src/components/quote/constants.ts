@@ -48,8 +48,8 @@ export function getCATS(template: Template): CategoryDef[] {
 
 // Source: public/legacy.html:1591
 export const UNITS: string[] = [
-  '/người', '/người/ngày', '/người/bữa', '/phòng', '/phòng/đêm',
-  '/xe', '/xe/ngày', '/suất', '/chuyến', '/buổi', '/ngày', '/vé',
+  '/người', '/ngày', '/bữa', '/đêm',
+  '/xe', '/xe/ngày', '/suất', '/chuyến', '/buổi', '/vé',
   'cả đoàn', 'cố định',
 ];
 
@@ -82,25 +82,25 @@ export type SeedFactory = (pax: number) => Partial<Record<CategoryId, Item[]>>;
 // Source: public/legacy.html:1600-1623
 export const TPL_DOMESTIC: SeedFactory = (pax) => ({
   flight: [mkItem({ name: 'Vé máy bay nội địa khứ hồi', cur: 'VND', price: 1800000, unit: '/người', qtyMode: 'per_pax', note: 'VietnamAirlines/Bamboo, phổ thông' })],
-  hotel: [mkItem({ name: 'Khách sạn 4★', cur: 'VND', price: 1200000, unit: '/phòng/đêm', qtyMode: 'custom', customQty: Math.ceil(pax / 2), times: 2, note: 'Phòng đôi/twin, gồm ăn sáng' })],
+  hotel: [mkItem({ name: 'Khách sạn 4★', cur: 'VND', price: 1200000, unit: '/đêm', qtyMode: 'custom', customQty: Math.ceil(pax / 2), times: 2, note: 'Phòng đôi/twin, gồm ăn sáng' })],
   transport: [
     mkItem({ name: 'Xe đón sân bay', cur: 'VND', price: 2500000, unit: '/chuyến', qtyMode: 'custom', customQty: 1, note: 'Xe 29 chỗ' }),
     mkItem({ name: 'Xe tham quan', cur: 'VND', price: 5500000, unit: '/xe/ngày', qtyMode: 'custom', customQty: 1, times: 2, note: 'Xe 45 chỗ, máy lạnh' }),
   ],
   meal: [
-    mkItem({ name: 'Bữa trưa', cur: 'VND', price: 250000, unit: '/người/bữa', qtyMode: 'per_pax', times: 2, note: 'Set menu địa phương' }),
-    mkItem({ name: 'Bữa tối', cur: 'VND', price: 350000, unit: '/người/bữa', qtyMode: 'per_pax', times: 2, note: 'Nhà hàng đặc sản' }),
+    mkItem({ name: 'Bữa trưa', cur: 'VND', price: 250000, unit: '/bữa', qtyMode: 'per_pax', times: 2, note: 'Set menu địa phương' }),
+    mkItem({ name: 'Bữa tối', cur: 'VND', price: 350000, unit: '/bữa', qtyMode: 'per_pax', times: 2, note: 'Nhà hàng đặc sản' }),
   ],
   sight: [mkItem({ name: 'Vé tham quan', cur: 'VND', price: 200000, unit: '/người', qtyMode: 'per_pax', note: '' })],
   visa: [mkItem({ name: 'Không áp dụng', cur: 'VND', price: 0, unit: '/người', enabled: false, note: 'Tour nội địa không cần visa' })],
   insurance: [mkItem({ name: 'BH du lịch nội địa', cur: 'VND', price: 50000, unit: '/người', qtyMode: 'per_pax', note: 'Mức BH 50 triệu VND' })],
   dmc: [mkItem({ name: 'Không áp dụng', cur: 'VND', price: 0, unit: '/người', enabled: false, note: 'Tour nội địa' })],
   staff: [
-    mkItem({ name: 'Hướng dẫn viên', cur: 'VND', price: 650000, unit: '/người/ngày', qtyMode: 'custom', customQty: 1, times: 3, note: 'HDV tiếng Việt' }),
-    mkItem({ name: 'Điều hành', cur: 'VND', price: 1000000, unit: '/người/ngày', qtyMode: 'custom', customQty: 1, times: 3, note: 'Coordinator on-site' }),
+    mkItem({ name: 'Hướng dẫn viên', cur: 'VND', price: 650000, unit: '/ngày', qtyMode: 'custom', customQty: 1, times: 3, note: 'HDV tiếng Việt' }),
+    mkItem({ name: 'Điều hành', cur: 'VND', price: 1000000, unit: '/ngày', qtyMode: 'custom', customQty: 1, times: 3, note: 'Coordinator on-site' }),
   ],
   logistics: [mkItem({ name: 'Travel kit cơ bản', cur: 'VND', price: 120000, unit: '/người', qtyMode: 'per_pax', note: 'Túi + nón + áo + sổ tay' })],
-  gala: [mkItem({ name: 'Gala dinner', cur: 'VND', price: 750000, unit: '/người/bữa', qtyMode: 'per_pax', enabled: false, note: 'Set menu 5 món + nước uống' })],
+  gala: [mkItem({ name: 'Gala dinner', cur: 'VND', price: 750000, unit: '/bữa', qtyMode: 'per_pax', enabled: false, note: 'Set menu 5 món + nước uống' })],
   teambuild: [mkItem({ name: 'Team building 1 ngày', cur: 'VND', price: 550000, unit: '/người', qtyMode: 'per_pax', enabled: false, note: 'Activity outdoor + GM + đạo cụ' })],
   meeting: [mkItem({ name: 'Phòng meeting half-day', cur: 'VND', price: 12000000, unit: 'cố định', qtyMode: 'per_group', enabled: false, note: 'Capacity 30-50 khách' })],
 });
@@ -108,37 +108,37 @@ export const TPL_DOMESTIC: SeedFactory = (pax) => ({
 // Source: public/legacy.html:1625-1646
 export const TPL_INTL: SeedFactory = (pax) => ({
   flight: [mkItem({ name: 'Vé quốc tế (Economy)', cur: 'USD', price: 550, unit: '/người', qtyMode: 'per_pax', note: 'Khứ hồi, hạng phổ thông' })],
-  hotel: [mkItem({ name: 'Khách sạn 4★', cur: 'USD', price: 120, unit: '/phòng/đêm', qtyMode: 'custom', customQty: Math.ceil(pax / 2), times: 4, note: 'Twin room, gồm ăn sáng' })],
+  hotel: [mkItem({ name: 'Khách sạn 4★', cur: 'USD', price: 120, unit: '/đêm', qtyMode: 'custom', customQty: Math.ceil(pax / 2), times: 4, note: 'Twin room, gồm ăn sáng' })],
   transport: [
     mkItem({ name: 'Xe đón sân bay', cur: 'USD', price: 200, unit: '/chuyến', qtyMode: 'custom', customQty: 1, note: 'Coach tại điểm đến' }),
     mkItem({ name: 'Xe tham quan', cur: 'USD', price: 350, unit: '/xe/ngày', qtyMode: 'custom', customQty: 1, times: 4, note: 'Coach đời mới' }),
   ],
   meal: [
-    mkItem({ name: 'Bữa trưa', cur: 'USD', price: 18, unit: '/người/bữa', qtyMode: 'per_pax', times: 4, note: 'Set menu địa phương' }),
-    mkItem({ name: 'Bữa tối', cur: 'USD', price: 25, unit: '/người/bữa', qtyMode: 'per_pax', times: 4, note: 'Nhà hàng đặc sản' }),
+    mkItem({ name: 'Bữa trưa', cur: 'USD', price: 18, unit: '/bữa', qtyMode: 'per_pax', times: 4, note: 'Set menu địa phương' }),
+    mkItem({ name: 'Bữa tối', cur: 'USD', price: 25, unit: '/bữa', qtyMode: 'per_pax', times: 4, note: 'Nhà hàng đặc sản' }),
   ],
   sight: [mkItem({ name: 'Vé tham quan', cur: 'USD', price: 25, unit: '/người', qtyMode: 'per_pax', note: '' })],
   visa: [mkItem({ name: 'Phí Visa', cur: 'USD', price: 60, unit: '/người', qtyMode: 'per_pax', note: 'Đã gồm phí dịch vụ' })],
   insurance: [mkItem({ name: 'BH Quốc tế Tiêu chuẩn', cur: 'VND', price: 200000, unit: '/người', qtyMode: 'per_pax', note: 'Mức BH 50K USD' })],
   dmc: [mkItem({ name: 'DMC Package', cur: 'USD', price: 0, unit: '/người', enabled: false, note: 'Land tour từ đối tác địa phương' })],
   staff: [
-    mkItem({ name: 'HDV Trưởng đoàn', cur: 'VND', price: 2500000, unit: '/người/ngày', qtyMode: 'custom', customQty: 1, times: 5, note: 'Đã gồm phụ cấp' }),
-    mkItem({ name: 'Điều hành Outbound', cur: 'VND', price: 1800000, unit: '/người/ngày', qtyMode: 'custom', customQty: 1, times: 5, note: 'On-site' }),
+    mkItem({ name: 'HDV Trưởng đoàn', cur: 'VND', price: 2500000, unit: '/ngày', qtyMode: 'custom', customQty: 1, times: 5, note: 'Đã gồm phụ cấp' }),
+    mkItem({ name: 'Điều hành Outbound', cur: 'VND', price: 1800000, unit: '/ngày', qtyMode: 'custom', customQty: 1, times: 5, note: 'On-site' }),
   ],
   logistics: [mkItem({ name: 'Travel kit quốc tế', cur: 'VND', price: 250000, unit: '/người', qtyMode: 'per_pax', note: 'Túi + sim card + tag + áo' })],
-  gala: [mkItem({ name: 'Gala dinner tại KS', cur: 'USD', price: 55, unit: '/người/bữa', qtyMode: 'per_pax', enabled: false, note: 'Set menu Western fine dining' })],
+  gala: [mkItem({ name: 'Gala dinner tại KS', cur: 'USD', price: 55, unit: '/bữa', qtyMode: 'per_pax', enabled: false, note: 'Set menu Western fine dining' })],
 });
 
 // Source: public/legacy.html:1648-1656
 export const TPL_DMC: SeedFactory = (pax) => ({
-  hotel: [mkItem({ name: 'Khách sạn', cur: 'USD', price: 0, unit: '/phòng/đêm', qtyMode: 'custom', customQty: Math.ceil(pax / 2), times: 1, note: 'Twin room' })],
+  hotel: [mkItem({ name: 'Khách sạn', cur: 'USD', price: 0, unit: '/đêm', qtyMode: 'custom', customQty: Math.ceil(pax / 2), times: 1, note: 'Twin room' })],
   transport: [mkItem({ name: 'Xe tham quan', cur: 'USD', price: 0, unit: '/xe/ngày', qtyMode: 'custom', customQty: 1, times: 1, note: '' })],
   meal: [
-    mkItem({ name: 'Ăn sáng', cur: 'USD', price: 0, unit: '/người/bữa', qtyMode: 'per_pax', times: 1, note: '' }),
-    mkItem({ name: 'Ăn trưa & tối', cur: 'USD', price: 0, unit: '/người/bữa', qtyMode: 'per_pax', times: 1, note: '' }),
+    mkItem({ name: 'Ăn sáng', cur: 'USD', price: 0, unit: '/bữa', qtyMode: 'per_pax', times: 1, note: '' }),
+    mkItem({ name: 'Ăn trưa & tối', cur: 'USD', price: 0, unit: '/bữa', qtyMode: 'per_pax', times: 1, note: '' }),
   ],
   sight: [mkItem({ name: 'Tham quan', cur: 'USD', price: 0, unit: '/người', qtyMode: 'per_pax', times: 1, note: '' })],
-  staff: [mkItem({ name: 'HDV địa phương', cur: 'USD', price: 0, unit: '/người/ngày', qtyMode: 'custom', customQty: 1, times: 1, note: '' })],
+  staff: [mkItem({ name: 'HDV địa phương', cur: 'USD', price: 0, unit: '/ngày', qtyMode: 'custom', customQty: 1, times: 1, note: '' })],
   service_fee: [mkItem({ name: 'Phí dịch vụ', cur: 'USD', price: 0, unit: '/người', qtyMode: 'per_pax', times: 1, note: '' })],
 });
 

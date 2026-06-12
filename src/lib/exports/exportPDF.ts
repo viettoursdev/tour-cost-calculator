@@ -5,6 +5,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { getCATS } from '@/components/quote/constants';
+import { plainNote } from '@/lib/util';
 import { calcVND, computeTotals, fmtVND } from '@/components/quote/calc';
 import { pricingLines } from '@/components/quote/pricing';
 import { loadVNFont } from './vnFont';
@@ -153,7 +154,8 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
       if (it.note) {
         checkPage(5);
         pdf.setTextColor(...gray); pdf.setFontSize(8);
-        pdf.text(`   ${it.note.slice(0, 70)}`, mX + 6, y);
+        const noteOneLine = plainNote(it.note).replace(/\s*\n\s*/g, ' · ');
+        pdf.text(`   ${noteOneLine.slice(0, 70)}`, mX + 6, y);
         y += 4; pdf.setFontSize(9);
       }
     });

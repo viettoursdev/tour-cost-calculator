@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { debounce, applyPath } from './util';
+import { debounce, applyPath, plainNote, attMeta } from './util';
 
 describe('debounce', () => {
   beforeEach(() => vi.useFakeTimers());
@@ -65,5 +65,31 @@ describe('applyPath', () => {
   it('overwrites a non-object intermediate', () => {
     const result = applyPath({ a: 5 }, 'a.b', 1);
     expect(result).toEqual({ a: { b: 1 } });
+  });
+});
+
+describe('plainNote', () => {
+  it('strips **bold** markers but keeps the text', () => {
+    expect(plainNote('Phòng **đôi** gồm ăn sáng')).toBe('Phòng đôi gồm ăn sáng');
+  });
+  it('keeps newlines and plain text untouched', () => {
+    expect(plainNote('Dòng 1\nDòng 2')).toBe('Dòng 1\nDòng 2');
+  });
+  it('returns empty string for null/undefined', () => {
+    expect(plainNote(undefined)).toBe('');
+    expect(plainNote(null)).toBe('');
+  });
+});
+
+describe('attMeta', () => {
+  it('formats uploader + time', () => {
+    const s = attMeta({ uploadedBy: 'An', uploadedAt: '2026-06-12T03:00:00.000Z' });
+    expect(s.startsWith('Lưu bởi An · ')).toBe(true);
+  });
+  it('shows only the uploader when time is missing', () => {
+    expect(attMeta({ uploadedBy: 'An' })).toBe('Lưu bởi An');
+  });
+  it('returns empty for legacy attachments without metadata', () => {
+    expect(attMeta({})).toBe('');
   });
 });

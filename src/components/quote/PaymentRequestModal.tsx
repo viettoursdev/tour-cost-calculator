@@ -9,6 +9,7 @@ import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { fbSendNotification, fbSendNotificationMany, fbEnsureNotifThread } from '@/lib/firebase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { attMeta } from '@/lib/util';
 import { slugifyTourKey } from './paymentUtils';
 import { fmtVND } from './calc';
 import { exportPaymentRequestPDF, type PaymentRequestForm } from '@/lib/exports/exportPaymentRequestPDF';
@@ -60,7 +61,9 @@ export function PaymentRequestModal({
     if (!files.length) return;
     setUploading(true);
     try {
-      const uploaded = await Promise.all(files.map((f) => uploadFileToWorker(f)));
+      const at = new Date().toISOString();
+      const uploaded = (await Promise.all(files.map((f) => uploadFileToWorker(f))))
+        .map((u) => ({ ...u, uploadedBy: currentUser.name, uploadedAt: at }));
       setForm((p) => ({ ...p, attachments: [...(p.attachments ?? []), ...uploaded] }));
     } catch (err) {
       window.alert('❌ Tải file lỗi: ' + (err instanceof Error ? err.message : String(err)));
@@ -325,16 +328,23 @@ export function PaymentRequestModal({
             <Stack spacing={0.75}>
               {(form.attachments ?? []).map((att, i) => (
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
-                  <Box
-                    component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
-                    title={att.name}
-                    sx={{
-                      flexGrow: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: '#0d7a6a',
-                      textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      '&:hover': { textDecoration: 'underline' },
-                    }}
-                  >
-                    📎 {att.name}
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Box
+                      component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
+                      title={att.name}
+                      sx={{
+                        display: 'block', fontSize: 13, fontWeight: 600, color: '#0d7a6a',
+                        textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        '&:hover': { textDecoration: 'underline' },
+                      }}
+                    >
+                      📎 {att.name}
+                    </Box>
+                    {attMeta(att) && (
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1.3 }}>
+                        {attMeta(att)}
+                      </Typography>
+                    )}
                   </Box>
                   <Button
                     size="small" color="error"

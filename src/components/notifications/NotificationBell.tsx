@@ -11,6 +11,7 @@ import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/firebase';
 import { workerFileUrl } from '@/lib/aiWorker';
+import { attMeta } from '@/lib/util';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -367,20 +368,26 @@ function NotificationItem({
       {attachments.length > 0 && (
         <Stack spacing={0.25} sx={{ mt: 0.75 }}>
           {attachments.map((a) => (
-            <Box
-              key={a.key}
-              component="a"
-              href={workerFileUrl(a.key)}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              sx={{
-                fontSize: 12, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              📎 {a.name}
+            <Box key={a.key}>
+              <Box
+                component="a"
+                href={workerFileUrl(a.key)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  display: 'block', fontSize: 12, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  '&:hover': { textDecoration: 'underline' },
+                }}
+              >
+                📎 {a.name}
+              </Box>
+              {attMeta(a) && (
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1.3 }}>
+                  {attMeta(a)}
+                </Typography>
+              )}
             </Box>
           ))}
         </Stack>

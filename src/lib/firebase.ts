@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
-  Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
+  FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc,
@@ -201,8 +201,8 @@ type SaveEntry = {
   customerId?: string;
   customerName?: string;
   collaborators?: Collaborator[];
-  attachment?: { key: string; name: string };
-  attachments?: { key: string; name: string }[];
+  attachment?: FileAttachment;
+  attachments?: FileAttachment[];
 };
 
 type SavedBy = { u: string; name: string; role: string };
