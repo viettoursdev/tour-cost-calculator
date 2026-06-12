@@ -6,12 +6,21 @@ export type NotificationType =
   | 'task'
   | 'collab_comment';
 
-/** A link from a notification to a domain object. */
+/** A link from a notification to a domain object (deep-link target). */
 export type NotifLink = {
-  kind: 'quote' | 'contract' | 'itinerary' | 'menu' | 'collab';
-  id: string;       // cloudId / contract id / itinerary id …
+  kind: 'quote' | 'dmc' | 'contract' | 'payment' | 'itinerary' | 'menu' | 'collab';
+  id: string;       // cloudId / contract id / itinerary id … (for 'payment' use the quote cloudId)
   label: string;    // human label shown on the chip
 };
+
+/** Live status of a shared activity (request/approval). */
+export type ActivityStatus =
+  | 'pending'         // chờ duyệt (bước 1)
+  | 'pending_stage2'  // đã duyệt bước 1, chờ bước 2
+  | 'approved'        // đã duyệt
+  | 'rejected'        // từ chối
+  | 'paid'            // đã thanh toán
+  | 'info';           // thông báo/thảo luận thường (không có quy trình duyệt)
 
 export type Notification = {
   id: string;
@@ -47,4 +56,14 @@ export type NotifThread = {
   comments: NotifComment[];
   createdAt: string;
   createdBy: string;
+  /** Loại hoạt động (đồng bộ với notification type) — vd 'payment_approval'. */
+  actType?: NotificationType;
+  /** Trạng thái sống của yêu cầu (chờ/đã duyệt/từ chối/đã chi). Cả các bên cùng thấy. */
+  status?: ActivityStatus;
+  /** Thời điểm cập nhật trạng thái gần nhất. */
+  updatedAt?: string;
+  /** Người cập nhật trạng thái gần nhất (tên hiển thị). */
+  updatedByName?: string;
+  /** Dữ liệu nghiệp vụ kèm theo (approvalKey, amount, approver…). */
+  data?: Record<string, unknown>;
 };

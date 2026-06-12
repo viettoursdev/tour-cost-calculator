@@ -4,15 +4,16 @@ import {
   ListItemButton, ListItemText, Menu, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
-import { fbSendNotification } from '@/lib/firebase';
+import { fbSendNotification, fbSendNotificationMany, fbEnsureNotifThread } from '@/lib/firebase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { slugifyTourKey } from './paymentUtils';
 import { fmtVND } from './calc';
 import { exportPaymentRequestPDF, type PaymentRequestForm } from '@/lib/exports/exportPaymentRequestPDF';
 import type {
-  Installment, PaymentApprovalEntry, PaymentItem, QuoteInfo, TourPaymentApprovalData, User,
+  Installment, NotifLink, PaymentApprovalEntry, PaymentItem, QuoteInfo, TourPaymentApprovalData, User,
 } from '@/types';
 
 type Props = {
@@ -107,6 +108,11 @@ export function PaymentRequestModal({
     setSending(true);
     try {
       const approvalKey = `${tourKey}_${ci.key}_${instIdx}`;
+      const threadId = `pay_${approvalKey}`;
+      const quoteCloudId = useQuoteStore.getState().draft.currentQuoteId ?? undefined;
+      const link: NotifLink | undefined = quoteCloudId
+        ? { kind: 'payment', id: quoteCloudId, label: `${ci.name} · ${info.name || ''}`.trim() }
+        : undefined;
       const data: TourPaymentApprovalData = {
         approvalKey,
         approvalStage: 1,
@@ -124,15 +130,52 @@ export function PaymentRequestModal({
         approver1Name: form.approver1,
         approver2Username: form.approver2Username,
         approver2Name: form.approver2,
+        threadId,
+        ...(quoteCloudId ? { quoteCloudId } : {}),
         ...(form.attachments?.length ? { attachments: form.attachments } : {}),
       };
+
+      // Shared activity — requester + both approvers subscribe; status + comments
+      // are visible to all of them in place.
+      const members = Array.from(new Set(
+        [currentUser.u, form.approver1Username, form.approver2Username].filter(Boolean),
+      ));
+      await fbEnsureNotifThread({
+        id: threadId,
+        title: `Đề nghị thanh toán: ${ci.name}`,
+        members,
+        comments: [],
+        createdAt: new Date().toISOString(),
+        createdBy: currentUser.name,
+        actType: 'payment_approval',
+        status: 'pending',
+        data: { ...data } as unknown as Record<string, unknown>,
+        ...(link ? { link } : {}),
+      });
+
+      // Actionable request → approver 1.
       await fbSendNotification(form.approver1Username, {
         type: 'payment_approval',
         title: '💰 Đề nghị xác nhận thanh toán NCC',
         message: `${currentUser.name} đề nghị duyệt: "${ci.name}" - ${form.supplier || '(NCC)'} - ${fmtVND(form.amount)} · Tour: ${info.name || ''}`,
         createdBy: `${currentUser.name} (${currentUser.role})`,
         data: { ...data } as unknown as Record<string, unknown>,
+        threadId,
+        ...(link ? { link } : {}),
       });
+
+      // Mirror (no action buttons) → requester + approver 2 so they track status & comment.
+      const others = members.filter((u) => u !== form.approver1Username);
+      if (others.length) {
+        await fbSendNotificationMany(others, {
+          type: 'payment_approval',
+          title: '📤 Đã gửi đề nghị thanh toán',
+          message: `Đề nghị duyệt "${ci.name}" - ${fmtVND(form.amount)} · gửi ${form.approver1}${form.approver2 ? ` → ${form.approver2}` : ''}`,
+          createdBy: currentUser.name,
+          threadId,
+          ...(link ? { link } : {}),
+        });
+      }
       onClose();
     } catch (e) {
       window.alert('❌ Lỗi gửi: ' + (e as Error).message);

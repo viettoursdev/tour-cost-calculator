@@ -84,4 +84,8 @@ export interface TourPaymentApprovalData {
   approver2Name: string;
   /** Tài liệu đính kèm phiếu đề nghị (lưu trên R2 qua AI Worker). */
   attachments?: { key: string; name: string }[];
+  /** Activity/thread chung của phiếu (để cập nhật trạng thái 2 chiều + comment). */
+  threadId?: string;
+  /** cloudId của báo giá liên quan — dùng deep-link mở tab Thanh toán. */
+  quoteCloudId?: string;
 }

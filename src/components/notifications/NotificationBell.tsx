@@ -9,10 +9,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import { fbSendNotification, fbSetApprovalStage } from '@/lib/firebase';
+import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus } from '@/lib/firebase';
 import { workerFileUrl } from '@/lib/aiWorker';
 import { NotificationCenter } from './NotificationCenter';
-import type { Notification, TourPaymentApprovalData } from '@/types';
+import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
   payment_due:      '#f39c12',
@@ -140,6 +140,20 @@ function NotificationItem({
         },
       );
 
+      // Deep-link back to the quote's payment tab (rebuilt from the approval data).
+      const link: NotifLink | undefined = data.quoteCloudId
+        ? { kind: 'payment', id: data.quoteCloudId, label: `${data.catName} · ${data.tourName}` }
+        : undefined;
+
+      // Update the shared activity status so the requester + both approvers see it live.
+      if (data.threadId) {
+        const newStatus: ActivityStatus =
+          !approved ? 'rejected'
+            : stage === 1 && data.approver2Username ? 'pending_stage2'
+              : 'paid';
+        await fbSetThreadStatus(data.threadId, newStatus, currentUserName);
+      }
+
       // If stage 1 approved and stage 2 designated, forward to stage 2 approver.
       if (approved && stage === 1 && data.approver2Username) {
         const stage2Data: TourPaymentApprovalData = { ...data, approvalStage: 2 };
@@ -149,6 +163,8 @@ function NotificationItem({
           message: `${data.requestedByName} đề nghị duyệt (stage 2): "${data.catName}" - ${data.supplier || '(NCC)'} - ${(data.amount || 0).toLocaleString('vi-VN')} đ · Tour: ${data.tourName}`,
           createdBy: approverLabel,
           data: { ...stage2Data } as unknown as Record<string, unknown>,
+          ...(data.threadId ? { threadId: data.threadId } : {}),
+          ...(link ? { link } : {}),
         });
       }
 
@@ -173,13 +189,15 @@ function NotificationItem({
         store.releaseSubscription(data.tourKey);
       }
 
-      // Reply to requester.
+      // Reply to requester (links back to the shared activity thread).
       await fbSendNotification(data.requestedBy, {
         type: 'payment_approval',
         title: approved ? '✅ Thanh toán đã được duyệt' : '❌ Đề nghị thanh toán bị từ chối',
         message: `"${data.catName}" · ${(data.amount || 0).toLocaleString('vi-VN')} đ · Tour: ${data.tourName}`,
         createdBy: currentUserName,
         data: { approved, approvalKey: data.approvalKey, stage } as Record<string, unknown>,
+        ...(data.threadId ? { threadId: data.threadId } : {}),
+        ...(link ? { link } : {}),
       });
 
       setActed(true);

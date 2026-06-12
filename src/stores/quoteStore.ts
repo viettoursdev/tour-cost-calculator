@@ -99,7 +99,7 @@ type QuoteState = {
   saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[]) => Promise<CloudQuoteEntry>;
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
-  loadCloud: (cloudId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  loadCloud: (cloudId: string, opts?: { dmc?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
 
 /**
@@ -577,11 +577,11 @@ export const useQuoteStore = create<QuoteState>()(
           await _col(id, cloudId, collabs);
         },
 
-        loadCloud: async (cloudId) => {
-          // Try DMC first if the current draft is DMC, else regular. This matches the
-          // QuoteHistoryView wiring: a user can only load quotes from the template-
-          // matched history view.
-          const isDmc = get().draft.template === 'dmc';
+        loadCloud: async (cloudId, opts) => {
+          // Caller may force the source (DMC vs regular) — used by notification
+          // deep-links, which must load regardless of the currently open template.
+          // Default: match the current draft template (QuoteHistoryView wiring).
+          const isDmc = opts?.dmc ?? (get().draft.template === 'dmc');
           const _get = isDmc ? fbGetDMCQuoteProject : fbGetQuoteProject;
           const project = await _get(cloudId);
           if (!project) {

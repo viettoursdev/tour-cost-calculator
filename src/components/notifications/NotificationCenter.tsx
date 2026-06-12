@@ -29,6 +29,20 @@ const TYPE_META: Record<string, { label: string; color: string; icon: string }> 
 };
 const meta = (t: string) => TYPE_META[t] ?? { label: 'Khác', color: '#95a5a6', icon: '🔔' };
 
+/** Live status badge for shared activity threads (requests/approvals). */
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  pending:        { label: '⏳ Chờ duyệt',        color: '#f39c12' },
+  pending_stage2: { label: '⏳ Chờ duyệt bước 2',  color: '#e67e22' },
+  approved:       { label: '✅ Đã duyệt',          color: '#27ae60' },
+  rejected:       { label: '❌ Từ chối',           color: '#dc3250' },
+  paid:           { label: '💸 Đã thanh toán',     color: '#16a085' },
+};
+
+const LINK_LABEL: Record<string, string> = {
+  quote: 'Mở báo giá', dmc: 'Mở DMC', payment: 'Mở phiếu thanh toán',
+  contract: 'Mở hợp đồng', itinerary: 'Mở chương trình', menu: 'Mở thực đơn', collab: 'Mở',
+};
+
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const timeAgo = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
@@ -46,6 +60,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
   const markAllRead = useNotificationStore((s) => s.markAllRead);
   const currentUser = useAuthStore((s) => s.currentUser);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
+  const setView = useQuoteStore((s) => s.setView);
 
   const [selId, setSelId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -64,12 +79,26 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
   };
 
   const openLink = async (link: NotifLink) => {
-    if (link.kind === 'quote') {
-      const r = await loadCloud(link.id);
-      if (r.ok) onClose();
-      else window.alert('⚠ ' + r.error);
-    } else {
-      window.alert(`Mở "${link.label}" từ mục tương ứng (${link.kind}).`);
+    switch (link.kind) {
+      case 'quote':
+      case 'dmc': {
+        const r = await loadCloud(link.id, { dmc: link.kind === 'dmc' });
+        if (r.ok) { setView('cost'); onClose(); } else window.alert('⚠ ' + r.error);
+        break;
+      }
+      case 'payment': {
+        // link.id = quote cloudId → load it, then jump to the Payment tab.
+        const r = await loadCloud(link.id, { dmc: false });
+        if (r.ok) { setView('payment'); onClose(); } else window.alert('⚠ ' + r.error);
+        break;
+      }
+      case 'contract': {
+        setView('contract');
+        onClose();
+        break;
+      }
+      default:
+        window.alert(`Mở "${link.label}" từ mục tương ứng (${link.kind}).`);
     }
   };
 
@@ -187,10 +216,20 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
 
   return (
     <Box sx={{ maxWidth: 760, mx: 'auto' }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
         <Box sx={{ fontSize: 24 }}>{m.icon}</Box>
         <Chip size="small" label={m.label} sx={{ bgcolor: m.color + '22', color: m.color, fontWeight: 700 }} />
+        {thread?.status && STATUS_META[thread.status] && (
+          <Chip
+            size="small"
+            label={STATUS_META[thread.status].label}
+            sx={{ bgcolor: STATUS_META[thread.status].color + '22', color: STATUS_META[thread.status].color, fontWeight: 800 }}
+          />
+        )}
         <Typography fontSize={12} color="text.secondary">· {new Date(notif.createdAt).toLocaleString('vi-VN')}</Typography>
+        {thread?.updatedAt && thread.updatedByName && (
+          <Typography fontSize={11} color="text.disabled">· cập nhật bởi {thread.updatedByName} {timeAgo(thread.updatedAt)}</Typography>
+        )}
       </Stack>
       <Typography variant="h5" fontWeight={800} sx={{ mb: 1 }}>{notif.title}</Typography>
       <Typography sx={{ whiteSpace: 'pre-wrap', color: 'rgba(15,58,74,0.85)', mb: 2 }}>{notif.message}</Typography>
@@ -200,7 +239,7 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
 
       {notif.link && (
         <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={() => onOpenLink(notif.link!)} sx={{ mb: 3, color: LEGACY.teal, borderColor: 'rgba(20,150,140,0.4)' }}>
-          {notif.link.kind === 'quote' ? 'Mở báo giá' : 'Mở'}: {notif.link.label}
+          {LINK_LABEL[notif.link.kind] ?? 'Mở'}: {notif.link.label}
         </Button>
       )}
 

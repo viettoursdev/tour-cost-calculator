@@ -11,7 +11,7 @@ import {
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
-  Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
+  ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc,
 } from '@/types';
@@ -549,6 +549,24 @@ export async function fbAddThreadComment(id: string, comment: NotifComment): Pro
   if (!snap.exists()) return;
   const t = snap.data() as NotifThread;
   await setDoc(notifThreadDoc(id), { ...t, comments: [...(t.comments ?? []), comment] });
+}
+
+/**
+ * Update the live status of a shared activity thread (read-modify-write).
+ * Both the requester and the approvers subscribe to the thread, so the new
+ * status propagates to everyone in place.
+ */
+export async function fbSetThreadStatus(
+  id: string,
+  status: ActivityStatus,
+  updatedByName: string,
+): Promise<void> {
+  const snap = await getDoc(notifThreadDoc(id));
+  if (!snap.exists()) return;
+  const t = snap.data() as NotifThread;
+  await setDoc(notifThreadDoc(id), {
+    ...t, status, updatedAt: new Date().toISOString(), updatedByName,
+  });
 }
 
 /** Send the same notification to multiple recipients. */
