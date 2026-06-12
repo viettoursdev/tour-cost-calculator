@@ -99,6 +99,11 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
     });
   }, [notifications, filter, search]);
 
+  const searchOptions = useMemo(
+    () => Array.from(new Set(notifications.map((n) => n.title).filter(Boolean))),
+    [notifications],
+  );
+
   const selected = useMemo(() => notifications.find((n) => n.id === selId) ?? null, [notifications, selId]);
 
   useEffect(() => {
@@ -152,12 +157,23 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
 
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 56px)' }}>
         {/* List + filters */}
-        <Box sx={{ width: 360, borderRight: '1px solid rgba(15,58,74,0.1)', bgcolor: '#fafcfc', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <Box sx={{ width: '38%', minWidth: 340, maxWidth: 600, borderRight: '1px solid rgba(15,58,74,0.1)', bgcolor: '#fafcfc', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <Box sx={{ p: 1, borderBottom: '1px solid rgba(15,58,74,0.08)' }}>
-            <TextField
-              size="small" fullWidth placeholder="🔍 Tìm thông báo…"
-              value={search} onChange={(e) => setSearch(e.target.value)}
-              sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 13 } }}
+            <Autocomplete
+              freeSolo
+              size="small"
+              options={searchOptions}
+              inputValue={search}
+              onInputChange={(_, v) => setSearch(v)}
+              clearOnEscape
+              sx={{ mb: 1 }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="🔍 Tìm thông báo…"
+                  sx={{ '& .MuiInputBase-input': { fontSize: 13.5 } }}
+                />
+              )}
             />
             <Stack direction="row" spacing={0.5} sx={{ overflowX: 'auto', pb: 0.25 }}>
               {FILTER_CHIPS.map((f) => {
@@ -191,15 +207,15 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
                     key={n.id} selected={active} onClick={() => handleSelect(n)}
                     sx={{ alignItems: 'flex-start', borderLeft: `3px solid ${active ? m.color : 'transparent'}`, py: 1.25 }}
                   >
-                    <Box sx={{ fontSize: 20, mr: 1.25, mt: 0.25 }}>{m.icon}</Box>
+                    <Box sx={{ fontSize: 23, mr: 1.25, mt: 0.25 }}>{m.icon}</Box>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Stack direction="row" alignItems="center" spacing={0.75}>
-                        {!n.read && <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#dc3250' }} />}
-                        <Typography fontWeight={n.read ? 600 : 800} fontSize={13.5} noWrap sx={{ flex: 1 }}>
+                        {!n.read && <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#dc3250' }} />}
+                        <Typography fontWeight={n.read ? 600 : 800} fontSize={15.5} noWrap sx={{ flex: 1 }}>
                           {n.title}
                         </Typography>
                       </Stack>
-                      <Typography fontSize={12} color="text.secondary" noWrap>{n.message}</Typography>
+                      <Typography fontSize={13.5} color="text.secondary" noWrap sx={{ mt: 0.25 }}>{n.message}</Typography>
                       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.5 }}>
                         <Chip size="small" label={m.label} sx={{ height: 17, fontSize: 10, bgcolor: m.color + '22', color: m.color, fontWeight: 700 }} />
                         {n.link && <LinkIcon sx={{ fontSize: 13, color: 'rgba(15,58,74,0.4)' }} />}
