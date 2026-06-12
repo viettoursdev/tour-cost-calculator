@@ -135,7 +135,9 @@ function NotificationItem({
   const attachments = (notif.data as Partial<TourPaymentApprovalData> | undefined)?.attachments ?? [];
   const isTourPaymentApproval =
     notif.type === 'payment_approval'
-    && (notif.data as { approvalKey?: string } | undefined)?.approvalKey != null
+    // Require approvalStage (a genuine request) — result/mirror notifs carry
+    // approvalKey but no approvalStage and must NOT be actionable.
+    && (notif.data as { approvalStage?: number } | undefined)?.approvalStage != null
     && canApprove
     && !acted && !resolved;
   // Contract-payment approvals (separate flow keyed by contractId).
@@ -150,6 +152,7 @@ function NotificationItem({
     try {
       const data = notif.data as unknown as TourPaymentApprovalData;
       const stage = data.approvalStage;
+      if (stage !== 1 && stage !== 2) return; // guard: not a genuine approval request
       const status: 'approved' | 'rejected' = approved ? 'approved' : 'rejected';
       const approverLabel = `${currentUserName} (${currentUserRole})`;
       await fbSetApprovalStage(

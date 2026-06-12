@@ -5,7 +5,7 @@ import {
   type Auth, type User as FbUser, type Unsubscribe as AuthUnsubscribe,
 } from 'firebase/auth';
 import {
-  deleteDoc, doc, getDoc, getFirestore, onSnapshot, setDoc,
+  deleteDoc, doc, getDoc, initializeFirestore, onSnapshot, setDoc,
   type DocumentReference, type DocumentSnapshot, type DocumentData, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
@@ -26,7 +26,10 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// ignoreUndefinedProperties: Firestore rejects `undefined` field values in
+// setDoc; strip them automatically so optional fields left undefined never
+// crash a write (e.g. an entry missing currentStage/finalStatus).
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 
 // Firebase Auth — magic link (production) + Email+Password (DEV testing).
 // Both methods set request.auth on Firestore rules; the rules also check the
