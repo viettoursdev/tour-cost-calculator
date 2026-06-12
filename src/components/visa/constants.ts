@@ -1,7 +1,7 @@
 import { daysUntil } from '@/lib/dateUtils';
 import type {
-  User, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField, VisaProcKind, VisaProcRow,
-  VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
+  User, VisaApplicant, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField, VisaProcKind,
+  VisaProcRow, VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
 } from '@/types';
 
 // Source: public/legacy.html:7573-7576.
@@ -76,6 +76,43 @@ export function generateVisaProjectCode(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `DAV-${p(d.getDate())}${p(d.getMonth() + 1)}${String(d.getFullYear()).slice(2)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+}
+
+export const APPLICANT_DOC_META: Record<VisaApplicant['docStatus'], { label: string; color: string }> = {
+  missing:   { label: 'Thiếu hồ sơ', color: '#dc3250' },
+  submitted: { label: 'Đã nộp',      color: '#f5a623' },
+  complete:  { label: 'Đủ hồ sơ',    color: '#27ae60' },
+};
+
+export const APPLICANT_RESULT_META: Record<VisaApplicant['result'], { label: string; color: string }> = {
+  pending:   { label: 'Chờ kết quả', color: '#a855f7' },
+  passed:    { label: 'Đậu',         color: '#27ae60' },
+  failed:    { label: 'Rớt',         color: '#dc3250' },
+  have_visa: { label: 'Đã có visa',  color: '#2563eb' },
+};
+
+let applicantSeq = 0;
+export function newVisaApplicant(): VisaApplicant {
+  return {
+    id: 'va' + Date.now().toString(36) + (applicantSeq++).toString(36) + Math.random().toString(36).slice(2, 5),
+    name: '',
+    passport: '',
+    docStatus: 'missing',
+    result: 'pending',
+  };
+}
+
+/** Tổng hợp 5 ô số liệu từ danh sách khách (checklist). */
+export function countsFromApplicants(applicants: VisaApplicant[]): Pick<
+  VisaProjectDoc, 'applyCount' | 'passedCount' | 'failedCount' | 'haveVisaCount' | 'pendingCount'
+> {
+  return {
+    applyCount: applicants.length,
+    passedCount: applicants.filter((a) => a.result === 'passed').length,
+    failedCount: applicants.filter((a) => a.result === 'failed').length,
+    haveVisaCount: applicants.filter((a) => a.result === 'have_visa').length,
+    pendingCount: applicants.filter((a) => a.result === 'pending').length,
+  };
 }
 
 export function newVisaProject(user: User | null): VisaProjectDoc {

@@ -17,7 +17,7 @@ import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
-import { checkContractDeadlines } from '@/lib/notifications';
+import { checkContractDeadlines, checkVisaDeadlines } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
 
@@ -73,6 +73,7 @@ export function MainApp() {
     const restUnsub = sync ? useRestaurantStore.getState().init() : undefined;
 
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
+    setTimeout(() => { void checkVisaDeadlines(currentUser); }, 4000);
     return () => {
       window.removeEventListener('storage', onFxStorage);
       fxUnsub?.();

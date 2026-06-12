@@ -13,13 +13,18 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { attMeta } from '@/lib/util';
+import { exportVisaProjectPDF } from '@/lib/exports/exportVisaProjectPDF';
 import {
-  deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaMilestone,
+  APPLICANT_DOC_META, APPLICANT_RESULT_META, countsFromApplicants,
+  deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaApplicant, newVisaMilestone,
   VISA_COUNTRIES, VISA_STATUS_META, VISA_STATUS_ORDER,
 } from './constants';
-import type { User, VisaMilestone, VisaProcIndexEntry, VisaProjectDoc, VisaProjectStatus } from '@/types';
+import type {
+  User, VisaApplicant, VisaMilestone, VisaProcIndexEntry, VisaProjectDoc, VisaProjectStatus,
+} from '@/types';
 
 type Props = {
   initial: VisaProjectDoc;
@@ -83,6 +88,14 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
     const q = quotes.find((x) => x.cloudId === cloudId);
     setDoc((p) => ({ ...p, linkedQuoteId: cloudId, linkedQuoteName: q?.name ?? '' }));
   };
+
+  const applicants = doc.applicants ?? [];
+  const setApplicants = (a: VisaApplicant[]) => set('applicants', a);
+  const addApplicant = () => setApplicants([...applicants, newVisaApplicant()]);
+  const updApplicant = (id: string, patch: Partial<VisaApplicant>) =>
+    setApplicants(applicants.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  const delApplicant = (id: string) => setApplicants(applicants.filter((a) => a.id !== id));
+  const syncCounts = () => setDoc((p) => ({ ...p, ...countsFromApplicants(p.applicants ?? []) }));
 
   const setMilestones = (ms: VisaMilestone[]) => set('milestones', ms);
   const updMilestone = (id: string, patch: Partial<VisaMilestone>) =>
@@ -230,6 +243,42 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
           )}
 
           <Divider textAlign="left">
+            <Typography variant="caption" fontWeight={700} color="text.secondary">DANH SÁCH KHÁCH (CHECKLIST)</Typography>
+          </Divider>
+          <Stack spacing={0.75}>
+            {applicants.map((a, i) => (
+              <Stack key={a.id} direction="row" spacing={0.5} alignItems="center">
+                <Typography variant="caption" color="text.disabled" sx={{ width: 18, textAlign: 'right' }}>{i + 1}</Typography>
+                <TextField size="small" placeholder="Họ tên" value={a.name}
+                  onChange={(e) => updApplicant(a.id, { name: e.target.value })} sx={{ flex: 1 }} />
+                <TextField size="small" placeholder="Số hộ chiếu" value={a.passport ?? ''}
+                  onChange={(e) => updApplicant(a.id, { passport: e.target.value })} sx={{ width: 130 }} />
+                <TextField select size="small" value={a.docStatus} sx={{ width: 130 }}
+                  onChange={(e) => updApplicant(a.id, { docStatus: e.target.value as VisaApplicant['docStatus'] })}>
+                  {(Object.keys(APPLICANT_DOC_META) as VisaApplicant['docStatus'][]).map((k) => (
+                    <MenuItem key={k} value={k} sx={{ color: APPLICANT_DOC_META[k].color }}>{APPLICANT_DOC_META[k].label}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField select size="small" value={a.result} sx={{ width: 130 }}
+                  onChange={(e) => updApplicant(a.id, { result: e.target.value as VisaApplicant['result'] })}>
+                  {(Object.keys(APPLICANT_RESULT_META) as VisaApplicant['result'][]).map((k) => (
+                    <MenuItem key={k} value={k} sx={{ color: APPLICANT_RESULT_META[k].color }}>{APPLICANT_RESULT_META[k].label}</MenuItem>
+                  ))}
+                </TextField>
+                <IconButton size="small" color="error" onClick={() => delApplicant(a.id)}><DeleteOutlineIcon fontSize="inherit" /></IconButton>
+              </Stack>
+            ))}
+            <Stack direction="row" spacing={1}>
+              <Button size="small" startIcon={<AddIcon />} onClick={addApplicant}>Thêm khách</Button>
+              {applicants.length > 0 && (
+                <Button size="small" color="inherit" startIcon={<RestartAltIcon />} onClick={syncCounts}>
+                  Cập nhật số liệu từ danh sách
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+
+          <Divider textAlign="left">
             <Typography variant="caption" fontWeight={700} color="text.secondary">HỒ SƠ VISA & TÀI LIỆU</Typography>
           </Divider>
           <Autocomplete
@@ -324,6 +373,11 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={() => exportVisaProjectPDF(doc, (u) => users.find((x) => x.u === u)?.name ?? u)}
+          startIcon={<PictureAsPdfIcon />} color="inherit">
+          Xuất PDF
+        </Button>
+        <Box sx={{ flex: 1 }} />
         <Button onClick={onClose} disabled={busy} color="inherit">Huỷ</Button>
         <Button onClick={() => void handleSave()} disabled={busy} variant="contained"
           sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>

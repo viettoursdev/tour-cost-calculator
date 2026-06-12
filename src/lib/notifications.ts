@@ -16,6 +16,8 @@ export function showBrowserNotif(title: string, body: string): void {
 }
 
 import { fbGetContracts, fbSendNotification } from '@/lib/firebase';
+import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { daysUntil } from '@/lib/dateUtils';
 import type { User } from '@/types';
 
 /**
@@ -51,5 +53,45 @@ export async function checkContractDeadlines(user: User): Promise<void> {
     }
   } catch (e) {
     console.warn('checkContractDeadlines failed:', (e as Error).message);
+  }
+}
+
+const VISA_DDL_KEY = 'vte_visa_deadline_notified';
+
+/**
+ * Nhắc các mốc hồ sơ visa sắp đến hạn (trong 7 ngày, chưa hoàn tất) cho nhân sự
+ * phụ trách. Mỗi (dự án, mốc, ngày) chỉ nhắc một lần (dedup qua localStorage).
+ * Gọi sau khi đăng nhập + dữ liệu dự án đã tải.
+ */
+export async function checkVisaDeadlines(user: User): Promise<void> {
+  try {
+    const projects = useVisaProjectStore.getState().projects;
+    const mine = projects.filter((p) =>
+      p.createdByUsername === user.u
+      || (p.mainStaff ?? []).includes(user.u)
+      || (p.supportStaff ?? []).includes(user.u));
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(VISA_DDL_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const p of mine) {
+      for (const m of p.milestones ?? []) {
+        if (m.done || !m.date) continue;
+        const d = daysUntil(m.date);
+        if (d == null || d < 0 || d > 7) continue;
+        const key = `${p.id}:${m.id}:${m.date}`;
+        if (set.has(key)) continue;
+        set.add(key);
+        await fbSendNotification(user.u, {
+          type: 'task',
+          title: '⏰ Sắp đến hạn hồ sơ visa',
+          message: `Dự án "${p.name || p.code}" — ${m.label}: còn ${d} ngày (${new Date(m.date).toLocaleDateString('vi-VN')})`,
+          createdBy: 'Hệ thống',
+          data: { visaProjectId: p.id, milestoneId: m.id },
+        });
+      }
+    }
+    try { localStorage.setItem(VISA_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkVisaDeadlines failed:', (e as Error).message);
   }
 }
