@@ -175,22 +175,22 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
                 />
               )}
             />
-            <Stack direction="row" spacing={0.5} sx={{ overflowX: 'auto', pb: 0.25 }}>
+            <TextField
+              select size="small" fullWidth
+              label="Bộ lọc"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as FilterKey)}
+              sx={{ '& .MuiInputBase-input': { fontSize: 13.5, fontWeight: 700 } }}
+            >
               {FILTER_CHIPS.map((f) => {
-                const active = filter === f.key;
                 const count = f.key === 'mine' ? mineCount : f.key === 'unread' ? unreadCount : 0;
                 return (
-                  <Chip
-                    key={f.key} size="small" clickable
-                    onClick={() => setFilter(f.key)}
-                    label={count ? `${f.label} (${count})` : f.label}
-                    color={active ? 'primary' : 'default'}
-                    variant={active ? 'filled' : 'outlined'}
-                    sx={{ fontWeight: 700, flexShrink: 0 }}
-                  />
+                  <MenuItem key={f.key} value={f.key} sx={{ fontWeight: 600 }}>
+                    {count ? `${f.label} (${count})` : f.label}
+                  </MenuItem>
                 );
               })}
-            </Stack>
+            </TextField>
           </Box>
           <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {filtered.length === 0 ? (
