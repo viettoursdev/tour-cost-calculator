@@ -342,10 +342,16 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
         : undefined;
       const members = Array.from(new Set([currentUser.u, ...recipients.map((u) => u.u)]));
       const threadId = link ? `q_${link.id}` : `t_${genId()}`;
-      await fbEnsureNotifThread({
-        id: threadId, title: title.trim(), members, link,
-        comments: [], createdAt: new Date().toISOString(), createdBy: currentUser.name,
-      });
+      // Best-effort: thread powers the discussion, but don't block the
+      // notification itself if notification_threads is locked down.
+      try {
+        await fbEnsureNotifThread({
+          id: threadId, title: title.trim(), members, link,
+          comments: [], createdAt: new Date().toISOString(), createdBy: currentUser.name,
+        });
+      } catch (err) {
+        console.warn('Tạo thread thảo luận thất bại (rules?):', (err as Error).message);
+      }
       await fbSendNotificationMany(members, {
         type, title: title.trim(), message: message.trim(), createdBy: currentUser.name,
         ...(link ? { link } : {}), threadId,

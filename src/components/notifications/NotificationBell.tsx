@@ -168,13 +168,19 @@ function NotificationItem({
         ? { kind: 'payment', id: data.quoteCloudId, label: `${data.catName} · ${data.tourName}` }
         : undefined;
 
-      // Update the shared activity status so the requester + both approvers see it live.
+      // Update the shared activity status so the requester + both approvers see
+      // it live. Best-effort — must not block approval if notification_threads
+      // is locked down (Firestore rules not yet deployed).
       if (data.threadId) {
         const newStatus: ActivityStatus =
           !approved ? 'rejected'
             : stage === 1 && data.approver2Username ? 'pending_stage2'
               : 'paid';
-        await fbSetThreadStatus(data.threadId, newStatus, currentUserName);
+        try {
+          await fbSetThreadStatus(data.threadId, newStatus, currentUserName);
+        } catch (err) {
+          console.warn('Cập nhật trạng thái activity thất bại (rules?):', (err as Error).message);
+        }
       }
 
       // If stage 1 approved and stage 2 designated, forward to stage 2 approver.

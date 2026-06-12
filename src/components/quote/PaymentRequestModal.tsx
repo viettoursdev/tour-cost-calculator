@@ -140,18 +140,25 @@ export function PaymentRequestModal({
       const members = Array.from(new Set(
         [currentUser.u, form.approver1Username, form.approver2Username].filter(Boolean),
       ));
-      await fbEnsureNotifThread({
-        id: threadId,
-        title: `Đề nghị thanh toán: ${ci.name}`,
-        members,
-        comments: [],
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser.name,
-        actType: 'payment_approval',
-        status: 'pending',
-        data: { ...data } as unknown as Record<string, unknown>,
-        ...(link ? { link } : {}),
-      });
+      // Best-effort: the shared activity thread powers 2-way status + comments,
+      // but it must not block the actual request if its collection is locked
+      // down (e.g. Firestore rules not yet deployed for notification_threads).
+      try {
+        await fbEnsureNotifThread({
+          id: threadId,
+          title: `Đề nghị thanh toán: ${ci.name}`,
+          members,
+          comments: [],
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser.name,
+          actType: 'payment_approval',
+          status: 'pending',
+          data: { ...data } as unknown as Record<string, unknown>,
+          ...(link ? { link } : {}),
+        });
+      } catch (err) {
+        console.warn('Tạo activity thread thất bại (rules?):', (err as Error).message);
+      }
 
       // Actionable request → approver 1.
       await fbSendNotification(form.approver1Username, {
