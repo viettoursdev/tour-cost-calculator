@@ -1,6 +1,6 @@
 import type {
-  User, VisaFee, VisaProcDoc, VisaProcField, VisaProcKind, VisaProcRow,
-  VisaProcSection, VisaProduct,
+  User, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField, VisaProcKind, VisaProcRow,
+  VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
 } from '@/types';
 
 // Source: public/legacy.html:7573-7576.
@@ -15,6 +15,85 @@ export const VISA_VALIDITY = [
 ] as const;
 
 export const VISA_LOCS = ['HCM', 'HAN', 'DAD'] as const;
+
+// Gợi ý quốc gia hay xin visa (Autocomplete freeSolo — vẫn nhập tự do được).
+export const VISA_COUNTRIES = [
+  'Hàn Quốc', 'Nhật Bản', 'Đài Loan', 'Trung Quốc', 'Mỹ', 'Canada', 'Úc',
+  'Anh', 'Schengen (EU)', 'Pháp', 'Đức', 'Ý', 'Hà Lan', 'Tây Ban Nha',
+  'New Zealand', 'Ấn Độ', 'Nga', 'Dubai (UAE)', 'Singapore', 'Thái Lan',
+] as const;
+
+// ── Dự án visa ──────────────────────────────────────────────────────────────
+
+export const VISA_STATUS_META: Record<VisaProjectStatus, { label: string; color: string }> = {
+  planning:    { label: 'Lên kế hoạch',    color: '#64748b' },
+  in_progress: { label: 'Đang triển khai', color: '#2563eb' },
+  reviewing:   { label: 'Đang xét visa',   color: '#f5a623' },
+  completed:   { label: 'Hoàn tất',        color: '#27ae60' },
+  pending:     { label: 'Pending',         color: '#a855f7' },
+  cancelled:   { label: 'Huỷ',             color: '#dc3250' },
+};
+
+export const VISA_STATUS_ORDER: VisaProjectStatus[] =
+  ['planning', 'in_progress', 'reviewing', 'pending', 'completed', 'cancelled'];
+
+// Các mốc timeline mặc định (customizable — thêm/xoá/đổi tên/đổi ngày).
+export const DEFAULT_VISA_MILESTONES: string[] = [
+  'Xác nhận tour',
+  'Nhận danh sách đoàn',
+  'Triển khai liên hệ & hướng dẫn thủ tục',
+  'Deadline nộp hồ sơ đoàn',
+  'Deadline nộp hồ sơ công ty',
+  'Submit hồ sơ',
+  'Phỏng vấn / Sinh trắc học',
+  'Dự kiến có visa',
+  'Khởi hành',
+];
+
+let milestoneSeq = 0;
+export function newVisaMilestone(label = 'Mốc mới'): VisaMilestone {
+  return {
+    id: 'vm' + Date.now().toString(36) + (milestoneSeq++).toString(36) + Math.random().toString(36).slice(2, 5),
+    label,
+    date: null,
+    done: false,
+  };
+}
+
+export function generateVisaProjectCode(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `DAV-${p(d.getDate())}${p(d.getMonth() + 1)}${String(d.getFullYear()).slice(2)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+}
+
+export function newVisaProject(user: User | null): VisaProjectDoc {
+  return {
+    id: 'vproj' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    code: generateVisaProjectCode(),
+    name: '',
+    country: '',
+    status: 'planning',
+    mainStaff: user?.u ? [user.u] : [],
+    supportStaff: [],
+    documentsSummary: '',
+    linkedQuoteId: null,
+    linkedQuoteName: '',
+    linkedProcIds: [],
+    attachments: [],
+    applyCount: 0,
+    passedCount: 0,
+    failedCount: 0,
+    haveVisaCount: 0,
+    pendingCount: 0,
+    startDate: null,
+    endDate: null,
+    milestones: DEFAULT_VISA_MILESTONES.map((l) => newVisaMilestone(l)),
+    applicants: [],
+    collaborators: [],
+    createdByUsername: user?.u ?? '',
+    createdByName: user?.name ?? '',
+  };
+}
 
 export const VISA_FEE_PRESET = [
   'Chi phí lãnh sự', 'Chi phí trung tâm tiếp nhận', 'Chi phí dịch thuật',

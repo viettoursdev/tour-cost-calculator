@@ -1,3 +1,5 @@
+import type { FileAttachment } from './quote';
+
 export interface VisaFee {
   id: string;
   name: string;
@@ -86,4 +88,67 @@ export interface VisaProcIndexEntry {
   createdAt?: string;
   updatedAt: string;
   updatedBy: string;
+}
+
+// ── Dự án visa (Visa Projects) ──────────────────────────────────────────────
+
+export type VisaProjectStatus =
+  | 'planning'      // Lên kế hoạch
+  | 'in_progress'   // Đang triển khai
+  | 'reviewing'     // Đang xét visa
+  | 'completed'     // Hoàn tất
+  | 'pending'       // Pending
+  | 'cancelled';    // Huỷ
+
+/** Một mốc thời gian trong timeline của dự án (Đợt 2). */
+export interface VisaMilestone {
+  id: string;
+  label: string;
+  date: string | null;   // ISO yyyy-mm-dd
+  done: boolean;
+  note?: string;
+}
+
+/** Hồ sơ từng khách trong đoàn (Đợt 4 — checklist). */
+export interface VisaApplicant {
+  id: string;
+  name: string;
+  passport?: string;
+  docStatus: 'missing' | 'submitted' | 'complete';
+  result: 'pending' | 'passed' | 'failed' | 'have_visa';
+  note?: string;
+}
+
+export interface VisaProjectDoc {
+  id: string;
+  code: string;
+  name: string;                       // Tên chương trình
+  country: string;
+  status: VisaProjectStatus;
+  mainStaff: string[];                // usernames — phụ trách chính
+  supportStaff: string[];             // usernames — hỗ trợ
+  documentsSummary: string;           // hồ sơ bao gồm (mô tả ngắn)
+  linkedQuoteId: string | null;       // link báo giá tour
+  linkedQuoteName: string;
+  linkedProcIds: string[];            // hồ sơ VisaProc liên kết (Đợt 3)
+  attachments: FileAttachment[];      // hồ sơ sao lưu (Đợt 3)
+  // Số liệu khách
+  applyCount: number;
+  passedCount: number;
+  failedCount: number;
+  haveVisaCount: number;
+  pendingCount: number;
+  // Timeline (Đợt 2)
+  startDate: string | null;
+  endDate: string | null;
+  milestones: VisaMilestone[];
+  // Checklist (Đợt 4)
+  applicants?: VisaApplicant[];
+  // Quyền xem / meta
+  collaborators: string[];
+  createdByUsername: string;
+  createdByName: string;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }

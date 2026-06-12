@@ -77,6 +77,9 @@ export const fbGetVisaProc = vi.fn(async () => null);
 export const fbDeleteVisaProc = vi.fn(async () => {});
 export const fbSubscribeVisaProcs = vi.fn(() => () => {});
 
+export const fbSubscribeVisaProjects = vi.fn(() => () => {});
+export const fbPushVisaProjects = vi.fn(async () => {});
+
 // ── Auth ──
 export const auth = {};
 export const fbSendSignInLink = vi.fn(async (_email: string) => {});

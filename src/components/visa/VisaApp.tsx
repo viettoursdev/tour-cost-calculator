@@ -7,14 +7,15 @@ import { useAuthStore } from '@/stores/authStore';
 import { VisaCatalog } from './VisaCatalog';
 import { VisaProcBuilder } from './VisaProcBuilder';
 import { VisaProcManager } from './VisaProcManager';
+import { VisaProjectManager } from './VisaProjectManager';
 import type { VisaProcDoc } from '@/types';
 
-type Tab = 'catalog' | 'procedures';
+type Tab = 'projects' | 'catalog' | 'procedures';
 
 type Props = { onExit: () => void };
 
 export function VisaApp({ onExit }: Props) {
-  const [tab, setTab] = useState<Tab>('catalog');
+  const [tab, setTab] = useState<Tab>('projects');
   const [editingProc, setEditingProc] = useState<VisaProcDoc | null>(null);
   const user = useAuthStore((s) => s.currentUser);
 
@@ -54,12 +55,15 @@ export function VisaApp({ onExit }: Props) {
             '& .MuiTabs-indicator': { bgcolor: '#fff' },
           }}
         >
+          <Tab value="projects" label="📁 Dự án visa" />
           <Tab value="catalog" label="📋 Danh mục giá" />
           <Tab value="procedures" label="🗂️ Hồ sơ thủ tục" />
         </Tabs>
       </Box>
 
-      {tab === 'catalog' ? (
+      {tab === 'projects' ? (
+        <VisaProjectManager />
+      ) : tab === 'catalog' ? (
         <VisaCatalog />
       ) : (
         <VisaProcManager onOpenEditor={setEditingProc} />

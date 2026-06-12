@@ -13,7 +13,7 @@ import type {
   FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
-  VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc,
+  VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
 } from '@/types';
 
 const firebaseConfig = {
@@ -942,5 +942,28 @@ export function fbSubscribeVisaProcs(
 ): Unsubscribe {
   return subDoc(VISA_PROC_INDEX_DOC, (s) => {
     cb(s.exists() ? ((s.data().items as VisaProcIndexEntry[]) ?? []) : []);
+  });
+}
+
+// ── Dự án visa (Visa Projects) ──
+// Lưu toàn bộ trong MỘT doc (mảng) như ncc_master/contracts_master, để dùng được
+// dưới rules hiện hành (viettours/* được phép) và né blocker deploy rules. Lưu ý
+// giới hạn 1 MB/doc — attachments chỉ là tham chiếu {key,name} nên dư sức.
+const VISA_PROJECTS_DOC = doc(db, 'viettours', 'visa_projects');
+
+export function fbSubscribeVisaProjects(cb: (list: VisaProjectDoc[]) => void): Unsubscribe {
+  return subDoc(VISA_PROJECTS_DOC, (s) => {
+    cb(s.exists() ? ((s.data().projects as VisaProjectDoc[]) ?? []) : []);
+  });
+}
+
+export async function fbPushVisaProjects(
+  list: VisaProjectDoc[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(VISA_PROJECTS_DOC, {
+    projects: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });
 }
