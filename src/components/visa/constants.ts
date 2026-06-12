@@ -1,3 +1,4 @@
+import { daysUntil } from '@/lib/dateUtils';
 import type {
   User, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField, VisaProcKind, VisaProcRow,
   VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
@@ -49,6 +50,17 @@ export const DEFAULT_VISA_MILESTONES: string[] = [
   'Dự kiến có visa',
   'Khởi hành',
 ];
+
+/** Nhãn + màu đếm ngược/quá hạn cho một mốc deadline. */
+export function deadlineMeta(date: string | null, done: boolean): { text: string; color: string } {
+  if (done) return { text: '✓ Hoàn tất', color: '#27ae60' };
+  const d = daysUntil(date);
+  if (d == null) return { text: 'Chưa đặt ngày', color: '#94a3b8' };
+  if (d < 0) return { text: `Quá hạn ${Math.abs(d)} ngày`, color: '#dc3250' };
+  if (d === 0) return { text: 'Hôm nay', color: '#f5a623' };
+  if (d <= 7) return { text: `Còn ${d} ngày`, color: '#f5a623' };
+  return { text: `Còn ${d} ngày`, color: '#2563eb' };
+}
 
 let milestoneSeq = 0;
 export function newVisaMilestone(label = 'Mốc mới'): VisaMilestone {

@@ -1,5 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { calcEndDate, fmtDate } from './dateUtils';
+import { calcEndDate, fmtDate, daysUntil } from './dateUtils';
+
+describe('daysUntil', () => {
+  it('returns null for missing/invalid input', () => {
+    expect(daysUntil(null)).toBeNull();
+    expect(daysUntil(undefined)).toBeNull();
+    expect(daysUntil('not-a-date')).toBeNull();
+  });
+  it('returns 0 for today', () => {
+    expect(daysUntil(new Date())).toBe(0);
+  });
+  it('is positive in the future, negative in the past', () => {
+    const plus3 = new Date(); plus3.setDate(plus3.getDate() + 3);
+    const minus2 = new Date(); minus2.setDate(minus2.getDate() - 2);
+    expect(daysUntil(plus3)).toBe(3);
+    expect(daysUntil(minus2)).toBe(-2);
+  });
+});
 
 describe('calcEndDate', () => {
   it('returns null when startDate is null', () => {

@@ -1,13 +1,21 @@
 import { useState } from 'react';
 import {
-  Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent,
-  DialogTitle, Divider, LinearProgress, MenuItem, Stack, TextField, Typography,
+  Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent,
+  DialogTitle, Divider, IconButton, LinearProgress, MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
-import { VISA_COUNTRIES, VISA_STATUS_META, VISA_STATUS_ORDER } from './constants';
-import type { User, VisaProjectDoc, VisaProjectStatus } from '@/types';
+import {
+  deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaMilestone,
+  VISA_COUNTRIES, VISA_STATUS_META, VISA_STATUS_ORDER,
+} from './constants';
+import type { User, VisaMilestone, VisaProjectDoc, VisaProjectStatus } from '@/types';
 
 type Props = {
   initial: VisaProjectDoc;
@@ -45,6 +53,24 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
     if (!cloudId) { setDoc((p) => ({ ...p, linkedQuoteId: null, linkedQuoteName: '' })); return; }
     const q = quotes.find((x) => x.cloudId === cloudId);
     setDoc((p) => ({ ...p, linkedQuoteId: cloudId, linkedQuoteName: q?.name ?? '' }));
+  };
+
+  const setMilestones = (ms: VisaMilestone[]) => set('milestones', ms);
+  const updMilestone = (id: string, patch: Partial<VisaMilestone>) =>
+    setMilestones(doc.milestones.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  const addMilestone = () => setMilestones([...doc.milestones, newVisaMilestone()]);
+  const delMilestone = (id: string) => setMilestones(doc.milestones.filter((m) => m.id !== id));
+  const moveMilestone = (i: number, dir: -1 | 1) => {
+    const ms = [...doc.milestones];
+    const j = i + dir;
+    if (j < 0 || j >= ms.length) return;
+    [ms[i], ms[j]] = [ms[j], ms[i]];
+    setMilestones(ms);
+  };
+  const resetMilestones = () => {
+    if (window.confirm('Khôi phục danh sách mốc mặc định? Các mốc hiện tại sẽ bị thay thế.')) {
+      setMilestones(DEFAULT_VISA_MILESTONES.map((l) => newVisaMilestone(l)));
+    }
   };
 
   const handleSave = async () => {
@@ -173,6 +199,53 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
               />
             </Box>
           )}
+
+          <Divider textAlign="left">
+            <Typography variant="caption" fontWeight={700} color="text.secondary">TIMELINE & MỐC THỜI GIAN</Typography>
+          </Divider>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              type="date" label="Thời gian triển khai" sx={{ flex: 1 }}
+              value={doc.startDate ?? ''} onChange={(e) => set('startDate', e.target.value || null)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              type="date" label="Deadline kết thúc" sx={{ flex: 1 }}
+              value={doc.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Stack>
+
+          <Stack spacing={0.75}>
+            {doc.milestones.map((m, i) => {
+              const meta = deadlineMeta(m.date, m.done);
+              return (
+                <Stack key={m.id} direction="row" spacing={0.5} alignItems="center">
+                  <Tooltip title={m.done ? 'Đã hoàn tất' : 'Đánh dấu hoàn tất'}>
+                    <Checkbox size="small" checked={m.done} onChange={(e) => updMilestone(m.id, { done: e.target.checked })} sx={{ p: 0.5 }} />
+                  </Tooltip>
+                  <TextField
+                    size="small" value={m.label} placeholder="Tên mốc"
+                    onChange={(e) => updMilestone(m.id, { label: e.target.value })}
+                    sx={{ flex: 1, '& .MuiInputBase-input': { fontSize: 13, textDecoration: m.done ? 'line-through' : 'none' } }}
+                  />
+                  <TextField
+                    size="small" type="date" value={m.date ?? ''}
+                    onChange={(e) => updMilestone(m.id, { date: e.target.value || null })}
+                    sx={{ width: 150 }} slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <Chip size="small" label={meta.text} sx={{ minWidth: 96, bgcolor: meta.color + '22', color: meta.color, fontWeight: 700 }} />
+                  <IconButton size="small" onClick={() => moveMilestone(i, -1)} disabled={i === 0}><ArrowUpwardIcon fontSize="inherit" /></IconButton>
+                  <IconButton size="small" onClick={() => moveMilestone(i, 1)} disabled={i === doc.milestones.length - 1}><ArrowDownwardIcon fontSize="inherit" /></IconButton>
+                  <IconButton size="small" color="error" onClick={() => delMilestone(m.id)}><DeleteOutlineIcon fontSize="inherit" /></IconButton>
+                </Stack>
+              );
+            })}
+            <Stack direction="row" spacing={1}>
+              <Button size="small" startIcon={<AddIcon />} onClick={addMilestone}>Thêm mốc</Button>
+              <Button size="small" color="inherit" startIcon={<RestartAltIcon />} onClick={resetMilestones}>Mốc mặc định</Button>
+            </Stack>
+          </Stack>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>

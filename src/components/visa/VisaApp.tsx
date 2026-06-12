@@ -8,9 +8,10 @@ import { VisaCatalog } from './VisaCatalog';
 import { VisaProcBuilder } from './VisaProcBuilder';
 import { VisaProcManager } from './VisaProcManager';
 import { VisaProjectManager } from './VisaProjectManager';
+import { VisaTimeline } from './VisaTimeline';
 import type { VisaProcDoc } from '@/types';
 
-type Tab = 'projects' | 'catalog' | 'procedures';
+type Tab = 'projects' | 'timeline' | 'catalog' | 'procedures';
 
 type Props = { onExit: () => void };
 
@@ -56,6 +57,7 @@ export function VisaApp({ onExit }: Props) {
           }}
         >
           <Tab value="projects" label="📁 Dự án visa" />
+          <Tab value="timeline" label="🗓️ Timeline" />
           <Tab value="catalog" label="📋 Danh mục giá" />
           <Tab value="procedures" label="🗂️ Hồ sơ thủ tục" />
         </Tabs>
@@ -63,6 +65,8 @@ export function VisaApp({ onExit }: Props) {
 
       {tab === 'projects' ? (
         <VisaProjectManager />
+      ) : tab === 'timeline' ? (
+        <VisaTimeline />
       ) : tab === 'catalog' ? (
         <VisaCatalog />
       ) : (
