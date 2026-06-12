@@ -141,6 +141,17 @@ function writeFxRatesLS(rates: Record<string, number>): void {
 }
 
 /**
+ * Tỷ giá TOÀN CỤC, áp dụng cho mọi báo giá / tour / tab / tài khoản.
+ * Nguồn duy nhất = baseline RATES_INIT ⟵ cache cloud (localStorage) ⟵ tỷ giá đang
+ * có trong bộ nhớ (gồm cả chỉnh sửa chưa lưu). Mọi draft (load cloud, đổi template,
+ * tạo mới, import) đều phải seed tỷ giá qua hàm này để KHÔNG dùng tỷ giá nhúng cũ
+ * của từng báo giá → tránh "mỗi tab/tour một tỷ giá khác nhau".
+ */
+function mergeGlobalRates(currentRates: Record<string, number>): Record<string, number> {
+  return { ...RATES_INIT, ...(readFxRatesLS() ?? {}), ...currentRates, VND: 1 };
+}
+
+/**
  * Internal helper: clone a draft via structuredClone for snapshot saves.
  */
 const cloneDraft = (d: QuoteDraft): QuoteDraft => structuredClone(d);
@@ -206,10 +217,10 @@ export const useQuoteStore = create<QuoteState>()(
           const tpl = TEMPLATES[template];
           // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
           if (tpl.kind === 'alt' || !tpl.init) {
-            set({
-              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null },
+            set((s) => ({
+              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: mergeGlobalRates(s.draft.rates) },
               view: 'cost',
-            });
+            }));
             return;
           }
           const items = tpl.init(EMPTY_DRAFT.pax);
@@ -219,7 +230,7 @@ export const useQuoteStore = create<QuoteState>()(
               template === 'dmc' ? DMC_CAT_IDS.includes(c.id) : c.id !== 'dmc',
             ]),
           ) as Record<CategoryId, boolean>;
-          set({
+          set((s) => ({
             draft: {
               ...EMPTY_DRAFT,
               template,
@@ -227,14 +238,15 @@ export const useQuoteStore = create<QuoteState>()(
               items,
               catEnabled,
               currentQuoteId: null,
+              rates: mergeGlobalRates(s.draft.rates),
               ...(template === 'dmc' ? dmcDefaults() : {}),
             },
             view: 'cost',
-          });
+          }));
         },
 
         abandon: () => {
-          set({ draft: EMPTY_DRAFT, view: 'cost' });
+          set((s) => ({ draft: { ...EMPTY_DRAFT, rates: mergeGlobalRates(s.draft.rates) }, view: 'cost' }));
         },
 
         setView: (v) =>
@@ -428,7 +440,8 @@ export const useQuoteStore = create<QuoteState>()(
                 // Clamp pax and rounding on import to the same minimums as the setters.
                 // A malformed file with pax: 0 would otherwise divide-by-zero in computeTotals.
                 ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
-                ...(data.rates ? { rates: data.rates } : {}),
+                // Tỷ giá toàn cục luôn thắng tỷ giá nhúng trong file import.
+                rates: { ...(data.rates ?? {}), ...mergeGlobalRates(s.draft.rates) },
                 ...(data.margin != null ? { margin: data.margin } : {}),
                 ...(data.vat != null ? { vat: data.vat } : {}),
                 ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
@@ -456,7 +469,8 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.template !== undefined ? { template: data.template } : {}),
               ...(data.info ? { info: data.info } : {}),
               ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
-              ...(data.rates ? { rates: data.rates } : {}),
+              // Tỷ giá toàn cục luôn thắng tỷ giá nhúng trong file import.
+              rates: { ...(data.rates ?? {}), ...mergeGlobalRates(s.draft.rates) },
               ...(data.margin != null ? { margin: data.margin } : {}),
               ...(data.vat != null ? { vat: data.vat } : {}),
               ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
@@ -606,10 +620,16 @@ export const useQuoteStore = create<QuoteState>()(
           if (!project) {
             return { ok: false, error: 'Báo giá không tồn tại trong cloud' };
           }
-          set({
-            draft: { ...project.currentState, currentQuoteId: cloudId },
+          // Tỷ giá luôn dùng bản TOÀN CỤC hiện hành, KHÔNG dùng tỷ giá nhúng cũ của
+          // báo giá đã lưu → mọi tour/tab/tài khoản thống nhất một tỷ giá.
+          set((s) => ({
+            draft: {
+              ...project.currentState,
+              currentQuoteId: cloudId,
+              rates: { ...project.currentState.rates, ...mergeGlobalRates(s.draft.rates) },
+            },
             view: 'cost',
-          });
+          }));
           return { ok: true };
         },
       }),
