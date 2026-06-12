@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Badge, Box, Button, Chip, Divider, IconButton, Popover, Stack, Tooltip, Typography,
 } from '@mui/material';
@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus } from '@/lib/firebase';
+import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/firebase';
 import { workerFileUrl } from '@/lib/aiWorker';
 import { NotificationCenter } from './NotificationCenter';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
@@ -18,6 +18,14 @@ const TYPE_COLOR: Record<string, string> = {
   payment_due:      '#f39c12',
   payment_approval: '#14A08C',
   collab_invite:    '#2980b9',
+};
+
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  pending:        { label: '⏳ Chờ duyệt',        color: '#f39c12' },
+  pending_stage2: { label: '⏳ Chờ duyệt bước 2',  color: '#e67e22' },
+  approved:       { label: '✅ Đã duyệt',          color: '#27ae60' },
+  rejected:       { label: '❌ Từ chối',           color: '#dc3250' },
+  paid:           { label: '💸 Đã thanh toán',     color: '#16a085' },
 };
 
 export function NotificationBell() {
@@ -114,15 +122,27 @@ function NotificationItem({
   const [acting, setActing] = useState(false);
   const [acted, setActed] = useState(false);
 
+  // Live status from the shared activity thread (if any) — lets every member's
+  // bell hide the action buttons once the request is resolved by anyone.
+  const [threadStatus, setThreadStatus] = useState<ActivityStatus | undefined>(undefined);
+  useEffect(() => {
+    if (!notif.threadId) { setThreadStatus(undefined); return; }
+    return fbSubscribeNotifThread(notif.threadId, (t) => setThreadStatus(t?.status));
+  }, [notif.threadId]);
+  const resolved = threadStatus === 'approved' || threadStatus === 'rejected' || threadStatus === 'paid';
+
   const borderColor = TYPE_COLOR[notif.type] ?? '#95a5a6';
   const attachments = (notif.data as Partial<TourPaymentApprovalData> | undefined)?.attachments ?? [];
   const isTourPaymentApproval =
     notif.type === 'payment_approval'
     && (notif.data as { approvalKey?: string } | undefined)?.approvalKey != null
     && canApprove
-    && !acted;
+    && !acted && !resolved;
+  // Contract-payment approvals (separate flow keyed by contractId).
   const isApprovalRequest =
-    notif.type === 'payment_approval' && !isTourPaymentApproval && canApprove && !acted;
+    notif.type === 'payment_approval'
+    && (notif.data as { contractId?: string } | undefined)?.contractId != null
+    && canApprove && !acted;
 
   const handleTourPaymentApproval = async (approved: boolean) => {
     if (acting) return;
@@ -287,6 +307,16 @@ function NotificationItem({
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
         {notif.message}
       </Typography>
+      {threadStatus && STATUS_META[threadStatus] && (
+        <Chip
+          size="small"
+          label={STATUS_META[threadStatus].label}
+          sx={{
+            mt: 0.5, height: 20, fontSize: 11, fontWeight: 800,
+            bgcolor: STATUS_META[threadStatus].color + '22', color: STATUS_META[threadStatus].color,
+          }}
+        />
+      )}
       <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.25 }}>
         {new Date(notif.createdAt).toLocaleString('vi-VN')} · {notif.createdBy}
       </Typography>
