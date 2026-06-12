@@ -13,15 +13,16 @@ service cloud.firestore {
         && request.auth.token.email.lower().matches('.*@viettours[.]com[.]vn$');
     }
 
-    // Shared single-doc collections (rate card, users, contracts, history…).
-    match /viettours/{docId}             { allow read, write: if isEmployee(); }
-    // Per-quote project documents.
-    match /quote_projects/{id}           { allow read, write: if isEmployee(); }
-    match /dmc_quote_projects/{id}       { allow read, write: if isEmployee(); }
-    // Per-user notification queue.
-    match /user_notifications/{username} { allow read, write: if isEmployee(); }
-
-    // Default deny anything else.
-    match /{document=**} { allow read, write: if false; }
+    // Internal tool: any authenticated @viettours.com.vn employee may read and
+    // write every collection (rate card, users, quotes, contracts, customers,
+    // NCC, notifications, notification_threads, tour_payments, itineraries,
+    // menus, visa, payment_approvals, …). Anonymous and external-domain clients
+    // are denied across the board.
+    //
+    // A previous per-collection allowlist silently denied newer collections
+    // (notification_threads, tour_payments, …), which broke notifications,
+    // payment sync, itineraries and menus. Phase 4 may re-introduce granular
+    // per-collection rules — but they must cover EVERY collection the app uses.
+    match /{document=**} { allow read, write: if isEmployee(); }
   }
 }
