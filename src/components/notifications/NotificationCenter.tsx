@@ -43,6 +43,24 @@ const LINK_LABEL: Record<string, string> = {
   contract: 'Mở hợp đồng', itinerary: 'Mở chương trình', menu: 'Mở thực đơn', collab: 'Mở',
 };
 
+type FilterKey = 'all' | 'mine' | 'unread' | NotificationType;
+
+/** "Việc của tôi": items in my feed that are awaiting my action. */
+const needsMyAction = (n: Notification): boolean =>
+  (n.type === 'payment_approval'
+    && (n.data as { approvalStage?: number } | undefined)?.approvalStage != null)
+  || n.type === 'task';
+
+const FILTER_CHIPS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: 'Tất cả' },
+  { key: 'mine', label: '🎯 Việc của tôi' },
+  { key: 'unread', label: '● Chưa đọc' },
+  { key: 'payment_approval', label: '🧾 Duyệt chi' },
+  { key: 'announcement', label: '📢 Thông báo' },
+  { key: 'collab_comment', label: '💬 Cộng tác' },
+  { key: 'task', label: '✅ Yêu cầu' },
+];
+
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const timeAgo = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();
@@ -64,12 +82,30 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
 
   const [selId, setSelId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [search, setSearch] = useState('');
+
+  const mineCount = useMemo(() => notifications.filter(needsMyAction).length, [notifications]);
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return notifications.filter((n) => {
+      if (filter === 'mine' && !needsMyAction(n)) return false;
+      if (filter === 'unread' && n.read) return false;
+      if (filter !== 'all' && filter !== 'mine' && filter !== 'unread' && n.type !== filter) return false;
+      if (q && !`${n.title} ${n.message} ${n.createdBy}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [notifications, filter, search]);
 
   const selected = useMemo(() => notifications.find((n) => n.id === selId) ?? null, [notifications, selId]);
 
   useEffect(() => {
-    if (open && notifications.length && !selId) setSelId(notifications[0].id);
-  }, [open, notifications, selId]);
+    // Keep a valid selection within the filtered list.
+    if (!open || filtered.length === 0) return;
+    if (!selId || !filtered.some((n) => n.id === selId)) setSelId(filtered[0].id);
+  }, [open, filtered, selId]);
 
   if (!currentUser) return null;
 
@@ -115,15 +151,39 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
       </Stack>
 
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 56px)' }}>
-        {/* List */}
-        <Box sx={{ width: 360, borderRight: '1px solid rgba(15,58,74,0.1)', overflowY: 'auto', bgcolor: '#fafcfc' }}>
-          {notifications.length === 0 ? (
+        {/* List + filters */}
+        <Box sx={{ width: 360, borderRight: '1px solid rgba(15,58,74,0.1)', bgcolor: '#fafcfc', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <Box sx={{ p: 1, borderBottom: '1px solid rgba(15,58,74,0.08)' }}>
+            <TextField
+              size="small" fullWidth placeholder="🔍 Tìm thông báo…"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 13 } }}
+            />
+            <Stack direction="row" spacing={0.5} sx={{ overflowX: 'auto', pb: 0.25 }}>
+              {FILTER_CHIPS.map((f) => {
+                const active = filter === f.key;
+                const count = f.key === 'mine' ? mineCount : f.key === 'unread' ? unreadCount : 0;
+                return (
+                  <Chip
+                    key={f.key} size="small" clickable
+                    onClick={() => setFilter(f.key)}
+                    label={count ? `${f.label} (${count})` : f.label}
+                    color={active ? 'primary' : 'default'}
+                    variant={active ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 700, flexShrink: 0 }}
+                  />
+                );
+              })}
+            </Stack>
+          </Box>
+          <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {filtered.length === 0 ? (
             <Box sx={{ p: 5, textAlign: 'center', color: 'text.disabled' }}>
-              <Typography variant="body2">Chưa có thông báo nào</Typography>
+              <Typography variant="body2">{notifications.length === 0 ? 'Chưa có thông báo nào' : 'Không có thông báo khớp bộ lọc'}</Typography>
             </Box>
           ) : (
             <List disablePadding>
-              {notifications.map((n) => {
+              {filtered.map((n) => {
                 const m = meta(n.type);
                 const active = n.id === selId;
                 return (
@@ -153,6 +213,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
               })}
             </List>
           )}
+          </Box>
         </Box>
 
         {/* Detail */}
