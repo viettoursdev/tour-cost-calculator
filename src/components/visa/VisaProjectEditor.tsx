@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ChangeEvent, useState } from 'react';
 import {
   Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent,
   DialogTitle, Divider, IconButton, LinearProgress, MenuItem, Stack, TextField, Tooltip, Typography,
@@ -8,14 +8,18 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useVisaProcStore } from '@/stores/visaProcStore';
+import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { attMeta } from '@/lib/util';
 import {
   deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaMilestone,
   VISA_COUNTRIES, VISA_STATUS_META, VISA_STATUS_ORDER,
 } from './constants';
-import type { User, VisaMilestone, VisaProjectDoc, VisaProjectStatus } from '@/types';
+import type { User, VisaMilestone, VisaProcIndexEntry, VisaProjectDoc, VisaProjectStatus } from '@/types';
 
 type Props = {
   initial: VisaProjectDoc;
@@ -32,10 +36,35 @@ const NUM_FIELDS: { key: keyof VisaProjectDoc; label: string; color: string }[] 
 
 export function VisaProjectEditor({ initial, onClose }: Props) {
   const users = useAuthStore((s) => s.users);
+  const user = useAuthStore((s) => s.currentUser);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const procList = useVisaProcStore((s) => s.list);
   const save = useVisaProjectStore((s) => s.save);
   const [doc, setDoc] = useState<VisaProjectDoc>(initial);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const byProcId = (ids: string[]): VisaProcIndexEntry[] =>
+    ids.map((id) => procList.find((x) => x.id === id)).filter((x): x is VisaProcIndexEntry => !!x);
+
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const at = new Date().toISOString();
+      const uploaded = (await Promise.all(files.map((f) => uploadFileToWorker(f))))
+        .map((u) => ({ ...u, uploadedBy: user?.name ?? '', uploadedAt: at }));
+      setDoc((p) => ({ ...p, attachments: [...(p.attachments ?? []), ...uploaded] }));
+    } catch (err) {
+      window.alert('Tải file lỗi: ' + (err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const removeAtt = (i: number) =>
+    setDoc((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }));
 
   const set = <K extends keyof VisaProjectDoc>(k: K, v: VisaProjectDoc[K]) =>
     setDoc((p) => ({ ...p, [k]: v }));
@@ -199,6 +228,52 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
               />
             </Box>
           )}
+
+          <Divider textAlign="left">
+            <Typography variant="caption" fontWeight={700} color="text.secondary">HỒ SƠ VISA & TÀI LIỆU</Typography>
+          </Divider>
+          <Autocomplete
+            multiple options={procList} value={byProcId(doc.linkedProcIds)}
+            onChange={(_, v) => set('linkedProcIds', v.map((x) => x.id))}
+            getOptionLabel={(x) => `${x.code ? x.code + ' · ' : ''}${x.title}`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            renderTags={(value, getTagProps) =>
+              value.map((x, i) => {
+                const { key, ...tp } = getTagProps({ index: i });
+                return <Chip key={key} {...tp} size="small" icon={<span>🗂️</span>} label={x.title} />;
+              })
+            }
+            renderInput={(p) => <TextField {...p} label="Hồ sơ thủ tục liên kết" placeholder="Chọn các hồ sơ thủ tục của dự án" />}
+          />
+          <Box>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              📎 File hồ sơ sao lưu
+            </Typography>
+            <Stack spacing={0.75}>
+              {(doc.attachments ?? []).map((att, i) => (
+                <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Box component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer" title={att.name}
+                      sx={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
+                      📎 {att.name}
+                    </Box>
+                    {attMeta(att) && (
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1.3 }}>{attMeta(att)}</Typography>
+                    )}
+                  </Box>
+                  <Button size="small" color="error" onClick={() => removeAtt(i)}>Gỡ</Button>
+                </Stack>
+              ))}
+              <Box>
+                <Button component="label" variant="outlined" size="small" startIcon={<AttachFileIcon />} disabled={uploading}>
+                  {uploading ? 'Đang tải lên…' : ((doc.attachments?.length ?? 0) ? 'Thêm / cập nhật file' : 'Đính kèm file (PDF/Word/ảnh…)')}
+                  <Box component="input" type="file" hidden multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*" onChange={onPickFiles} />
+                </Button>
+              </Box>
+            </Stack>
+          </Box>
 
           <Divider textAlign="left">
             <Typography variant="caption" fontWeight={700} color="text.secondary">TIMELINE & MỐC THỜI GIAN</Typography>

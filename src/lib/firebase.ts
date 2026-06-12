@@ -906,6 +906,8 @@ export async function fbSaveVisaProc(d: VisaProcDoc, savedBy: string): Promise<v
     code: d.code ?? '',
     title: d.title ?? '',
     country: d.country ?? '',
+    visaType: d.visaType ?? '',
+    isTemplate: d.isTemplate ?? false,
     linkedQuoteName: d.linkedQuoteName ?? '',
     collaborators: d.collaborators ?? [],
     createdByUsername: d.createdByUsername ?? '',

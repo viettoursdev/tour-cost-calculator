@@ -64,6 +64,9 @@ export interface VisaProcDoc {
   code: string;
   title: string;
   country: string;
+  visaType?: string;                  // loại hình visa (Evisa, Visa đoàn…)
+  isTemplate?: boolean;               // dùng làm template mẫu theo quốc gia/loại
+  attachments?: FileAttachment[];     // file hồ sơ sao lưu (R2)
   linkedQuoteId: string | null;
   linkedQuoteName: string;
   createdByUsername: string;
@@ -81,6 +84,8 @@ export interface VisaProcIndexEntry {
   code: string;
   title: string;
   country: string;
+  visaType?: string;
+  isTemplate?: boolean;
   linkedQuoteName: string;
   collaborators: string[];
   createdByUsername: string;

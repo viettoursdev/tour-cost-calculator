@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import {
-  Box, Button, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Paper, Select,
-  Stack, TextField, Typography,
+  Box, Button, Chip, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton,
+  MenuItem, Paper, Select, Stack, Switch, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -11,11 +11,15 @@ import HistoryIcon from '@mui/icons-material/History';
 import PeopleIcon from '@mui/icons-material/People';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SaveIcon from '@mui/icons-material/Save';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
-import { PROC_KIND_ICON, newProcField, newProcRow, newProcSection } from './constants';
+import { PROC_KIND_ICON, VISAP_TYPES, newProcField, newProcRow, newProcSection } from './constants';
 import { exportVisaProcDocx } from '@/lib/exports/exportVisaProcDocx';
 import { exportVisaProcPDF } from '@/lib/exports/exportVisaProcPDF';
+import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { attMeta } from '@/lib/util';
 import { VisaProcCollabModal } from './VisaProcCollabModal';
 import type { User, VisaProcDoc, VisaProcSection } from '@/types';
 
@@ -28,11 +32,48 @@ type Props = {
 export function VisaProcBuilder({ initial, user, onBack }: Props) {
   const [doc, setDoc] = useState<VisaProcDoc>(initial);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const procList = useVisaProcStore((s) => s.list);
   const [showCollab, setShowCollab] = useState(false);
   const [showVers, setShowVers] = useState(false);
+  const [showTpl, setShowTpl] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const isOwner = doc.createdByUsername === user.u;
   const savedBy = `${user.name} (${user.role})`;
+
+  const templates = procList.filter((x) => x.isTemplate && x.id !== doc.id);
+
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const at = new Date().toISOString();
+      const uploaded = (await Promise.all(files.map((f) => uploadFileToWorker(f))))
+        .map((u) => ({ ...u, uploadedBy: user.name, uploadedAt: at }));
+      setDoc((p) => ({ ...p, attachments: [...(p.attachments ?? []), ...uploaded] }));
+    } catch (err) {
+      window.alert('Tải file lỗi: ' + (err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const removeAtt = (i: number) =>
+    setDoc((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }));
+
+  const applyTemplate = async (id: string) => {
+    const full = await useVisaProcStore.getState().load(id);
+    if (!full) { window.alert('Không tải được template.'); return; }
+    if (!window.confirm('Áp dụng template này? Các mục hồ sơ hiện tại sẽ bị thay thế (file & link giữ nguyên).')) return;
+    setDoc((p) => ({
+      ...p,
+      sections: JSON.parse(JSON.stringify(full.sections)) as VisaProcSection[],
+      country: p.country || full.country,
+      visaType: p.visaType || full.visaType,
+    }));
+    setShowTpl(false);
+  };
 
   // Auto-save 1.5s debounce.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -217,6 +258,55 @@ export function VisaProcBuilder({ initial, user, onBack }: Props) {
               </Select>
             </Box>
           </Box>
+
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
+            <TextField
+              select size="small" label="Loại visa" sx={{ minWidth: 170 }}
+              value={doc.visaType ?? ''} onChange={(e) => set('visaType', e.target.value)}
+            >
+              <MenuItem value=""><em>—</em></MenuItem>
+              {VISAP_TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
+            </TextField>
+            <FormControlLabel
+              control={<Switch checked={!!doc.isTemplate} onChange={(e) => set('isTemplate', e.target.checked)} />}
+              label="Dùng làm template mẫu"
+            />
+            <Button variant="outlined" size="small" startIcon={<AutoFixHighIcon />}
+              onClick={() => setShowTpl(true)} disabled={templates.length === 0}>
+              Áp dụng template ({templates.length})
+            </Button>
+          </Stack>
+
+          {/* File hồ sơ đính kèm (sao lưu / cập nhật) */}
+          <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed rgba(15,58,74,0.15)' }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              📎 File hồ sơ đính kèm
+            </Typography>
+            <Stack spacing={0.75}>
+              {(doc.attachments ?? []).map((att, i) => (
+                <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Box component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer" title={att.name}
+                      sx={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
+                      📎 {att.name}
+                    </Box>
+                    {attMeta(att) && (
+                      <Typography variant="caption" color="text.disabled" sx={{ display: 'block', lineHeight: 1.3 }}>{attMeta(att)}</Typography>
+                    )}
+                  </Box>
+                  <Button size="small" color="error" onClick={() => removeAtt(i)}>Gỡ</Button>
+                </Stack>
+              ))}
+              <Box>
+                <Button component="label" variant="outlined" size="small" startIcon={<AttachFileIcon />} disabled={uploading}>
+                  {uploading ? 'Đang tải lên…' : ((doc.attachments?.length ?? 0) ? 'Thêm / cập nhật file' : 'Đính kèm file (PDF/Word/ảnh…)')}
+                  <Box component="input" type="file" hidden multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*" onChange={onPickFiles} />
+                </Button>
+              </Box>
+            </Stack>
+          </Box>
         </Paper>
 
         <Stack spacing={2}>
@@ -364,6 +454,40 @@ export function VisaProcBuilder({ initial, user, onBack }: Props) {
               </Button>
             </Paper>
           ))}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showTpl} onClose={() => setShowTpl(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          ✨ Áp dụng template hồ sơ
+          <Typography variant="caption" display="block" color="text.secondary">
+            Chọn mẫu theo quốc gia / loại visa — nội dung mục hồ sơ sẽ được nạp vào.
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          {templates.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4, color: 'text.disabled' }}>
+              Chưa có template nào. Bật “Dùng làm template mẫu” ở một hồ sơ để tạo.
+            </Box>
+          ) : templates.map((t) => {
+            const match = (!!doc.country && t.country === doc.country) || (!!doc.visaType && t.visaType === doc.visaType);
+            return (
+              <Paper key={t.id} variant="outlined" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 1.25, mb: 1 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography fontWeight={700} fontSize={14} noWrap>{t.title}</Typography>
+                  <Stack direction="row" spacing={0.5} sx={{ mt: 0.25 }} flexWrap="wrap" useFlexGap>
+                    {t.country && <Chip size="small" variant="outlined" label={`🌐 ${t.country}`} />}
+                    {t.visaType && <Chip size="small" variant="outlined" label={t.visaType} />}
+                    {match && <Chip size="small" color="success" label="Khớp" />}
+                  </Stack>
+                </Box>
+                <Button size="small" variant="contained" onClick={() => void applyTemplate(t.id)}
+                  sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+                  Áp dụng
+                </Button>
+              </Paper>
+            );
+          })}
         </DialogContent>
       </Dialog>
 
