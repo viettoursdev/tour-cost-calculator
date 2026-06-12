@@ -142,6 +142,13 @@ export function QuoteHistoryView() {
     if (!result.ok) window.alert('⚠ ' + result.error);
   };
 
+  const handleOpenLinked = async (row: CloudQuoteEntry) => {
+    if (!row.linkedQuoteId) return;
+    if (!window.confirm(`Mở bản liên kết "${row.linkedQuoteName ?? ''}"? Thay đổi cục bộ chưa lưu có thể mất.`)) return;
+    const r = await loadCloud(row.linkedQuoteId, { dmc: row.linkedQuoteTemplate === 'dmc' });
+    if (!r.ok) window.alert('⚠ ' + r.error);
+  };
+
   const handleDelete = async (row: CloudQuoteEntry) => {
     if (!window.confirm(`Xoá báo giá "${row.name}" (${row.quoteCode})? Không thể hoàn tác.`)) return;
     try {
@@ -201,6 +208,21 @@ export function QuoteHistoryView() {
           />
         </Tooltip>
       ),
+    },
+    {
+      field: 'linkedQuoteId',
+      headerName: 'Liên kết',
+      width: 140,
+      sortable: false,
+      renderCell: (p) => (p.row.linkedQuoteId ? (
+        <Tooltip title={`Mở bản liên kết: ${p.row.linkedQuoteName ?? ''}`}>
+          <Chip
+            size="small" color="primary" variant="outlined" clickable
+            label={p.row.linkedQuoteTemplate === 'dmc' ? '🔗 DMC' : '🔗 Nước ngoài'}
+            onClick={() => void handleOpenLinked(p.row)}
+          />
+        </Tooltip>
+      ) : null),
     },
     {
       field: 'attachment',

@@ -9,7 +9,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { LEGACY } from '@/theme';
-import type { Collaborator, Customer, FileAttachment, User } from '@/types';
+import type { CloudQuoteEntry, Collaborator, Customer, FileAttachment, User } from '@/types';
 import { attMeta } from '@/lib/util';
 
 type Props = { open: boolean; onClose: () => void };
@@ -55,6 +55,15 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // "Lưu cả hai cùng lúc" — chỉ với DMC breakdown: chọn báo giá nước ngoài (intl)
+  // để gắn liên kết chéo; một lần lưu sẽ cập nhật cả hai bản ghi.
+  const foreignQuotes = useMemo(() => quotes.filter((q) => q.template === 'intl'), [quotes]);
+  const [linkedForeign, setLinkedForeign] = useState<CloudQuoteEntry | null>(
+    () => (existingEntry?.linkedQuoteId
+      ? quotes.find((q) => q.cloudId === existingEntry.linkedQuoteId) ?? null
+      : null),
+  );
+
   const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -84,7 +93,10 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     setError(null);
     try {
       const collaborators: Collaborator[] = collabUsers.map((u) => ({ u: u.u, name: u.name }));
-      await saveCloud(name, collaborators, note, customer ?? undefined, attachments);
+      const linked = template === 'dmc' && linkedForeign
+        ? { id: linkedForeign.cloudId, name: linkedForeign.name, template: linkedForeign.template }
+        : null;
+      await saveCloud(name, collaborators, note, customer ?? undefined, attachments, linked);
       onClose();
     } catch (e) {
       setError((e as Error).message || 'Lỗi không xác định');
@@ -158,6 +170,35 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
               <TextField {...params} label="Cộng tác viên" placeholder="Chọn người được xem báo giá này" />
             )}
           />
+
+          {/* DMC breakdown ↔ báo giá nước ngoài: lưu cả hai cùng lúc */}
+          {template === 'dmc' && (
+            <Autocomplete
+              options={foreignQuotes}
+              value={linkedForeign}
+              onChange={(_, v) => setLinkedForeign(v)}
+              getOptionLabel={(q) => `${q.quoteCode ? q.quoteCode + ' · ' : ''}${q.name}`}
+              isOptionEqualToValue={(a, b) => a.cloudId === b.cloudId}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="🔗 Lưu kèm báo giá nước ngoài (optional)"
+                  placeholder="Chọn báo giá nước ngoài để liên kết"
+                  helperText="Một lần lưu sẽ cập nhật liên kết cho cả DMC breakdown và báo giá nước ngoài."
+                />
+              )}
+              renderOption={(props, q) => (
+                <li {...props} key={q.cloudId}>
+                  <Stack>
+                    <Typography variant="body2" fontWeight={600}>{q.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {q.quoteCode || '—'}{q.customerName ? ` · ${q.customerName}` : ''}
+                    </Typography>
+                  </Stack>
+                </li>
+              )}
+            />
+          )}
 
           <TextField
             label="Ghi chú phiên bản (optional)"

@@ -7,6 +7,7 @@ import {
   fbUpdateCollaborators,
   fbDeleteDMCQuote, fbGetDMCQuoteProject, fbSaveDMCQuote, fbSaveDMCQuoteState,
   fbUpdateDMCCollaborators,
+  fbSetRegularEntryLink,
   fbPushFxRates,
   generateQuoteCode,
 } from '@/lib/firebase';
@@ -96,7 +97,7 @@ type QuoteState = {
   renameSnapshot: (id: number, name: string) => void;
 
   // Cloud sync (PR-3.2)
-  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[]) => Promise<CloudQuoteEntry>;
+  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[], linkedForeign?: { id: string; name: string; template: Template } | null) => Promise<CloudQuoteEntry>;
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
   loadCloud: (cloudId: string, opts?: { dmc?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -523,7 +524,7 @@ export const useQuoteStore = create<QuoteState>()(
           set({ snapshots: next });
         },
 
-        saveCloud: async (name, collaborators, note, customer, attachments) => {
+        saveCloud: async (name, collaborators, note, customer, attachments, linkedForeign) => {
           const { draft } = get();
           const u = useAuthStore.getState().currentUser;
           if (!u) throw new Error('saveCloud: no current user');
@@ -553,11 +554,29 @@ export const useQuoteStore = create<QuoteState>()(
               collaborators,
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
               ...(attachments ? { attachments } : {}),
+              ...(linkedForeign
+                ? { linkedQuoteId: linkedForeign.id, linkedQuoteName: linkedForeign.name, linkedQuoteTemplate: linkedForeign.template }
+                : {}),
             },
             { u: u.u, name: u.name, role: u.role },
           );
           await _saveS(cloudId, draft, note, { name: u.name, role: u.role });
           set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId } }));
+
+          // "Lưu cả hai cùng lúc": khi lưu DMC breakdown có gắn báo giá nước
+          // ngoài, ghi ngược liên kết lên bản ghi báo giá đó (non-blocking — vẫn
+          // OK nếu rules chặn ghi; liên kết phía DMC đã được lưu ở trên).
+          if (isDmc && linkedForeign) {
+            try {
+              await fbSetRegularEntryLink(linkedForeign.id, {
+                linkedQuoteId: cloudId,
+                linkedQuoteName: entry.name,
+                linkedQuoteTemplate: 'dmc',
+              });
+            } catch (e) {
+              console.warn('saveCloud: ghi ngược liên kết báo giá nước ngoài lỗi:', (e as Error).message);
+            }
+          }
           return entry;
         },
 

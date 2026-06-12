@@ -154,6 +154,10 @@ export type CloudQuoteEntry = {
   attachment?: FileAttachment;
   /** Nhiều file đính kèm cho báo giá (lưu trên R2 qua AI Worker). */
   attachments?: FileAttachment[];
+  /** Liên kết chéo DMC ↔ báo giá nước ngoài: cloudId của bản ghi đối ứng. */
+  linkedQuoteId?: string;
+  linkedQuoteName?: string;
+  linkedQuoteTemplate?: Template;
 };
 
 export type CloudQuoteProject = {

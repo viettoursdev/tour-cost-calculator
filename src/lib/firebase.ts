@@ -203,9 +203,14 @@ type SaveEntry = {
   collaborators?: Collaborator[];
   attachment?: FileAttachment;
   attachments?: FileAttachment[];
+  linkedQuoteId?: string;
+  linkedQuoteName?: string;
+  linkedQuoteTemplate?: Template;
 };
 
 type SavedBy = { u: string; name: string; role: string };
+
+type EntryLink = { linkedQuoteId?: string; linkedQuoteName?: string; linkedQuoteTemplate?: Template };
 
 function makeQuoteHistoryApi(
   historyDoc: DocumentReference,
@@ -232,6 +237,9 @@ function makeQuoteHistoryApi(
       if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
       if (entry.attachment !== undefined) optionalFields.attachment = entry.attachment;
       if (entry.attachments !== undefined) optionalFields.attachments = entry.attachments;
+      if (entry.linkedQuoteId !== undefined) optionalFields.linkedQuoteId = entry.linkedQuoteId;
+      if (entry.linkedQuoteName !== undefined) optionalFields.linkedQuoteName = entry.linkedQuoteName;
+      if (entry.linkedQuoteTemplate !== undefined) optionalFields.linkedQuoteTemplate = entry.linkedQuoteTemplate;
 
       let saved: CloudQuoteEntry;
       if (idx >= 0) {
@@ -346,6 +354,18 @@ function makeQuoteHistoryApi(
       const snap = await getDoc(projectDoc(cloudId));
       return snap.exists() ? (snap.data() as CloudQuoteProject) : null;
     },
+
+    /** Ghi liên kết chéo lên bản ghi lịch sử (theo cloudId). Dùng để cập nhật
+     *  bản ghi đối ứng khi "lưu cả hai" (DMC ↔ báo giá nước ngoài). */
+    async fbSetEntryLink(cloudId: string, link: EntryLink): Promise<void> {
+      const snap = await getDoc(historyDoc);
+      if (!snap.exists()) return;
+      const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+      const i = quotes.findIndex((q) => q.cloudId === cloudId);
+      if (i < 0) return;
+      quotes[i] = { ...quotes[i], ...link };
+      await setDoc(historyDoc, { quotes });
+    },
   };
 }
 
@@ -356,6 +376,7 @@ export const fbSaveQuoteState        = _regular.fbSaveQuoteState;
 export const fbDeleteQuote           = _regular.fbDeleteQuote;
 export const fbUpdateCollaborators   = _regular.fbUpdateCollaborators;
 export const fbGetQuoteProject       = _regular.fbGetQuoteProject;
+export const fbSetRegularEntryLink   = _regular.fbSetEntryLink;
 
 const _dmc = makeQuoteHistoryApi(DMC_QUOTE_HISTORY_DOC, dmcQuoteProjectDoc);
 export const fbSubscribeDMCQuoteHistory = _dmc.fbSubscribeQuoteHistory;
@@ -364,6 +385,7 @@ export const fbSaveDMCQuoteState         = _dmc.fbSaveQuoteState;
 export const fbDeleteDMCQuote            = _dmc.fbDeleteQuote;
 export const fbUpdateDMCCollaborators    = _dmc.fbUpdateCollaborators;
 export const fbGetDMCQuoteProject        = _dmc.fbGetQuoteProject;
+export const fbSetDMCEntryLink           = _dmc.fbSetEntryLink;
 
 // ── Customers ──
 
