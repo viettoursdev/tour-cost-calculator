@@ -9,6 +9,21 @@ export const CURRENCY_FLAGS: Record<OutputCurrency, string> = {
   SGD: '🇸🇬', THB: '🇹🇭', GBP: '🇬🇧', AUD: '🇦🇺', CNY: '🇨🇳',
 };
 
+/** Thứ tự hiển thị tỷ giá quy đổi (panel "Tỷ giá quy đổi → VND"). */
+export const FX_DISPLAY_ORDER: string[] =
+  ['USD', 'EUR', 'GBP', 'SGD', 'JPY', 'KRW', 'AUD', 'CNY', 'THB'];
+
+/** Hạng sắp xếp của 1 mã tiền tệ trong panel tỷ giá (mã lạ xếp cuối). */
+export function fxRank(code: string): number {
+  const i = FX_DISPLAY_ORDER.indexOf(code);
+  return i < 0 ? FX_DISPLAY_ORDER.length + 1 : i;
+}
+
+/** Nhãn hiển thị tỷ giá — CNY hiển thị là RMB theo thói quen nội bộ. */
+export function fxLabel(code: string): string {
+  return code === 'CNY' ? 'RMB' : code;
+}
+
 // Source: public/legacy.html:3694-3697
 // VND or missing rate → identity.
 export function toOutputCurrency(

@@ -26,7 +26,7 @@ export function calcVND(item: Item, rates: Record<string, number>, pax: number):
   // Byte-for-byte parity with legacy.html:1687-1688: `enabled === false`, not `!enabled`.
   // Matters for JSON imports where `enabled` may be undefined — legacy treats missing as
   // enabled, so we match that semantics rather than the stricter TS-types interpretation.
-  if (item.enabled === false || item.foc === true) return 0;
+  if (item.enabled === false || item.foc === true || item.included === true) return 0;
   const r = rates[item.cur] ?? 1;
   return item.price * r * item.times * qtyOf(item, pax);
 }

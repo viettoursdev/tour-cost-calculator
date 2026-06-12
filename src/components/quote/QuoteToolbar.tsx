@@ -29,7 +29,7 @@ import { QuotePrintable } from './QuotePrintable';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
-import { fmtOutput } from '@/lib/currency';
+import { fmtOutput, fxRank, fxLabel } from '@/lib/currency';
 import { computeTotals, fmtVND } from './calc';
 import { InvoiceModal } from './InvoiceModal';
 import { HotelModal } from '@/components/rates/HotelModal';
@@ -123,6 +123,20 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     else if (key === 'visa') setRateModal({ kind: 'visa' });
     else setRateModal({ kind: 'other', type: key, label });
     setRateAnchor(null);
+  };
+
+  // Thêm một loại tiền tệ custom vào bảng tỷ giá. Nhấn "💾 Lưu tỷ giá" sau đó để
+  // sao lưu lên cloud cho mọi tài khoản (custom currency vẫn được giữ qua sync).
+  const addCustomRate = () => {
+    const raw = window.prompt('Nhập mã tiền tệ cần thêm (vd: MYR, HKD, TWD, CHF):');
+    const code = raw?.trim().toUpperCase();
+    if (!code) return;
+    if (!/^[A-Z]{2,5}$/.test(code)) { alert('⚠ Mã tiền tệ không hợp lệ (2–5 chữ cái, vd MYR).'); return; }
+    if (code === 'VND') { alert('VND là tiền gốc, không cần thêm tỷ giá.'); return; }
+    if (rates[code] != null) { alert(`⚠ ${fxLabel(code)} đã có trong bảng tỷ giá.`); return; }
+    const rate = Number(window.prompt(`Tỷ giá: 1 ${fxLabel(code)} = ? VND`, '0')) || 0;
+    setRate(code, rate);
+    setShowRates(true);
   };
 
   const handleExport = () => {
@@ -603,6 +617,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, px: 2.25, pb: 2.25, pt: 0.5 }}>
             {Object.entries(rates)
               .filter(([c, r]) => c !== 'VND' && typeof r === 'number')
+              .sort((a, b) => fxRank(a[0]) - fxRank(b[0]))
               .map(([c, r]) => (
                 <Box
                   key={c}
@@ -612,7 +627,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                     borderRadius: '10px', px: 1.75, py: 1,
                   }}
                 >
-                  <Typography sx={{ color: '#0d7a6a', fontSize: 13, fontWeight: 700, minWidth: 36 }}>1 {c}</Typography>
+                  <Typography sx={{ color: '#0d7a6a', fontSize: 13, fontWeight: 700, minWidth: 36 }}>1 {fxLabel(c)}</Typography>
                   <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>=</Typography>
                   <TextField
                     size="small" type="number" value={r}
@@ -628,6 +643,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                   />
                 </Box>
               ))}
+            <Box
+              onClick={addCustomRate}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer',
+                background: 'rgba(20,150,140,0.06)', border: '1px dashed rgba(20,150,140,0.45)',
+                borderRadius: '10px', px: 1.75, py: 1, color: '#0d7a6a', fontSize: 13, fontWeight: 700,
+                '&:hover': { background: 'rgba(20,150,140,0.14)' },
+              }}
+            >
+              ➕ Thêm tỷ giá
+            </Box>
           </Box>
         )}
       </Box>

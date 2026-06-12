@@ -39,6 +39,7 @@ export type Item = {
   enabled: boolean;
   foc: boolean;
   optional?: boolean;   // excluded from totals; shown as an optional add-on
+  included?: boolean;   // "Đã gồm" — đã bao gồm trong giá khác; không cộng vào tổng
 };
 
 export type QuoteInfo = {

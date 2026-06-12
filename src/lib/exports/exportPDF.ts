@@ -124,7 +124,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   activeCATS.forEach(cat => {
     if (!catEnabled[cat.id as keyof typeof catEnabled]) return;
     const catItems = (items[cat.id as keyof typeof items] ?? [])
-      .filter((i: Item) => i.name && !i.optional && (calcVND(i, rates, pax) > 0 || i.foc === true));
+      .filter((i: Item) => i.name && !i.optional && (calcVND(i, rates, pax) > 0 || i.foc === true || i.included === true));
     if (catItems.length === 0) return;
     const sub = catItems.reduce((s: number, i: Item) => s + calcVND(i, rates, pax), 0);
     checkPage(10);
@@ -145,6 +145,10 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
       if (it.foc) {
         pdf.setTextColor(39, 174, 96); pdf.setFont(FONT, 'bold');
         pdf.text('FOC - Miễn phí', pageW - mX, y, { align: 'right' });
+        pdf.setFont(FONT, 'normal');
+      } else if (it.included) {
+        pdf.setTextColor(37, 99, 235); pdf.setFont(FONT, 'bold');
+        pdf.text('Đã bao gồm', pageW - mX, y, { align: 'right' });
         pdf.setFont(FONT, 'normal');
       } else if (!isPackage) {
         pdf.setTextColor(...teal);

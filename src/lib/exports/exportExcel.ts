@@ -122,7 +122,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   let r = H + 1; const first = r; let idx = 0;
   getCATS(template).forEach(cat => {
     if (catEnabled[cat.id as keyof typeof catEnabled] === false) return;
-    const rows = (items[cat.id as keyof typeof items] ?? []).filter((it: Item) => it.enabled !== false && !it.foc && !it.optional);
+    const rows = (items[cat.id as keyof typeof items] ?? []).filter((it: Item) => it.enabled !== false && !it.foc && !it.optional && !it.included);
     if (rows.length === 0) return;
     rows.forEach((it: Item, j: number) => {
       const zebra = idx % 2 ? ZEBRA : WHITE;

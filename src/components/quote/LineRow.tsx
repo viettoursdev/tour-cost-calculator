@@ -280,12 +280,16 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
         </Stack>
       </TableCell>
 
-      {/* Total + FOC + Optional */}
+      {/* Total + FOC + Optional + Including */}
       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
         <Stack alignItems="flex-end" spacing={0.5}>
           {item.foc ? (
             <Box sx={{ background: '#27ae60', color: '#fff', fontSize: 10, fontWeight: 800, px: 0.9, py: 0.25, borderRadius: '5px', letterSpacing: 0.5 }}>
               FOC
+            </Box>
+          ) : item.included ? (
+            <Box sx={{ background: '#2563eb', color: '#fff', fontSize: 10, fontWeight: 800, px: 0.9, py: 0.25, borderRadius: '5px', letterSpacing: 0.4 }}>
+              ĐÃ GỒM
             </Box>
           ) : (
             <Stack alignItems="flex-end" spacing={0.25}>
@@ -306,7 +310,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
           <Stack direction="row" spacing={0.5}>
             <Tooltip title={item.foc ? 'Bỏ FOC – tính phí lại' : 'Đánh dấu Free of Charge'}>
               <Box
-                component="button" onClick={() => u({ foc: !item.foc, ...(item.foc ? {} : { optional: false }) })}
+                component="button" onClick={() => u({ foc: !item.foc, ...(item.foc ? {} : { optional: false, included: false }) })}
                 sx={{
                   background: item.foc ? 'rgba(39,174,96,0.15)' : 'rgba(15,58,74,0.05)',
                   border: `1px solid ${item.foc ? '#27ae60' : 'rgba(15,58,74,0.15)'}`,
@@ -320,7 +324,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
             </Tooltip>
             <Tooltip title={item.optional ? 'Bỏ tuỳ chọn – tính vào tổng' : 'Chi phí tuỳ chọn (không tính vào tổng)'}>
               <Box
-                component="button" onClick={() => u({ optional: !item.optional, ...(item.optional ? {} : { foc: false }) })}
+                component="button" onClick={() => u({ optional: !item.optional, ...(item.optional ? {} : { foc: false, included: false }) })}
                 sx={{
                   background: item.optional ? 'rgba(245,166,35,0.18)' : 'rgba(15,58,74,0.05)',
                   border: `1px solid ${item.optional ? '#f5a623' : 'rgba(15,58,74,0.15)'}`,
@@ -330,6 +334,20 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
                 }}
               >
                 {item.optional ? '✓ Optional' : 'Optional?'}
+              </Box>
+            </Tooltip>
+            <Tooltip title={item.included ? 'Bỏ "đã gồm" – tính vào tổng' : 'Đã bao gồm trong giá khác (không cộng vào tổng)'}>
+              <Box
+                component="button" onClick={() => u({ included: !item.included, ...(item.included ? {} : { foc: false, optional: false }) })}
+                sx={{
+                  background: item.included ? 'rgba(37,99,235,0.15)' : 'rgba(15,58,74,0.05)',
+                  border: `1px solid ${item.included ? '#2563eb' : 'rgba(15,58,74,0.15)'}`,
+                  color: item.included ? '#2563eb' : 'rgba(15,58,74,0.5)',
+                  borderRadius: '6px', px: 0.9, py: '1px', fontSize: 9, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 0.3,
+                }}
+              >
+                {item.included ? '✓ Đã gồm' : 'Including?'}
               </Box>
             </Tooltip>
           </Stack>
