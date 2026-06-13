@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useMenuStore } from '@/stores/menuStore';
+import { useLinkNavStore } from '@/stores/linkNavStore';
 import { MenuBuilder } from './MenuBuilder';
 import { MenuHome } from './MenuHome';
 import { RestaurantLibrary } from './RestaurantLibrary';
@@ -14,6 +15,15 @@ export function MenuApp({ onExit }: Props) {
   const [mode, setMode] = useState<Mode>('list');
   const [current, setCurrent] = useState<Menu | null>(null);
   const user = useAuthStore((s) => s.currentUser);
+
+  // Mở sâu một thực đơn khi điều hướng từ hub "🔗 Liên kết" của báo giá.
+  useEffect(() => {
+    const id = useLinkNavStore.getState().consume('menu');
+    if (!id) return;
+    void useMenuStore.getState().load(id).then((full) => {
+      if (full) { setCurrent(full); setMode('edit'); }
+    });
+  }, []);
 
   if (!user) return null;
 

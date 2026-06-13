@@ -8,7 +8,14 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { canViewAll } from '@/auth/ROLES';
+
+async function openLinkedQuote(cloudId: string): Promise<void> {
+  if (!window.confirm('Rời phần chương trình để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
+  const r = await useQuoteStore.getState().loadCloud(cloudId);
+  if (!r.ok) window.alert('⚠ ' + r.error);
+}
 
 type Props = {
   onNew: () => void;
@@ -139,8 +146,17 @@ export function ItineraryHome({ onNew, onOpen, onBack }: Props) {
                   {x.destination || x.title || '(Chưa đặt tên)'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {x.days}N{x.nights}Đ{x.linkedQuoteName ? ` · 🔗 ${x.linkedQuoteName}` : ''}
+                  {x.days}N{x.nights}Đ
                 </Typography>
+                {x.linkedQuoteId && (
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      size="small" color="primary" variant="outlined" clickable
+                      label={`🔗 ${x.linkedQuoteName || 'Báo giá'}`}
+                      onClick={(e) => { e.stopPropagation(); void openLinkedQuote(x.linkedQuoteId!); }}
+                    />
+                  </Box>
+                )}
                 <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.75 }}>
                   Cập nhật: {fmtDt(x.updatedAt)}{x.updatedBy ? ` · ${x.updatedBy}` : ''}
                 </Typography>

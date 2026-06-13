@@ -9,7 +9,14 @@ import RestaurantIcon from '@mui/icons-material/Restaurant';
 import SearchIcon from '@mui/icons-material/Search';
 import { useMenuStore } from '@/stores/menuStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { canViewAll } from '@/auth/ROLES';
+
+async function openLinkedQuote(cloudId: string): Promise<void> {
+  if (!window.confirm('Rời phần thực đơn để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
+  const r = await useQuoteStore.getState().loadCloud(cloudId);
+  if (!r.ok) window.alert('⚠ ' + r.error);
+}
 
 type Props = {
   onNew: () => void;
@@ -138,8 +145,16 @@ export function MenuHome({ onNew, onOpen, onRestaurants, onBack }: Props) {
                 <Typography variant="caption" color="text.secondary">
                   {x.days} ngày
                   {x.linkedItineraryName ? ` · 🗺️ ${x.linkedItineraryName}` : ''}
-                  {x.linkedQuoteName ? ` · 🔗 ${x.linkedQuoteName}` : ''}
                 </Typography>
+                {x.linkedQuoteId && (
+                  <Box sx={{ mt: 0.5 }}>
+                    <Chip
+                      size="small" color="primary" variant="outlined" clickable
+                      label={`🔗 ${x.linkedQuoteName || 'Báo giá'}`}
+                      onClick={(e) => { e.stopPropagation(); void openLinkedQuote(x.linkedQuoteId!); }}
+                    />
+                  </Box>
+                )}
                 <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.75 }}>
                   Cập nhật: {fmtDt(x.updatedAt)}{x.updatedBy ? ` · ${x.updatedBy}` : ''}
                 </Typography>

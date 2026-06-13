@@ -1,15 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box, Button, Chip, IconButton, Paper, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
+import LaunchIcon from '@mui/icons-material/Launch';
 import { useAuthStore } from '@/stores/authStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { newVisaProject, VISA_STATUS_META } from './constants';
 import { VisaProjectEditor } from './VisaProjectEditor';
 import type { VisaProjectDoc } from '@/types';
+
+type Props = { initialOpenId?: string | null; onConsumeInitial?: () => void };
 
 function fmtDt(s?: string): string {
   if (!s) return '—';
@@ -18,16 +22,30 @@ function fmtDt(s?: string): string {
   } catch { return s; }
 }
 
-export function VisaProjectManager() {
+export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = {}) {
   const projects = useVisaProjectStore((s) => s.projects);
   const loading = useVisaProjectStore((s) => s.loading);
   const remove = useVisaProjectStore((s) => s.remove);
+  const loadCloud = useQuoteStore((s) => s.loadCloud);
   const users = useAuthStore((s) => s.users);
   const user = useAuthStore((s) => s.currentUser);
 
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<VisaProjectDoc | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
+
+  // Auto-mở editor khi được điều hướng từ hub liên kết (chờ projects tải xong).
+  useEffect(() => {
+    if (!initialOpenId) return;
+    const p = projects.find((x) => x.id === initialOpenId);
+    if (p) { setEditing(p); onConsumeInitial?.(); }
+  }, [initialOpenId, projects, onConsumeInitial]);
+
+  const openLinkedQuote = async (cloudId: string) => {
+    if (!window.confirm('Rời phần visa để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
+    const r = await loadCloud(cloudId);
+    if (!r.ok) window.alert('⚠ ' + r.error);
+  };
 
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
 
@@ -96,6 +114,12 @@ export function VisaProjectManager() {
                       <Typography fontWeight={800} fontSize={15}>{p.name || '(Chưa đặt tên)'}</Typography>
                       <Chip size="small" label={meta.label} sx={{ bgcolor: meta.color + '22', color: meta.color, fontWeight: 700 }} />
                       {p.country && <Chip size="small" variant="outlined" label={`🌐 ${p.country}`} />}
+                      {p.linkedQuoteId && (
+                        <Tooltip title={`Mở báo giá: ${p.linkedQuoteName}`}>
+                          <Chip size="small" color="primary" variant="outlined" clickable icon={<LaunchIcon />}
+                            label="🔗 Báo giá" onClick={() => void openLinkedQuote(p.linkedQuoteId!)} />
+                        </Tooltip>
+                      )}
                     </Stack>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
                       {p.code}{p.linkedQuoteName ? ` · 🔗 ${p.linkedQuoteName}` : ''} · Cập nhật {fmtDt(p.updatedAt ?? p.createdAt)}

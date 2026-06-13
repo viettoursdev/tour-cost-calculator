@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box, Button, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAuthStore } from '@/stores/authStore';
+import { useLinkNavStore } from '@/stores/linkNavStore';
 import { VisaCatalog } from './VisaCatalog';
 import { VisaProcBuilder } from './VisaProcBuilder';
 import { VisaProcManager } from './VisaProcManager';
@@ -19,7 +20,14 @@ type Props = { onExit: () => void };
 export function VisaApp({ onExit }: Props) {
   const [tab, setTab] = useState<Tab>('projects');
   const [editingProc, setEditingProc] = useState<VisaProcDoc | null>(null);
+  const [pendingProjId, setPendingProjId] = useState<string | null>(null);
   const user = useAuthStore((s) => s.currentUser);
+
+  // Mở sâu một dự án visa khi điều hướng từ hub "🔗 Liên kết" của báo giá.
+  useEffect(() => {
+    const id = useLinkNavStore.getState().consume('visaProject');
+    if (id) { setPendingProjId(id); setTab('projects'); }
+  }, []);
 
   if (!user) return null;
 
@@ -66,7 +74,7 @@ export function VisaApp({ onExit }: Props) {
       </Box>
 
       {tab === 'projects' ? (
-        <VisaProjectManager />
+        <VisaProjectManager initialOpenId={pendingProjId} onConsumeInitial={() => setPendingProjId(null)} />
       ) : tab === 'timeline' ? (
         <VisaTimeline />
       ) : tab === 'dashboard' ? (
