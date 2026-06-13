@@ -14,12 +14,18 @@ import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import type { Itinerary } from '@/types';
 
 // 9 ảnh mẫu (GIỮ NGUYÊN file gốc, không nén) — phục vụ từ public/, tải lúc xuất.
-// 4 banner (20.8×2.9cm) + 4 ảnh ngang (17.56×4.23cm) + 1 ảnh đứng (7.67×10.24cm).
-const cm = (v: number) => Math.round((v / 2.54) * 96); // cm → px @96dpi
+// Kích thước hiển thị (px @96dpi) tính theo ĐÚNG TỈ LỆ GỐC của từng ảnh (vừa khít
+// trong khung mẫu, KHÔNG kéo giãn): banner ~1.5:1, wide 1:1, portrait 0.75:1.
 const SAMPLE_IMAGES: { file: string; w: number; h: number }[] = [
-  ...['banner1.jpg', 'banner2.jpg', 'banner3.jpg', 'banner4.jpg'].map((file) => ({ file, w: cm(20.80), h: cm(2.90) })),
-  ...['wide1.jpg', 'wide2.jpg', 'wide3.jpg', 'wide4.jpg'].map((file) => ({ file, w: cm(17.56), h: cm(4.23) })),
-  { file: 'portrait1.jpg', w: cm(7.67), h: cm(10.24) },
+  { file: 'banner1.jpg', w: 196, h: 110 },
+  { file: 'banner2.jpg', w: 165, h: 110 },
+  { file: 'banner3.jpg', w: 165, h: 110 },
+  { file: 'banner4.jpg', w: 166, h: 110 },
+  { file: 'wide1.jpg', w: 160, h: 160 },
+  { file: 'wide2.jpg', w: 160, h: 160 },
+  { file: 'wide3.jpg', w: 160, h: 160 },
+  { file: 'wide4.jpg', w: 160, h: 160 },
+  { file: 'portrait1.jpg', w: 290, h: 387 },
 ];
 
 async function fetchSampleImages(): Promise<{ data: Uint8Array; w: number; h: number }[]> {
