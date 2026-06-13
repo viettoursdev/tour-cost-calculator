@@ -17,6 +17,10 @@ import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { callAIWorker } from '@/lib/aiWorker';
 import { exportItineraryDocx } from '@/lib/exports/exportItineraryDocx';
+import { exportItineraryExecutionPDF } from '@/lib/exports/exportItineraryExecutionPDF';
+import { exportItineraryExecutionDocx } from '@/lib/exports/exportItineraryExecutionDocx';
+import { useMenuStore } from '@/stores/menuStore';
+import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
 import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -76,6 +80,16 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Xuất Bản điều hành tour — tự tìm thực đơn đã link với chương trình + contact nhà hàng.
+  const handleExec = async (format: 'pdf' | 'docx') => {
+    const withCode = { ...it, code };
+    const idx = useMenuStore.getState().list.find((x) => x.linkedItineraryId === it.id);
+    const menu = idx ? await useMenuStore.getState().load(idx.id) : null;
+    const restaurants = useRestaurantStore.getState().list;
+    if (format === 'pdf') exportItineraryExecutionPDF(withCode, menu, restaurants);
+    else await exportItineraryExecutionDocx(withCode, menu, restaurants);
   };
 
   const addFlight = () => setIt((p) => ({
@@ -263,6 +277,15 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               onClick={() => void exportItineraryDocx(it, code)}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Xuất Word
+            </Button>
+            <Button color="inherit" variant="contained" startIcon={<span>🧭</span>}
+              onClick={() => void handleExec('pdf')}
+              sx={{ bgcolor: '#0f3a4a', color: '#fff' }}>
+              Execution PDF
+            </Button>
+            <Button color="inherit" variant="outlined" startIcon={<span>🧭</span>}
+              onClick={() => void handleExec('docx')}>
+              Execution Word
             </Button>
             <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onBack}>
               Quay lại
