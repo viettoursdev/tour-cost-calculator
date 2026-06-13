@@ -24,6 +24,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const dmcQuotes = useQuoteHistoryStore((s) => s.dmcQuotes);
   const customers = useCustomerStore((s) => s.customers);
+  const saveCustomer = useCustomerStore((s) => s.save);
 
   // Follow the active quote template: DMC breakdowns live in a separate history
   // list, so look up the existing entry in the matching source — otherwise a DMC
@@ -47,6 +48,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     return users.filter((u) => set.has(u.u));
   });
   const [customer, setCustomer] = useState<Customer | null>(existingCustomer);
+  const [customerInput, setCustomerInput] = useState<string>(existingCustomer?.name ?? '');
   const [note, setNote] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>(
     () => existingEntry?.attachments ?? (existingEntry?.attachment ? [existingEntry.attachment] : []),
@@ -96,7 +98,35 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
       const linked = template === 'dmc' && linkedForeign
         ? { id: linkedForeign.cloudId, name: linkedForeign.name, template: linkedForeign.template }
         : null;
-      await saveCloud(name, collaborators, note, customer ?? undefined, attachments, linked);
+
+      // Khách hàng (optional): cho phép nhập tên chưa có trong danh sách.
+      // - Đã chọn từ danh sách → dùng luôn.
+      // - Gõ tên trùng (không phân biệt hoa/thường) → khớp khách hiện có.
+      // - Tên mới → TỰ TẠO & lưu vào danh sách khách hàng rồi gắn vào báo giá.
+      let custArg: { id: string; name: string } | undefined;
+      const typed = customerInput.trim();
+      if (customer) {
+        custArg = { id: customer.id, name: customer.name };
+      } else if (typed) {
+        const found = customers.find((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
+        if (found) {
+          custArg = { id: found.id, name: found.name };
+        } else {
+          const newCust: Customer = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: typed,
+            type: 'company',
+            contacts: [],
+            note: 'Tự tạo khi lưu báo giá',
+            createdAt: '',
+            createdBy: '',
+          };
+          await saveCustomer(newCust);
+          custArg = { id: newCust.id, name: typed };
+        }
+      }
+
+      await saveCloud(name, collaborators, note, custArg, attachments, linked);
       onClose();
     } catch (e) {
       setError((e as Error).message || 'Lỗi không xác định');
@@ -124,25 +154,33 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
             autoFocus
           />
 
-          {/* Customer link */}
+          {/* Customer link — freeSolo: cho nhập khách chưa có trong danh sách,
+              hệ thống sẽ tự tạo & lưu khi bấm Lưu. */}
           <Autocomplete
+            freeSolo
             options={customers}
             value={customer}
-            onChange={(_, v) => setCustomer(v)}
-            getOptionLabel={(c) => c.name}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
+            inputValue={customerInput}
+            onInputChange={(_, v) => setCustomerInput(v)}
+            onChange={(_, v) => {
+              if (v && typeof v !== 'string') { setCustomer(v); setCustomerInput(v.name); }
+              else { setCustomer(null); if (typeof v === 'string') setCustomerInput(v); }
+            }}
+            getOptionLabel={(c) => (typeof c === 'string' ? c : c.name)}
+            isOptionEqualToValue={(a, b) => typeof a !== 'string' && typeof b !== 'string' && a.id === b.id}
             renderInput={(params) => (
               <TextField
                 {...params}
                 label="Khách hàng (optional)"
-                placeholder="Chọn hoặc bỏ trống"
+                placeholder="Chọn hoặc gõ tên khách mới (tự lưu)"
+                helperText="Gõ tên khách chưa có trong danh sách → hệ thống tự thêm vào danh sách khách hàng."
               />
             )}
             renderOption={(props, c) => (
-              <li {...props} key={c.id}>
+              <li {...props} key={typeof c === 'string' ? c : c.id}>
                 <Stack>
-                  <Typography variant="body2" fontWeight={600}>{c.name}</Typography>
-                  {c.contacts?.[0]?.name && (
+                  <Typography variant="body2" fontWeight={600}>{typeof c === 'string' ? c : c.name}</Typography>
+                  {typeof c !== 'string' && c.contacts?.[0]?.name && (
                     <Typography variant="caption" color="text.secondary">
                       {c.contacts[0].name}{c.contacts[0].phone ? ` · ${c.contacts[0].phone}` : ''}
                     </Typography>
