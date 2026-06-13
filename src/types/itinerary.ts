@@ -32,6 +32,47 @@ export interface Flight {
 
 export type ItineraryType = 'NN' | 'ND';
 
+// ── Thông tin vận hành (Execution) — cho file Itinerary Execution của HDV ──
+export interface ExecContact {
+  id: string;
+  role: string;     // vai trò / loại (HDV chính, Tài xế, Khách sạn, Điểm tham quan…)
+  name: string;
+  phone: string;
+  note?: string;
+}
+export interface ExecGuest {
+  id: string;
+  name: string;
+  room?: string;     // phân phòng
+  dietary?: string;  // ăn kiêng / dị ứng
+  medical?: string;  // lưu ý y tế
+  vip?: boolean;
+  note?: string;
+}
+export interface ExecChecklistItem { id: string; text: string; done?: boolean }
+export interface ExecDayOps {
+  dayNum: number;
+  hotelName?: string;
+  hotelContact?: string;
+  venues?: ExecContact[];
+  notes?: string;
+  checklist?: ExecChecklistItem[];
+}
+export interface ExecData {
+  sosHotline?: string;
+  sosOperator?: string;
+  sosInsurance?: string;
+  sosEmbassy?: string;
+  sosMedical?: string;
+  guides?: ExecContact[];
+  drivers?: ExecContact[];
+  suppliers?: ExecContact[];
+  guests?: ExecGuest[];
+  guestNotes?: string;
+  dayOps?: ExecDayOps[];
+  generalNotes?: string;
+}
+
 export interface Itinerary {
   id: string;
   code?: string;
@@ -50,6 +91,8 @@ export interface Itinerary {
   excludes: string[];
   linkedQuoteId: string | null;
   linkedQuoteName: string;
+  /** Thông tin vận hành cho file Itinerary Execution (optional). */
+  exec?: ExecData;
   createdAt?: string;
   createdBy?: string;
   updatedAt?: string;

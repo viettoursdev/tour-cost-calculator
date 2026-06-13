@@ -820,6 +820,7 @@ export async function fbSaveMenu(m: Menu, savedBy: string): Promise<void> {
     title: m.title ?? '',
     destination: m.destination ?? '',
     days: m.days ?? 0,
+    linkedItineraryId: m.linkedItineraryId ?? null,
     linkedItineraryName: m.linkedItineraryName ?? '',
     linkedQuoteId: m.linkedQuoteId ?? null,
     linkedQuoteName: m.linkedQuoteName ?? '',

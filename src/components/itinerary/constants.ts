@@ -1,4 +1,19 @@
-import type { Activity, Day, Segment } from '@/types';
+import type {
+  Activity, Day, ExecChecklistItem, ExecContact, ExecGuest, Segment,
+} from '@/types';
+
+let execSeq = 0;
+const execId = (p: string) => p + Date.now().toString(36) + (execSeq++).toString(36) + Math.random().toString(36).slice(2, 4);
+
+export function newExecContact(role = ''): ExecContact {
+  return { id: execId('ec'), role, name: '', phone: '', note: '' };
+}
+export function newExecGuest(): ExecGuest {
+  return { id: execId('eg'), name: '', room: '', dietary: '', medical: '', vip: false, note: '' };
+}
+export function newExecChecklistItem(text = ''): ExecChecklistItem {
+  return { id: execId('cl'), text, done: false };
+}
 
 // Source: public/legacy.html:6618.
 export function newActivity(): Activity {

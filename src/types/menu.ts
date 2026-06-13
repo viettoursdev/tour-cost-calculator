@@ -77,6 +77,7 @@ export interface MenuIndexEntry {
   title: string;
   destination: string;
   days: number;
+  linkedItineraryId?: string | null;
   linkedItineraryName: string;
   linkedQuoteId?: string | null;
   linkedQuoteName: string;
