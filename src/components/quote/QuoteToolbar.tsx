@@ -31,6 +31,8 @@ import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { fmtOutput, fxRank, fxLabel } from '@/lib/currency';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { computeTotals, fmtVND } from './calc';
 import { InvoiceModal } from './InvoiceModal';
 import { HotelModal } from '@/components/rates/HotelModal';
@@ -115,6 +117,11 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
+  const undoDraft = useQuoteStore((s) => s.undoDraft);
+  const redoDraft = useQuoteStore((s) => s.redoDraft);
+  const canUndo = useQuoteStore((s) => s.draftPast.length > 0);
+  const canRedo = useQuoteStore((s) => s.draftFuture.length > 0);
+  useUndoRedoShortcuts(undoDraft, redoDraft);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const excelInput = useRef<HTMLInputElement | null>(null);
   const printRef = useRef<HTMLDivElement | null>(null);
@@ -560,6 +567,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             />
           </Box>
         )}
+        <UndoRedoButtons undo={undoDraft} redo={redoDraft} canUndo={canUndo} canRedo={canRedo} />
         <Button
           size="small" variant="contained" startIcon={<CloudUploadIcon />}
           // Blur first so the trigger isn't a focused descendant of #root when the

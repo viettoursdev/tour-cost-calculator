@@ -53,10 +53,15 @@ type QuoteState = {
   currentUsername: string | null;
   fxSyncedAt: string | null;
   fxSyncedBy: string | null;
+  /** Lịch sử undo/redo của draft báo giá (trong phiên). */
+  draftPast: QuoteDraft[];
+  draftFuture: QuoteDraft[];
 
   init: (user: User) => void;
   reset: () => void;
   syncFxNow: () => Promise<void>;
+  undoDraft: () => void;
+  redoDraft: () => void;
 
   newDraft: (template: Template) => void;
   abandon: () => void;
@@ -156,6 +161,19 @@ function mergeGlobalRates(currentRates: Record<string, number>): Record<string, 
  */
 const cloneDraft = (d: QuoteDraft): QuoteDraft => structuredClone(d);
 
+// Undo/redo của draft báo giá: bỏ qua ghi lịch sử cho thay đổi không phải do người
+// dùng gõ (đồng bộ FX, load cloud, đổi template, hydrate, chính thao tác undo/redo).
+let histMuted = false;
+let histTs = 0;
+const HIST_CAP = 50;
+const HIST_COALESCE = 500;
+/** Chạy fn mà KHÔNG ghi lịch sử undo (thay đổi không do người dùng gõ). */
+function muted<T>(fn: () => T): T {
+  histMuted = true;
+  try { return fn(); } finally { histMuted = false; }
+}
+const CLEAR_HIST = { draftPast: [] as QuoteDraft[], draftFuture: [] as QuoteDraft[] };
+
 /**
  * The store. The persist middleware uses a dynamic name set on init(user).
  * Trick: persist({ name: '__placeholder__', ... }) is initialized at module load;
@@ -172,6 +190,33 @@ export const useQuoteStore = create<QuoteState>()(
         currentUsername: null,
         fxSyncedAt: null,
         fxSyncedBy: null,
+        draftPast: [],
+        draftFuture: [],
+
+        undoDraft: () => {
+          const s = get();
+          if (!s.draftPast.length) return;
+          const prev = s.draftPast[s.draftPast.length - 1];
+          histMuted = true;
+          set({
+            draft: prev,
+            draftPast: s.draftPast.slice(0, -1),
+            draftFuture: [s.draft, ...s.draftFuture].slice(0, HIST_CAP),
+          });
+          histMuted = false;
+        },
+        redoDraft: () => {
+          const s = get();
+          if (!s.draftFuture.length) return;
+          const nxt = s.draftFuture[0];
+          histMuted = true;
+          set({
+            draft: nxt,
+            draftPast: [...s.draftPast, s.draft].slice(-HIST_CAP),
+            draftFuture: s.draftFuture.slice(1),
+          });
+          histMuted = false;
+        },
 
         init: (user) => {
           const key = persistKey(user.u);
@@ -201,26 +246,28 @@ export const useQuoteStore = create<QuoteState>()(
           // keep the shared rate table after reload).
           const fxLS = readFxRatesLS();
           const baseDraft = storedDraft ?? EMPTY_DRAFT;
-          set({
+          muted(() => set({
             draft: fxLS ? { ...baseDraft, rates: { ...baseDraft.rates, ...fxLS, VND: 1 } } : baseDraft,
             snapshots: readUserSnapshots(user.u),
             currentUsername: user.u,
             view: storedView,
-          });
+            ...CLEAR_HIST,
+          }));
         },
 
         reset: () => {
-          set({ draft: EMPTY_DRAFT, snapshots: [], currentUsername: null, view: 'cost' });
+          muted(() => set({ draft: EMPTY_DRAFT, snapshots: [], currentUsername: null, view: 'cost', ...CLEAR_HIST }));
         },
 
         newDraft: (template) => {
           const tpl = TEMPLATES[template];
           // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
           if (tpl.kind === 'alt' || !tpl.init) {
-            set((s) => ({
+            muted(() => set((s) => ({
               draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: mergeGlobalRates(s.draft.rates) },
               view: 'cost',
-            }));
+              ...CLEAR_HIST,
+            })));
             return;
           }
           const items = tpl.init(EMPTY_DRAFT.pax);
@@ -230,7 +277,7 @@ export const useQuoteStore = create<QuoteState>()(
               template === 'dmc' ? DMC_CAT_IDS.includes(c.id) : c.id !== 'dmc',
             ]),
           ) as Record<CategoryId, boolean>;
-          set((s) => ({
+          muted(() => set((s) => ({
             draft: {
               ...EMPTY_DRAFT,
               template,
@@ -242,11 +289,12 @@ export const useQuoteStore = create<QuoteState>()(
               ...(template === 'dmc' ? dmcDefaults() : {}),
             },
             view: 'cost',
-          }));
+            ...CLEAR_HIST,
+          })));
         },
 
         abandon: () => {
-          set((s) => ({ draft: { ...EMPTY_DRAFT, rates: mergeGlobalRates(s.draft.rates) }, view: 'cost' }));
+          muted(() => set((s) => ({ draft: { ...EMPTY_DRAFT, rates: mergeGlobalRates(s.draft.rates) }, view: 'cost', ...CLEAR_HIST })));
         },
 
         setView: (v) =>
@@ -275,7 +323,8 @@ export const useQuoteStore = create<QuoteState>()(
           // debounced pushes) — anything at/older than our last push — and adopt
           // any snapshot newer than it. Cross-tab updates (no pushedAt) always apply.
           if (pushedAt && lastFxPushAt && pushedAt <= lastFxPushAt) return;
-          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...cleanRates(rates), VND: 1 } } }));
+          // Đồng bộ tỷ giá không phải thao tác gõ → không tạo bước undo.
+          muted(() => set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...cleanRates(rates), VND: 1 } } })));
           // persistLocal=false when the update CAME FROM a localStorage 'storage'
           // event, to avoid a write→event→write feedback loop between tabs.
           if (persistLocal) writeFxRatesLS(get().draft.rates);
@@ -432,7 +481,8 @@ export const useQuoteStore = create<QuoteState>()(
               return { ok: false, error: 'File không phải là báo giá Viettours hợp lệ' };
             }
             // Accept any subset of fields present; missing fields keep current values.
-            set((s) => ({
+            muted(() => set((s) => ({
+              ...CLEAR_HIST,
               draft: {
                 ...s.draft,
                 ...(data.template !== undefined ? { template: data.template } : {}),
@@ -455,7 +505,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.groups ? { groups: data.groups } : {}),
                 ...(data.activeGroupId ? { activeGroupId: data.activeGroupId } : {}),
               },
-            }));
+            })));
             return { ok: true };
           } catch (e) {
             return { ok: false, error: `Lỗi đọc file: ${(e as Error).message}` };
@@ -463,7 +513,8 @@ export const useQuoteStore = create<QuoteState>()(
         },
 
         applyImport: (data) => {
-          set((s) => ({
+          muted(() => set((s) => ({
+            ...CLEAR_HIST,
             draft: {
               ...s.draft,
               ...(data.template !== undefined ? { template: data.template } : {}),
@@ -484,7 +535,7 @@ export const useQuoteStore = create<QuoteState>()(
               currentQuoteId: null, // imported file starts a new quote
             },
             view: 'cost',
-          }));
+          })));
         },
 
         saveSnapshot: (name) => {
@@ -513,7 +564,7 @@ export const useQuoteStore = create<QuoteState>()(
           const { snapshots } = get();
           const snap = snapshots.find((s) => s.id === id);
           if (!snap) return;
-          set({ draft: cloneDraft(snap.state), view: 'cost' });
+          muted(() => set({ draft: cloneDraft(snap.state), view: 'cost', ...CLEAR_HIST }));
         },
 
         deleteSnapshot: (id) => {
@@ -622,14 +673,15 @@ export const useQuoteStore = create<QuoteState>()(
           }
           // Tỷ giá luôn dùng bản TOÀN CỤC hiện hành, KHÔNG dùng tỷ giá nhúng cũ của
           // báo giá đã lưu → mọi tour/tab/tài khoản thống nhất một tỷ giá.
-          set((s) => ({
+          muted(() => set((s) => ({
             draft: {
               ...project.currentState,
               currentQuoteId: cloudId,
               rates: { ...project.currentState.rates, ...mergeGlobalRates(s.draft.rates) },
             },
             view: 'cost',
-          }));
+            ...CLEAR_HIST,
+          })));
           return { ok: true };
         },
       }),
@@ -668,4 +720,20 @@ export const useQuoteStore = create<QuoteState>()(
       },
     ),
   ),
+);
+
+// Ghi lịch sử undo/redo mỗi khi `draft` thay đổi do người dùng (bỏ qua khi muted).
+useQuoteStore.subscribe(
+  (s) => s.draft,
+  (_draft, prevDraft) => {
+    if (histMuted) return;
+    const now = Date.now();
+    const past = useQuoteStore.getState().draftPast;
+    const coalesce = past.length > 0 && now - histTs < HIST_COALESCE;
+    histTs = now;
+    useQuoteStore.setState((s) => ({
+      draftPast: coalesce ? s.draftPast : [...s.draftPast, prevDraft].slice(-HIST_CAP),
+      draftFuture: [],
+    }));
+  },
 );
