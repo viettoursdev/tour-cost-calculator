@@ -5,11 +5,17 @@
  * exportContractDocx/exportContractPDF). Uses Aptos font for Vietnamese text.
  */
 import {
-  AlignmentType, BorderStyle, Document, HeightRule, Packer, Paragraph, ShadingType,
+  AlignmentType, BorderStyle, Document, Footer, Header, ImageRun, Packer, Paragraph, ShadingType,
   Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
   type IParagraphOptions, type ITableCellOptions,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import { VTE_LOGO, b64ToU8 } from './vteLogo';
+import {
+  IMG_BANNER, IMG_BANNER_W, IMG_BANNER_H,
+  IMG_WIDE, IMG_WIDE_W, IMG_WIDE_H,
+  IMG_PORTRAIT, IMG_PORTRAIT_W, IMG_PORTRAIT_H,
+} from './itinerarySampleImages';
 import type { Itinerary } from '@/types';
 
 const FONT = 'Aptos';
@@ -86,26 +92,21 @@ const tbl = (rows: TableRow[], widths: number[], o: TblOpts = {}): Table => new 
   rows,
 });
 
-// Khung ảnh placeholder (giữ mặc định để dán ảnh thật vào sau).
-const BOX_BD = { style: BorderStyle.SINGLE, size: 4, color: LINE };
-const boxBorders = { top: BOX_BD, bottom: BOX_BD, left: BOX_BD, right: BOX_BD, insideHorizontal: NB, insideVertical: BOX_BD };
-const imgCell = (w: number): TableCell => cell(
-  [P(tr('📷  Khu vực chèn ảnh', { size: 16, italics: true, color: MUTE }), { align: AlignmentType.CENTER, after: 0 })],
-  { width: w, fill: 'F2F4F5', valign: VerticalAlign.CENTER },
-);
-/** Một dải khung ảnh: `cols` ô ngang nhau, cao `heightTwips`. */
-const imgRow = (cols: number, heightTwips: number): Table => {
-  const w = Math.floor(CW / cols);
-  return new Table({
-    width: { size: CW, type: WidthType.DXA },
-    columnWidths: Array(cols).fill(w),
-    borders: boxBorders,
-    rows: [new TableRow({
-      height: { value: heightTwips, rule: HeightRule.ATLEAST },
-      children: Array.from({ length: cols }, () => imgCell(w)),
-    })],
+// Ảnh layout mẫu (căn giữa) — giữ nguyên theo file mẫu, có thể thay ảnh sau.
+const imgPara = (b64: string, w: number, h: number): Paragraph =>
+  new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 80 },
+    children: [new ImageRun({ type: 'jpg', data: b64ToU8(b64), transformation: { width: w, height: h } })],
   });
-};
+
+// Footer công ty (Times New Roman, căn giữa) — giữ nguyên theo mẫu.
+const ftrLine = (t: string, bold = false): Paragraph =>
+  new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 0 },
+    children: [new TextRun({ text: t, font: 'Times New Roman', size: 16, bold, color: INK })],
+  });
 
 export async function exportItineraryDocx(it: Itinerary, code: string): Promise<void> {
   const C: (Paragraph | Table)[] = [];
@@ -216,20 +217,12 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     C.push(P(mealRuns, { before: 40, after: 140 }));
   });
 
-  // Layout hình ảnh tham khảo — khung placeholder giữ mặc định để ghép ảnh sau.
-  C.push(P(tr('HÌNH ẢNH THAM KHẢO', { size: 18, bold: true, color: NAVY }),
-    {
-      before: 120, after: 60,
-      border: { bottom: { style: BorderStyle.SINGLE, size: 5, color: TEAL, space: 2 } },
-    }));
-  C.push(P(tr('*** Lay out hình ảnh tham khảo — dán ảnh trực tiếp vào các khung bên dưới.',
-    { size: 14, italics: true, color: MUTE }), { after: 60 }));
-  C.push(imgRow(1, 1640));                       // banner ngang
-  C.push(P(tr('', {}), { after: 40 }));
-  C.push(imgRow(1, 2400));                       // ảnh minh hoạ lớn
-  C.push(P(tr('', {}), { after: 40 }));
-  C.push(imgRow(2, 2900));                       // 2 ảnh đứng cạnh nhau
-  C.push(P(tr('', {}), { after: 80 }));
+  // Layout hình ảnh mẫu (trang 2) — giữ nguyên theo file mẫu; thay ảnh sau khi cần.
+  C.push(P(tr('*** Lay out hình ảnh tham khảo', { size: 16, bold: true, color: MUTE }),
+    { before: 120, after: 60 }));
+  C.push(imgPara(IMG_BANNER, IMG_BANNER_W, IMG_BANNER_H));
+  C.push(imgPara(IMG_WIDE, IMG_WIDE_W, IMG_WIDE_H));
+  C.push(imgPara(IMG_PORTRAIT, IMG_PORTRAIT_W, IMG_PORTRAIT_H));
 
   // Note
   C.push(P(tr('✱ Chương trình có thể thay đổi thứ tự tùy thời tiết & tình hình thực tế, vẫn đảm bảo đầy đủ nội dung.',
@@ -263,15 +256,43 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     { size: 20, bold: true, italics: true, color: TEAL }),
     { align: AlignmentType.CENTER, before: 240 }));
 
+  // Word Header (lặp mỗi trang): logo (trái) + mã chương trình (phải) — theo mẫu.
+  const docHeader = new Header({
+    children: [tbl([new TableRow({
+      children: [
+        cell([new Paragraph({
+          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: 100, height: 57 } })],
+          spacing: { after: 0 },
+        })], { width: 5153, valign: VerticalAlign.CENTER }),
+        cell([
+          P(tr('MÃ CHƯƠNG TRÌNH', { size: 14, bold: true, color: MUTE }), { align: AlignmentType.RIGHT, after: 0 }),
+          P(tr(code, { size: 22, bold: true, color: NAVY }), { align: AlignmentType.RIGHT, after: 0 }),
+        ], { width: 5153, valign: VerticalAlign.CENTER }),
+      ],
+    })], [5153, 5153])],
+  });
+
+  // Word Footer (lặp mỗi trang): địa chỉ HCM + Hà Nội — giữ nguyên theo mẫu.
+  const docFooter = new Footer({
+    children: [
+      ftrLine('Head office: 19B Mai Thị Lựu, Tân Định Ward, HCM City – Vietnam - Tel: (84.8) 38 218 218 – 38 217 217 – Fax: (84.8) 38 218 999'),
+      ftrLine('Email: viettours@viettours.com.vn – Website: www.viettours.com.vn'),
+      ftrLine('Hanoi Branch: 36 Đào Tấn, Giảng Võ Ward, Hanoi – Vietnam - Tel: (84.4) 37 66 36 36 - Fax: (84.4) 37 66 36 37'),
+      ftrLine('Email: viettourshanoi@viettours.com.vn – Website: www.viettours.com.vn'),
+    ],
+  });
+
   const docDoc = new Document({
     styles: { default: { document: { run: { font: FONT, size: 19 } } } },
     sections: [{
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 800, right: 800, bottom: 800, left: 800 },
+          margin: { top: 1560, right: 800, bottom: 1340, left: 800, header: 360, footer: 280 },
         },
       },
+      headers: { default: docHeader },
+      footers: { default: docFooter },
       children: C,
     }],
   });
