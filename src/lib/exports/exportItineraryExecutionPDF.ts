@@ -199,10 +199,6 @@ export function exportItineraryExecutionPDF(
 
   if (m.generalNotes) { sectionHead('Lưu ý vận hành khác'); para('', m.generalNotes, 2); y += 2; }
 
-  ensure(10);
-  setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn', PW / 2, y + 4, { align: 'center' });
-
   const slug = (m.title || '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);
   pdf.save(`Execution_${m.code || 'Tour'}_${slug}.pdf`);
 }

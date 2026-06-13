@@ -135,8 +135,6 @@ export async function exportItineraryExecutionDocx(
 
   if (m.generalNotes) { kids.push(heading('Lưu ý vận hành khác')); kids.push(line([tr(m.generalNotes)])); }
 
-  kids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200 }, children: [tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn', { color: MUTE, size: 15 })] }));
-
   const doc = new Document({ sections: [{ children: kids }] });
   const blob = await Packer.toBlob(doc);
   const slug = (m.title || '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);

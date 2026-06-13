@@ -247,8 +247,6 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
   C.push(P(tr('Kính chúc Quý khách một hành trình lý thú và trọn vẹn!',
     { size: 20, bold: true, italics: true, color: TEAL }),
     { align: AlignmentType.CENTER, before: 240 }));
-  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn',
-    { size: 15, color: MUTE }), { align: AlignmentType.CENTER }));
 
   const docDoc = new Document({
     styles: { default: { document: { run: { font: FONT, size: 19 } } } },
