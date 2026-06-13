@@ -99,6 +99,18 @@ export interface Itinerary {
   updatedBy?: string;
 }
 
+/** Một mục trong thư viện thuyết minh điểm tham quan (tái dùng giữa các lịch trình). */
+export interface PoiEntry {
+  id: string;
+  place: string;          // tên địa điểm tham quan
+  destination?: string;   // điểm đến / quốc gia (để lọc)
+  commentary: string;     // nội dung thuyết minh
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface ItineraryIndexEntry {
   id: string;
   code: string;

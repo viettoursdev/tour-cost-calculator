@@ -24,6 +24,7 @@ type Props = {
   onNew: () => void;
   onOpen: (id: string) => void;
   onImport: () => void;
+  onLibrary: () => void;
   onBack: () => void;
 };
 
@@ -39,7 +40,7 @@ function fmtDt(s?: string): string {
   }
 }
 
-export function ItineraryHome({ onNew, onOpen, onImport, onBack }: Props) {
+export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Props) {
   const list = useItineraryStore((s) => s.list);
   const loading = useItineraryStore((s) => s.loading);
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -75,6 +76,9 @@ export function ItineraryHome({ onNew, onOpen, onImport, onBack }: Props) {
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button variant="outlined" color="inherit" startIcon={<span>📚</span>} onClick={onLibrary}>
+              Thuyết minh
+            </Button>
             <Button variant="outlined" color="inherit" startIcon={<span>📥</span>} onClick={onImport}>
               Phân tích từ file
             </Button>

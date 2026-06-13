@@ -17,6 +17,7 @@ import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { usePoiStore } from '@/stores/poiStore';
 import { checkContractDeadlines, checkVisaDeadlines } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
@@ -63,6 +64,7 @@ export function MainApp() {
     const vpUnsub = useVisaProductsStore.getState().init();
     const vprocUnsub = useVisaProcStore.getState().init();
     const vprojUnsub = useVisaProjectStore.getState().init();
+    const poiUnsub = usePoiStore.getState().init();
 
     const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
     const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
@@ -90,6 +92,7 @@ export function MainApp() {
       vpUnsub?.();
       vprocUnsub?.();
       vprojUnsub?.();
+      poiUnsub?.();
     };
   }, [currentUser]);
 

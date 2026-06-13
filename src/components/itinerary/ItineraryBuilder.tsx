@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Autocomplete, Box, Button, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
@@ -20,6 +20,8 @@ import { exportItineraryDocx } from '@/lib/exports/exportItineraryDocx';
 import { exportItineraryExecutionPDF } from '@/lib/exports/exportItineraryExecutionPDF';
 import { exportItineraryExecutionDocx } from '@/lib/exports/exportItineraryExecutionDocx';
 import { useMenuStore } from '@/stores/menuStore';
+import { usePoiStore } from '@/stores/poiStore';
+import { filterRank } from '@/lib/search';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
 import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
@@ -61,6 +63,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const pois = usePoiStore((s) => s.pois);
 
   const code = useMemo(
     () => generateItinCode(it.type, it.continent, it.country, it.seq),
@@ -203,7 +206,12 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
       const d = await callAIWorker('/ai', {
         prompt: `Viết 1-2 câu thuyết minh ngắn gọn, súc tích, chuyên nghiệp về địa điểm/hoạt động: "${placeText}" tại ${it.destination || 'điểm đến'}. Dành cho khách đoàn doanh nghiệp. Chỉ trả về câu thuyết minh, giữ lại tên địa điểm ở đầu nếu có.`,
       });
-      if (d.text) updAct(dayId, segId, actId, { text: d.text.trim() });
+      if (d.text) {
+        const commentary = d.text.trim();
+        updAct(dayId, segId, actId, { text: commentary });
+        // Lưu vào thư viện thuyết minh để tái dùng (dedupe theo địa điểm).
+        void usePoiStore.getState().upsertMany([{ place: placeText.trim(), commentary, destination: it.destination }]);
+      }
     } catch (e) {
       window.alert('❌ ' + (e as Error).message);
     } finally {
@@ -539,10 +547,33 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                             onChange={(e) => updAct(d.id, seg.id, a.id, { time: e.target.value })}
                             placeholder="08:00"
                             InputProps={{ sx: { fontSize: 12, fontWeight: 700, color: '#14a08c' } }} />
-                          <TextField fullWidth size="small"
-                            value={a.text}
-                            onChange={(e) => updAct(d.id, seg.id, a.id, { text: e.target.value })}
-                            placeholder="Nội dung hoạt động / thuyết minh..." />
+                          <Autocomplete
+                            fullWidth freeSolo size="small" options={pois}
+                            inputValue={a.text}
+                            onInputChange={(_, v) => updAct(d.id, seg.id, a.id, { text: v })}
+                            onChange={(_, v) => {
+                              if (v && typeof v !== 'string') {
+                                updAct(d.id, seg.id, a.id, { text: `${v.place} – ${v.commentary}` });
+                              }
+                            }}
+                            getOptionLabel={(o) => (typeof o === 'string' ? o : o.place)}
+                            filterOptions={(opts, st) => (st.inputValue.trim()
+                              ? filterRank(opts, st.inputValue, (p) => `${p.place} ${p.commentary}`).slice(0, 6)
+                              : [])}
+                            renderOption={(props, o) => (
+                              <li {...props} key={typeof o === 'string' ? o : o.id}>
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="body2" fontWeight={700}>{typeof o === 'string' ? o : o.place}</Typography>
+                                  {typeof o !== 'string' && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} noWrap>{o.commentary}</Typography>
+                                  )}
+                                </Box>
+                              </li>
+                            )}
+                            renderInput={(params) => (
+                              <TextField {...params} placeholder="Nội dung hoạt động / thuyết minh… (gõ tên điểm để gợi ý)" />
+                            )}
+                          />
                           <Button size="small" variant="outlined"
                             disabled={aiBusy === a.id}
                             onClick={() => void genActivity(d.id, seg.id, a.id, a.text)}

@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
-  FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc,
+  FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
@@ -968,6 +968,26 @@ export async function fbPushVisaProjects(
 ): Promise<void> {
   await setDoc(VISA_PROJECTS_DOC, {
     projects: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── Thư viện thuyết minh điểm tham quan (single-doc, dùng chung) ──
+const POI_LIBRARY_DOC = doc(db, 'viettours', 'poi_library');
+
+export function fbSubscribePois(cb: (list: PoiEntry[]) => void): Unsubscribe {
+  return subDoc(POI_LIBRARY_DOC, (s) => {
+    cb(s.exists() ? ((s.data().pois as PoiEntry[]) ?? []) : []);
+  });
+}
+
+export async function fbPushPois(
+  list: PoiEntry[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(POI_LIBRARY_DOC, {
+    pois: list,
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });

@@ -80,6 +80,9 @@ export const fbSubscribeVisaProcs = vi.fn(() => () => {});
 export const fbSubscribeVisaProjects = vi.fn(() => () => {});
 export const fbPushVisaProjects = vi.fn(async () => {});
 
+export const fbSubscribePois = vi.fn(() => () => {});
+export const fbPushPois = vi.fn(async () => {});
+
 // ── Auth ──
 export const auth = {};
 export const fbSendSignInLink = vi.fn(async (_email: string) => {});
