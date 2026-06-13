@@ -16,6 +16,9 @@ import { useVisaProcStore } from '@/stores/visaProcStore';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { attMeta } from '@/lib/util';
+import { useHistoryState } from '@/lib/useHistoryState';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { exportVisaProjectPDF } from '@/lib/exports/exportVisaProjectPDF';
 import {
   APPLICANT_DOC_META, APPLICANT_RESULT_META, countsFromApplicants,
@@ -45,7 +48,8 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const procList = useVisaProcStore((s) => s.list);
   const save = useVisaProjectStore((s) => s.save);
-  const [doc, setDoc] = useState<VisaProjectDoc>(initial);
+  const { state: doc, set: setDoc, undo, redo, canUndo, canRedo } = useHistoryState<VisaProjectDoc>(initial);
+  useUndoRedoShortcuts(undo, redo);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -132,10 +136,15 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
   return (
     <Dialog open onClose={busy ? undefined : onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 0.5 }}>
-        {initial.name ? 'Sửa dự án visa' : 'Dự án visa mới'}
-        <Typography variant="caption" display="block" color="text.secondary">
-          Mã {doc.code} · đồng bộ Cloud
-        </Typography>
+        <Stack direction="row" alignItems="flex-start" spacing={1}>
+          <Box sx={{ flex: 1 }}>
+            {initial.name ? 'Sửa dự án visa' : 'Dự án visa mới'}
+            <Typography variant="caption" display="block" color="text.secondary">
+              Mã {doc.code} · đồng bộ Cloud
+            </Typography>
+          </Box>
+          <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} />
+        </Stack>
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>

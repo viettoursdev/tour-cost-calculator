@@ -22,6 +22,9 @@ import { exportItineraryExecutionDocx } from '@/lib/exports/exportItineraryExecu
 import { useMenuStore } from '@/stores/menuStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { filterRank } from '@/lib/search';
+import { useHistoryState } from '@/lib/useHistoryState';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
 import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
@@ -57,7 +60,9 @@ function freshItinerary(): Itinerary {
 }
 
 export function ItineraryBuilder({ initial, user, onBack }: Props) {
-  const [it, setIt] = useState<Itinerary>(() => initial ?? freshItinerary());
+  const initialIt = useMemo(() => initial ?? freshItinerary(), [initial]);
+  const { state: it, set: setIt, undo, redo, canUndo, canRedo } = useHistoryState<Itinerary>(initialIt);
+  useUndoRedoShortcuts(undo, redo);
   const [saving, setSaving] = useState(false);
   const [flightPaste, setFlightPaste] = useState('');
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
@@ -295,6 +300,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               onClick={() => void handleExec('docx')}>
               Execution Word
             </Button>
+            <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} color="#fff" />
             <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onBack}>
               Quay lại
             </Button>

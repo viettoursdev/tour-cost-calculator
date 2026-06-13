@@ -6,6 +6,9 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { CONTRACT_STATUS } from './constants';
+import { useHistoryState } from '@/lib/useHistoryState';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import type { Contract, ContractCancel, ContractPayment } from '@/types';
 
 type Props = {
@@ -15,7 +18,8 @@ type Props = {
 };
 
 export function ContractModal({ initial, onSave, onClose }: Props) {
-  const [form, setForm] = useState<Contract>(initial);
+  const { state: form, set: setForm, undo, redo, canUndo, canRedo } = useHistoryState<Contract>(initial);
+  useUndoRedoShortcuts(undo, redo);
   const [tab, setTab] = useState(0);
 
   const setF = <K extends keyof Contract>(k: K, v: Contract[K]) =>
@@ -55,8 +59,9 @@ export function ContractModal({ initial, onSave, onClose }: Props) {
 
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        {initial.id ? '✏️ Sửa hợp đồng' : '➕ Tạo hợp đồng mới'}
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ flex: 1 }}>{initial.id ? '✏️ Sửa hợp đồng' : '➕ Tạo hợp đồng mới'}</Box>
+        <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} />
       </DialogTitle>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}>

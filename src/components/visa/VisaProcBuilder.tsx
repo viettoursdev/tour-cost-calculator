@@ -15,6 +15,9 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
+import { useHistoryState } from '@/lib/useHistoryState';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { PROC_KIND_ICON, VISAP_TYPES, newProcField, newProcRow, newProcSection } from './constants';
 import { exportVisaProcDocx } from '@/lib/exports/exportVisaProcDocx';
 import { exportVisaProcPDF } from '@/lib/exports/exportVisaProcPDF';
@@ -30,7 +33,8 @@ type Props = {
 };
 
 export function VisaProcBuilder({ initial, user, onBack }: Props) {
-  const [doc, setDoc] = useState<VisaProcDoc>(initial);
+  const { state: doc, set: setDoc, undo, redo, canUndo, canRedo } = useHistoryState<VisaProcDoc>(initial);
+  useUndoRedoShortcuts(undo, redo);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const procList = useVisaProcStore((s) => s.list);
   const [showCollab, setShowCollab] = useState(false);
@@ -226,6 +230,7 @@ export function VisaProcBuilder({ initial, user, onBack }: Props) {
               onClick={() => void handleSaveNow()} disabled={saving}>
               {saving ? '⏳' : 'Lưu'}
             </Button>
+            <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} color="#fff" />
             <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onBack}>
               Quay lại
             </Button>

@@ -1,8 +1,10 @@
-import { useState } from 'react';
 import {
   Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Paper, Stack, TextField, Typography,
 } from '@mui/material';
+import { useHistoryState } from '@/lib/useHistoryState';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
@@ -31,7 +33,8 @@ type Props = {
 };
 
 export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
-  const [form, setForm] = useState<Ncc>(ncc ?? EMPTY_NCC);
+  const { state: form, set: setForm, undo, redo, canUndo, canRedo } = useHistoryState<Ncc>(ncc ?? EMPTY_NCC);
+  useUndoRedoShortcuts(undo, redo, canEdit);
 
   const setF = <K extends keyof Ncc>(k: K, v: Ncc[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -100,7 +103,10 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ flex: 1 }}>{title}</Box>
+        {canEdit && <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} />}
+      </DialogTitle>
 
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>

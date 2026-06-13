@@ -20,6 +20,9 @@ import {
 import { StarRating } from './StarRating';
 import { exportMenuDocx } from '@/lib/exports/exportMenuDocx';
 import { exportMenuPDF } from '@/lib/exports/exportMenuPDF';
+import { useHistoryState } from '@/lib/useHistoryState';
+import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
+import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import type { ItineraryType, Menu, MenuDay, MenuMeal, User } from '@/types';
 
 type Props = {
@@ -36,7 +39,9 @@ function reorder<T>(arr: T[], from: number, to: number): T[] {
 }
 
 export function MenuBuilder({ initial, user, onBack }: Props) {
-  const [it, setIt] = useState<Menu>(() => initial ?? freshMenu());
+  const initialMenu = useMemo(() => initial ?? freshMenu(), [initial]);
+  const { state: it, set: setIt, undo, redo, canUndo, canRedo } = useHistoryState<Menu>(initialMenu);
+  useUndoRedoShortcuts(undo, redo);
   const [saving, setSaving] = useState(false);
   const [includePrices, setIncludePrices] = useState(true);
   const restaurants = useRestaurantStore((s) => s.list);
@@ -198,6 +203,7 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
               onClick={() => void handleSave()} disabled={saving}>
               {saving ? '⏳ Lưu...' : 'Lưu'}
             </Button>
+            <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} color="#fff" />
             <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onBack}>
               Quay lại
             </Button>
