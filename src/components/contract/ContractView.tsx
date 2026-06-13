@@ -22,6 +22,7 @@ import { AcceptanceCertModal } from './AcceptanceCertModal';
 import { QuotePickerDialog } from './QuotePickerDialog';
 import { fmtVND } from '@/components/quote/calc';
 import type { Contract, CloudQuoteEntry } from '@/types';
+import { filterRank } from '@/lib/search';
 
 export function ContractView() {
   const contracts = useContractStore((s) => s.contracts);
@@ -51,17 +52,8 @@ export function ContractView() {
   const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return ownContracts.filter((c) => {
-      if (filterStatus && (c.contractStatus || 'draft') !== filterStatus) return false;
-      if (!q) return true;
-      return (
-        c.contractNo?.toLowerCase().includes(q) ||
-        c.tourName?.toLowerCase().includes(q) ||
-        c.partyB?.name?.toLowerCase().includes(q) ||
-        c.tourDest?.toLowerCase().includes(q)
-      );
-    });
+    const base = ownContracts.filter((c) => !filterStatus || (c.contractStatus || 'draft') === filterStatus);
+    return filterRank(base, search, (c) => [c.contractNo, c.tourName, c.partyB?.name, c.tourDest].filter(Boolean).join(' '));
   }, [ownContracts, search, filterStatus]);
 
   const totalValue = ownContracts.reduce((s, c) => s + Math.round((+c.pricePerPax || 0) * (+c.contractPax || 0)), 0);

@@ -12,6 +12,7 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { newVisaProject, VISA_STATUS_META } from './constants';
 import { VisaProjectEditor } from './VisaProjectEditor';
 import type { VisaProjectDoc } from '@/types';
+import { filterRank } from '@/lib/search';
 
 type Props = { initialOpenId?: string | null; onConsumeInitial?: () => void };
 
@@ -60,14 +61,10 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
     );
   }, [projects, user]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return visible;
-    return visible.filter((p) =>
-      [p.name, p.code, p.country, VISA_STATUS_META[p.status]?.label]
-        .some((s) => (s ?? '').toLowerCase().includes(q)),
-    );
-  }, [visible, search]);
+  const filtered = useMemo(
+    () => filterRank(visible, search, (p) => `${p.name} ${p.code} ${p.country} ${VISA_STATUS_META[p.status]?.label ?? ''}`),
+    [visible, search],
+  );
 
   if (!user) return null;
 

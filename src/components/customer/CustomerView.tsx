@@ -16,6 +16,7 @@ import { ImportListModal } from '@/components/common/ImportListModal';
 import { customerToNcc } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import type { Customer } from '@/types';
+import { filterRank } from '@/lib/search';
 
 type FilterType = '' | 'company' | 'individual';
 type ModalState = { customer: Customer | null } | null;
@@ -45,26 +46,16 @@ export function CustomerView() {
   const [convertTarget, setConvertTarget] = useState<Customer | null>(null);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const base = customers.filter((c) => {
       if (!viewAll && c.createdBy !== currentUser?.name) return false;
       if (filterType && c.type !== filterType) return false;
-      if (!q) return true;
-      return (
-        c.name?.toLowerCase().includes(q) ||
-        c.note?.toLowerCase().includes(q) ||
-        c.address?.toLowerCase().includes(q) ||
-        c.taxCode?.toLowerCase().includes(q) ||
-        (c.contacts ?? []).some(
-          (ct) =>
-            ct.name?.toLowerCase().includes(q) ||
-            ct.phone?.includes(q) ||
-            ct.email?.toLowerCase().includes(q) ||
-            ct.position?.toLowerCase().includes(q),
-        )
-      );
+      return true;
     });
-    return sortList(base, sort);
+    const text = (c: Customer) => [
+      c.name, c.note, c.address, c.taxCode,
+      ...(c.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
+    ].filter(Boolean).join(' ');
+    return sortList(filterRank(base, search, text), sort);
   }, [customers, search, filterType, viewAll, currentUser?.name, sort]);
 
   const handleSave = async (form: Customer) => {

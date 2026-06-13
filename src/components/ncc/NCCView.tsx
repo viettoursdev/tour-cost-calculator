@@ -17,6 +17,7 @@ import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
+import { filterRank } from '@/lib/search';
 
 type ModalState = { ncc: Ncc | null } | null;
 
@@ -45,25 +46,16 @@ export function NCCView() {
   const [convertTarget, setConvertTarget] = useState<Ncc | null>(null);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const base = suppliers.filter((s) => {
       if (!viewAll && s.createdBy !== currentUser?.name) return false;
       if (filterSector && !s.sectors.includes(filterSector)) return false;
-      if (!q) return true;
-      return (
-        s.name?.toLowerCase().includes(q) ||
-        s.location?.toLowerCase().includes(q) ||
-        s.note?.toLowerCase().includes(q) ||
-        (s.contacts ?? []).some(
-          (ct) =>
-            ct.name?.toLowerCase().includes(q) ||
-            ct.phone?.includes(q) ||
-            ct.email?.toLowerCase().includes(q) ||
-            ct.position?.toLowerCase().includes(q),
-        )
-      );
+      return true;
     });
-    return sortList(base, sort);
+    const text = (s: Ncc) => [
+      s.name, s.location, s.note, (s.sectors ?? []).join(' '),
+      ...(s.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
+    ].filter(Boolean).join(' ');
+    return sortList(filterRank(base, search, text), sort);
   }, [suppliers, search, filterSector, viewAll, currentUser?.name, sort]);
 
   const handleSave = async (form: Ncc) => {

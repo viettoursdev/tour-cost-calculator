@@ -15,6 +15,7 @@ import type { CloudQuoteEntry, Collaborator, Template, User } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import Delete from '@mui/icons-material/Delete';
 import AttachFile from '@mui/icons-material/AttachFile';
+import { filterRank } from '@/lib/search';
 
 const TEMPLATE_LABEL: Record<Template, string> = {
   domestic: 'Nội địa',
@@ -120,16 +121,8 @@ export function QuoteHistoryView() {
   );
 
   const filtered = useMemo(() => {
-    const lc = search.trim().toLowerCase();
-    return visible.filter((q) => {
-      if (!isDMC && templateFilter !== 'all' && q.template !== templateFilter) return false;
-      if (!lc) return true;
-      return (
-        q.name.toLowerCase().includes(lc) ||
-        q.quoteCode.toLowerCase().includes(lc) ||
-        q.customerName?.toLowerCase().includes(lc)
-      );
-    });
+    const base = visible.filter((q) => isDMC || templateFilter === 'all' || q.template === templateFilter);
+    return filterRank(base, search, (q) => [q.name, q.quoteCode, q.customerName].filter(Boolean).join(' '));
   }, [visible, search, templateFilter, isDMC]);
 
   const handleLoad = async (row: CloudQuoteEntry) => {

@@ -11,6 +11,7 @@ import { useMenuStore } from '@/stores/menuStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { canViewAll } from '@/auth/ROLES';
+import { filterRank } from '@/lib/search';
 
 async function openLinkedQuote(cloudId: string): Promise<void> {
   if (!window.confirm('Rời phần thực đơn để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
@@ -46,16 +47,8 @@ export function MenuHome({ onNew, onOpen, onRestaurants, onBack }: Props) {
   const [search, setSearch] = useState('');
   const [delId, setDelId] = useState<string | null>(null);
 
-  const filtered = list.filter((x) => {
-    if (!viewAll && x.createdBy !== currentUser?.name) return false;
-    const q = search.toLowerCase();
-    if (!q) return true;
-    return (
-      (x.code ?? '').toLowerCase().includes(q) ||
-      (x.title ?? '').toLowerCase().includes(q) ||
-      (x.destination ?? '').toLowerCase().includes(q)
-    );
-  });
+  const base = list.filter((x) => viewAll || x.createdBy === currentUser?.name);
+  const filtered = filterRank(base, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.destination ?? ''}`);
 
   const handleDelete = async (id: string) => {
     await useMenuStore.getState().delete(id);

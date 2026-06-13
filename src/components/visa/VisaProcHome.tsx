@@ -6,6 +6,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import type { VisaProcIndexEntry } from '@/types';
+import { filterRank } from '@/lib/search';
 
 type Props = {
   list: VisaProcIndexEntry[];
@@ -31,15 +32,7 @@ export function VisaProcHome({ list, loading, currentUsername, onNew, onOpen }: 
   const [search, setSearch] = useState('');
   const [delId, setDelId] = useState<string | null>(null);
 
-  const filtered = list.filter((x) => {
-    const q = search.toLowerCase();
-    if (!q) return true;
-    return (
-      (x.code ?? '').toLowerCase().includes(q) ||
-      (x.title ?? '').toLowerCase().includes(q) ||
-      (x.country ?? '').toLowerCase().includes(q)
-    );
-  });
+  const filtered = filterRank(list, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.country ?? ''}`);
 
   const handleDelete = async (id: string) => {
     await useVisaProcStore.getState().delete(id);
