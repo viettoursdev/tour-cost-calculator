@@ -35,6 +35,18 @@ const META: Record<Kind, { label: string; icon: string; color: string }> = {
   ncc:         { label: 'Nhà cung cấp', icon: '🏢', color: '#475569' },
 };
 
+type ScopeKey = 'all' | 'quote' | 'itinerary' | 'menu' | 'contract' | 'visa' | 'customer' | 'ncc';
+const SCOPES: { key: ScopeKey; label: string; kinds: Kind[] }[] = [
+  { key: 'all', label: 'Tất cả', kinds: [] },
+  { key: 'quote', label: '📋 Báo giá', kinds: ['quoteDom', 'quoteIntl', 'dmc'] },
+  { key: 'itinerary', label: '🗺️ Chương trình', kinds: ['itinerary'] },
+  { key: 'menu', label: '🍽️ Thực đơn', kinds: ['menu'] },
+  { key: 'contract', label: '📜 Hợp đồng', kinds: ['contract'] },
+  { key: 'visa', label: '🛂 Visa', kinds: ['visaProject', 'visaProc'] },
+  { key: 'customer', label: '👥 Khách hàng', kinds: ['customer'] },
+  { key: 'ncc', label: '🏢 NCC', kinds: ['ncc'] },
+];
+
 const RECENT_KEY = 'vte_search_recent';
 type RecentRef = { kind: Kind; id: string; title: string; subtitle: string };
 function readRecent(): RecentRef[] {
@@ -60,10 +72,11 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
   const visaProcs = useVisaProcStore((s) => s.list);
 
   const [q, setQ] = useState('');
+  const [scope, setScope] = useState<ScopeKey>('all');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (open) { setQ(''); setActive(0); setTimeout(() => inputRef.current?.focus(), 60); } }, [open]);
+  useEffect(() => { if (open) { setQ(''); setScope('all'); setActive(0); setTimeout(() => inputRef.current?.focus(), 60); } }, [open]);
 
   const index = useMemo<SItem[]>(() => {
     const out: SItem[] = [];
@@ -110,16 +123,22 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
     return out;
   }, [quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs]);
 
+  const scopedIndex = useMemo<SItem[]>(() => {
+    if (scope === 'all') return index;
+    const kinds = SCOPES.find((s) => s.key === scope)?.kinds ?? [];
+    return index.filter((it) => kinds.includes(it.kind));
+  }, [index, scope]);
+
   const results = useMemo<SItem[]>(() => {
     if (!q.trim()) {
       const recent = readRecent();
-      const byKey = new Map(index.map((it) => [it.kind + ':' + it.id, it]));
-      return recent.map((r) => byKey.get(r.kind + ':' + r.id) ?? { ...r, text: r.title }).slice(0, 8);
+      const byKey = new Map(scopedIndex.map((it) => [it.kind + ':' + it.id, it]));
+      return recent.map((r) => byKey.get(r.kind + ':' + r.id)).filter((x): x is SItem => !!x).slice(0, 8);
     }
-    return filterRank(index, q, (it) => it.text).slice(0, 40);
-  }, [q, index]);
+    return filterRank(scopedIndex, q, (it) => it.text).slice(0, 40);
+  }, [q, scopedIndex]);
 
-  useEffect(() => { setActive(0); }, [q]);
+  useEffect(() => { setActive(0); }, [q, scope]);
 
   const go = (it: SItem) => {
     const st = useQuoteStore.getState();
@@ -167,6 +186,18 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
         />
         <Chip size="small" label="Esc" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }} variant="outlined" />
       </Box>
+
+      <Stack direction="row" spacing={0.5} sx={{ px: 1.5, py: 0.75, overflowX: 'auto', borderBottom: '1px solid rgba(15,58,74,0.08)' }}>
+        {SCOPES.map((s) => (
+          <Chip
+            key={s.key} size="small" clickable label={s.label}
+            color={scope === s.key ? 'primary' : 'default'}
+            variant={scope === s.key ? 'filled' : 'outlined'}
+            onClick={() => setScope(s.key)}
+            sx={{ fontWeight: 700, flexShrink: 0 }}
+          />
+        ))}
+      </Stack>
 
       <Box sx={{ maxHeight: 460, overflowY: 'auto' }}>
         {results.length === 0 ? (
