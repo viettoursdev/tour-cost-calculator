@@ -12,8 +12,8 @@ import {
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import {
-  IMG_BANNER, IMG_BANNER_W, IMG_BANNER_H,
-  IMG_WIDE, IMG_WIDE_W, IMG_WIDE_H,
+  IMG_BANNERS, IMG_BANNER_W, IMG_BANNER_H,
+  IMG_WIDES, IMG_WIDE_W, IMG_WIDE_H,
   IMG_PORTRAIT, IMG_PORTRAIT_W, IMG_PORTRAIT_H,
 } from './itinerarySampleImages';
 import type { Itinerary } from '@/types';
@@ -217,11 +217,12 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     C.push(P(mealRuns, { before: 40, after: 140 }));
   });
 
-  // Layout hình ảnh mẫu (trang 2) — giữ nguyên theo file mẫu; thay ảnh sau khi cần.
+  // Layout 9 hình ảnh mẫu — giữ nguyên theo file mẫu (4 banner + 4 ảnh ngang +
+  // 1 ảnh đứng); có thể thay ảnh khác vào sau khi cần.
   C.push(P(tr('*** Lay out hình ảnh tham khảo', { size: 16, bold: true, color: MUTE }),
     { before: 120, after: 60 }));
-  C.push(imgPara(IMG_BANNER, IMG_BANNER_W, IMG_BANNER_H));
-  C.push(imgPara(IMG_WIDE, IMG_WIDE_W, IMG_WIDE_H));
+  IMG_BANNERS.forEach((b) => C.push(imgPara(b, IMG_BANNER_W, IMG_BANNER_H)));
+  IMG_WIDES.forEach((b) => C.push(imgPara(b, IMG_WIDE_W, IMG_WIDE_H)));
   C.push(imgPara(IMG_PORTRAIT, IMG_PORTRAIT_W, IMG_PORTRAIT_H));
 
   // Note
