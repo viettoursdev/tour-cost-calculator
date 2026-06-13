@@ -85,6 +85,19 @@ export async function callAIWorker(
   // Đọc body trước để giữ lại thông báo lỗi thật từ worker (vd "Request not allowed"),
   // thay vì chỉ báo mã HTTP chung chung.
   const d = (await r.json().catch(() => ({}))) as AIWorkerResponse;
-  if (!r.ok || d.error) throw new Error(d.error || 'Worker lỗi ' + r.status);
+  if (!r.ok || d.error) {
+    const raw = d.error || `Worker lỗi ${r.status}`;
+    // "Request not allowed" là lỗi 403 Anthropic trả về khi API key của worker sai
+    // (thường do dùng Admin key thay vì key chuẩn, hoặc workspace không có quyền model).
+    if (/request not allowed|unauthorized|invalid x-api-key|authentication_error/i.test(raw)) {
+      throw new Error(
+        'AI Worker không gọi được Claude — Anthropic từ chối API key ("' + raw + '"). '
+        + 'Kiểm tra biến ANTHROPIC_API_KEY của Cloudflare Worker: phải là API key CHUẨN '
+        + '(sk-ant-api…), KHÔNG phải Admin key (sk-ant-admin…), và workspace có quyền dùng model. '
+        + 'Hướng dẫn: cloudflare-worker/README.md.',
+      );
+    }
+    throw new Error(raw);
+  }
   return d;
 }

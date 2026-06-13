@@ -39,9 +39,31 @@ Trong **Build configuration** của Worker:
   ```
 - Sau khi deploy lần đầu, thêm Secret `ANTHROPIC_API_KEY` ở **Settings → Variables and Secrets**.
 
+## Xử lý sự cố
+
+### Lỗi 500 `{"error":"Request not allowed"}` (mọi tính năng AI báo lỗi)
+
+`Request not allowed` là **lỗi 403 do Anthropic trả về**, worker chuyển nguyên về app.
+Nghĩa là `ANTHROPIC_API_KEY` của worker **bị Anthropic từ chối**. Nguyên nhân & cách sửa:
+
+1. **Sai loại key (hay gặp nhất):** đang dùng **Admin key** `sk-ant-admin…` — loại này
+   KHÔNG gọi được API Messages. Phải dùng **API key chuẩn** dạng `sk-ant-api03-…`
+   (Console Anthropic → **API Keys** → *Create Key*, KHÔNG phải mục *Admin keys*).
+2. **Key sai/đã thu hồi**, hoặc **workspace của key không có quyền dùng model** trong
+   `MODEL`. Tạo key mới trong đúng workspace có quyền, hoặc đổi `MODEL` sang model mà key có quyền.
+3. **Cập nhật lại Secret:** Cloudflare → Worker → **Settings → Variables and Secrets**
+   → sửa `ANTHROPIC_API_KEY` = key chuẩn → **Save/Deploy**.
+
+Kiểm tra nhanh sau khi sửa:
+```bash
+curl -X POST https://tour-cost-calculator.<tên>.workers.dev/ai \
+  -H "Content-Type: application/json" -d '{"prompt":"Trả về đúng chữ: OK"}'
+# → {"text":"OK"}   (nếu vẫn {"error":"Request not allowed"} → key vẫn sai)
+```
+
 ## Ghi chú
 
-- **Model:** mặc định `claude-haiku-4-5` (rẻ & nhanh nhất). Đổi hằng `MODEL` thành
+- **Model:** mặc định `claude-haiku-4-5-20251001` (rẻ & nhanh nhất). Đổi hằng `MODEL` thành
   `claude-sonnet-4-6` (cân bằng) hoặc `claude-opus-4-8` (chất lượng cao nhất), rồi Deploy lại.
 - **Chi phí** do tài khoản Anthropic của bạn chịu (theo token). OCR ảnh tốn nhiều token hơn dịch text.
 - Worker này dùng chung URL cho cả **Dịch hồ sơ** và **Chương trình tour**.
