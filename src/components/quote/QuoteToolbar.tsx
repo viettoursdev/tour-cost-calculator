@@ -128,6 +128,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const printRefPkg = useRef<HTMLDivElement | null>(null);
 
   const openRate = (key: string, label: string) => {
+    // Blur menu item đang focus trước khi mở Dialog để tránh cảnh báo aria-hidden
+    // (MUI ẩn popover của Menu trong khi item vẫn giữ focus).
+    (document.activeElement as HTMLElement | null)?.blur();
     if (key === 'hotel') setRateModal({ kind: 'hotel' });
     else if (key === 'visa') setRateModal({ kind: 'visa' });
     else setRateModal({ kind: 'other', type: key, label });

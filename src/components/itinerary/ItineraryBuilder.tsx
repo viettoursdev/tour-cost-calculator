@@ -278,7 +278,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Button color="inherit" variant="outlined" startIcon={<SettingsIcon />}
-              onClick={() => setAiSettingsOpen(true)}>
+              onClick={(e) => { e.currentTarget.blur(); setAiSettingsOpen(true); }}>
               AI
             </Button>
             <Button color="inherit" variant="outlined" startIcon={<SaveIcon />}
