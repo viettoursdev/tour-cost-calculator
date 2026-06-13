@@ -3,7 +3,7 @@ import { create } from 'zustand';
 /** Deep-link mở sâu một entry trong các "alt app" (Menu/Itinerary/Visa) vốn chỉ
  *  render khi quote draft.template đổi. Hub liên kết đặt `pending` rồi chuyển
  *  template; app đọc & `consume()` lúc mount để mở đúng entry. */
-export type LinkNavKind = 'menu' | 'itinerary' | 'visaProject';
+export type LinkNavKind = 'menu' | 'itinerary' | 'visaProject' | 'visaProc';
 
 type State = {
   pending: { kind: LinkNavKind; id: string } | null;

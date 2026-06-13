@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AppBar, Avatar, Box, Button, IconButton, Stack,
   Toolbar, Tooltip, Typography,
@@ -6,7 +6,9 @@ import {
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import SearchIcon from '@mui/icons-material/Search';
 import { QuoteView } from '@/components/quote/QuoteView';
+import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { NotificationToaster } from '@/components/notifications/NotificationToaster';
@@ -29,6 +31,19 @@ export function AppShell() {
   const canManageUsers = hasPerm(currentUser, 'manageUsers');
   const centerOpen = useNotificationStore((s) => s.centerOpen);
   const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Legacy-style translucent pill button on the teal header bar.
   const pillSx = {
@@ -72,6 +87,11 @@ export function AppShell() {
                   TK
                 </Button>
               )}
+              <Tooltip title="Tìm kiếm (Ctrl/⌘ + K)">
+                <Button startIcon={<SearchIcon />} sx={pillSx} onClick={() => setSearchOpen(true)}>
+                  Tìm
+                </Button>
+              </Tooltip>
               <NotificationBell />
               <Tooltip title="Đăng xuất">
                 <IconButton
@@ -110,6 +130,7 @@ export function AppShell() {
       {/* Single global instance — opened from any bell or a toast click. */}
       <NotificationToaster />
       <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} />
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </Box>
   );
 }

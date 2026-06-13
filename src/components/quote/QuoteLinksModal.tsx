@@ -16,6 +16,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
 import { fbSetDMCEntryLink } from '@/lib/firebase';
 import { LEGACY } from '@/theme';
+import type { Template } from '@/types';
 
 type Opt = { key: string; label: string; sub?: string };
 
@@ -49,7 +50,7 @@ export function QuoteLinksModal({ open, onClose }: Props) {
   const openAlt = (kind: LinkNavKind, id: string, what: string) => {
     if (!leaveOk(what)) return;
     useLinkNavStore.getState().request(kind, id);
-    const tpl = kind === 'visaProject' ? 'visa' : kind;
+    const tpl: Template = kind === 'menu' ? 'menu' : kind === 'itinerary' ? 'itinerary' : 'visa';
     useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: tpl }, view: 'cost' }));
     onClose();
   };

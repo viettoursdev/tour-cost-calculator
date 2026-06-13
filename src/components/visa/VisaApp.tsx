@@ -5,6 +5,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useAuthStore } from '@/stores/authStore';
 import { useLinkNavStore } from '@/stores/linkNavStore';
+import { useVisaProcStore } from '@/stores/visaProcStore';
 import { VisaCatalog } from './VisaCatalog';
 import { VisaProcBuilder } from './VisaProcBuilder';
 import { VisaProcManager } from './VisaProcManager';
@@ -23,10 +24,15 @@ export function VisaApp({ onExit }: Props) {
   const [pendingProjId, setPendingProjId] = useState<string | null>(null);
   const user = useAuthStore((s) => s.currentUser);
 
-  // Mở sâu một dự án visa khi điều hướng từ hub "🔗 Liên kết" của báo giá.
+  // Mở sâu một dự án / hồ sơ visa khi điều hướng từ hub liên kết hoặc tìm kiếm.
   useEffect(() => {
-    const id = useLinkNavStore.getState().consume('visaProject');
-    if (id) { setPendingProjId(id); setTab('projects'); }
+    const projId = useLinkNavStore.getState().consume('visaProject');
+    if (projId) { setPendingProjId(projId); setTab('projects'); return; }
+    const procId = useLinkNavStore.getState().consume('visaProc');
+    if (procId) {
+      setTab('procedures');
+      void useVisaProcStore.getState().load(procId).then((full) => { if (full) setEditingProc(full); });
+    }
   }, []);
 
   if (!user) return null;
