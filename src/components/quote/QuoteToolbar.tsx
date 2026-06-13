@@ -26,6 +26,7 @@ import { exportDMCPDF } from '@/lib/exports/exportDMCPDF';
 import { exportPDFImage } from '@/lib/exports/exportPDFImage';
 import { emptyContract } from '@/components/contract/constants';
 import { QuotePrintable } from './QuotePrintable';
+import { QuoteLinksModal } from './QuoteLinksModal';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -113,6 +114,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
+  const [linksOpen, setLinksOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const excelInput = useRef<HTMLInputElement | null>(null);
   const printRef = useRef<HTMLDivElement | null>(null);
@@ -567,7 +569,16 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         >
           Lưu
         </Button>
+        <Button
+          size="small" variant="outlined" startIcon={<span>🔗</span>}
+          onClick={(e) => { e.currentTarget.blur(); setLinksOpen(true); }}
+          sx={{ fontWeight: 700 }}
+        >
+          Liên kết
+        </Button>
       </Toolbar>
+
+      <QuoteLinksModal open={linksOpen} onClose={() => setLinksOpen(false)} />
 
       {/* FX rates — legacy "glass" panel; only for intl + DMC quotes */}
       {(template === 'intl' || template === 'dmc') && (

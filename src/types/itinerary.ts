@@ -63,6 +63,7 @@ export interface ItineraryIndexEntry {
   destination: string;
   days: number;
   nights: number;
+  linkedQuoteId?: string | null;
   linkedQuoteName: string;
   createdAt?: string;
   createdBy?: string;
