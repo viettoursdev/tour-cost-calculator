@@ -23,6 +23,8 @@ import { QuotePickerDialog } from './QuotePickerDialog';
 import { fmtVND } from '@/components/quote/calc';
 import type { Contract, CloudQuoteEntry } from '@/types';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 export function ContractView() {
   const contracts = useContractStore((s) => s.contracts);
@@ -45,16 +47,27 @@ export function ContractView() {
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [quotePicker, setQuotePicker] = useState(false);
   const [modal, setModal] = useState<Contract | null>(null);
   const [acceptanceTarget, setAcceptanceTarget] = useState<Contract | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null);
 
+  const owners = useMemo(
+    () => [...new Set(ownContracts.map((c) => c.createdBy).filter(Boolean))].sort(),
+    [ownContracts],
+  );
   const filtered = useMemo(() => {
-    const base = ownContracts.filter((c) => !filterStatus || (c.contractStatus || 'draft') === filterStatus);
+    const base = ownContracts.filter((c) =>
+      (!filterStatus || (c.contractStatus || 'draft') === filterStatus)
+      && (!owner || c.createdBy === owner)
+      && inDateRange(c.updatedAt ?? c.createdAt, dateRange, dateFrom, dateTo));
     return filterRank(base, search, (c) => [c.contractNo, c.tourName, c.partyB?.name, c.tourDest].filter(Boolean).join(' '));
-  }, [ownContracts, search, filterStatus]);
+  }, [ownContracts, search, filterStatus, owner, dateRange, dateFrom, dateTo]);
 
   const totalValue = ownContracts.reduce((s, c) => s + Math.round((+c.pricePerPax || 0) * (+c.contractPax || 0)), 0);
   const totalPaid = ownContracts.reduce(
@@ -118,9 +131,14 @@ export function ContractView() {
             <MenuItem key={k} value={k}>{s.icon} {s.label}</MenuItem>
           ))}
         </Select>
-        {(search || filterStatus) && (
+        <ListFilterBar
+          dateRange={dateRange} onDateRange={setDateRange}
+          from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+          owners={owners} owner={owner} onOwner={setOwner}
+        />
+        {(search || filterStatus || owner || dateRange !== 'all') && (
           <Button size="small" color="error" variant="outlined"
-            onClick={() => { setSearch(''); setFilterStatus(''); }}>
+            onClick={() => { setSearch(''); setFilterStatus(''); setOwner(''); setDateRange('all'); }}>
             ✕ Xoá lọc
           </Button>
         )}

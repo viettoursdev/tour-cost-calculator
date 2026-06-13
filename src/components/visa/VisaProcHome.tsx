@@ -7,6 +7,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import type { VisaProcIndexEntry } from '@/types';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 type Props = {
   list: VisaProcIndexEntry[];
@@ -30,9 +32,17 @@ function fmtDt(s?: string): string {
 
 export function VisaProcHome({ list, loading, currentUsername, onNew, onOpen }: Props) {
   const [search, setSearch] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [delId, setDelId] = useState<string | null>(null);
 
-  const filtered = filterRank(list, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.country ?? ''}`);
+  const owners = [...new Set(list.map((x) => x.createdByName).filter((v): v is string => !!v))].sort();
+  const base = list.filter((x) =>
+    (!owner || x.createdByName === owner)
+    && inDateRange(x.updatedAt ?? x.createdAt, dateRange, dateFrom, dateTo));
+  const filtered = filterRank(base, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.country ?? ''}`);
 
   const handleDelete = async (id: string) => {
     await useVisaProcStore.getState().delete(id);
@@ -45,7 +55,12 @@ export function VisaProcHome({ list, loading, currentUsername, onNew, onOpen }: 
         <TextField size="small" value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="🔍 Tìm mã, tên hồ sơ, quốc gia..."
-          sx={{ maxWidth: 380, flex: 1 }} />
+          sx={{ maxWidth: 320, flex: 1, minWidth: 220 }} />
+        <ListFilterBar
+          dateRange={dateRange} onDateRange={setDateRange}
+          from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+          owners={owners} owner={owner} onOwner={setOwner}
+        />
         <Box sx={{ flex: 1 }} />
         <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}
           sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>

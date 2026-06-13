@@ -11,6 +11,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { canViewAll } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 async function openLinkedQuote(cloudId: string): Promise<void> {
   if (!window.confirm('Rời phần chương trình để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
@@ -43,9 +45,17 @@ export function ItineraryHome({ onNew, onOpen, onBack }: Props) {
   // Operations trở lên xem toàn bộ; dưới ngưỡng chỉ thấy chương trình do mình tạo.
   const viewAll = !!currentUser && canViewAll(currentUser.role, 'itinerary');
   const [search, setSearch] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [delId, setDelId] = useState<string | null>(null);
 
-  const base = list.filter((x) => viewAll || x.createdBy === currentUser?.name);
+  const owners = [...new Set(list.map((x) => x.createdBy).filter((v): v is string => !!v))].sort();
+  const base = list.filter((x) =>
+    (viewAll || x.createdBy === currentUser?.name)
+    && (!owner || x.createdBy === owner)
+    && inDateRange(x.updatedAt ?? x.createdAt, dateRange, dateFrom, dateTo));
   const filtered = filterRank(base, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.destination ?? ''} ${x.linkedQuoteName ?? ''}`);
 
   const handleDelete = async (id: string) => {
@@ -76,18 +86,25 @@ export function ItineraryHome({ onNew, onOpen, onBack }: Props) {
       </Box>
 
       <Box sx={{ p: 3, maxWidth: 1100, mx: 'auto' }}>
-        <TextField
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm mã, tên, điểm đến..."
-          size="small"
-          sx={{ mb: 2.5, maxWidth: 420, width: '100%' }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
-            ),
-          }}
-        />
+        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2.5 }} alignItems="center">
+          <TextField
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm mã, tên, điểm đến..."
+            size="small"
+            sx={{ maxWidth: 360, flex: 1, minWidth: 220 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+              ),
+            }}
+          />
+          <ListFilterBar
+            dateRange={dateRange} onDateRange={setDateRange}
+            from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+            owners={owners} owner={owner} onOwner={setOwner}
+          />
+        </Stack>
 
         {loading && (
           <Box sx={{ textAlign: 'center', py: 8, color: 'text.disabled' }}>

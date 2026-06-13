@@ -18,6 +18,8 @@ import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 type ModalState = { ncc: Ncc | null } | null;
 
@@ -35,6 +37,10 @@ export function NCCView() {
   const [search, setSearch] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const [sort, setSort] = useState<SortMode>('oldest');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ncc | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -45,10 +51,16 @@ export function NCCView() {
   const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageCustomers');
   const [convertTarget, setConvertTarget] = useState<Ncc | null>(null);
 
+  const owners = useMemo(
+    () => [...new Set(suppliers.map((s) => s.createdBy).filter(Boolean))].sort(),
+    [suppliers],
+  );
   const filtered = useMemo(() => {
     const base = suppliers.filter((s) => {
       if (!viewAll && s.createdBy !== currentUser?.name) return false;
       if (filterSector && !s.sectors.includes(filterSector)) return false;
+      if (owner && s.createdBy !== owner) return false;
+      if (!inDateRange(s.updatedAt ?? s.createdAt, dateRange, dateFrom, dateTo)) return false;
       return true;
     });
     const text = (s: Ncc) => [
@@ -56,7 +68,7 @@ export function NCCView() {
       ...(s.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
-  }, [suppliers, search, filterSector, viewAll, currentUser?.name, sort]);
+  }, [suppliers, search, filterSector, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Ncc) => {
     await save(form);
@@ -131,9 +143,14 @@ export function NCCView() {
             <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
           ))}
         </Select>
-        {(search || filterSector) && (
+        <ListFilterBar
+          dateRange={dateRange} onDateRange={setDateRange}
+          from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+          owners={owners} owner={owner} onOwner={setOwner}
+        />
+        {(search || filterSector || owner || dateRange !== 'all') && (
           <Button size="small" color="error" variant="outlined"
-            onClick={() => { setSearch(''); setFilterSector(''); }}>
+            onClick={() => { setSearch(''); setFilterSector(''); setOwner(''); setDateRange('all'); }}>
             ✕ Xoá lọc
           </Button>
         )}

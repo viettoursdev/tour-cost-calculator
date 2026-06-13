@@ -17,6 +17,8 @@ import { customerToNcc } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import type { Customer } from '@/types';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 type FilterType = '' | 'company' | 'individual';
 type ModalState = { customer: Customer | null } | null;
@@ -35,6 +37,10 @@ export function CustomerView() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('');
   const [sort, setSort] = useState<SortMode>('oldest');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useCustomerStore((s) => s.importMany);
@@ -45,10 +51,16 @@ export function CustomerView() {
   const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageNCC');
   const [convertTarget, setConvertTarget] = useState<Customer | null>(null);
 
+  const owners = useMemo(
+    () => [...new Set(customers.map((c) => c.createdBy).filter(Boolean))].sort(),
+    [customers],
+  );
   const filtered = useMemo(() => {
     const base = customers.filter((c) => {
       if (!viewAll && c.createdBy !== currentUser?.name) return false;
       if (filterType && c.type !== filterType) return false;
+      if (owner && c.createdBy !== owner) return false;
+      if (!inDateRange(c.updatedAt ?? c.createdAt, dateRange, dateFrom, dateTo)) return false;
       return true;
     });
     const text = (c: Customer) => [
@@ -56,7 +68,7 @@ export function CustomerView() {
       ...(c.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
-  }, [customers, search, filterType, viewAll, currentUser?.name, sort]);
+  }, [customers, search, filterType, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Customer) => {
     await save(form);
@@ -140,12 +152,17 @@ export function CustomerView() {
             <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
           ))}
         </Select>
-        {(search || filterType) && (
+        <ListFilterBar
+          dateRange={dateRange} onDateRange={setDateRange}
+          from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+          owners={owners} owner={owner} onOwner={setOwner}
+        />
+        {(search || filterType || owner || dateRange !== 'all') && (
           <Button
             size="small"
             color="error"
             variant="outlined"
-            onClick={() => { setSearch(''); setFilterType(''); }}
+            onClick={() => { setSearch(''); setFilterType(''); setOwner(''); setDateRange('all'); }}
           >
             ✕ Xoá lọc
           </Button>

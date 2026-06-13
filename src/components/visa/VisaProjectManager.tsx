@@ -13,6 +13,8 @@ import { newVisaProject, VISA_STATUS_META } from './constants';
 import { VisaProjectEditor } from './VisaProjectEditor';
 import type { VisaProjectDoc } from '@/types';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 type Props = { initialOpenId?: string | null; onConsumeInitial?: () => void };
 
@@ -32,6 +34,10 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
   const user = useAuthStore((s) => s.currentUser);
 
   const [search, setSearch] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [editing, setEditing] = useState<VisaProjectDoc | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
 
@@ -61,10 +67,16 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
     );
   }, [projects, user]);
 
-  const filtered = useMemo(
-    () => filterRank(visible, search, (p) => `${p.name} ${p.code} ${p.country} ${VISA_STATUS_META[p.status]?.label ?? ''}`),
-    [visible, search],
+  const owners = useMemo(
+    () => [...new Set(visible.map((p) => p.createdByName).filter(Boolean))].sort(),
+    [visible],
   );
+  const filtered = useMemo(() => {
+    const base = visible.filter((p) =>
+      (!owner || p.createdByName === owner)
+      && inDateRange(p.updatedAt ?? p.createdAt, dateRange, dateFrom, dateTo));
+    return filterRank(base, search, (p) => `${p.name} ${p.code} ${p.country} ${VISA_STATUS_META[p.status]?.label ?? ''}`);
+  }, [visible, search, owner, dateRange, dateFrom, dateTo]);
 
   if (!user) return null;
 
@@ -76,7 +88,12 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
         <TextField
           size="small" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="🔍 Tìm tên chương trình, mã, quốc gia, trạng thái…"
-          sx={{ maxWidth: 420, flex: 1 }}
+          sx={{ maxWidth: 360, flex: 1 }}
+        />
+        <ListFilterBar
+          dateRange={dateRange} onDateRange={setDateRange}
+          from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+          owners={owners} owner={owner} onOwner={setOwner}
         />
         <Box sx={{ flex: 1 }} />
         <Button

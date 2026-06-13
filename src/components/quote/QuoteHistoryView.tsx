@@ -16,6 +16,8 @@ import CloudDownload from '@mui/icons-material/CloudDownload';
 import Delete from '@mui/icons-material/Delete';
 import AttachFile from '@mui/icons-material/AttachFile';
 import { filterRank } from '@/lib/search';
+import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
+import { ListFilterBar } from '@/components/common/ListFilterBar';
 
 const TEMPLATE_LABEL: Record<Template, string> = {
   domestic: 'Nội địa',
@@ -106,6 +108,10 @@ export function QuoteHistoryView() {
 
   const [search, setSearch] = useState('');
   const [templateFilter, setTemplateFilter] = useState<TemplateFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRangeKey>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [owner, setOwner] = useState('');
   const [collabAnchor, setCollabAnchor] = useState<{
     el: HTMLElement;
     row: CloudQuoteEntry;
@@ -120,10 +126,17 @@ export function QuoteHistoryView() {
     [allQuotes, currentUserU],
   );
 
+  const owners = useMemo(
+    () => [...new Set(visible.map((q) => q.createdByName).filter(Boolean))].sort(),
+    [visible],
+  );
   const filtered = useMemo(() => {
-    const base = visible.filter((q) => isDMC || templateFilter === 'all' || q.template === templateFilter);
+    const base = visible.filter((q) =>
+      (isDMC || templateFilter === 'all' || q.template === templateFilter)
+      && (!owner || q.createdByName === owner)
+      && inDateRange(q.updatedAt ?? q.createdAt, dateRange, dateFrom, dateTo));
     return filterRank(base, search, (q) => [q.name, q.quoteCode, q.customerName].filter(Boolean).join(' '));
-  }, [visible, search, templateFilter, isDMC]);
+  }, [visible, search, templateFilter, isDMC, owner, dateRange, dateFrom, dateTo]);
 
   const handleLoad = async (row: CloudQuoteEntry) => {
     if (currentQuoteId && currentQuoteId !== row.cloudId) {
@@ -275,6 +288,11 @@ export function QuoteHistoryView() {
             <MenuItem value="intl">Quốc tế</MenuItem>
           </Select>
         )}
+        <ListFilterBar
+          dateRange={dateRange} onDateRange={setDateRange}
+          from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
+          owners={owners} owner={owner} onOwner={setOwner}
+        />
         <Typography variant="body2" color="text.secondary">
           Hiển thị <strong>{filtered.length}</strong> / {allQuotes.length}
         </Typography>
