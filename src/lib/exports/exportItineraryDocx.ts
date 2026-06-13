@@ -5,12 +5,11 @@
  * exportContractDocx/exportContractPDF). Uses Aptos font for Vietnamese text.
  */
 import {
-  AlignmentType, BorderStyle, Document, ImageRun, Packer, Paragraph, ShadingType,
+  AlignmentType, BorderStyle, Document, HeightRule, Packer, Paragraph, ShadingType,
   Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
   type IParagraphOptions, type ITableCellOptions,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import type { Itinerary } from '@/types';
 
 const FONT = 'Aptos';
@@ -87,30 +86,31 @@ const tbl = (rows: TableRow[], widths: number[], o: TblOpts = {}): Table => new 
   rows,
 });
 
+// Khung ảnh placeholder (giữ mặc định để dán ảnh thật vào sau).
+const BOX_BD = { style: BorderStyle.SINGLE, size: 4, color: LINE };
+const boxBorders = { top: BOX_BD, bottom: BOX_BD, left: BOX_BD, right: BOX_BD, insideHorizontal: NB, insideVertical: BOX_BD };
+const imgCell = (w: number): TableCell => cell(
+  [P(tr('📷  Khu vực chèn ảnh', { size: 16, italics: true, color: MUTE }), { align: AlignmentType.CENTER, after: 0 })],
+  { width: w, fill: 'F2F4F5', valign: VerticalAlign.CENTER },
+);
+/** Một dải khung ảnh: `cols` ô ngang nhau, cao `heightTwips`. */
+const imgRow = (cols: number, heightTwips: number): Table => {
+  const w = Math.floor(CW / cols);
+  return new Table({
+    width: { size: CW, type: WidthType.DXA },
+    columnWidths: Array(cols).fill(w),
+    borders: boxBorders,
+    rows: [new TableRow({
+      height: { value: heightTwips, rule: HeightRule.ATLEAST },
+      children: Array.from({ length: cols }, () => imgCell(w)),
+    })],
+  });
+};
+
 export async function exportItineraryDocx(it: Itinerary, code: string): Promise<void> {
   const C: (Paragraph | Table)[] = [];
 
-  // Header row: brand text (left) + code (right)
-  C.push(tbl([new TableRow({
-    children: [
-      cell([
-        new Paragraph({
-          children: [new ImageRun({
-            type: 'png',
-            data: b64ToU8(VTE_LOGO),
-            transformation: { width: 81, height: 46 },
-          })],
-          spacing: { after: 0 },
-        }),
-      ], { width: 5153, valign: VerticalAlign.CENTER }),
-      cell([
-        P(tr('MÃ CHƯƠNG TRÌNH', { size: 14, bold: true, color: MUTE }), { align: AlignmentType.RIGHT, after: 0 }),
-        P(tr(code, { size: 22, bold: true, color: NAVY }), { align: AlignmentType.RIGHT, after: 0 }),
-      ], { width: 5153, valign: VerticalAlign.CENTER }),
-    ],
-  })], [5153, 5153]));
-
-  // Title block
+  // Title block (theo mẫu: bắt đầu thẳng bằng tiêu đề, không logo/mã ở đầu trang)
   C.push(P(tr('CHƯƠNG TRÌNH THAM QUAN DU LỊCH', { size: 18, bold: true, color: MUTE }),
     { align: AlignmentType.CENTER, before: 140 }));
   C.push(P(tr((it.destination || 'ĐIỂM ĐẾN').toUpperCase(), { size: 48, bold: true, color: NAVY }),
@@ -215,6 +215,21 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     }
     C.push(P(mealRuns, { before: 40, after: 140 }));
   });
+
+  // Layout hình ảnh tham khảo — khung placeholder giữ mặc định để ghép ảnh sau.
+  C.push(P(tr('HÌNH ẢNH THAM KHẢO', { size: 18, bold: true, color: NAVY }),
+    {
+      before: 120, after: 60,
+      border: { bottom: { style: BorderStyle.SINGLE, size: 5, color: TEAL, space: 2 } },
+    }));
+  C.push(P(tr('*** Lay out hình ảnh tham khảo — dán ảnh trực tiếp vào các khung bên dưới.',
+    { size: 14, italics: true, color: MUTE }), { after: 60 }));
+  C.push(imgRow(1, 1640));                       // banner ngang
+  C.push(P(tr('', {}), { after: 40 }));
+  C.push(imgRow(1, 2400));                       // ảnh minh hoạ lớn
+  C.push(P(tr('', {}), { after: 40 }));
+  C.push(imgRow(2, 2900));                       // 2 ảnh đứng cạnh nhau
+  C.push(P(tr('', {}), { after: 80 }));
 
   // Note
   C.push(P(tr('✱ Chương trình có thể thay đổi thứ tự tùy thời tiết & tình hình thực tế, vẫn đảm bảo đầy đủ nội dung.',
