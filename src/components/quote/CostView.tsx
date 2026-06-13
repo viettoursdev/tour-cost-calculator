@@ -79,7 +79,8 @@ export function CostView() {
           let onOpenRate: (() => void) | undefined;
           if (cat.id === 'visa') onOpenRate = () => setVisaPickerOpen(true);
           else if (cat.id === 'hotel') onOpenRate = () => setPicker({ kind: 'hotel', catId: 'hotel' });
-          else if (cat.rateCard) {
+          // Rate card "tham quan" chỉ cho tour quốc tế & nội địa (không hiện ở DMC).
+          else if (cat.rateCard && !(cat.rateCard === 'sight' && template === 'dmc')) {
             const type = cat.rateCard;
             const label = cat.label;
             onOpenRate = () => setPicker({ kind: 'rate', catId, type, label });

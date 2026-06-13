@@ -24,7 +24,7 @@ export const CATS: CategoryDef[] = [
   { id: 'hotel',      icon: '🏨',  label: 'Khách sạn',         labelEn: 'Hotel',             color: '#f5a623', rateCard: 'hotel' },
   { id: 'transport',  icon: '🚌',  label: 'Vận chuyển',        labelEn: 'Transportation',    color: '#9b59b6', rateCard: 'transport' },
   { id: 'meal',       icon: '🍽️', label: 'Ăn uống',           labelEn: 'Meals',             color: '#14a08c' },
-  { id: 'sight',      icon: '🎟️', label: 'Tham quan',         labelEn: 'Sightseeing',       color: '#e74c3c' },
+  { id: 'sight',      icon: '🎟️', label: 'Tham quan',         labelEn: 'Sightseeing',       color: '#e74c3c', rateCard: 'sight' },
   { id: 'event',      icon: '🎉',  label: 'Sự kiện',           labelEn: 'Event',             color: '#e84393', dmcOnly: true },
   { id: 'meeting',    icon: '📊',  label: 'Meeting / Hội nghị', labelEn: 'Meeting / Conference', color: '#34495e', rateCard: 'meeting', domesticOnly: true },
   { id: 'teambuild',  icon: '🎯',  label: 'Team Building',     labelEn: 'Team Building',     color: '#27ae60', rateCard: 'teambuild', domesticOnly: true },

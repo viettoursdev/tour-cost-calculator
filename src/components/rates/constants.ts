@@ -73,6 +73,7 @@ export type RateCategory = { key: string; label: string; icon: string };
 export const RATE_CATEGORIES: RateCategory[] = [
   { key: 'hotel', label: 'Khách sạn', icon: '🏨' },
   { key: 'transport', label: 'Vận chuyển', icon: '🚌' },
+  { key: 'sight', label: 'Chi phí tham quan', icon: '🎟️' },
   { key: 'staff', label: 'HDV / Nhân sự', icon: '🎤' },
   { key: 'visa', label: 'Visa quốc tế', icon: '🛂' },
   { key: 'insurance', label: 'Bảo hiểm', icon: '🛡️' },
@@ -91,6 +92,9 @@ export const RATE_CATEGORIES: RateCategory[] = [
 export function isRateCategoryVisible(key: string, template: string | null): boolean {
   if (!template) return true;
   switch (key) {
+    case 'sight':
+      // Rate card chi phí tham quan: chỉ áp dụng cho tour quốc tế & nội địa.
+      return template === 'intl' || template === 'domestic';
     case 'insurance':
     case 'logistics':
     case 'gala':
