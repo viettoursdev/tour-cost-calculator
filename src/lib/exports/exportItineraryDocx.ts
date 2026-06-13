@@ -11,12 +11,28 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
-import {
-  IMG_BANNERS, IMG_BANNER_W, IMG_BANNER_H,
-  IMG_WIDES, IMG_WIDE_W, IMG_WIDE_H,
-  IMG_PORTRAIT, IMG_PORTRAIT_W, IMG_PORTRAIT_H,
-} from './itinerarySampleImages';
 import type { Itinerary } from '@/types';
+
+// 9 ảnh mẫu (GIỮ NGUYÊN file gốc, không nén) — phục vụ từ public/, tải lúc xuất.
+// 4 banner (20.8×2.9cm) + 4 ảnh ngang (17.56×4.23cm) + 1 ảnh đứng (7.67×10.24cm).
+const cm = (v: number) => Math.round((v / 2.54) * 96); // cm → px @96dpi
+const SAMPLE_IMAGES: { file: string; w: number; h: number }[] = [
+  ...['banner1.jpg', 'banner2.jpg', 'banner3.jpg', 'banner4.jpg'].map((file) => ({ file, w: cm(20.80), h: cm(2.90) })),
+  ...['wide1.jpg', 'wide2.jpg', 'wide3.jpg', 'wide4.jpg'].map((file) => ({ file, w: cm(17.56), h: cm(4.23) })),
+  { file: 'portrait1.jpg', w: cm(7.67), h: cm(10.24) },
+];
+
+async function fetchSampleImages(): Promise<{ data: Uint8Array; w: number; h: number }[]> {
+  const base = import.meta.env.BASE_URL;
+  try {
+    return await Promise.all(SAMPLE_IMAGES.map(async (m) => {
+      const r = await fetch(`${base}itinerary-sample/${m.file}`);
+      return { data: new Uint8Array(await r.arrayBuffer()), w: m.w, h: m.h };
+    }));
+  } catch {
+    return [];
+  }
+}
 
 const FONT = 'Aptos';
 const NAVY = '0F3A4A';
@@ -92,12 +108,12 @@ const tbl = (rows: TableRow[], widths: number[], o: TblOpts = {}): Table => new 
   rows,
 });
 
-// Ảnh layout mẫu (căn giữa) — giữ nguyên theo file mẫu, có thể thay ảnh sau.
-const imgPara = (b64: string, w: number, h: number): Paragraph =>
+// Ảnh layout mẫu (căn giữa) — giữ nguyên ảnh gốc theo file mẫu.
+const imgPara = (data: Uint8Array, w: number, h: number): Paragraph =>
   new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 80 },
-    children: [new ImageRun({ type: 'jpg', data: b64ToU8(b64), transformation: { width: w, height: h } })],
+    children: [new ImageRun({ type: 'jpg', data, transformation: { width: w, height: h } })],
   });
 
 // Footer công ty (Times New Roman, căn giữa) — giữ nguyên theo mẫu.
@@ -110,6 +126,7 @@ const ftrLine = (t: string, bold = false): Paragraph =>
 
 export async function exportItineraryDocx(it: Itinerary, code: string): Promise<void> {
   const C: (Paragraph | Table)[] = [];
+  const sampleImgs = await fetchSampleImages();
 
   // Title block (theo mẫu: bắt đầu thẳng bằng tiêu đề, không logo/mã ở đầu trang)
   C.push(P(tr('CHƯƠNG TRÌNH THAM QUAN DU LỊCH', { size: 18, bold: true, color: MUTE }),
@@ -221,9 +238,7 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
   // 1 ảnh đứng); có thể thay ảnh khác vào sau khi cần.
   C.push(P(tr('*** Lay out hình ảnh tham khảo', { size: 16, bold: true, color: MUTE }),
     { before: 120, after: 60 }));
-  IMG_BANNERS.forEach((b) => C.push(imgPara(b, IMG_BANNER_W, IMG_BANNER_H)));
-  IMG_WIDES.forEach((b) => C.push(imgPara(b, IMG_WIDE_W, IMG_WIDE_H)));
-  C.push(imgPara(IMG_PORTRAIT, IMG_PORTRAIT_W, IMG_PORTRAIT_H));
+  sampleImgs.forEach((im) => C.push(imgPara(im.data, im.w, im.h)));
 
   // Note
   C.push(P(tr('✱ Chương trình có thể thay đổi thứ tự tùy thời tiết & tình hình thực tế, vẫn đảm bảo đầy đủ nội dung.',
@@ -262,8 +277,8 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     children: [tbl([new TableRow({
       children: [
         cell([new Paragraph({
-          // Logo đúng kích thước yêu cầu: 6.45cm × 1.25cm (≈ 244 × 47 px @96dpi).
-          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: 244, height: 47 } })],
+          // Logo đúng kích thước yêu cầu: 4.65cm × 1.25cm (≈ 176 × 47 px @96dpi) — đúng tỉ lệ gốc.
+          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: 176, height: 47 } })],
           spacing: { after: 0 },
         })], { width: 5153, valign: VerticalAlign.CENTER }),
         cell([
