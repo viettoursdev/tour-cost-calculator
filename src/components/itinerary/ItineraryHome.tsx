@@ -23,6 +23,7 @@ async function openLinkedQuote(cloudId: string): Promise<void> {
 type Props = {
   onNew: () => void;
   onOpen: (id: string) => void;
+  onImport: () => void;
   onBack: () => void;
 };
 
@@ -38,7 +39,7 @@ function fmtDt(s?: string): string {
   }
 }
 
-export function ItineraryHome({ onNew, onOpen, onBack }: Props) {
+export function ItineraryHome({ onNew, onOpen, onImport, onBack }: Props) {
   const list = useItineraryStore((s) => s.list);
   const loading = useItineraryStore((s) => s.loading);
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -73,7 +74,10 @@ export function ItineraryHome({ onNew, onOpen, onBack }: Props) {
               {loading ? 'Đang tải...' : `${list.length} chương trình · đồng bộ Cloud`}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Button variant="outlined" color="inherit" startIcon={<span>📥</span>} onClick={onImport}>
+              Phân tích từ file
+            </Button>
             <Button variant="contained" color="inherit" startIcon={<AddIcon />} onClick={onNew}
               sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, '&:hover': { bgcolor: '#f4fefa' } }}>
               Tạo chương trình
