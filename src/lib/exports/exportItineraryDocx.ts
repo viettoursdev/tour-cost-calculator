@@ -261,7 +261,8 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     children: [tbl([new TableRow({
       children: [
         cell([new Paragraph({
-          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: 100, height: 57 } })],
+          // Logo đúng kích thước yêu cầu: 6.45cm × 1.25cm (≈ 244 × 47 px @96dpi).
+          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: 244, height: 47 } })],
           spacing: { after: 0 },
         })], { width: 5153, valign: VerticalAlign.CENTER }),
         cell([
