@@ -124,6 +124,7 @@ Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tool
 |-----|---------|
 | `vte_users` | Zustand-persisted user list (`authStore`) |
 | `vte_pending_signin_email` | Email a magic link was sent to (`authStore`, cleared on completion) |
+| `vte_remembered_email` | Last successfully-used email, used to prefill the login screen (`rememberedEmail`). Never cleared on sign-out. |
 | `vte_session_method_{username}` | `'link'` or `'password'` — which sign-in method started this session (`authStore` / `sessionTimeout`) |
 | `vte_session_last_active_{username}` | Epoch ms of the user's last interaction. Drives the 48h inactivity sign-out for `link` sessions only. |
 | Firebase Auth IndexedDB | Session token (managed by `firebase/auth`, persists across browser restarts) |
