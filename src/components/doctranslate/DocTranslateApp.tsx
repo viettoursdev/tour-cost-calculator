@@ -7,8 +7,10 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DescriptionIcon from '@mui/icons-material/Description';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import TranslateIcon from '@mui/icons-material/Translate';
+import { saveAs } from 'file-saver';
 import { callAIWorker, getAIWorker, setAIWorker } from '@/lib/aiWorker';
 import { chunkText, extractDocx, extractImage, extractPdf } from '@/lib/docExtract';
+import { translateDocxInPlace } from '@/lib/docxTranslate';
 import { exportTranslationDocx } from '@/lib/exports/exportTranslationDocx';
 import { exportTranslationPDF } from '@/lib/exports/exportTranslationPDF';
 
@@ -25,8 +27,31 @@ export function DocTranslateApp({ onExit }: Props) {
   const [source, setSource] = useState('');
   const [result, setResult] = useState('');
   const [err, setErr] = useState('');
+  const [layoutBusy, setLayoutBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const hasWorker = !!getAIWorker();
+  const isDocx = !!file && file.name.toLowerCase().endsWith('.docx');
+
+  // Dịch .docx GIỮ NGUYÊN layout (bảng/định dạng) → tải về .docx mới.
+  const exportLayoutDocx = async () => {
+    if (!file) return;
+    setLayoutBusy(true); setErr(''); setProgress('Đang đọc file Word...');
+    try {
+      const blob = await translateDocxInPlace(
+        file,
+        async (t) => (await callAIWorker('/translate', { text: t })).text ?? '',
+        setProgress,
+      );
+      const base = file.name.replace(/\.[^.]+$/, '') || 'BanDich';
+      saveAs(blob, `${base}_EN.docx`);
+      setProgress('');
+    } catch (e) {
+      setErr((e as Error).message);
+      setProgress('');
+    } finally {
+      setLayoutBusy(false);
+    }
+  };
 
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -133,11 +158,20 @@ export function DocTranslateApp({ onExit }: Props) {
           </Box>
           <Button fullWidth variant="contained" size="large"
             startIcon={<TranslateIcon />}
-            disabled={!file || busy}
+            disabled={!file || busy || layoutBusy}
             onClick={() => void run()}
-            sx={{ mt: 1.5, background: (!file || busy) ? undefined : 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+            sx={{ mt: 1.5, background: (!file || busy || layoutBusy) ? undefined : 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
             {busy ? '⏳ Đang xử lý...' : 'Dịch sang tiếng Anh'}
           </Button>
+          {isDocx && (
+            <Button fullWidth variant="outlined" size="large"
+              startIcon={<DescriptionIcon />}
+              disabled={busy || layoutBusy}
+              onClick={() => void exportLayoutDocx()}
+              sx={{ mt: 1 }}>
+              {layoutBusy ? '⏳ Đang dịch giữ layout...' : '📄 Dịch & tải Word giữ nguyên layout'}
+            </Button>
+          )}
           {progress && (
             <Typography variant="body2" fontWeight={600} sx={{ mt: 1.5, color: '#0d7a6a' }}>
               {progress}
