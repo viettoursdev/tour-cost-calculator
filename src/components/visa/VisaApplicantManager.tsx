@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, AppBar, Box, Button, Checkbox, Chip,
-  Dialog, FormControlLabel, IconButton, MenuItem, Stack, TextField, Toolbar, Tooltip,
-  Typography,
+  Dialog, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, TextField, Toolbar,
+  Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import HistoryIcon from '@mui/icons-material/History';
@@ -15,12 +16,13 @@ import {
   APPLICANT_DOC_META, APPLICANT_RESULT_META, countsFromApplicants,
   newApplicantDoc, newVisaApplicant,
 } from './constants';
+import { VisaGuestHistory } from './VisaGuestHistory';
+import { guestKeyOf, type GuestKey } from './applicantMatch';
 import type { ApplicantDoc, VisaApplicant, VisaProjectDoc } from '@/types';
 
 type Props = {
   project: VisaProjectDoc;
   onClose: () => void;
-  onOpenGuestHistory?: (a: VisaApplicant) => void;
 };
 
 /** Bỏ dấu nhưng GIỮ hoa/thường (khác normalizeVN vốn lowercase) → tên không dấu. */
@@ -32,12 +34,13 @@ function stripAccentsKeepCase(s: string): string {
 }
 
 /** Màn quản lý danh sách khách theo từng dự án — đầy đủ trường + checklist hồ sơ. */
-export function VisaApplicantManager({ project, onClose, onOpenGuestHistory }: Props) {
+export function VisaApplicantManager({ project, onClose }: Props) {
   const save = useVisaProjectStore((s) => s.save);
   const [list, setList] = useState<VisaApplicant[]>(
     () => (project.applicants ?? []).map((a) => ({ ...a, docs: a.docs ? a.docs.map((d) => ({ ...d })) : undefined })),
   );
   const [busy, setBusy] = useState(false);
+  const [guestSeed, setGuestSeed] = useState<GuestKey | null>(null);
 
   const upd = (id: string, patch: Partial<VisaApplicant>) =>
     setList((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
@@ -212,14 +215,12 @@ export function VisaApplicantManager({ project, onClose, onOpenGuestHistory }: P
                         onChange={(e) => upd(a.id, { note: e.target.value })} />
 
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        {onOpenGuestHistory && (
-                          <Tooltip title="Xem lịch sử visa của khách này">
-                            <Button size="small" color="inherit" startIcon={<HistoryIcon />}
-                              onClick={() => onOpenGuestHistory(a)}>
-                              Lịch sử khách
-                            </Button>
-                          </Tooltip>
-                        )}
+                        <Tooltip title="Xem lịch sử visa của khách này (các dự án & báo giá liên quan)">
+                          <Button size="small" color="inherit" startIcon={<HistoryIcon />}
+                            onClick={() => setGuestSeed(guestKeyOf(a))}>
+                            Lịch sử khách
+                          </Button>
+                        </Tooltip>
                         <Button size="small" color="error" startIcon={<DeleteOutlineIcon />} onClick={() => del(a.id)}>
                           Xoá khách
                         </Button>
@@ -232,6 +233,16 @@ export function VisaApplicantManager({ project, onClose, onOpenGuestHistory }: P
           </Stack>
         )}
       </Box>
+
+      <Dialog open={!!guestSeed} onClose={() => setGuestSeed(null)} fullWidth maxWidth="md">
+        <DialogTitle sx={{ pr: 6 }}>
+          🔗 Lịch sử visa của khách
+          <IconButton onClick={() => setGuestSeed(null)} sx={{ position: 'absolute', right: 8, top: 8 }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        {guestSeed && <VisaGuestHistory seed={guestSeed} />}
+      </Dialog>
     </Dialog>
   );
 }
