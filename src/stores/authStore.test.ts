@@ -258,11 +258,15 @@ describe('sign-in method persistence', () => {
     });
 
     await useAuthStore.getState().init();
+    const start = Date.now();
     await useAuthStore.getState().requestSignInLink('ceo@viettours.com.vn');
     await idCb!({ email: 'ceo@viettours.com.vn' });
 
     expect(getSignInMethod('ceo')).toBe('link');
-    expect(readLastActive('ceo')).toBe(Date.now());
+    const last = readLastActive('ceo');
+    expect(last).not.toBeNull();
+    expect(last!).toBeGreaterThanOrEqual(start);
+    expect(last!).toBeLessThanOrEqual(Date.now());
   });
 
   it('records "password" method when signInWithPassword resolves and a user signs in', async () => {
