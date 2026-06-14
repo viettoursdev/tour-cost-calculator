@@ -1,7 +1,7 @@
 import { daysUntil } from '@/lib/dateUtils';
 import type {
-  User, VisaApplicant, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField, VisaProcKind,
-  VisaProcRow, VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
+  ApplicantDoc, User, VisaApplicant, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField,
+  VisaProcKind, VisaProcRow, VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
 } from '@/types';
 
 // Source: public/legacy.html:7573-7576.
@@ -91,14 +91,37 @@ export const APPLICANT_RESULT_META: Record<VisaApplicant['result'], { label: str
   have_visa: { label: 'Đã có visa',  color: '#2563eb' },
 };
 
+// Checklist hồ sơ mặc định cho mỗi khách (thêm loại khác được).
+export const DEFAULT_APPLICANT_DOCS = [
+  'Hộ chiếu (bản gốc)', 'Hình thẻ', 'Hồ sơ công việc',
+  'Hồ sơ nhân thân', 'Hồ sơ tài chính', 'Hồ sơ tài sản',
+] as const;
+
+let applicantDocSeq = 0;
+export function newApplicantDoc(label = 'Hồ sơ khác'): ApplicantDoc {
+  return {
+    id: 'ad' + Date.now().toString(36) + (applicantDocSeq++).toString(36) + Math.random().toString(36).slice(2, 4),
+    label,
+    checked: false,
+  };
+}
+
 let applicantSeq = 0;
 export function newVisaApplicant(): VisaApplicant {
   return {
     id: 'va' + Date.now().toString(36) + (applicantSeq++).toString(36) + Math.random().toString(36).slice(2, 5),
     name: '',
+    nameNoAccent: '',
+    gender: '',
+    dob: '',
     passport: '',
+    passportIssue: '',
+    passportExpiry: '',
+    countriesVisited: '',
     docStatus: 'missing',
     result: 'pending',
+    docs: DEFAULT_APPLICANT_DOCS.map((l) => newApplicantDoc(l)),
+    note: '',
   };
 }
 

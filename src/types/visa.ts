@@ -124,13 +124,27 @@ export interface VisaMilestone {
 }
 
 /** Hồ sơ từng khách trong đoàn (Đợt 4 — checklist). */
+/** Một mục trong checklist hồ sơ của khách (mở rộng được). */
+export interface ApplicantDoc {
+  id: string;
+  label: string;
+  checked: boolean;
+}
+
 export interface VisaApplicant {
   id: string;
-  name: string;
-  passport?: string;
+  name: string;                 // Họ tên (có dấu)
+  nameNoAccent?: string;        // Họ tên (không dấu) — tự sinh từ name, sửa tay được
+  gender?: 'Nam' | 'Nữ' | 'Khác' | '';
+  dob?: string;                 // Ngày sinh (YYYY-MM-DD)
+  passport?: string;            // Số hộ chiếu
+  passportIssue?: string;       // Ngày cấp
+  passportExpiry?: string;      // Ngày hết hạn
+  countriesVisited?: string;    // Các quốc gia đã từng đi
   docStatus: 'missing' | 'submitted' | 'complete';
   result: 'pending' | 'passed' | 'failed' | 'have_visa';
-  note?: string;
+  docs?: ApplicantDoc[];        // Checklist hồ sơ
+  note?: string;                // Lưu ý khác
 }
 
 export interface VisaProjectDoc {

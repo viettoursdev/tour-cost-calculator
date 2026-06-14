@@ -6,11 +6,13 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import LaunchIcon from '@mui/icons-material/Launch';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { newVisaProject, VISA_STATUS_META } from './constants';
 import { VisaProjectEditor } from './VisaProjectEditor';
+import { VisaApplicantManager } from './VisaApplicantManager';
 import type { VisaProjectDoc } from '@/types';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
@@ -39,6 +41,7 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
   const [editing, setEditing] = useState<VisaProjectDoc | null>(null);
+  const [managing, setManaging] = useState<VisaProjectDoc | null>(null);
   const [delId, setDelId] = useState<string | null>(null);
 
   // Auto-mở editor khi được điều hướng từ hub liên kết (chờ projects tải xong).
@@ -160,6 +163,9 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
                   </Stack>
 
                   <Stack direction="row" spacing={0.5}>
+                    <Tooltip title="Danh sách khách">
+                      <IconButton size="small" sx={{ color: '#0d7a6a' }} onClick={() => setManaging(p)}><PeopleAltIcon fontSize="small" /></IconButton>
+                    </Tooltip>
                     <Tooltip title="Sửa">
                       <IconButton size="small" color="primary" onClick={() => setEditing(p)}><EditIcon fontSize="small" /></IconButton>
                     </Tooltip>
@@ -180,6 +186,7 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
       )}
 
       {editing && <VisaProjectEditor initial={editing} onClose={() => setEditing(null)} />}
+      {managing && <VisaApplicantManager project={managing} onClose={() => setManaging(null)} />}
     </Box>
   );
 }
