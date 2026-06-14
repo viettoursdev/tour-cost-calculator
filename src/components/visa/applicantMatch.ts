@@ -49,7 +49,7 @@ export function guestKeyOf(a: VisaApplicant): GuestKey {
 // Các ô vô hướng được điền-bù khi gộp (giữ giá trị của base nếu đã có).
 const FILL_FIELDS: (keyof VisaApplicant)[] = [
   'name', 'nameNoAccent', 'gender', 'dob', 'passport', 'passportIssue',
-  'passportExpiry', 'countriesVisited', 'note',
+  'passportExpiry', 'countriesVisited', 'failReason', 'note',
 ];
 
 function isEmpty(v: unknown): boolean {

@@ -288,6 +288,15 @@ export function VisaApplicantManager({ project, onClose }: Props) {
                                   onChange={(e) => upd(a.id, { countriesVisited: e.target.value })}
                                   placeholder="VD: Nhật Bản, Hàn Quốc, Singapore…" />
 
+                                <TextField
+                                  size="small" fullWidth multiline minRows={2}
+                                  label="Lý do rớt (nếu khách rớt)"
+                                  value={a.failReason ?? ''}
+                                  onChange={(e) => upd(a.id, { failReason: e.target.value })}
+                                  color={a.result === 'failed' ? 'error' : undefined}
+                                  focused={a.result === 'failed' ? true : undefined}
+                                  placeholder="VD: thiếu chứng minh tài chính, hồ sơ công việc chưa thuyết phục…" />
+
                                 <Box>
                                   <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
                                     <Typography variant="caption" fontWeight={800} color="text.secondary"

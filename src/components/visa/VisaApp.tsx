@@ -12,10 +12,12 @@ import { VisaProcManager } from './VisaProcManager';
 import { VisaProjectManager } from './VisaProjectManager';
 import { VisaTimeline } from './VisaTimeline';
 import { VisaDashboard } from './VisaDashboard';
+import { VisaResultsDashboard } from './VisaResultsDashboard';
 import { VisaGuestHistory } from './VisaGuestHistory';
+import { canViewVisaReports } from './visaAccess';
 import type { VisaProcDoc } from '@/types';
 
-type Tab = 'projects' | 'timeline' | 'dashboard' | 'guests' | 'catalog' | 'procedures';
+type Tab = 'projects' | 'timeline' | 'dashboard' | 'reports' | 'guests' | 'catalog' | 'procedures';
 
 type Props = { onExit: () => void };
 
@@ -24,6 +26,9 @@ export function VisaApp({ onExit }: Props) {
   const [editingProc, setEditingProc] = useState<VisaProcDoc | null>(null);
   const [pendingProjId, setPendingProjId] = useState<string | null>(null);
   const user = useAuthStore((s) => s.currentUser);
+  const canReports = canViewVisaReports(user);
+
+  const openProject = (id: string) => { setPendingProjId(id); setTab('projects'); };
 
   // Mở sâu một dự án / hồ sơ visa khi điều hướng từ hub liên kết hoặc tìm kiếm.
   useEffect(() => {
@@ -75,6 +80,7 @@ export function VisaApp({ onExit }: Props) {
           <Tab value="projects" label="📁 Dự án visa" />
           <Tab value="timeline" label="🗓️ Timeline" />
           <Tab value="dashboard" label="📊 Tổng quan" />
+          {canReports && <Tab value="reports" label="📈 Thống kê visa" />}
           <Tab value="guests" label="🔗 Lịch sử khách" />
           <Tab value="catalog" label="📋 Danh mục giá" />
           <Tab value="procedures" label="🗂️ Hồ sơ thủ tục" />
@@ -87,6 +93,8 @@ export function VisaApp({ onExit }: Props) {
         <VisaTimeline />
       ) : tab === 'dashboard' ? (
         <VisaDashboard />
+      ) : tab === 'reports' ? (
+        canReports ? <VisaResultsDashboard onOpenProject={openProject} /> : <VisaDashboard />
       ) : tab === 'guests' ? (
         <VisaGuestHistory />
       ) : tab === 'catalog' ? (

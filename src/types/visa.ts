@@ -151,6 +151,7 @@ export interface VisaApplicant {
   countriesVisited?: string;    // Các quốc gia đã từng đi
   docStatus: 'missing' | 'submitted' | 'complete';
   result: 'pending' | 'passed' | 'failed' | 'have_visa';
+  failReason?: string;          // Lý do rớt (khi result = failed)
   docs?: ApplicantDoc[];        // Checklist hồ sơ
   passportHistory?: PassportRecord[];   // Hộ chiếu cũ đã thay
   note?: string;                // Lưu ý khác
@@ -177,6 +178,7 @@ export interface VisaProjectDoc {
   pendingCount: number;
   // Timeline (Đợt 2)
   startDate: string | null;
+  departureDate?: string | null;     // Ngày khởi hành chương trình (gom thống kê theo tháng/năm)
   endDate: string | null;
   milestones: VisaMilestone[];
   // Checklist (Đợt 4)

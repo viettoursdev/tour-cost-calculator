@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canViewVisaProject, visibleVisaProjects } from './visaAccess';
+import { canViewVisaProject, visibleVisaProjects, canViewVisaReports } from './visaAccess';
 import type { Role, User, VisaProjectDoc } from '@/types';
 
 const user = (u: string, role: Role): User =>
@@ -48,5 +48,16 @@ describe('visibleVisaProjects', () => {
     expect(visibleVisaProjects(user('op1', 'Operations'), projs)).toHaveLength(2);
     expect(visibleVisaProjects(user('tp', 'Trưởng Phòng'), projs)).toHaveLength(3);
     expect(visibleVisaProjects(user('sale1', 'Sales'), projs)).toHaveLength(0);
+  });
+});
+
+describe('canViewVisaReports', () => {
+  it('only Trưởng Phòng and above', () => {
+    expect(canViewVisaReports(user('tp', 'Trưởng Phòng'))).toBe(true);
+    expect(canViewVisaReports(user('bgd', 'Ban Giám Đốc'))).toBe(true);
+    expect(canViewVisaReports(user('ceo', 'CEO'))).toBe(true);
+    expect(canViewVisaReports(user('op1', 'Operations'))).toBe(false);
+    expect(canViewVisaReports(user('sale1', 'Sales'))).toBe(false);
+    expect(canViewVisaReports(null)).toBe(false);
   });
 });

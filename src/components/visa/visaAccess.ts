@@ -29,3 +29,8 @@ export function canViewVisaProject(user: User | null, p: ProjAccess): boolean {
 export function visibleVisaProjects<T extends ProjAccess>(user: User | null, projects: T[]): T[] {
   return projects.filter((p) => canViewVisaProject(user, p));
 }
+
+/** Chỉ Trưởng Phòng trở lên (TP, BGĐ, CEO) được xem dashboard thống kê tổng hợp. */
+export function canViewVisaReports(user: User | null): boolean {
+  return !!user && (ROLE_RANK[user.role] ?? 0) >= RANK_VIEW_ALL;
+}

@@ -120,6 +120,7 @@ export function newVisaApplicant(): VisaApplicant {
     countriesVisited: '',
     docStatus: 'missing',
     result: 'pending',
+    failReason: '',
     docs: DEFAULT_APPLICANT_DOCS.map((l) => newApplicantDoc(l)),
     note: '',
   };
@@ -158,6 +159,7 @@ export function newVisaProject(user: User | null): VisaProjectDoc {
     haveVisaCount: 0,
     pendingCount: 0,
     startDate: null,
+    departureDate: null,
     endDate: null,
     milestones: DEFAULT_VISA_MILESTONES.map((l) => newVisaMilestone(l)),
     applicants: [],

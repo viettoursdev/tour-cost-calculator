@@ -343,6 +343,12 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
+              type="date" label="Ngày khởi hành" sx={{ flex: 1 }}
+              value={doc.departureDate ?? ''} onChange={(e) => set('departureDate', e.target.value || null)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              helperText="Dùng để gom thống kê theo tháng/năm"
+            />
+            <TextField
               type="date" label="Deadline kết thúc" sx={{ flex: 1 }}
               value={doc.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)}
               slotProps={{ inputLabel: { shrink: true } }}
