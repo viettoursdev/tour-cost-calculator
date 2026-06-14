@@ -13,6 +13,7 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { newVisaProject, VISA_STATUS_META } from './constants';
 import { VisaProjectEditor } from './VisaProjectEditor';
 import { VisaApplicantManager } from './VisaApplicantManager';
+import { canViewVisaProject, visibleVisaProjects } from './visaAccess';
 import type { VisaProjectDoc } from '@/types';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
@@ -45,11 +46,14 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
   const [delId, setDelId] = useState<string | null>(null);
 
   // Auto-mở editor khi được điều hướng từ hub liên kết (chờ projects tải xong).
+  // Chỉ mở nếu user có quyền xem dự án; nếu không thì bỏ qua điều hướng.
   useEffect(() => {
     if (!initialOpenId) return;
     const p = projects.find((x) => x.id === initialOpenId);
-    if (p) { setEditing(p); onConsumeInitial?.(); }
-  }, [initialOpenId, projects, onConsumeInitial]);
+    if (!p) return;
+    if (canViewVisaProject(user, p)) setEditing(p);
+    onConsumeInitial?.();
+  }, [initialOpenId, projects, onConsumeInitial, user]);
 
   const openLinkedQuote = async (cloudId: string) => {
     if (!window.confirm('Rời phần visa để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
@@ -59,16 +63,7 @@ export function VisaProjectManager({ initialOpenId, onConsumeInitial }: Props = 
 
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
 
-  const visible = useMemo(() => {
-    if (!user) return [];
-    return projects.filter((p) =>
-      user.role === 'CEO'
-      || p.createdByUsername === user.u
-      || (p.mainStaff ?? []).includes(user.u)
-      || (p.supportStaff ?? []).includes(user.u)
-      || (p.collaborators ?? []).includes(user.u),
-    );
-  }, [projects, user]);
+  const visible = useMemo(() => visibleVisaProjects(user, projects), [projects, user]);
 
   const owners = useMemo(
     () => [...new Set(visible.map((p) => p.createdByName).filter(Boolean))].sort(),

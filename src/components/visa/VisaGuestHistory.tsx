@@ -5,8 +5,10 @@ import {
 import LaunchIcon from '@mui/icons-material/Launch';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useAuthStore } from '@/stores/authStore';
 import { APPLICANT_RESULT_META, VISA_STATUS_META } from './constants';
 import { guestKeyOf, matchesGuestQuery, sameGuest, type GuestKey } from './applicantMatch';
+import { visibleVisaProjects } from './visaAccess';
 import type { VisaApplicant, VisaProjectDoc } from '@/types';
 
 type Props = {
@@ -24,11 +26,15 @@ function fmtDt(s?: string): string {
 
 /** Tra cứu lịch sử visa của một khách xuyên các dự án (khớp tên/HC/ngày sinh). */
 export function VisaGuestHistory({ seed = null }: Props) {
-  const projects = useVisaProjectStore((s) => s.projects);
+  const allProjects = useVisaProjectStore((s) => s.projects);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
+  const user = useAuthStore((s) => s.currentUser);
   const [search, setSearch] = useState(seed?.passport || seed?.name || '');
 
   useEffect(() => { if (seed) setSearch(seed.passport || seed.name || ''); }, [seed]);
+
+  // Chỉ tra trên các dự án user có quyền xem (tránh lộ khách của dự án không thuộc quyền).
+  const projects = useMemo(() => visibleVisaProjects(user, allProjects), [allProjects, user]);
 
   const hits = useMemo<Hit[]>(() => {
     const q = search.trim();

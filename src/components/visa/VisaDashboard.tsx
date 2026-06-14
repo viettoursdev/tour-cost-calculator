@@ -5,6 +5,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { VISA_STATUS_META, VISA_STATUS_ORDER } from './constants';
+import { visibleVisaProjects } from './visaAccess';
 import type { VisaProjectDoc } from '@/types';
 
 type Agg = { projects: number; apply: number; passed: number; failed: number; haveVisa: number; pending: number };
@@ -17,9 +18,11 @@ function addAgg(a: Agg, p: VisaProjectDoc) {
 const passRate = (a: Agg) => (a.passed + a.failed > 0 ? Math.round((a.passed / (a.passed + a.failed)) * 100) : null);
 
 export function VisaDashboard() {
-  const projects = useVisaProjectStore((s) => s.projects);
+  const allProjects = useVisaProjectStore((s) => s.projects);
   const users = useAuthStore((s) => s.users);
   const user = useAuthStore((s) => s.currentUser);
+  // Chỉ thống kê trên các dự án user có quyền xem.
+  const projects = useMemo(() => visibleVisaProjects(user, allProjects), [allProjects, user]);
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
 
   const visible = useMemo(() => {

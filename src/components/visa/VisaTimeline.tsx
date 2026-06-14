@@ -5,6 +5,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { deadlineMeta, VISA_STATUS_META } from './constants';
+import { visibleVisaProjects } from './visaAccess';
 import { daysUntil, fmtDate } from '@/lib/dateUtils';
 import type { VisaProjectDoc } from '@/types';
 
@@ -13,16 +14,7 @@ export function VisaTimeline() {
   const user = useAuthStore((s) => s.currentUser);
   const [selId, setSelId] = useState<string>('');
 
-  const visible = useMemo(() => {
-    if (!user) return [];
-    return projects.filter((p) =>
-      user.role === 'CEO'
-      || p.createdByUsername === user.u
-      || (p.mainStaff ?? []).includes(user.u)
-      || (p.supportStaff ?? []).includes(user.u)
-      || (p.collaborators ?? []).includes(user.u),
-    );
-  }, [projects, user]);
+  const visible = useMemo(() => visibleVisaProjects(user, projects), [projects, user]);
 
   const selected = visible.find((p) => p.id === selId) ?? visible[0] ?? null;
 
