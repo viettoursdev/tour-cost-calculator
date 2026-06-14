@@ -18,8 +18,55 @@
  * vào ô "AI Worker URL" trong app, bấm Lưu.
  */
 
-const MODEL = 'claude-haiku-4-5-20251001'; // Rẻ & nhanh. Đổi 'claude-sonnet-4-6' (cân bằng) hoặc 'claude-opus-4-8' (cao nhất) nếu cần
+const MODEL = 'claude-haiku-4-5-20251001'; // Rẻ & nhanh — dùng cho /ocr, /ai
+const MODEL_TRANSLATE = 'claude-sonnet-4-6'; // Dịch hồ sơ visa cần chính xác thuật ngữ pháp lý
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+
+// Prompt dịch hồ sơ visa Việt→Anh chuẩn lãnh sự (chắt lọc từ skill visa-translation).
+const VISA_TRANSLATE_PROMPT = [
+  'Bạn là biên dịch viên hồ sơ visa Việt → Anh nộp lãnh sự. Bản dịch được chấm theo 3 tiêu chí:',
+  'CHÍNH XÁC DỮ KIỆN tuyệt đối · ĐÚNG THUẬT NGỮ hành chính/pháp lý · GIỐNG BỐ CỤC bản gốc để viên',
+  'chức đối chiếu. KHÔNG dịch cho "mượt" — ưu tiên trung thực với bản gốc.',
+  '',
+  'ĐẦU RA: CHỈ tiếng Anh, mô phỏng đúng bố cục bản gốc (giữ thứ tự, xuống dòng, bảng ra bảng, đúng',
+  'số cột). KHÔNG song ngữ, KHÔNG thêm tiêu đề/ghi chú/giải thích ngoài bản dịch.',
+  '',
+  'QUY TẮC BẤT DI BẤT DỊCH:',
+  '• Tên người: GIỮ NGUYÊN, không dịch, giữ đủ dấu tiếng Việt (vd "Nguyễn Văn Anh" giữ nguyên).',
+  '  Nếu nguồn ghi không dấu thì theo nguồn — tên phải khớp hộ chiếu.',
+  '• Địa danh: giữ tên riêng tiếng Việt CÓ DẤU, chỉ dịch danh từ đơn vị: phường=Ward, xã=Commune,',
+  '  quận=District, huyện=District, tỉnh=Province, thành phố=City. Vd "Phường Bến Nghé, Quận 1," +',
+  '  " TP. Hồ Chí Minh" → "Ben Nghe Ward, District 1, Ho Chi Minh City".',
+  '• Ngày tháng: GIỮ NGUYÊN giá trị, viết tháng bằng CHỮ để khỏi nhầm: "03/02/2024" → "February 3, 2024".',
+  '• Số tiền/số liệu: copy CHÍNH XÁC từng chữ số, giữ đơn vị gốc (VND), KHÔNG quy đổi ngoại tệ.',
+  '  Sao kê/bảng lương: từng dòng, số dư phải khớp tuyệt đối.',
+  '• Con dấu/chữ ký/ô trống/ảnh: mô tả trong [ngoặc vuông], KHÔNG bịa nội dung. Vd:',
+  '  [Round red seal: People\'s Committee of Ben Nghe Ward] · [Signed] · [No signature] · [Photo] · [QR code].',
+  '• Chỗ không đọc được: ghi [illegible], không đoán.',
+  '• KHÔNG thêm, KHÔNG bớt, KHÔNG biên tập kể cả khi bản gốc có lỗi.',
+  '',
+  'QUỐC HIỆU (nếu có) đặt đầu, căn giữa:',
+  '  SOCIALIST REPUBLIC OF VIETNAM / Independence – Freedom – Happiness',
+  '',
+  'GLOSSARY CHUẨN (bắt buộc dùng đúng):',
+  'Ủy ban nhân dân=People\'s Committee · Công an=Public Security/Police · Cục Quản lý xuất nhập cảnh=',
+  'Immigration Department · Sở=Department · Phòng=Division/Office · Chủ tịch=Chairman · Giám đốc=Director.',
+  'Giấy khai sinh=Birth Certificate · Giấy chứng nhận kết hôn=Marriage Certificate · Giấy xác nhận tình',
+  'trạng hôn nhân=Certificate of Marital Status · Sổ hộ khẩu=Household Registration Book · Giấy xác nhận',
+  'thông tin về cư trú (CT07)=Certificate of Residence Information (Form CT07) · Căn cước công dân=Citizen',
+  'Identity Card · Chứng minh nhân dân=People\'s Identity Card · Hộ chiếu=Passport. Họ và tên=Full name ·',
+  'Giới tính=Sex · Ngày sinh=Date of birth · Nơi sinh=Place of birth · Quê quán=Place of origin · Nguyên',
+  'quán=Native place · Dân tộc=Ethnicity · Quốc tịch=Nationality · Nơi thường trú=Permanent residence ·',
+  'Nơi tạm trú=Temporary residence · Số định danh cá nhân=Personal identification number · Chủ hộ=Head of',
+  'household · Quan hệ với chủ hộ=Relationship to head of household. Tình trạng hôn nhân: Độc thân/Đã kết',
+  'hôn/Đã ly hôn/Góa=Single/Married/Divorced/Widowed. Sao kê tài khoản=Account Statement · Giấy xác nhận',
+  'số dư=Balance Confirmation Letter · Sổ tiết kiệm=Savings Book · Số tài khoản=Account number · Chủ tài',
+  'khoản=Account holder · Số dư đầu kỳ/cuối kỳ=Opening/Closing balance · Hợp đồng lao động=Labor Contract ·',
+  'Giấy xác nhận công tác=Employment Confirmation · Quyết định bổ nhiệm=Appointment Decision · Giấy chứng',
+  'nhận quyền sử dụng đất=Land Use Right Certificate · Giấy phép kinh doanh=Business Registration Certificate.',
+  '',
+  'Chỉ trả về BẢN DỊCH TIẾNG ANH.',
+].join('\n');
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -43,7 +90,7 @@ function mediaTypeFromB64(b64) {
   return 'image/png';
 }
 
-async function callClaude(env, content, maxTokens = 8000) {
+async function callClaude(env, content, maxTokens = 8000, model = MODEL) {
   if (!env.ANTHROPIC_API_KEY) throw new Error('Worker chưa cấu hình ANTHROPIC_API_KEY');
   const r = await fetch(ANTHROPIC_URL, {
     method: 'POST',
@@ -53,7 +100,7 @@ async function callClaude(env, content, maxTokens = 8000) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       max_tokens: maxTokens,
       messages: [{ role: 'user', content }],
     }),
@@ -133,21 +180,8 @@ export default {
       if (path.endsWith('/translate')) {
         if (!body.text) return json({ error: "Thiếu trường 'text'" }, 400);
         const text = await callClaude(env, [
-          {
-            type: 'text',
-            text:
-              'Dịch đoạn văn bản sau từ TIẾNG VIỆT sang TIẾNG ANH.\n' +
-              'QUY TẮC DANH TỪ RIÊNG (bắt buộc): mọi tên riêng — tên người, tên đường/phố, ' +
-              'địa danh, tên công ty, tên khách sạn/nhà hàng — PHẢI viết bằng tiếng Việt ' +
-              'KHÔNG DẤU (bỏ hết dấu thanh sắc/huyền/hỏi/ngã/nặng và dấu mũ/móc; đ→d), ' +
-              'TUYỆT ĐỐI không dịch nghĩa các tên này. ' +
-              'Ví dụ: "Đà Nẵng" → "Da Nang"; "đường Mai Thị Lựu" → "Mai Thi Luu Street"; ' +
-              '"Nguyễn Huệ" → "Nguyen Hue"; "Khách sạn Mường Thanh" → "Muong Thanh Hotel".\n' +
-              'Giữ nguyên định dạng, xuống dòng và thuật ngữ chuyên ngành du lịch/sự kiện.\n' +
-              'Chỉ trả về bản dịch tiếng Anh, không thêm chú thích.\n\n---\n' +
-              body.text,
-          },
-        ]);
+          { type: 'text', text: VISA_TRANSLATE_PROMPT + '\n\n=== VĂN BẢN GỐC (TIẾNG VIỆT) ===\n' + body.text },
+        ], 8000, MODEL_TRANSLATE);
         return json({ text });
       }
 
