@@ -65,7 +65,25 @@ const VISA_TRANSLATE_PROMPT = [
   'Giấy xác nhận công tác=Employment Confirmation · Quyết định bổ nhiệm=Appointment Decision · Giấy chứng',
   'nhận quyền sử dụng đất=Land Use Right Certificate · Giấy phép kinh doanh=Business Registration Certificate.',
   '',
+  'NẾU đầu vào ở dạng Markdown (bảng "|...|", dòng tiêu đề "#", dòng kẻ "---"): GIỮ NGUYÊN',
+  'cấu trúc Markdown đó trong bản dịch — bảng vẫn là bảng đúng số cột & thứ tự cột, chỉ dịch',
+  'phần chữ trong ô. Giữ nguyên các ký hiệu trong [ngoặc vuông] (dịch nội dung bên trong).',
+  '',
   'Chỉ trả về BẢN DỊCH TIẾNG ANH.',
+].join('\n');
+
+// Prompt OCR tái dựng BỐ CỤC bằng Markdown (giữ tiếng Việt, chưa dịch).
+const OCR_STRUCTURE_PROMPT = [
+  'Trích xuất TOÀN BỘ chữ trong ảnh, GIỮ NGUYÊN tiếng Việt (KHÔNG dịch). Tái dựng đúng BỐ CỤC',
+  'bản gốc bằng Markdown để dùng làm bản dịch nộp lãnh sự:',
+  '• Bảng (sao kê, bảng lương, danh sách…) → BẢNG Markdown đúng số cột & thứ tự cột, mỗi dòng 1 hàng.',
+  '• Quốc hiệu / tiêu đề căn giữa → để trên đầu, mỗi phần một dòng.',
+  '• Giữ ĐÚNG thứ tự khối thông tin và xuống dòng như bản gốc; KHÔNG gộp, KHÔNG sắp xếp lại.',
+  '• Con dấu → [Con dấu: <nội dung đọc được>]; chữ ký tay → [Chữ ký]; ô không ký → [Không có chữ ký];',
+  '  ảnh chân dung → [Ảnh]; mã QR → [QR]; vân tay → [Vân tay]; chỗ không đọc được → [không đọc được].',
+  '• Số liệu, ngày tháng, tên riêng, số tài khoản: chép CHÍNH XÁC từng ký tự, KHÔNG sửa, KHÔNG bịa.',
+  '',
+  'Chỉ trả về nội dung trích xuất (Markdown tiếng Việt), không thêm lời giải thích.',
 ].join('\n');
 
 const CORS = {
@@ -166,14 +184,8 @@ export default {
             type: 'image',
             source: { type: 'base64', media_type: mediaTypeFromB64(body.image), data: body.image },
           },
-          {
-            type: 'text',
-            text:
-              'Trích xuất TOÀN BỘ chữ trong ảnh này (chủ yếu tiếng Việt). ' +
-              'Giữ nguyên thứ tự, xuống dòng và bố cục. ' +
-              'Chỉ trả về văn bản trích xuất, không thêm bất kỳ lời giải thích nào.',
-          },
-        ]);
+          { type: 'text', text: OCR_STRUCTURE_PROMPT },
+        ], 8000, MODEL_TRANSLATE);
         return json({ text });
       }
 
