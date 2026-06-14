@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useAuthStore } from '@/stores/authStore';
+import { getRememberedEmail, setRememberedEmail } from '@/auth/rememberedEmail';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 
 const RESEND_SECONDS = 60;
@@ -14,7 +15,7 @@ export function LoginScreen() {
   const pendingCrossDeviceUrl = useAuthStore((s) => s.pendingCrossDeviceUrl);
   const authError = useAuthStore((s) => s.authError);
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => getRememberedEmail() ?? '');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,8 +41,12 @@ export function LoginScreen() {
     setErr(null);
     const out = await useAuthStore.getState().requestSignInLink(email.trim());
     setBusy(false);
-    if (!out.ok) setErr(out.error);
-    else setCooldown(RESEND_SECONDS);
+    if (!out.ok) {
+      setErr(out.error);
+      return;
+    }
+    setRememberedEmail(email);
+    setCooldown(RESEND_SECONDS);
   }
 
   async function submitCrossDevice(e: React.FormEvent) {
@@ -50,7 +55,11 @@ export function LoginScreen() {
     setErr(null);
     const out = await useAuthStore.getState().completeCrossDeviceSignIn(email.trim());
     setBusy(false);
-    if (!out.ok) setErr(out.error);
+    if (!out.ok) {
+      setErr(out.error);
+      return;
+    }
+    setRememberedEmail(email);
   }
 
   async function submitPassword(e: React.FormEvent) {
@@ -59,7 +68,11 @@ export function LoginScreen() {
     setErr(null);
     const out = await useAuthStore.getState().signInWithPassword(email.trim(), password);
     setBusy(false);
-    if (!out.ok) setErr(out.error);
+    if (!out.ok) {
+      setErr(out.error);
+      return;
+    }
+    setRememberedEmail(email);
   }
 
   const containerSx = {
