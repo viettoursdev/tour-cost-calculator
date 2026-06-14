@@ -22,18 +22,9 @@ export function VisaDashboard() {
   const users = useAuthStore((s) => s.users);
   const user = useAuthStore((s) => s.currentUser);
   // Chỉ thống kê trên các dự án user có quyền xem.
-  const projects = useMemo(() => visibleVisaProjects(user, allProjects), [allProjects, user]);
+  // Dự án user có quyền xem (Trưởng Phòng+ thấy tất cả; còn lại: tạo/được add).
+  const visible = useMemo(() => visibleVisaProjects(user, allProjects), [allProjects, user]);
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
-
-  const visible = useMemo(() => {
-    if (!user) return [];
-    return projects.filter((p) =>
-      user.role === 'CEO'
-      || p.createdByUsername === user.u
-      || (p.mainStaff ?? []).includes(user.u)
-      || (p.supportStaff ?? []).includes(user.u)
-      || (p.collaborators ?? []).includes(user.u));
-  }, [projects, user]);
 
   const total = useMemo(() => { const a = emptyAgg(); visible.forEach((p) => addAgg(a, p)); return a; }, [visible]);
 

@@ -24,20 +24,17 @@ describe('canViewVisaProject', () => {
     expect(canViewVisaProject(user('sale1', 'Sales'), proj({ createdByUsername: 'sale1' }))).toBe(true);
   });
 
-  it('assigned Operations+ staff can view', () => {
+  it('anyone added can view regardless of rank', () => {
     expect(canViewVisaProject(user('op1', 'Operations'), proj({ mainStaff: ['op1'] }))).toBe(true);
-    expect(canViewVisaProject(user('op2', 'Operations'), proj({ supportStaff: ['op2'] }))).toBe(true);
-    expect(canViewVisaProject(user('op3', 'Operations'), proj({ collaborators: ['op3'] }))).toBe(true);
+    expect(canViewVisaProject(user('sale1', 'Sales'), proj({ mainStaff: ['sale1'] }))).toBe(true);
+    expect(canViewVisaProject(user('mkt1', 'Marketing'), proj({ supportStaff: ['mkt1'] }))).toBe(true);
+    expect(canViewVisaProject(user('acc1', 'Accountant'), proj({ collaborators: ['acc1'] }))).toBe(true);
+    expect(canViewVisaProject(user('std1', 'Standard'), proj({ supportStaff: ['std1'] }))).toBe(true);
   });
 
-  it('assigned but BELOW Operations cannot view', () => {
-    expect(canViewVisaProject(user('sale1', 'Sales'), proj({ mainStaff: ['sale1'] }))).toBe(false);
-    expect(canViewVisaProject(user('mkt1', 'Marketing'), proj({ supportStaff: ['mkt1'] }))).toBe(false);
-    expect(canViewVisaProject(user('acc1', 'Accountant'), proj({ collaborators: ['acc1'] }))).toBe(false);
-  });
-
-  it('unrelated user cannot view', () => {
+  it('unrelated user (not added, below TP) cannot view', () => {
     expect(canViewVisaProject(user('op9', 'Operations'), proj({ createdByUsername: 'x' }))).toBe(false);
+    expect(canViewVisaProject(user('sale9', 'Sales'), proj({ createdByUsername: 'x' }))).toBe(false);
   });
 });
 
