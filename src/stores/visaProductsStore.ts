@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { fbSaveVisaProducts, fbSubscribeVisaProducts } from '@/lib/firebase';
 import { RATES_INIT } from '@/components/quote/constants';
-import type { VisaProduct } from '@/types';
+import type { VisaProduct, VisaProductVersion } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 
 type State = {
   products: VisaProduct[];
   rates: Record<string, number>;
+  versions: VisaProductVersion[];
   loaded: boolean;
   init: () => Unsubscribe;
   save: (data: { products: VisaProduct[]; rates: Record<string, number> }, savedBy: string) => Promise<void>;
@@ -15,6 +16,7 @@ type State = {
 export const useVisaProductsStore = create<State>()((set) => ({
   products: [],
   rates: { ...RATES_INIT },
+  versions: [],
   loaded: false,
 
   init: () => fbSubscribeVisaProducts((d) => {
@@ -22,6 +24,7 @@ export const useVisaProductsStore = create<State>()((set) => ({
       set((s) => ({
         products: d.products ?? [],
         rates: d.rates && Object.keys(d.rates).length ? { ...s.rates, ...d.rates } : s.rates,
+        versions: d.versions ?? [],
         loaded: true,
       }));
     } else {

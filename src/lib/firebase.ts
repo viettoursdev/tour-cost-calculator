@@ -881,11 +881,22 @@ export async function fbSaveVisaProducts(
   data: { products: VisaProduct[]; rates: Record<string, number> },
   savedBy: string,
 ): Promise<void> {
+  const now = new Date().toISOString();
+  // Lưu phiên bản: đọc doc cũ, đẩy snapshot của lần lưu này lên đầu (cap 20).
+  const prevSnap = await getDoc(VISA_PRODUCTS_DOC);
+  const prev = prevSnap.exists() ? (prevSnap.data() as VisaProductsDoc) : null;
+  const prevVersions = prev?.versions ?? [];
+  const versionNo = (prevVersions[0]?.versionNo ?? 0) + 1;
+  const versions = [
+    { versionNo, savedAt: now, savedBy: savedBy || '', products: data.products },
+    ...prevVersions,
+  ].slice(0, 20);
   await setDoc(VISA_PRODUCTS_DOC, {
     products: data.products,
     rates: data.rates,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
     updatedBy: savedBy || '',
+    versions,
   });
 }
 

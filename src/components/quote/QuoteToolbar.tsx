@@ -26,11 +26,12 @@ import { exportDMCPDF } from '@/lib/exports/exportDMCPDF';
 import { exportPDFImage } from '@/lib/exports/exportPDFImage';
 import { emptyContract } from '@/components/contract/constants';
 import { QuotePrintable } from './QuotePrintable';
+import { FxRatesPanel } from './FxRatesPanel';
 import { QuoteLinksModal } from './QuoteLinksModal';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
-import { fmtOutput, fxRank, fxLabel } from '@/lib/currency';
+import { fmtOutput } from '@/lib/currency';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { computeTotals, fmtVND } from './calc';
@@ -89,10 +90,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const view = useQuoteStore((s) => s.view);
   const patchInfo = useQuoteStore((s) => s.patchInfo);
   const setPax = useQuoteStore((s) => s.setPax);
-  const setRate = useQuoteStore((s) => s.setRate);
-  const syncFxNow = useQuoteStore((s) => s.syncFxNow);
-  const fxSyncedAt = useQuoteStore((s) => s.fxSyncedAt);
-  const fxSyncedBy = useQuoteStore((s) => s.fxSyncedBy);
   const setView = useQuoteStore((s) => s.setView);
   const exportJSON = useQuoteStore((s) => s.exportJSON);
   const importJSON = useQuoteStore((s) => s.importJSON);
@@ -109,8 +106,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const totals = computeTotals(draft);
   const totalCost = totals.totalCost;
 
-  const [showRates, setShowRates] = useState(false);
-  const [fxSyncing, setFxSyncing] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
@@ -135,20 +130,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     else if (key === 'visa') setRateModal({ kind: 'visa' });
     else setRateModal({ kind: 'other', type: key, label });
     setRateAnchor(null);
-  };
-
-  // Thêm một loại tiền tệ custom vào bảng tỷ giá. Nhấn "💾 Lưu tỷ giá" sau đó để
-  // sao lưu lên cloud cho mọi tài khoản (custom currency vẫn được giữ qua sync).
-  const addCustomRate = () => {
-    const raw = window.prompt('Nhập mã tiền tệ cần thêm (vd: MYR, HKD, TWD, CHF):');
-    const code = raw?.trim().toUpperCase();
-    if (!code) return;
-    if (!/^[A-Z]{2,5}$/.test(code)) { alert('⚠ Mã tiền tệ không hợp lệ (2–5 chữ cái, vd MYR).'); return; }
-    if (code === 'VND') { alert('VND là tiền gốc, không cần thêm tỷ giá.'); return; }
-    if (rates[code] != null) { alert(`⚠ ${fxLabel(code)} đã có trong bảng tỷ giá.`); return; }
-    const rate = Number(window.prompt(`Tỷ giá: 1 ${fxLabel(code)} = ? VND`, '0')) || 0;
-    setRate(code, rate);
-    setShowRates(true);
   };
 
   const handleExport = () => {
@@ -591,94 +572,10 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
       <QuoteLinksModal open={linksOpen} onClose={() => setLinksOpen(false)} />
 
-      {/* FX rates — legacy "glass" panel; only for intl + DMC quotes */}
       {(template === 'intl' || template === 'dmc') && (
-      <Box sx={{ mx: 2, mb: 1.5, borderRadius: '12px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(20,150,140,0.18)' }}>
-        <Box
-          onClick={() => setShowRates((v) => !v)}
-          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.25, py: 1.25, cursor: 'pointer' }}
-        >
-          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-            <Box component="span" sx={{ fontSize: 15 }}>💱</Box>
-            <Typography sx={{ fontWeight: 700, fontSize: 14, color: LEGACY.navy, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-              Tỷ giá quy đổi (→ VND)
-            </Typography>
-            <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>
-              Nhấp để {showRates ? 'ẩn' : 'chỉnh sửa'}
-            </Typography>
-          </Stack>
-          <Stack direction="row" alignItems="center" spacing={1.25}>
-            {fxSyncedAt && (
-              <Typography sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 11 }}>
-                ☁️ Cập nhật {new Date(fxSyncedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                {fxSyncedBy ? ` · ${fxSyncedBy}` : ''}
-              </Typography>
-            )}
-            <Button
-              size="small" variant="contained"
-              disabled={fxSyncing}
-              onClick={async (e) => {
-                e.stopPropagation();
-                setFxSyncing(true);
-                try {
-                  await syncFxNow();
-                } catch (err) {
-                  alert('❌ Lưu tỷ giá thất bại (ghi cloud bị chặn?): ' + (err instanceof Error ? err.message : String(err)));
-                } finally {
-                  setFxSyncing(false);
-                }
-              }}
-              sx={{ minWidth: 0, px: 1.5, py: 0.3, fontSize: 12, fontWeight: 800, background: LEGACY.headerGradient }}
-            >
-              {fxSyncing ? 'Đang lưu…' : '💾 Lưu tỷ giá'}
-            </Button>
-            <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 13 }}>{showRates ? '▲' : '▼'}</Box>
-          </Stack>
+        <Box sx={{ mx: 2, mb: 1.5 }}>
+          <FxRatesPanel />
         </Box>
-        {showRates && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, px: 2.25, pb: 2.25, pt: 0.5 }}>
-            {Object.entries(rates)
-              .filter(([c, r]) => c !== 'VND' && typeof r === 'number')
-              .sort((a, b) => fxRank(a[0]) - fxRank(b[0]))
-              .map(([c, r]) => (
-                <Box
-                  key={c}
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: 1,
-                    background: 'rgba(168,230,221,0.25)', border: '1px solid rgba(20,150,140,0.2)',
-                    borderRadius: '10px', px: 1.75, py: 1,
-                  }}
-                >
-                  <Typography sx={{ color: '#0d7a6a', fontSize: 13, fontWeight: 700, minWidth: 36 }}>1 {fxLabel(c)}</Typography>
-                  <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>=</Typography>
-                  <TextField
-                    size="small" type="number" value={r}
-                    onChange={(e) => setRate(c, Number(e.target.value) || 0)}
-                    variant="standard"
-                    slotProps={{
-                      input: {
-                        disableUnderline: true,
-                        endAdornment: <Box component="span" sx={{ color: '#f5a623', fontWeight: 700, fontSize: 13, ml: 0.25 }}>₫</Box>,
-                      },
-                      htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right', fontWeight: 700, fontSize: 14, color: '#f5a623', padding: 0, width: 72 } },
-                    }}
-                  />
-                </Box>
-              ))}
-            <Box
-              onClick={addCustomRate}
-              sx={{
-                display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer',
-                background: 'rgba(20,150,140,0.06)', border: '1px dashed rgba(20,150,140,0.45)',
-                borderRadius: '10px', px: 1.75, py: 1, color: '#0d7a6a', fontSize: 13, fontWeight: 700,
-                '&:hover': { background: 'rgba(20,150,140,0.14)' },
-              }}
-            >
-              ➕ Thêm tỷ giá
-            </Box>
-          </Box>
-        )}
-      </Box>
       )}
       {invoiceOpen && currentUser && draft.template && draft.template !== 'dmc' && (
         <InvoiceModal

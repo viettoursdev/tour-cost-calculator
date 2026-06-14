@@ -4,19 +4,22 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import HistoryIcon from '@mui/icons-material/History';
 import { useAuthStore } from '@/stores/authStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
+import { useQuoteStore } from '@/stores/quoteStore';
+import { FxRatesPanel } from '@/components/quote/FxRatesPanel';
 import { MENU_CUR } from '@/components/menu/constants';
 import {
   VISAP_TYPES, VISA_FEE_PRESET, VISA_LOCS, VISA_VALIDITY, newVisaFee, newVisaProduct,
 } from './constants';
+import { VisaCatalogHistoryModal } from './VisaCatalogHistoryModal';
 import type { VisaFee, VisaProduct } from '@/types';
 
 export function VisaCatalog() {
   const products = useVisaProductsStore((s) => s.products);
-  const rates = useVisaProductsStore((s) => s.rates);
+  // Tỷ giá dùng chung với báo giá (toàn cục) — sửa ở đâu cũng đồng bộ mọi nơi.
+  const rates = useQuoteStore((s) => s.draft.rates);
   const loaded = useVisaProductsStore((s) => s.loaded);
   const user = useAuthStore((s) => s.currentUser);
   const savedBy = user ? `${user.name} (${user.role})` : 'unknown';
@@ -24,16 +27,11 @@ export function VisaCatalog() {
   const [search, setSearch] = useState('');
   const [outCur, setOutCur] = useState('VND');
   const [showFx, setShowFx] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
 
-  const persist = (np?: VisaProduct[], nr?: Record<string, number>) => {
-    void useVisaProductsStore.getState().save({
-      products: np ?? products,
-      rates: nr ?? rates,
-    }, savedBy);
+  const saveProducts = (next: VisaProduct[]) => {
+    void useVisaProductsStore.getState().save({ products: next, rates }, savedBy);
   };
-
-  const saveProducts = (next: VisaProduct[]) => persist(next, undefined);
-  const saveRates = (next: Record<string, number>) => persist(undefined, next);
 
   const addP = () => saveProducts([newVisaProduct(), ...products]);
   const updP = (id: string, patch: Partial<VisaProduct>) =>
@@ -100,9 +98,12 @@ export function VisaCatalog() {
           </Select>
         </Stack>
         <Button size="small" variant="outlined"
-          startIcon={showFx ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           onClick={() => setShowFx((s) => !s)}>
           💱 Tỷ giá
+        </Button>
+        <Button size="small" variant="outlined" startIcon={<HistoryIcon />}
+          onClick={() => setHistOpen(true)}>
+          Lịch sử
         </Button>
         <Box sx={{ flex: 1 }} />
         <Button variant="contained" startIcon={<AddIcon />} onClick={addP}
@@ -112,23 +113,16 @@ export function VisaCatalog() {
       </Stack>
 
       {showFx && (
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="caption" fontWeight={800} color="text.secondary"
-            sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Tỷ giá quy đổi về VND (đồng bộ mọi user)
-          </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 1.25 }}>
-            {MENU_CUR.filter((c) => c !== 'VND').map((c) => (
-              <Stack key={c} direction="row" spacing={0.75} alignItems="center">
-                <Typography fontWeight={800} sx={{ color: '#0d7a6a', width: 34, fontSize: 12 }}>{c}</Typography>
-                <TextField size="small" type="number" value={rates[c] ?? 0}
-                  onChange={(e) => saveRates({ ...rates, [c]: +e.target.value })}
-                  sx={{ '& .MuiInputBase-input': { textAlign: 'right', fontSize: 12 } }} />
-              </Stack>
-            ))}
-          </Box>
-        </Paper>
+        <Box sx={{ mb: 2 }}>
+          <FxRatesPanel defaultOpen />
+        </Box>
       )}
+
+      <VisaCatalogHistoryModal
+        open={histOpen}
+        onClose={() => setHistOpen(false)}
+        onRestore={(restored) => { saveProducts(restored); setHistOpen(false); }}
+      />
 
       {!loaded && (
         <Box sx={{ textAlign: 'center', py: 8, color: 'text.disabled' }}>⏳ Đang tải...</Box>

@@ -24,11 +24,20 @@ export interface VisaProduct {
   active: boolean;
 }
 
+/** Một bản lưu lịch sử của bảng giá visa (snapshot products tại thời điểm lưu). */
+export interface VisaProductVersion {
+  versionNo: number;
+  savedAt: string;
+  savedBy: string;
+  products: VisaProduct[];
+}
+
 export interface VisaProductsDoc {
   products: VisaProduct[];
   rates: Record<string, number>;
   updatedAt?: string;
   updatedBy?: string;
+  versions?: VisaProductVersion[];
 }
 
 export type VisaProcKind = 'enterprise' | 'applicant' | 'content' | 'relative' | 'custom';
