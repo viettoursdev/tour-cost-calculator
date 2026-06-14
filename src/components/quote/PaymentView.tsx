@@ -25,6 +25,11 @@ function defaultRec(): PaymentRecord {
   return { supplier: '', installments: [], note: '' };
 }
 
+// Số tiền có dấu chấm phân tách hàng nghìn (vi-VN), không kèm ký hiệu tiền tệ.
+const groupVN = (n: number): string => (n ? Math.round(n).toLocaleString('vi-VN') : '');
+// Bỏ mọi ký tự không phải chữ số (dấu chấm, khoảng trắng…) → số nguyên.
+const parseAmount = (s: string): number => Number(s.replace(/\D/g, '')) || 0;
+
 export function PaymentView() {
   const draft = useQuoteStore((s) => s.draft);
   const tourName = draft.info.name ?? '';
@@ -287,13 +292,13 @@ export function PaymentView() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <TextField
-                        type="number"
-                        value={ci.amount}
+                        value={groupVN(ci.amount)}
                         onChange={(e) => {
-                          const v = +e.target.value;
+                          const v = parseAmount(e.target.value);
                           if (ci.custom) editCustomAmount(ci.key, v);
                           else setCustomAmount(ci.key, v);
                         }}
+                        slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                         size="small"
                         variant="standard"
                         sx={{
@@ -401,9 +406,9 @@ export function PaymentView() {
                               sx={{ width: 120, '& .MuiInputBase-input': { fontSize: 12, py: 0.5 } }}
                             />
                             <TextField
-                              type="number"
-                              value={inst.amount}
-                              onChange={(e) => updInstallment(ci.key, idx, { amount: +e.target.value })}
+                              value={groupVN(inst.amount)}
+                              onChange={(e) => updInstallment(ci.key, idx, { amount: parseAmount(e.target.value) })}
+                              slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                               size="small"
                               variant="outlined"
                               sx={{ width: 130, '& .MuiInputBase-input': { fontSize: 13, fontWeight: 700, py: 0.5 } }}
