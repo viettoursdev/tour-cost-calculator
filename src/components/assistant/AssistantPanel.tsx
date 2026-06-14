@@ -1,0 +1,142 @@
+import { useEffect, useRef, useState } from 'react';
+import {
+  Box, Drawer, IconButton, Link, Stack, TextField, Typography,
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import SendIcon from '@mui/icons-material/Send';
+import { runAssistant } from '@/lib/assistant/agent';
+import { LEGACY } from '@/theme';
+import type { ChatMessage, Citation } from '@/lib/aiWorker';
+
+type UiMsg = { role: 'user' | 'assistant'; text: string; pending?: boolean; citations?: Citation[] };
+
+const SUGGESTIONS = [
+  'Tìm báo giá đi Nhật Bản',
+  'Khách hàng ABC đã đi tour nào?',
+  'Margin trung bình các báo giá nước ngoài?',
+  'Gợi ý lịch trình 4N3Đ Đà Nẵng cho đoàn 20 khách',
+];
+
+function dedupeCitations(cs: Citation[]): Citation[] {
+  const seen = new Set<string>();
+  const out: Citation[] = [];
+  for (const c of cs) {
+    const key = c.url ?? c.title ?? '';
+    if (!key || seen.has(key)) continue;
+    seen.add(key); out.push(c);
+  }
+  return out;
+}
+
+export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [history, setHistory] = useState<ChatMessage[]>([]); // định dạng agent (gồm tool blocks)
+  const [ui, setUi] = useState<UiMsg[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [ui, activity]);
+
+  const send = async (text: string) => {
+    const q = text.trim();
+    if (!q || busy) return;
+    setInput('');
+    const nextHistory: ChatMessage[] = [...history, { role: 'user', content: q }];
+    setUi((p) => [...p, { role: 'user', text: q }, { role: 'assistant', text: '', pending: true }]);
+    setBusy(true);
+    try {
+      const r = await runAssistant(nextHistory, { web: false, onActivity: setActivity });
+      setHistory(r.messages);
+      setUi((p) => {
+        const copy = [...p];
+        copy[copy.length - 1] = { role: 'assistant', text: r.text || '(không có nội dung)', citations: dedupeCitations(r.citations) };
+        return copy;
+      });
+    } catch (e) {
+      setUi((p) => {
+        const copy = [...p];
+        copy[copy.length - 1] = { role: 'assistant', text: '❌ ' + (e as Error).message };
+        return copy;
+      });
+    } finally {
+      setBusy(false); setActivity('');
+    }
+  };
+
+  return (
+    <Drawer anchor="right" open={open} onClose={onClose}
+      slotProps={{ paper: { sx: { width: { xs: '100%', sm: 440 }, display: 'flex', flexDirection: 'column' } } }}>
+      <Box sx={{ px: 2, py: 1.5, background: LEGACY.headerGradient, color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ fontSize: 20 }}>🤖</Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography fontWeight={900}>Trợ lý ảo Viettours</Typography>
+          <Typography variant="caption" sx={{ opacity: 0.85 }}>Tra cứu · phân tích · tư vấn (theo quyền của bạn)</Typography>
+        </Box>
+        <IconButton onClick={onClose} sx={{ color: '#fff' }}><CloseIcon /></IconButton>
+      </Box>
+
+      <Box ref={scrollRef} sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: '#f7faf9' }}>
+        {ui.length === 0 ? (
+          <Box sx={{ color: 'text.secondary' }}>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              Hỏi tôi về dữ liệu nội bộ (báo giá, lịch trình, khách hàng, NCC…) hoặc nhờ tư vấn nghiệp vụ.
+            </Typography>
+            <Stack spacing={1}>
+              {SUGGESTIONS.map((s) => (
+                <Box key={s} onClick={() => void send(s)}
+                  sx={{ cursor: 'pointer', border: '1px solid rgba(20,150,140,0.3)', borderRadius: 2, px: 1.5, py: 1,
+                    bgcolor: '#fff', fontSize: 13, '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+                  💬 {s}
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        ) : (
+          <Stack spacing={1.5}>
+            {ui.map((m, i) => (
+              <Box key={i} sx={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <Box sx={{
+                  maxWidth: '88%', px: 1.75, py: 1.25, borderRadius: 2.5, fontSize: 14, lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  bgcolor: m.role === 'user' ? '#0d7a6a' : '#fff',
+                  color: m.role === 'user' ? '#fff' : 'text.primary',
+                  border: m.role === 'user' ? 'none' : '1px solid rgba(15,58,74,0.12)',
+                }}>
+                  {m.pending ? <Typography variant="body2" color="text.secondary">{activity || 'Đang suy nghĩ…'}</Typography> : m.text}
+                  {m.citations && m.citations.length > 0 && (
+                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed rgba(15,58,74,0.2)' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Nguồn:</Typography>
+                      <Stack spacing={0.25}>
+                        {m.citations.map((c, k) => (
+                          <Link key={k} href={c.url} target="_blank" rel="noreferrer" variant="caption" sx={{ wordBreak: 'break-all' }}>
+                            {c.title || c.url}
+                          </Link>
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        )}
+      </Box>
+
+      <Box sx={{ p: 1.5, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+        <TextField
+          fullWidth multiline maxRows={4} size="small" value={input} disabled={busy}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input); } }}
+          placeholder="Nhập câu hỏi… (Enter để gửi)"
+        />
+        <IconButton color="primary" disabled={busy || !input.trim()} onClick={() => void send(input)}
+          sx={{ bgcolor: '#0d7a6a', color: '#fff', '&:hover': { bgcolor: '#0a5c50' }, '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)' } }}>
+          <SendIcon />
+        </IconButton>
+      </Box>
+    </Drawer>
+  );
+}

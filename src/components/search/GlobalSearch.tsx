@@ -13,14 +13,12 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
 import { filterRank } from '@/lib/search';
+import { buildSearchIndex, type IndexItem, type IndexKind } from '@/lib/searchIndex';
 import { LEGACY } from '@/theme';
 import type { Template } from '@/types';
 
-type Kind =
-  | 'quoteDom' | 'quoteIntl' | 'dmc' | 'itinerary' | 'menu'
-  | 'contract' | 'visaProject' | 'visaProc' | 'customer' | 'ncc';
-
-type SItem = { kind: Kind; id: string; title: string; subtitle: string; text: string };
+type Kind = IndexKind;
+type SItem = IndexItem;
 
 const META: Record<Kind, { label: string; icon: string; color: string }> = {
   quoteDom:    { label: 'Báo giá nội địa', icon: '📋', color: '#0d7a6a' },
@@ -78,50 +76,10 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
 
   useEffect(() => { if (open) { setQ(''); setScope('all'); setActive(0); setTimeout(() => inputRef.current?.focus(), 60); } }, [open]);
 
-  const index = useMemo<SItem[]>(() => {
-    const out: SItem[] = [];
-    quotes.forEach((x) => out.push({
-      kind: x.template === 'domestic' ? 'quoteDom' : 'quoteIntl', id: x.cloudId,
-      title: x.name, subtitle: [x.quoteCode, x.customerName].filter(Boolean).join(' · '),
-      text: [x.name, x.quoteCode, x.customerName].filter(Boolean).join(' '),
-    }));
-    dmcQuotes.forEach((x) => out.push({
-      kind: 'dmc', id: x.cloudId, title: x.name, subtitle: x.quoteCode ?? '',
-      text: [x.name, x.quoteCode, x.customerName].filter(Boolean).join(' '),
-    }));
-    contracts.forEach((c) => out.push({
-      kind: 'contract', id: c.id, title: c.tourName || c.contractNo,
-      subtitle: [c.contractNo, c.tourDest].filter(Boolean).join(' · '),
-      text: [c.tourName, c.contractNo, c.tourDest, c.partyB?.name].filter(Boolean).join(' '),
-    }));
-    customers.forEach((c) => out.push({
-      kind: 'customer', id: c.id, title: c.name,
-      subtitle: [c.taxCode, c.contacts?.[0]?.name].filter(Boolean).join(' · '),
-      text: [c.name, c.taxCode, ...(c.contacts ?? []).map((k) => `${k.name} ${k.phone}`)].filter(Boolean).join(' '),
-    }));
-    suppliers.forEach((n) => out.push({
-      kind: 'ncc', id: n.id, title: n.name,
-      subtitle: [n.location, (n.sectors ?? []).join(', ')].filter(Boolean).join(' · '),
-      text: [n.name, n.location, (n.sectors ?? []).join(' '), n.note].filter(Boolean).join(' '),
-    }));
-    itineraries.forEach((x) => out.push({
-      kind: 'itinerary', id: x.id, title: x.title, subtitle: [x.code, x.destination].filter(Boolean).join(' · '),
-      text: [x.title, x.code, x.destination].filter(Boolean).join(' '),
-    }));
-    menus.forEach((x) => out.push({
-      kind: 'menu', id: x.id, title: x.title, subtitle: [x.code, x.destination].filter(Boolean).join(' · '),
-      text: [x.title, x.code, x.destination].filter(Boolean).join(' '),
-    }));
-    visaProjects.forEach((p) => out.push({
-      kind: 'visaProject', id: p.id, title: p.name || p.code, subtitle: [p.code, p.country].filter(Boolean).join(' · '),
-      text: [p.name, p.code, p.country].filter(Boolean).join(' '),
-    }));
-    visaProcs.forEach((x) => out.push({
-      kind: 'visaProc', id: x.id, title: x.title, subtitle: [x.code, x.country].filter(Boolean).join(' · '),
-      text: [x.title, x.code, x.country].filter(Boolean).join(' '),
-    }));
-    return out;
-  }, [quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs]);
+  const index = useMemo<SItem[]>(
+    () => buildSearchIndex({ quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs }),
+    [quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs],
+  );
 
   const scopedIndex = useMemo<SItem[]>(() => {
     if (scope === 'all') return index;

@@ -20,6 +20,8 @@
 
 const MODEL = 'claude-haiku-4-5-20251001'; // Rẻ & nhanh — dùng cho /ocr, /ai
 const MODEL_TRANSLATE = 'claude-sonnet-4-6'; // Dịch hồ sơ visa cần chính xác thuật ngữ pháp lý
+const MODEL_ASSISTANT = 'claude-sonnet-4-6'; // Trợ lý ảo: tra cứu, phân tích, tư vấn
+const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
 // Prompt dịch hồ sơ visa Việt→Anh chuẩn lãnh sự (chắt lọc từ skill visa-translation).
@@ -201,6 +203,34 @@ export default {
         if (!body.prompt) return json({ error: "Thiếu trường 'prompt'" }, 400);
         const text = await callClaude(env, [{ type: 'text', text: body.prompt }]);
         return json({ text });
+      }
+
+      // Trợ lý ảo: vòng lặp tool-use chạy phía client. Trả NGUYÊN message của Claude
+      // (content blocks gồm tool_use, stop_reason, usage) để client thực thi tool cục bộ.
+      if (path.endsWith('/chat')) {
+        if (!env.ANTHROPIC_API_KEY) return json({ error: 'Worker chưa cấu hình ANTHROPIC_API_KEY' }, 500);
+        if (!Array.isArray(body.messages)) return json({ error: "Thiếu trường 'messages'" }, 400);
+        const tools = Array.isArray(body.tools) ? [...body.tools] : [];
+        if (body.web) tools.push(WEB_SEARCH_TOOL);
+        const payload = {
+          model: MODEL_ASSISTANT,
+          max_tokens: 4096,
+          messages: body.messages,
+          ...(body.system ? { system: body.system } : {}),
+          ...(tools.length ? { tools } : {}),
+        };
+        const r = await fetch(ANTHROPIC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!r.ok) return json({ error: data?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
+        return json(data);
       }
 
       return json({ error: 'Endpoint không hỗ trợ: ' + path }, 404);

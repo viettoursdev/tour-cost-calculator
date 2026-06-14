@@ -32,6 +32,21 @@ export function setAIWorker(url: string): void {
   }
 }
 
+// ── Trợ lý ảo (Anthropic Messages, tool-use) ──
+export interface Citation { type?: string; url?: string; title?: string; cited_text?: string }
+export interface ContentBlock {
+  type: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+  tool_use_id?: string;
+  content?: unknown;
+  citations?: Citation[];
+  [k: string]: unknown;
+}
+export interface ChatMessage { role: 'user' | 'assistant'; content: string | ContentBlock[] }
+
 export interface AIWorkerBody {
   prompt?: string;
   origin?: string;
@@ -39,6 +54,11 @@ export interface AIWorkerBody {
   mode?: 'driving' | 'walking' | 'bicycling' | 'transit';
   image?: string; // base64 (no data URL prefix) — for /ocr
   text?: string;  // VI source text — for /translate
+  // /chat
+  system?: string;
+  messages?: ChatMessage[];
+  tools?: unknown[];
+  web?: boolean;
 }
 
 export interface AIWorkerResponse {
@@ -46,9 +66,13 @@ export interface AIWorkerResponse {
   distance?: string;
   duration?: string;
   error?: string;
+  // /chat — message của Claude
+  content?: ContentBlock[];
+  stop_reason?: string;
+  usage?: Record<string, unknown>;
 }
 
-export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate';
+export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate' | '/chat';
 
 /** Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }. */
 export async function uploadFileToWorker(file: File): Promise<{ key: string; name: string }> {

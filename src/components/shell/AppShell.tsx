@@ -9,6 +9,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SearchIcon from '@mui/icons-material/Search';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
+import { AssistantPanel } from '@/components/assistant/AssistantPanel';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { NotificationToaster } from '@/components/notifications/NotificationToaster';
@@ -32,6 +33,7 @@ export function AppShell() {
   const centerOpen = useNotificationStore((s) => s.centerOpen);
   const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
@@ -92,6 +94,11 @@ export function AppShell() {
                   Tìm
                 </Button>
               </Tooltip>
+              <Tooltip title="Trợ lý ảo">
+                <Button startIcon={<span>🤖</span>} sx={pillSx} onClick={() => setAssistantOpen(true)}>
+                  Trợ lý
+                </Button>
+              </Tooltip>
               <NotificationBell />
               <Tooltip title="Đăng xuất">
                 <IconButton
@@ -131,6 +138,7 @@ export function AppShell() {
       <NotificationToaster />
       <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
     </Box>
   );
 }
