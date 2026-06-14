@@ -131,6 +131,14 @@ export interface ApplicantDoc {
   checked: boolean;
 }
 
+/** Một bản ghi hộ chiếu cũ (lưu lại khi khách đổi hộ chiếu mới). */
+export interface PassportRecord {
+  passport?: string;
+  issue?: string;      // Ngày cấp
+  expiry?: string;     // Ngày hết hạn
+  replacedAt: string;  // Thời điểm bị thay bằng hộ chiếu mới
+}
+
 export interface VisaApplicant {
   id: string;
   name: string;                 // Họ tên (có dấu)
@@ -144,6 +152,7 @@ export interface VisaApplicant {
   docStatus: 'missing' | 'submitted' | 'complete';
   result: 'pending' | 'passed' | 'failed' | 'have_visa';
   docs?: ApplicantDoc[];        // Checklist hồ sơ
+  passportHistory?: PassportRecord[];   // Hộ chiếu cũ đã thay
   note?: string;                // Lưu ý khác
 }
 

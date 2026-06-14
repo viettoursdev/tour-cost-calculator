@@ -45,3 +45,74 @@ export function matchesGuestQuery(a: GuestKey, query: string): boolean {
 export function guestKeyOf(a: VisaApplicant): GuestKey {
   return { name: a.name, passport: a.passport, dob: a.dob };
 }
+
+// Các ô vô hướng được điền-bù khi gộp (giữ giá trị của base nếu đã có).
+const FILL_FIELDS: (keyof VisaApplicant)[] = [
+  'name', 'nameNoAccent', 'gender', 'dob', 'passport', 'passportIssue',
+  'passportExpiry', 'countriesVisited', 'note',
+];
+
+function isEmpty(v: unknown): boolean {
+  return v == null || (typeof v === 'string' && v.trim() === '');
+}
+
+/**
+ * Gộp `extra` vào `base`: GIỮ base làm gốc, chỉ điền các ô đang trống của base
+ * bằng giá trị từ extra. Checklist/lịch sử hộ chiếu giữ của base (bù nếu base thiếu).
+ */
+export function mergeApplicant(base: VisaApplicant, extra: VisaApplicant): VisaApplicant {
+  const out: VisaApplicant = { ...base };
+  for (const f of FILL_FIELDS) {
+    if (isEmpty(out[f]) && !isEmpty(extra[f])) {
+      (out as unknown as Record<string, unknown>)[f] = extra[f];
+    }
+  }
+  if ((!out.docs || out.docs.length === 0) && extra.docs?.length) out.docs = extra.docs.map((d) => ({ ...d }));
+  if ((!out.passportHistory || out.passportHistory.length === 0) && extra.passportHistory?.length) {
+    out.passportHistory = extra.passportHistory.map((p) => ({ ...p }));
+  }
+  return out;
+}
+
+/**
+ * Loại khách trùng trong danh sách: giữ bản đầu tiên, GỘP thông tin từ các bản
+ * trùng (theo {@link sameGuest}) vào nó. Trả về danh sách mới + số bản đã gộp/bỏ.
+ */
+export function dedupeApplicants(list: VisaApplicant[]): { list: VisaApplicant[]; removed: number } {
+  const kept: VisaApplicant[] = [];
+  let removed = 0;
+  for (const a of list) {
+    const idx = kept.findIndex((k) => sameGuest(guestKeyOf(k), guestKeyOf(a)));
+    if (idx === -1) {
+      kept.push(a);
+    } else {
+      kept[idx] = mergeApplicant(kept[idx], a);
+      removed++;
+    }
+  }
+  return { list: kept, removed };
+}
+
+/**
+ * Gộp danh sách `incoming` (vd từ Excel) vào `current`: bản trùng được gộp vào
+ * bản hiện có, bản mới được thêm. Trả về danh sách + số thêm mới & số gộp.
+ */
+export function mergeIncoming(
+  current: VisaApplicant[],
+  incoming: VisaApplicant[],
+): { list: VisaApplicant[]; added: number; merged: number } {
+  const out = [...current];
+  let added = 0;
+  let merged = 0;
+  for (const a of incoming) {
+    const idx = out.findIndex((k) => sameGuest(guestKeyOf(k), guestKeyOf(a)));
+    if (idx === -1) {
+      out.push(a);
+      added++;
+    } else {
+      out[idx] = mergeApplicant(out[idx], a);
+      merged++;
+    }
+  }
+  return { list: out, added, merged };
+}
