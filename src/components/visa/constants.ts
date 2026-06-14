@@ -15,7 +15,7 @@ export const VISA_VALIDITY = [
   'Multi 2 năm', 'Multi 5 năm', 'Multi 10 năm',
 ] as const;
 
-export const VISA_LOCS = ['HCM', 'HAN', 'DAD'] as const;
+export const VISA_LOCS = ['HCM', 'HAN', 'DAD', 'Toàn quốc'] as const;
 
 // Gợi ý quốc gia hay xin visa (Autocomplete freeSolo — vẫn nhập tự do được).
 export const VISA_COUNTRIES = [
@@ -147,7 +147,8 @@ export function newVisaProject(user: User | null): VisaProjectDoc {
 export const VISA_FEE_PRESET = [
   'Chi phí lãnh sự', 'Chi phí trung tâm tiếp nhận', 'Chi phí dịch thuật',
   'Chi phí công chứng', 'Chi phí hợp pháp hoá lãnh sự', 'Chi phí chuyển phát',
-  'Chi phí in ấn', 'Chi phí công ty trung gian', 'Chi phí dịch vụ', 'Chi phí khác',
+  'Chi phí in ấn', 'Chi phí công ty trung gian', 'Chi phí dịch vụ',
+  'Phí thanh toán thẻ', 'Chi phí khác',
 ] as const;
 
 export const PROC_KIND_ICON: Record<VisaProcKind, string> = {
