@@ -105,7 +105,7 @@ Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tool
 | Document/Collection | Content |
 |--------------------|---------|
 | `viettours/master_rate_card` | Shared rate card (hotels, transport, staff, etc.) |
-| `viettours/fx_rates` | Shared FX rates (→ VND), synced live to all accounts |
+| `viettours/fx_rates` | Tỷ giá ĐỒNG BỘ (→ VND). Chỉ CEO ghi (nút "Đồng bộ tỷ giá" → `pushGlobalRates`); chỉ seed cho báo giá MỚI. Mỗi báo giá giữ `draft.rates` riêng (lưu trong từng bản lịch sử) — bản đồng bộ KHÔNG ghi đè báo giá cũ. DMC linked mirror tỷ giá báo giá khi load. |
 | `viettours/user_accounts` | All user accounts |
 | `viettours/ncc_master` | Supplier list |
 | `viettours/contracts_master` | All contracts |

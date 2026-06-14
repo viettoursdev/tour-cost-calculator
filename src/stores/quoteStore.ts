@@ -51,6 +51,8 @@ type QuoteState = {
   view: QuoteViewKey;
   snapshots: Snapshot[];
   currentUsername: string | null;
+  /** Tỷ giá đồng bộ TOÀN CỤC (chỉ seed báo giá mới; tách khỏi draft.rates). */
+  syncedRates: Record<string, number>;
   fxSyncedAt: string | null;
   fxSyncedBy: string | null;
   /** Lịch sử undo/redo của draft báo giá (trong phiên). */
@@ -59,7 +61,12 @@ type QuoteState = {
 
   init: (user: User) => void;
   reset: () => void;
-  syncFxNow: () => Promise<void>;
+  /** CEO: ghi tỷ giá lên cloud đồng bộ toàn hệ thống (áp cho báo giá mới). */
+  pushGlobalRates: (rates: Record<string, number>) => Promise<void>;
+  /** Sửa 1 dòng trong bảng tỷ giá đồng bộ (global scope, trước khi Đồng bộ). */
+  setSyncedRate: (cur: string, rate: number) => void;
+  /** "Lưu tỷ giá": ghim tỷ giá hiện tại vào báo giá đang mở (local). */
+  saveDraftRatesLocal: () => void;
   undoDraft: () => void;
   redoDraft: () => void;
 
@@ -114,11 +121,11 @@ type QuoteState = {
  */
 const persistKey = (username: string) => `vte_quote_draft_${username}`;
 
-// Shared FX rates. Editing is LOCAL only; pressing "Lưu tỷ giá" (syncFxNow)
-// writes the table to the cloud doc (viettours/fx_rates) — that saved version is
-// the canonical record every user adopts, and only a NEWER save overrides it.
-// `lastFxPushAt` = timestamp of our own last save, so we skip our own echo and
-// adopt any snapshot newer than it.
+// Tỷ giá ĐỒNG BỘ toàn cục (viettours/fx_rates). CHỈ CEO bấm "Đồng bộ tỷ giá"
+// (pushGlobalRates) mới ghi bản này — và nó chỉ seed cho BÁO GIÁ MỚI. Tỷ giá của
+// từng báo giá (draft.rates) độc lập, không bị bản đồng bộ ghi đè.
+// `lastFxPushAt` = timestamp lần ghi của chính mình, để bỏ qua echo và chỉ nhận
+// snapshot mới hơn.
 let lastFxPushAt: string | null = null;
 
 // Keep only numeric currency entries — defends against polluted sources (e.g. a
@@ -146,14 +153,21 @@ function writeFxRatesLS(rates: Record<string, number>): void {
 }
 
 /**
- * Tỷ giá TOÀN CỤC, áp dụng cho mọi báo giá / tour / tab / tài khoản.
- * Nguồn duy nhất = baseline RATES_INIT ⟵ cache cloud (localStorage) ⟵ tỷ giá đang
- * có trong bộ nhớ (gồm cả chỉnh sửa chưa lưu). Mọi draft (load cloud, đổi template,
- * tạo mới, import) đều phải seed tỷ giá qua hàm này để KHÔNG dùng tỷ giá nhúng cũ
- * của từng báo giá → tránh "mỗi tab/tour một tỷ giá khác nhau".
+ * Tỷ giá đồng bộ TOÀN CỤC. Nguồn = RATES_INIT ⟵ cache cloud (localStorage) ⟵ tỷ
+ * giá đồng bộ đang giữ trong bộ nhớ (từ subscription cloud). CHỈ dùng để seed cho
+ * BÁO GIÁ MỚI — không áp đè lên báo giá cũ đã lưu.
  */
-function mergeGlobalRates(currentRates: Record<string, number>): Record<string, number> {
-  return { ...RATES_INIT, ...(readFxRatesLS() ?? {}), ...currentRates, VND: 1 };
+function seedNewRates(synced?: Record<string, number>): Record<string, number> {
+  return { ...RATES_INIT, ...(readFxRatesLS() ?? {}), ...(synced ?? {}), VND: 1 };
+}
+
+/**
+ * Giữ NGUYÊN tỷ giá đã lưu của một báo giá (load cloud / import / mở lại). Chỉ bù
+ * các mã tiền tệ còn thiếu bằng RATES_INIT, KHÔNG kéo tỷ giá đồng bộ hiện hành vào
+ * → báo giá cũ luôn dùng đúng tỷ giá tại thời điểm nó được lưu.
+ */
+function keepSavedRates(saved?: Record<string, number>): Record<string, number> {
+  return { ...RATES_INIT, ...(saved ?? {}), VND: 1 };
 }
 
 /**
@@ -188,6 +202,7 @@ export const useQuoteStore = create<QuoteState>()(
         view: 'cost',
         snapshots: [],
         currentUsername: null,
+        syncedRates: { ...RATES_INIT },
         fxSyncedAt: null,
         fxSyncedBy: null,
         draftPast: [],
@@ -241,13 +256,13 @@ export const useQuoteStore = create<QuoteState>()(
             storedDraft = null;
             try { localStorage.removeItem(key); } catch { /* ignore */ }
           }
-          // Global FX rates live in their own key — apply them on top of whatever
-          // draft we end up with (so DMC drafts, which are dropped above, still
-          // keep the shared rate table after reload).
+          // Tỷ giá đồng bộ toàn cục nạp vào `syncedRates` (chỉ để seed báo giá MỚI).
+          // KHÔNG áp đè lên draft đang dở — draft giữ đúng tỷ giá riêng của nó.
           const fxLS = readFxRatesLS();
           const baseDraft = storedDraft ?? EMPTY_DRAFT;
           muted(() => set({
-            draft: fxLS ? { ...baseDraft, rates: { ...baseDraft.rates, ...fxLS, VND: 1 } } : baseDraft,
+            draft: baseDraft,
+            syncedRates: { ...RATES_INIT, ...(fxLS ?? {}), VND: 1 },
             snapshots: readUserSnapshots(user.u),
             currentUsername: user.u,
             view: storedView,
@@ -264,7 +279,7 @@ export const useQuoteStore = create<QuoteState>()(
           // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
           if (tpl.kind === 'alt' || !tpl.init) {
             muted(() => set((s) => ({
-              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: mergeGlobalRates(s.draft.rates) },
+              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: seedNewRates(s.syncedRates) },
               view: 'cost',
               ...CLEAR_HIST,
             })));
@@ -285,7 +300,7 @@ export const useQuoteStore = create<QuoteState>()(
               items,
               catEnabled,
               currentQuoteId: null,
-              rates: mergeGlobalRates(s.draft.rates),
+              rates: seedNewRates(s.syncedRates),
               ...(template === 'dmc' ? dmcDefaults() : {}),
             },
             view: 'cost',
@@ -294,7 +309,7 @@ export const useQuoteStore = create<QuoteState>()(
         },
 
         abandon: () => {
-          muted(() => set((s) => ({ draft: { ...EMPTY_DRAFT, rates: mergeGlobalRates(s.draft.rates) }, view: 'cost', ...CLEAR_HIST })));
+          muted(() => set((s) => ({ draft: { ...EMPTY_DRAFT, rates: seedNewRates(s.syncedRates) }, view: 'cost', ...CLEAR_HIST })));
         },
 
         setView: (v) =>
@@ -311,10 +326,14 @@ export const useQuoteStore = create<QuoteState>()(
 
         setPax: (n) => set((s) => ({ draft: { ...s.draft, pax: Math.max(1, n) } })),
 
-        // Editing only updates the local working table; nothing is saved/synced
-        // until the user presses "Lưu tỷ giá" (syncFxNow).
+        // Sửa tỷ giá của BÁO GIÁ đang mở (per-quote, lưu hành nội bộ trong báo giá đó).
         setRate: (cur, rate) =>
           set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } })),
+
+        // Sửa 1 dòng bảng tỷ giá ĐỒNG BỘ (global). Chưa ghi cloud cho tới khi
+        // "Đồng bộ tỷ giá" (pushGlobalRates) được bấm.
+        setSyncedRate: (cur, rate) =>
+          set((s) => ({ syncedRates: { ...s.syncedRates, [cur]: rate, VND: 1 } })),
 
         setRatesSynced: (rates, pushedAt, pushedBy, persistLocal = true) => {
           // Always record sync meta (for the "cập nhật lúc…" indicator).
@@ -323,21 +342,30 @@ export const useQuoteStore = create<QuoteState>()(
           // debounced pushes) — anything at/older than our last push — and adopt
           // any snapshot newer than it. Cross-tab updates (no pushedAt) always apply.
           if (pushedAt && lastFxPushAt && pushedAt <= lastFxPushAt) return;
-          // Đồng bộ tỷ giá không phải thao tác gõ → không tạo bước undo.
-          muted(() => set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, ...cleanRates(rates), VND: 1 } } })));
+          // CHỈ cập nhật bảng tỷ giá đồng bộ — KHÔNG đụng vào draft.rates của báo giá
+          // đang mở (đây là điểm mấu chốt: đồng bộ không còn ảnh hưởng báo giá cũ).
+          set((s) => ({ syncedRates: { ...s.syncedRates, ...cleanRates(rates), VND: 1 } }));
           // persistLocal=false when the update CAME FROM a localStorage 'storage'
           // event, to avoid a write→event→write feedback loop between tabs.
-          if (persistLocal) writeFxRatesLS(get().draft.rates);
+          if (persistLocal) writeFxRatesLS(get().syncedRates);
         },
 
-        // "Lưu tỷ giá": save the current table to the cloud as the canonical
-        // record for all users, and cache it locally.
-        syncFxNow: async () => {
+        // "Đồng bộ tỷ giá" (chỉ CEO): ghi bảng tỷ giá lên cloud làm bản đồng bộ
+        // toàn hệ thống. Chỉ áp cho báo giá MỚI tạo về sau — báo giá cũ không đổi.
+        pushGlobalRates: async (rates) => {
           const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
-          const at = await fbPushFxRates(cleanRates(get().draft.rates), by);
+          const clean = { ...cleanRates(rates), VND: 1 };
+          const at = await fbPushFxRates(clean, by);
           lastFxPushAt = at;
-          writeFxRatesLS(get().draft.rates);
-          set({ fxSyncedAt: at, fxSyncedBy: by });
+          writeFxRatesLS(clean);
+          set({ syncedRates: clean, fxSyncedAt: at, fxSyncedBy: by });
+        },
+
+        // "Lưu tỷ giá": ghim tỷ giá hiện tại vào báo giá đang mở (persist local; sẽ
+        // đi theo khi lưu bản lịch sử). Không ghi cloud, không ảnh hưởng tỷ giá đồng bộ.
+        saveDraftRatesLocal: () => {
+          // Ghi lại draft (persist tự lưu localStorage) nhưng không tạo bước undo.
+          muted(() => set((s) => ({ draft: { ...s.draft } })));
         },
 
         setMargin: (n) => set((s) => ({ draft: { ...s.draft, margin: n } })),
@@ -490,8 +518,8 @@ export const useQuoteStore = create<QuoteState>()(
                 // Clamp pax and rounding on import to the same minimums as the setters.
                 // A malformed file with pax: 0 would otherwise divide-by-zero in computeTotals.
                 ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
-                // Tỷ giá toàn cục luôn thắng tỷ giá nhúng trong file import.
-                rates: { ...(data.rates ?? {}), ...mergeGlobalRates(s.draft.rates) },
+                // Giữ nguyên tỷ giá nhúng trong file (báo giá tự lưu tỷ giá của nó).
+                rates: keepSavedRates(data.rates),
                 ...(data.margin != null ? { margin: data.margin } : {}),
                 ...(data.vat != null ? { vat: data.vat } : {}),
                 ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
@@ -520,8 +548,8 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.template !== undefined ? { template: data.template } : {}),
               ...(data.info ? { info: data.info } : {}),
               ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
-              // Tỷ giá toàn cục luôn thắng tỷ giá nhúng trong file import.
-              rates: { ...(data.rates ?? {}), ...mergeGlobalRates(s.draft.rates) },
+              // Giữ nguyên tỷ giá nhúng trong dữ liệu import (báo giá tự giữ tỷ giá).
+              rates: keepSavedRates(data.rates),
               ...(data.margin != null ? { margin: data.margin } : {}),
               ...(data.vat != null ? { vat: data.vat } : {}),
               ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
@@ -671,14 +699,22 @@ export const useQuoteStore = create<QuoteState>()(
           if (!project) {
             return { ok: false, error: 'Báo giá không tồn tại trong cloud' };
           }
-          // Tỷ giá luôn dùng bản TOÀN CỤC hiện hành, KHÔNG dùng tỷ giá nhúng cũ của
-          // báo giá đã lưu → mọi tour/tab/tài khoản thống nhất một tỷ giá.
-          muted(() => set((s) => ({
-            draft: {
-              ...project.currentState,
-              currentQuoteId: cloudId,
-              rates: { ...project.currentState.rates, ...mergeGlobalRates(s.draft.rates) },
-            },
+          // Giữ ĐÚNG tỷ giá đã lưu của báo giá (không kéo tỷ giá đồng bộ hiện hành vào
+          // → báo giá cũ không bị thay đổi). Riêng DMC breakdown nếu có LIÊN KẾT tới
+          // một báo giá thì MIRROR theo tỷ giá của báo giá đó.
+          let rates = keepSavedRates(project.currentState.rates);
+          if (isDmc) {
+            const entry = useQuoteHistoryStore.getState().dmcQuotes.find((q) => q.cloudId === cloudId);
+            const linkedId = entry?.linkedQuoteId;
+            if (linkedId) {
+              try {
+                const linked = await fbGetQuoteProject(linkedId);
+                if (linked?.currentState?.rates) rates = keepSavedRates(linked.currentState.rates);
+              } catch { /* giữ tỷ giá của chính DMC nếu không lấy được báo giá liên kết */ }
+            }
+          }
+          muted(() => set(() => ({
+            draft: { ...project.currentState, currentQuoteId: cloudId, rates },
             view: 'cost',
             ...CLEAR_HIST,
           })));

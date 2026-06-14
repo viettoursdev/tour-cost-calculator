@@ -572,7 +572,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
       <QuoteLinksModal open={linksOpen} onClose={() => setLinksOpen(false)} />
 
-      {(template === 'intl' || template === 'dmc') && (
+      {(template === 'domestic' || template === 'intl' || template === 'dmc') && (
         <Box sx={{ mx: 2, mb: 1.5 }}>
           <FxRatesPanel />
         </Box>

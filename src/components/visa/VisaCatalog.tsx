@@ -18,8 +18,8 @@ import type { VisaFee, VisaProduct } from '@/types';
 
 export function VisaCatalog() {
   const products = useVisaProductsStore((s) => s.products);
-  // Tỷ giá dùng chung với báo giá (toàn cục) — sửa ở đâu cũng đồng bộ mọi nơi.
-  const rates = useQuoteStore((s) => s.draft.rates);
+  // Visa dùng tỷ giá ĐỒNG BỘ toàn hệ thống (chỉ CEO sửa qua nút Đồng bộ tỷ giá).
+  const rates = useQuoteStore((s) => s.syncedRates);
   const loaded = useVisaProductsStore((s) => s.loaded);
   const user = useAuthStore((s) => s.currentUser);
   const savedBy = user ? `${user.name} (${user.role})` : 'unknown';
@@ -114,7 +114,7 @@ export function VisaCatalog() {
 
       {showFx && (
         <Box sx={{ mb: 2 }}>
-          <FxRatesPanel defaultOpen />
+          <FxRatesPanel scope="global" defaultOpen />
         </Box>
       )}
 
