@@ -13,6 +13,8 @@ vi.mock('./data', () => ({
   ],
   permittedData: () => ({
     contracts: [{ id: 'k1', contractNo: 'HD01', tourName: 'Tour Nhật', tourDest: 'Nhật Bản', partyB: { name: 'KS Sakura' } }],
+    itineraries: [{ id: 'it1', title: 'Tour Nhật 5N4Đ', destination: 'Nhật Bản', days: 5 }],
+    menus: [],
   }),
   visibleQuotesAll: () => [
     { cloudId: 'i1', template: 'intl', name: 'Tour Nhật', quoteCode: 'BG02', customerName: 'Cty A', pax: 15, totalCost: 100, updatedAt: '2026-02-01' },
@@ -23,6 +25,10 @@ vi.mock('./data', () => ({
 vi.mock('@/lib/firebase', () => ({
   fbGetQuoteProject: vi.fn(async () => ({ currentState: draft({}) })),
   fbGetDMCQuoteProject: vi.fn(async () => ({ currentState: draft({}) })),
+}));
+
+vi.mock('@/stores/poiStore', () => ({
+  usePoiStore: { getState: () => ({ pois: [{ id: 'p1', place: 'Núi Phú Sĩ', destination: 'Nhật Bản', commentary: 'Biểu tượng nước Nhật.' }] }) },
 }));
 
 import { runAssistantTool } from './tools';
@@ -72,5 +78,17 @@ describe('assistant tools', () => {
     expect(r.sampleSize).toBe(2);
     expect(r.avgMarginPct).toBe(10);
     expect(r.avgServiceChargeVND).toBe(500000);
+  });
+
+  it('list_itineraries filters by destination', async () => {
+    const r = await run('list_itineraries', { destination: 'nhat' });
+    expect(r.count).toBe(1);
+    expect(r.itineraries[0].id).toBe('it1');
+  });
+
+  it('search_pois finds a point of interest', async () => {
+    const r = await run('search_pois', { query: 'phu si' });
+    expect(r.count).toBe(1);
+    expect(r.pois[0].place).toBe('Núi Phú Sĩ');
   });
 });

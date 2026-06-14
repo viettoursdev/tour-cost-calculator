@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Box, Drawer, IconButton, Link, Stack, TextField, Typography,
+  Box, Chip, Drawer, IconButton, Link, Stack, TextField, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
+import PublicIcon from '@mui/icons-material/Public';
 import { runAssistant } from '@/lib/assistant/agent';
 import { LEGACY } from '@/theme';
 import type { ChatMessage, Citation } from '@/lib/aiWorker';
@@ -33,6 +34,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
   const [ui, setUi] = useState<UiMsg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [web, setWeb] = useState(true);
   const [activity, setActivity] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +50,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     setUi((p) => [...p, { role: 'user', text: q }, { role: 'assistant', text: '', pending: true }]);
     setBusy(true);
     try {
-      const r = await runAssistant(nextHistory, { web: false, onActivity: setActivity });
+      const r = await runAssistant(nextHistory, { web, onActivity: setActivity });
       setHistory(r.messages);
       setUi((p) => {
         const copy = [...p];
@@ -125,7 +127,14 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
         )}
       </Box>
 
-      <Box sx={{ p: 1.5, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+      <Box sx={{ px: 1.5, pt: 1 }}>
+        <Chip
+          size="small" icon={<PublicIcon />} label={web ? 'Tra web: Bật' : 'Tra web: Tắt'}
+          color={web ? 'primary' : 'default'} variant={web ? 'filled' : 'outlined'}
+          onClick={() => setWeb((v) => !v)} sx={{ fontWeight: 700 }}
+        />
+      </Box>
+      <Box sx={{ p: 1.5, pt: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', gap: 1, alignItems: 'flex-end' }}>
         <TextField
           fullWidth multiline maxRows={4} size="small" value={input} disabled={busy}
           onChange={(e) => setInput(e.target.value)}

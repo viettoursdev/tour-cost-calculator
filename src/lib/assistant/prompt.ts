@@ -17,6 +17,13 @@ export function assistantSystem(): string {
     '• Số tiền VND ghi có dấu chấm phân tách hàng nghìn (vd 12.500.000 ₫).',
     '• Có thể gọi nhiều tool nối tiếp (vd search_records để lấy id rồi get_quote).',
     '',
+    'TƯ VẤN LỊCH TRÌNH: trước tiên tham khảo dữ liệu nội bộ (list_itineraries/get_itinerary',
+    'để xem chương trình tương tự đã làm, search_pois để lấy điểm tham quan & lời thuyết minh,',
+    'list_menus/get_menu cho ẩm thực). Có thể dùng web_search để bổ sung thông tin mới (điểm',
+    'tham quan, mùa lễ hội, thời tiết, giá tham khảo) — luôn ưu tiên & nêu rõ dữ liệu nội bộ',
+    'của Viettours, web chỉ để bổ sung và phải dẫn nguồn. Khi đề xuất lịch trình, trình bày',
+    'theo từng ngày (sáng/trưa/tối), nêu điểm tham quan, bữa ăn, lưu ý vận hành.',
+    '',
     `Hôm nay là ${today}.`,
   ].join('\n');
 }

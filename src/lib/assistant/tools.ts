@@ -5,6 +5,9 @@
 import { filterRank, normalizeVN } from '@/lib/search';
 import { computeTotals } from '@/components/quote/calc';
 import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
+import { useItineraryStore } from '@/stores/itineraryStore';
+import { useMenuStore } from '@/stores/menuStore';
+import { usePoiStore } from '@/stores/poiStore';
 import { permittedIndex, permittedData, visibleQuotesAll } from './data';
 import type { CloudQuoteEntry } from '@/types';
 
@@ -74,6 +77,31 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
         max: { type: 'number', description: 'Số báo giá lấy mẫu tối đa (mặc định 15, trần 25)' },
       },
     },
+  },
+  {
+    name: 'list_itineraries',
+    description: 'Liệt kê các chương trình tour (lịch trình) đã lưu, tuỳ chọn lọc theo điểm đến. Dùng để tham khảo khi tư vấn lịch trình.',
+    input_schema: { type: 'object', properties: { destination: { type: 'string', description: 'Điểm đến cần lọc (tuỳ chọn)' } } },
+  },
+  {
+    name: 'get_itinerary',
+    description: 'Chi tiết một chương trình tour theo id: tiêu đề, điểm đến, số ngày/đêm, giới thiệu, và lịch trình từng ngày (tiêu đề ngày, bữa ăn, hoạt động).',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'search_pois',
+    description: 'Tìm điểm tham quan trong thư viện thuyết minh (POI) theo từ khoá/điểm đến — gồm tên điểm và nội dung thuyết minh. Dùng khi dựng/tư vấn lịch trình.',
+    input_schema: { type: 'object', properties: { query: { type: 'string' }, limit: { type: 'number' } }, required: ['query'] },
+  },
+  {
+    name: 'list_menus',
+    description: 'Liệt kê các thực đơn đã lưu, tuỳ chọn lọc theo điểm đến.',
+    input_schema: { type: 'object', properties: { destination: { type: 'string' } } },
+  },
+  {
+    name: 'get_menu',
+    description: 'Chi tiết một thực đơn theo id: tiêu đề, điểm đến, và từng ngày (nhà hàng, thành phố, món gợi ý, giá).',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
   },
 ];
 
@@ -170,6 +198,64 @@ async function toolPricingStats(input: Record<string, unknown>): Promise<unknown
   };
 }
 
+async function toolListItineraries(input: Record<string, unknown>): Promise<unknown> {
+  const dest = normalizeVN(str(input, 'destination'));
+  let list = permittedData().itineraries;
+  if (dest) list = list.filter((x) => normalizeVN(`${x.destination ?? ''} ${x.title}`).includes(dest));
+  return { count: list.length, itineraries: list.map((x) => ({ id: x.id, title: x.title, destination: x.destination, days: x.days })) };
+}
+
+async function toolGetItinerary(input: Record<string, unknown>): Promise<unknown> {
+  const id = str(input, 'id');
+  if (!permittedData().itineraries.some((x) => x.id === id)) return { error: 'Không tìm thấy chương trình này trong phạm vi bạn được xem.' };
+  const it = await useItineraryStore.getState().load(id);
+  if (!it) return { error: 'Không tải được chương trình.' };
+  return {
+    title: it.title, destination: it.destination, days: it.days, nights: it.nights, intro: it.intro,
+    schedule: (it.schedule ?? []).map((d) => ({
+      day: d.dayNum, title: d.title,
+      meals: [d.meals?.B && 'Sáng', d.meals?.L && 'Trưa', d.meals?.D && 'Tối'].filter(Boolean),
+      activities: (d.segments ?? []).flatMap((s) => (s.activities ?? []).map((a) => a.text)).filter(Boolean),
+    })),
+  };
+}
+
+async function toolSearchPois(input: Record<string, unknown>): Promise<unknown> {
+  const q = normalizeVN(str(input, 'query'));
+  const limit = typeof input.limit === 'number' ? input.limit : 12;
+  const pois = usePoiStore.getState().pois;
+  const hits = (q
+    ? pois.filter((p) => normalizeVN(`${p.place} ${p.destination ?? ''} ${p.commentary}`).includes(q))
+    : pois
+  ).slice(0, Math.min(limit, 30));
+  return { count: hits.length, pois: hits.map((p) => ({ place: p.place, destination: p.destination ?? null, commentary: (p.commentary ?? '').slice(0, 600) })) };
+}
+
+async function toolListMenus(input: Record<string, unknown>): Promise<unknown> {
+  const dest = normalizeVN(str(input, 'destination'));
+  let list = permittedData().menus;
+  if (dest) list = list.filter((x) => normalizeVN(`${x.destination ?? ''} ${x.title}`).includes(dest));
+  return { count: list.length, menus: list.map((x) => ({ id: x.id, title: x.title, destination: x.destination, days: x.days })) };
+}
+
+async function toolGetMenu(input: Record<string, unknown>): Promise<unknown> {
+  const id = str(input, 'id');
+  if (!permittedData().menus.some((x) => x.id === id)) return { error: 'Không tìm thấy thực đơn này trong phạm vi bạn được xem.' };
+  const m = await useMenuStore.getState().load(id);
+  if (!m) return { error: 'Không tải được thực đơn.' };
+  return {
+    title: m.title, destination: m.destination, days: m.days,
+    schedule: (m.schedule ?? []).map((d) => ({
+      day: d.dayNum, city: d.city,
+      meals: (d.meals ?? []).map((meal) => ({
+        type: meal.mealType, restaurant: meal.restaurantName, city: meal.city,
+        dishes: meal.adjustedDishes || meal.suggestedDishes,
+        price: meal.adjustedPrice || meal.suggestedPrice, cur: meal.cur,
+      })),
+    })),
+  };
+}
+
 /** Thực thi một tool, trả chuỗi JSON cho tool_result. */
 export async function runAssistantTool(name: string, input: Record<string, unknown>): Promise<string> {
   try {
@@ -180,6 +266,11 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
       case 'customer_tours': result = await toolCustomerTours(input); break;
       case 'supplier_usage': result = await toolSupplierUsage(input); break;
       case 'pricing_stats': result = await toolPricingStats(input); break;
+      case 'list_itineraries': result = await toolListItineraries(input); break;
+      case 'get_itinerary': result = await toolGetItinerary(input); break;
+      case 'search_pois': result = await toolSearchPois(input); break;
+      case 'list_menus': result = await toolListMenus(input); break;
+      case 'get_menu': result = await toolGetMenu(input); break;
       default: result = { error: `Tool không hỗ trợ: ${name}` };
     }
     return JSON.stringify(result);
