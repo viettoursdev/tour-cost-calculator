@@ -11,6 +11,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
+import { flightDepStr, flightArrStr } from '@/components/itinerary/flightFields';
 import type { Itinerary } from '@/types';
 
 // 9 ảnh mẫu (GIỮ NGUYÊN file gốc, không nén) — phục vụ từ public/, tải lúc xuất.
@@ -156,7 +157,7 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
   }
 
   // Flight table
-  const fl = (it.flights || []).filter((f) => f.flightNo || f.dep || f.arr);
+  const fl = (it.flights || []).filter((f) => f.flightNo || flightDepStr(f) || flightArrStr(f));
   if (fl.length) {
     C.push(P(tr('✈  THÔNG TIN CHUYẾN BAY', { size: 18, bold: true, color: NAVY }),
       {
@@ -171,7 +172,7 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
           { width: fw[i], fill: NAVY, mt: 30, mb: 30 })),
     })];
     fl.forEach((f, ri) => rows.push(new TableRow({
-      children: [f.group, f.leg, f.flightNo, f.dep, f.arr].map((v, ci) =>
+      children: [f.group, f.leg, f.flightNo, flightDepStr(f), flightArrStr(f)].map((v, ci) =>
         cell([P(tr(v, { size: 16, bold: ci === 0, color: ci === 0 ? GRPC : INK }), { after: 0 })],
           { width: fw[ci], fill: ri % 2 ? ZEBRA : WHITE, mt: 24, mb: 24 })),
     })));

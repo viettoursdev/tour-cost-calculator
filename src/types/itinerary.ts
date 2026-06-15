@@ -26,8 +26,12 @@ export interface Flight {
   group: string;
   leg: string;
   flightNo: string;
-  dep: string;
-  arr: string;
+  dep: string;   // legacy: "TSN 05:40" (giữ để tương thích; đồng bộ từ 4 trường dưới)
+  arr: string;   // legacy: "PEK 11:35"
+  depAirport?: string;  // Sân bay khởi hành (vd TSN)
+  depTime?: string;     // Giờ bay (vd 05:40)
+  arrAirport?: string;  // Sân bay đến (vd PEK)
+  arrTime?: string;     // Giờ đáp (vd 11:35)
 }
 
 export type ItineraryType = 'NN' | 'ND';

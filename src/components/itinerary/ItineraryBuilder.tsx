@@ -13,6 +13,7 @@ import {
   ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, newActivity, newDay, newSegment, TRANSPORT_PRESETS,
 } from './constants';
 import { parseFlights } from './parseFlights';
+import { flightDep, flightArr, normalizeFlight } from './flightFields';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { callAIWorker } from '@/lib/aiWorker';
@@ -60,7 +61,10 @@ function freshItinerary(): Itinerary {
 }
 
 export function ItineraryBuilder({ initial, user, onBack }: Props) {
-  const initialIt = useMemo(() => initial ?? freshItinerary(), [initial]);
+  const initialIt = useMemo(() => {
+    const base = initial ?? freshItinerary();
+    return { ...base, flights: (base.flights ?? []).map(normalizeFlight) };
+  }, [initial]);
   const { state: it, set: setIt, undo, redo, canUndo, canRedo } = useHistoryState<Itinerary>(initialIt);
   useUndoRedoShortcuts(undo, redo);
   const [saving, setSaving] = useState(false);
@@ -114,7 +118,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
       window.alert('Không nhận diện được chuyến bay. Thử dán dạng: CA904 TSN 05:40 PEK 11:35');
       return;
     }
-    setIt((p) => ({ ...p, flights: parsed }));
+    setIt((p) => ({ ...p, flights: parsed.map(normalizeFlight) }));
     setFlightPaste('');
   };
 
@@ -430,8 +434,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
           </Paper>
 
           <Stack spacing={1}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 0.9fr 0.8fr 0.8fr 0.8fr 0.8fr 36px', gap: 1, px: 0.25 }}>
+              {['Nhóm', 'Chặng', 'Số hiệu', 'Sân bay đi', 'Giờ bay', 'Sân bay đến', 'Giờ đáp', ''].map((h, i) => (
+                <Typography key={i} variant="caption" fontWeight={700} color="text.secondary">{h}</Typography>
+              ))}
+            </Box>
             {it.flights.map((f) => (
-              <Box key={f.id} sx={{ display: 'grid', gridTemplateColumns: '1.1fr 1.3fr 1fr 1.1fr 1.1fr 40px', gap: 1, alignItems: 'center' }}>
+              <Box key={f.id} sx={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 0.9fr 0.8fr 0.8fr 0.8fr 0.8fr 36px', gap: 1, alignItems: 'center' }}>
                 <TextField size="small" value={f.group}
                   onChange={(e) => updFlight(f.id, { group: e.target.value })}
                   placeholder="Nhóm" />
@@ -441,12 +450,18 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                 <TextField size="small" value={f.flightNo}
                   onChange={(e) => updFlight(f.id, { flightNo: e.target.value })}
                   placeholder="CA904" />
-                <TextField size="small" value={f.dep}
-                  onChange={(e) => updFlight(f.id, { dep: e.target.value })}
-                  placeholder="TSN 05:40" />
-                <TextField size="small" value={f.arr}
-                  onChange={(e) => updFlight(f.id, { arr: e.target.value })}
-                  placeholder="PEK 11:35" />
+                <TextField size="small" value={flightDep(f).airport}
+                  onChange={(e) => updFlight(f.id, { depAirport: e.target.value.toUpperCase() })}
+                  placeholder="TSN" />
+                <TextField size="small" value={flightDep(f).time}
+                  onChange={(e) => updFlight(f.id, { depTime: e.target.value })}
+                  placeholder="05:40" />
+                <TextField size="small" value={flightArr(f).airport}
+                  onChange={(e) => updFlight(f.id, { arrAirport: e.target.value.toUpperCase() })}
+                  placeholder="PEK" />
+                <TextField size="small" value={flightArr(f).time}
+                  onChange={(e) => updFlight(f.id, { arrTime: e.target.value })}
+                  placeholder="11:35" />
                 <IconButton size="small" color="error" onClick={() => delFlight(f.id)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>

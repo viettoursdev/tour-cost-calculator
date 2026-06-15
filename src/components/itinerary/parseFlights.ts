@@ -56,6 +56,8 @@ export function parseFlights(text: string): Flight[] {
         group: 'Nhóm 1',
         leg,
         flightNo,
+        depAirport: airports[0] ?? '', depTime: times[0] ?? '',
+        arrAirport: airports[1] ?? '', arrTime: times[1] ?? '',
         dep: [airports[0], times[0]].filter(Boolean).join(' '),
         arr: [airports[1], times[1]].filter(Boolean).join(' '),
       });
