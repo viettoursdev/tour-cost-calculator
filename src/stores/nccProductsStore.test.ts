@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
 
-import { useNccProductsStore } from './nccProductsStore';
+import { useNccProductsStore, priceToVND } from './nccProductsStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
 import * as fb from '@/lib/firebase';
@@ -57,4 +57,11 @@ describe('nccProductsStore', () => {
     expect(list[0].id).toBe('np2');
     expect(fb.fbPushNccProducts).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('priceToVND', () => {
+  const rates = { VND: 1, USD: 25000, JPY: 165 };
+  it('keeps VND as-is', () => expect(priceToVND(500000, 'VND', rates)).toBe(500000));
+  it('converts foreign currency by rate', () => expect(priceToVND(100, 'USD', rates)).toBe(2500000));
+  it('falls back to rate 1 for unknown currency', () => expect(priceToVND(100, 'XYZ', rates)).toBe(100));
 });

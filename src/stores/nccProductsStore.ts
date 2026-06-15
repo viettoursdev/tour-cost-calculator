@@ -7,6 +7,11 @@ import type { Unsubscribe } from 'firebase/firestore';
 
 export const newNccProductId = () => 'np' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
+/** Quy đổi một mức giá NCC về VND theo tỷ giá báo giá (VND nếu không có tỷ giá). */
+export function priceToVND(amount: number, cur: string, rates: Record<string, number>): number {
+  return Math.round((amount || 0) * (rates[cur] || 1));
+}
+
 type State = {
   products: NccProduct[];
   loading: boolean;

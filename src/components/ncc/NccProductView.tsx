@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, Link, MenuItem,
+  Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, Link, Menu, MenuItem,
   Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField,
   Tooltip, Typography,
 } from '@mui/material';
@@ -9,15 +9,19 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import HistoryIcon from '@mui/icons-material/History';
+import PaymentsIcon from '@mui/icons-material/Payments';
 import { useAuthStore } from '@/stores/authStore';
-import { useNccProductsStore } from '@/stores/nccProductsStore';
+import { useNccProductsStore, priceToVND } from '@/stores/nccProductsStore';
+import { useQuoteStore } from '@/stores/quoteStore';
+import { usePaymentStore } from '@/stores/paymentStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewAll } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
 import { workerFileUrl } from '@/lib/aiWorker';
 import { CATS } from '@/components/quote/constants';
+import { slugifyTourKey } from '@/components/quote/paymentUtils';
 import { NccProductEditor } from './NccProductEditor';
-import type { CategoryId, NccProduct } from '@/types';
+import type { CategoryId, CustomCostItem, NccPrice, NccProduct } from '@/types';
 
 const CAT_BY = Object.fromEntries(CATS.map((c) => [c.id, c])) as Record<CategoryId, (typeof CATS)[number]>;
 const catMeta = (id: CategoryId) => CAT_BY[id] ?? { icon: '🧩', label: id, color: '#95a5a6' };
@@ -38,6 +42,40 @@ export function NccProductView() {
   const [filterNcc, setFilterNcc] = useState('');
   const [editing, setEditing] = useState<NccProduct | null>(null);
   const [fileHistOpen, setFileHistOpen] = useState(false);
+  const [payPicker, setPayPicker] = useState<{ el: HTMLElement; product: NccProduct } | null>(null);
+
+  const draftRates = useQuoteStore((s) => s.draft.rates);
+  const draftName = useQuoteStore((s) => s.draft.info.name);
+
+  // Thêm 1 dòng chi phí (theo hạng mục + NCC) vào tab Quản lý thanh toán của tour hiện tại.
+  const linkToPayment = (p: NccProduct, price?: NccPrice) => {
+    const tourName = (draftName ?? '').trim();
+    if (!tourName) { window.alert('Báo giá chưa có tên tour — hãy đặt tên báo giá trước khi liên kết Thanh toán.'); return; }
+    const tourKey = slugifyTourKey(tourName);
+    const cm = catMeta(p.category);
+    const amountVND = price ? priceToVND(price.amount, price.cur, draftRates) : 0;
+    const key = 'custom_' + Date.now();
+    const item: CustomCostItem = {
+      key, catId: p.category, catLabel: cm.label, catIcon: cm.icon, catColor: cm.color,
+      name: `${p.name}${p.nccName ? ' — ' + p.nccName : ''}`, amount: amountVND,
+    };
+    const store = usePaymentStore.getState();
+    store.ensureSubscribed(tourKey);
+    // Chờ snapshot ban đầu của tour về (tránh ghi đè dữ liệu thanh toán đã có) rồi mới nối thêm.
+    window.setTimeout(() => {
+      const cur = store.getTour(tourKey);
+      store.setCustomItems(tourKey, [...cur.customItems, item]);
+      store.setPayments(tourKey, { ...cur.payments, [key]: { supplier: p.nccName, installments: [], note: '' } });
+      store.releaseSubscription(tourKey);
+      window.alert(`✅ Đã thêm "${item.name}"${amountVND ? ` (${amountVND.toLocaleString('vi-VN')} ₫)` : ''} vào tab Quản lý thanh toán.`);
+    }, 700);
+  };
+
+  const onClickPay = (el: HTMLElement, p: NccProduct) => {
+    const rows = p.prices ?? [];
+    if (rows.length > 1) setPayPicker({ el, product: p });
+    else linkToPayment(p, rows[0]);
+  };
 
   const visible = useMemo(() => {
     const base = products.filter((p) => {
@@ -161,12 +199,20 @@ export function NccProductView() {
                             </Stack>
                           )}
                         </Box>
-                        {canEdit && (
-                          <Stack direction="row" spacing={0.5}>
-                            <Tooltip title="Sửa"><IconButton size="small" color="primary" onClick={() => setEditing(p)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                            <Tooltip title="Xoá"><IconButton size="small" color="error" onClick={() => onDelete(p)}><DeleteOutlineIcon fontSize="small" /></IconButton></Tooltip>
-                          </Stack>
-                        )}
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <Tooltip title="Liên kết sang tab Quản lý thanh toán">
+                            <Button size="small" variant="outlined" startIcon={<PaymentsIcon />}
+                              onClick={(e) => onClickPay(e.currentTarget, p)} sx={{ fontWeight: 700, color: '#0d7a6a', borderColor: 'rgba(20,150,140,0.5)' }}>
+                              Thanh toán
+                            </Button>
+                          </Tooltip>
+                          {canEdit && (
+                            <>
+                              <Tooltip title="Sửa"><IconButton size="small" color="primary" onClick={() => setEditing(p)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                              <Tooltip title="Xoá"><IconButton size="small" color="error" onClick={() => onDelete(p)}><DeleteOutlineIcon fontSize="small" /></IconButton></Tooltip>
+                            </>
+                          )}
+                        </Stack>
                       </Stack>
                     </Paper>
                   );
@@ -199,6 +245,15 @@ export function NccProductView() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Menu anchorEl={payPicker?.el} open={!!payPicker} onClose={() => setPayPicker(null)}>
+        <Typography variant="caption" sx={{ px: 2, py: 0.5, display: 'block', color: 'text.secondary' }}>Chọn mức giá đưa sang Thanh toán:</Typography>
+        {(payPicker?.product.prices ?? []).map((pr) => (
+          <MenuItem key={pr.id} onClick={() => { const p = payPicker!.product; setPayPicker(null); linkToPayment(p, pr); }}>
+            {pr.label || '(mức giá)'} — <b style={{ marginLeft: 4, color: '#0d7a6a' }}>{fmtMoney(pr.amount, pr.cur)}</b>{pr.unit ? ` / ${pr.unit}` : ''}
+          </MenuItem>
+        ))}
+      </Menu>
 
       {editing && <NccProductEditor product={editing} onClose={() => setEditing(null)} />}
     </Box>
