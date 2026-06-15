@@ -13,3 +13,11 @@ vite-after-mo-click.png
 old-service-account.json
 new-service-account.json
 firestore-dump.json
+
+# Local env files — keep .env.example committed as the template.
+.env
+.env.local
+.env.*.local
+
+# Transient migration scratch notes — never commit.
+MIGRATION_NOTES.md
