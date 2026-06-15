@@ -1,16 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Box, Button, Chip, IconButton, Menu, MenuItem, Paper, Select, Stack, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
+  Menu, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow,
+  TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ImageIcon from '@mui/icons-material/Image';
 import SellIcon from '@mui/icons-material/Sell';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { parseFlights } from '@/lib/flightParse';
 import { deriveAirline, deriveAirport, newFlight } from './flightConstants';
 import { FlightEditor } from './FlightEditor';
 import type { FlightFare, QuoteFlight } from '@/types';
+
+const fileToB64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result ?? '').split(',')[1] ?? '');
+  r.onerror = reject;
+  r.readAsDataURL(file);
+});
 
 const airlineName = (f: QuoteFlight) => f.airlineName || deriveAirline(f.flightNo).name;
 const airlineCode = (f: QuoteFlight) => f.airlineCode || deriveAirline(f.flightNo).code;
@@ -31,6 +42,31 @@ export function FlightView() {
   const [filterAir, setFilterAir] = useState('');
   const [editing, setEditing] = useState<QuoteFlight | null>(null);
   const [payPicker, setPayPicker] = useState<{ el: HTMLElement; flight: QuoteFlight } | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiText, setAiText] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState('');
+  const [queue, setQueue] = useState<QuoteFlight[]>([]); // chuyến bay AI parse, duyệt tuần tự
+
+  const runParse = async (payload: { text?: string; imageB64?: string }) => {
+    setAiBusy(true); setAiErr('');
+    try {
+      const parsed = await parseFlights(payload);
+      if (!parsed.length) { setAiErr('Không nhận diện được chuyến bay nào. Hãy thử ảnh rõ hơn hoặc nhập tay.'); return; }
+      setAiOpen(false); setAiText('');
+      setQueue(parsed); // mở FlightEditor lần lượt để duyệt rồi Lưu
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  const onPickImage = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    const imageB64 = await fileToB64(file);
+    void runParse({ imageB64, text: aiText.trim() || undefined });
+  };
 
   const upd = (id: string, patch: Partial<QuoteFlight>) => setFlights(flights.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   const del = (id: string) => setFlights(flights.filter((f) => f.id !== id));
@@ -86,6 +122,10 @@ export function FlightView() {
           {airlines.map((a) => <MenuItem key={a} value={a}>{a} — {deriveAirline(a + '0').name || a}</MenuItem>)}
         </Select>
         <Box sx={{ flex: 1 }} />
+        <Button variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => { setAiErr(''); setAiOpen(true); }}
+          sx={{ fontWeight: 700, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}>
+          Phân tích AI
+        </Button>
         <Button variant="contained" startIcon={<AddIcon />} onClick={add}
           sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
           Thêm chuyến bay
@@ -181,6 +221,39 @@ export function FlightView() {
           </MenuItem>
         ))}
       </Menu>
+
+      <Dialog open={aiOpen} onClose={() => !aiBusy && setAiOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>✨ Phân tích chuyến bay bằng AI</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Dán dòng code/booking chuyến bay, hoặc tải ảnh thông tin chuyến bay. AI sẽ điền sẵn vào form để bạn duyệt rồi Lưu.
+          </Typography>
+          <TextField fullWidth multiline minRows={4} value={aiText} onChange={(e) => setAiText(e.target.value)}
+            placeholder={'VD:\nVN310 01JAN HAN SGN 0800 1010\nVJ142 02JAN SGN DAD 14:20 15:35'} disabled={aiBusy} />
+          {aiErr && <Alert severity="error" sx={{ mt: 1.5 }}>{aiErr}</Alert>}
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Button component="label" variant="outlined" startIcon={<ImageIcon />} disabled={aiBusy}>
+            Tải ảnh
+            <input type="file" hidden accept="image/*" onChange={onPickImage} />
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => setAiOpen(false)} color="inherit" disabled={aiBusy}>Huỷ</Button>
+          <Button variant="contained" disabled={aiBusy || !aiText.trim()} onClick={() => void runParse({ text: aiText.trim() })}
+            sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+            {aiBusy ? 'Đang phân tích…' : 'Phân tích'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {queue.length > 0 && (
+        <FlightEditor
+          key={queue[0].id}
+          flight={queue[0]}
+          onClose={() => setQueue((q) => q.slice(1))}
+          onSave={(f) => { setFlights([...flights, f]); setQueue((q) => q.slice(1)); }}
+        />
+      )}
 
       {editing && <FlightEditor flight={editing} onClose={() => setEditing(null)} onSave={(f) => { upd(f.id, f); setEditing(null); }} />}
     </Box>
