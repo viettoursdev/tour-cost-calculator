@@ -33,8 +33,90 @@ export const newWorkflowStep = (label = 'Bước mới', status: WorkflowStatus 
   status,
 });
 
-/** Quy trình mặc định: 13 bước, đều "Chưa làm". */
-export const defaultWorkflow = (): WorkflowStep[] => WORKFLOW_DEFAULT_STEPS.map((l) => newWorkflowStep(l));
+/** Khoá ổn định cho 13 bước mặc định (cùng thứ tự WORKFLOW_DEFAULT_STEPS). */
+export const WORKFLOW_STEP_KEYS = [
+  'receive', 'quote', 'confirm_service', 'visa', 'contract', 'deposit_ncc',
+  'final_service', 'comms', 'deposit_pretrip', 'departure', 'acceptance',
+  'final_payment', 'close',
+] as const;
+export type WorkflowStepKey = (typeof WORKFLOW_STEP_KEYS)[number];
+
+/** Hạn mặc định = N ngày TRƯỚC khởi hành (âm = sau khởi hành). */
+export const WORKFLOW_OFFSETS: Record<WorkflowStepKey, number> = {
+  receive: 45, quote: 35, confirm_service: 28, visa: 35, contract: 21, deposit_ncc: 18,
+  final_service: 10, comms: 7, deposit_pretrip: 5, departure: 0, acceptance: -1,
+  final_payment: -7, close: -10,
+};
+
+const LABEL_TO_KEY = new Map<string, WorkflowStepKey>(WORKFLOW_DEFAULT_STEPS.map((l, i) => [l, WORKFLOW_STEP_KEYS[i]]));
+/** Suy khoá từ nhãn mặc định (cho workflow cũ chưa có key). */
+export const keyByLabel = (label: string): WorkflowStepKey | undefined => LABEL_TO_KEY.get(label);
+/** Khoá hiệu lực của bước: key đã lưu, hoặc suy từ nhãn. */
+export const keyOf = (s: WorkflowStep): WorkflowStepKey | undefined => (s.key as WorkflowStepKey | undefined) ?? keyByLabel(s.label);
+
+/** Quy trình mặc định: 13 bước (todo), kèm khoá + hạn mặc định. */
+export const defaultWorkflow = (): WorkflowStep[] => WORKFLOW_DEFAULT_STEPS.map((l, i) => {
+  const key = WORKFLOW_STEP_KEYS[i];
+  return { ...newWorkflowStep(l), key, dueOffset: WORKFLOW_OFFSETS[key] };
+});
+
+// ── Tự đồng bộ trạng thái từ dữ liệu thật ──
+export interface WorkflowSignalCtx {
+  quoteStatus?: string;
+  hasContract?: boolean;
+  hasVisa?: boolean;
+  visaCompleted?: boolean;
+  paymentPaid?: number;
+  paymentRemaining?: number;
+  paymentCost?: number;
+  departureDate?: string | null;
+  todayISO?: string;
+}
+
+/** Tín hiệu trạng thái gợi ý theo khoá bước (chỉ 'doing'/'done'). */
+export function workflowSignals(ctx: WorkflowSignalCtx): Partial<Record<WorkflowStepKey, WorkflowStatus>> {
+  const out: Partial<Record<WorkflowStepKey, WorkflowStatus>> = {};
+  const st = ctx.quoteStatus;
+  if (st === 'sent' || st === 'negotiating' || st === 'won') out.quote = 'done';
+  else if (st === 'in_progress') out.quote = 'doing';
+  if (ctx.hasContract) out.contract = 'done';
+  if (ctx.hasVisa) out.visa = ctx.visaCompleted ? 'done' : 'doing';
+  if ((ctx.paymentPaid ?? 0) > 0) { out.deposit_ncc = 'doing'; out.deposit_pretrip = 'doing'; }
+  if ((ctx.paymentCost ?? 0) > 0 && (ctx.paymentRemaining ?? 1) <= 0) out.final_payment = 'done';
+  const today = ctx.todayISO ?? new Date().toISOString().slice(0, 10);
+  if (ctx.departureDate && today >= ctx.departureDate) out.departure = 'done';
+  return out;
+}
+
+const RANK: Record<WorkflowStatus, number> = { todo: 0, doing: 1, done: 2, blocked: -1 };
+/** Gợi ý cho 1 bước nếu tín hiệu CAO HƠN trạng thái hiện tại (và không bị Tạm hoãn). */
+export function suggestionFor(step: WorkflowStep, signals: Partial<Record<WorkflowStepKey, WorkflowStatus>>): WorkflowStatus | null {
+  const k = keyOf(step);
+  const sig = k ? signals[k] : undefined;
+  if (!sig || step.status === 'blocked') return null;
+  return RANK[sig] > RANK[step.status] ? sig : null;
+}
+
+/** Áp tín hiệu (advance-only): chỉ nâng cấp, không hạ cấp, bỏ qua 'blocked'. */
+export function applySignals(steps: WorkflowStep[], signals: Partial<Record<WorkflowStepKey, WorkflowStatus>>): WorkflowStep[] {
+  let next = steps;
+  for (const s of steps) {
+    const sig = suggestionFor(s, signals);
+    if (sig) next = setStepStatus(next, s.id, sig);
+  }
+  return next;
+}
+
+/** Tự điền Hạn cho bước có dueOffset & dueDate đang TRỐNG (= khởi hành − dueOffset ngày). */
+export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null): WorkflowStep[] {
+  if (!departureISO) return steps;
+  const base = Date.parse(departureISO);
+  if (Number.isNaN(base)) return steps;
+  return steps.map((s) => {
+    if (s.dueOffset == null || s.dueDate) return s;
+    return { ...s, dueDate: new Date(base - s.dueOffset * 86400000).toISOString().slice(0, 10) };
+  });
+}
 
 /** Tiến độ: số bước hoàn tất / tổng + phần trăm. */
 export function workflowProgress(steps: WorkflowStep[]): { done: number; total: number; pct: number } {

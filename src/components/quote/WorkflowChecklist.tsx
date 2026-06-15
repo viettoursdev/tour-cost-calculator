@@ -1,4 +1,4 @@
-import { Box, Checkbox, Chip, Stack, Typography } from '@mui/material';
+import { Box, Checkbox, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { deadlineMeta } from '@/components/visa/constants';
 import { WORKFLOW_STATUS_META } from './workflowConstants';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
@@ -6,10 +6,11 @@ import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 type Props = {
   steps: WorkflowStep[];
   users: User[];
+  suggestions?: Record<string, WorkflowStatus>;
   onSetStatus: (id: string, status: WorkflowStatus) => void;
 };
 
-export function WorkflowChecklist({ steps, users, onSetStatus }: Props) {
+export function WorkflowChecklist({ steps, users, suggestions = {}, onSetStatus }: Props) {
   const nameOf = (u?: string) => users.find((x) => x.u === u)?.name ?? u ?? '';
   return (
     <Stack spacing={0.5}>
@@ -24,6 +25,12 @@ export function WorkflowChecklist({ steps, users, onSetStatus }: Props) {
             <Typography sx={{ flex: 1, fontWeight: 600, textDecoration: done ? 'line-through' : 'none', color: done ? 'text.disabled' : 'text.primary' }}>
               {s.label}
             </Typography>
+            {suggestions[s.id] && (
+              <Tooltip title="Đề xuất theo dữ liệu thật — bấm để áp">
+                <Chip size="small" label={`↗ ${WORKFLOW_STATUS_META[suggestions[s.id]].label}`} onClick={() => onSetStatus(s.id, suggestions[s.id])}
+                  sx={{ height: 18, fontWeight: 700, bgcolor: WORKFLOW_STATUS_META[suggestions[s.id]].color, color: '#fff', cursor: 'pointer' }} />
+              </Tooltip>
+            )}
             {s.assignee && <Chip size="small" variant="outlined" label={`👤 ${nameOf(s.assignee)}`} />}
             {dl && <Typography variant="caption" sx={{ color: dl.color, fontWeight: 700, minWidth: 90, textAlign: 'right' }}>⏱ {dl.text}</Typography>}
             <Chip size="small" label={meta.label} sx={{ bgcolor: meta.color + '22', color: meta.color, fontWeight: 700, minWidth: 84 }} />

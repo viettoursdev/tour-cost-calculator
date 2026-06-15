@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
+  workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
+import type { WorkflowStep } from '@/types';
 
 describe('defaultWorkflow', () => {
   it('creates the 13 default steps, all todo, with unique ids', () => {
@@ -56,6 +58,73 @@ describe('ganttBounds', () => {
     const b = ganttBounds(w, today)!;
     expect(b.min).toBe(Date.parse('2026-06-10'));
     expect(b.max).toBe(Date.parse('2026-06-20'));
+  });
+});
+
+describe('keys', () => {
+  it('default steps carry stable keys + dueOffset; keyByLabel/keyOf resolve', () => {
+    const w = defaultWorkflow();
+    expect(w[1].key).toBe('quote');
+    expect(w[4].key).toBe('contract');
+    expect(typeof w[0].dueOffset).toBe('number');
+    expect(keyByLabel('Ký kết hợp đồng')).toBe('contract');
+    expect(keyOf({ id: 'x', label: 'Khởi hành', status: 'todo' } as WorkflowStep)).toBe('departure'); // suy từ nhãn (không key)
+  });
+});
+
+describe('workflowSignals', () => {
+  it('maps quote status, contract, visa, payment, departure', () => {
+    const s = workflowSignals({
+      quoteStatus: 'won', hasContract: true, hasVisa: true, visaCompleted: false,
+      paymentPaid: 5, paymentRemaining: 0, paymentCost: 10,
+      departureDate: '2026-01-01', todayISO: '2026-06-15',
+    });
+    expect(s.quote).toBe('done');
+    expect(s.contract).toBe('done');
+    expect(s.visa).toBe('doing');
+    expect(s.deposit_ncc).toBe('doing');
+    expect(s.final_payment).toBe('done');
+    expect(s.departure).toBe('done');
+  });
+  it('no departure signal before the date', () => {
+    expect(workflowSignals({ departureDate: '2026-12-31', todayISO: '2026-06-15' }).departure).toBeUndefined();
+  });
+});
+
+describe('applySignals (advance-only)', () => {
+  it('advances but never downgrades and skips blocked', () => {
+    const w = defaultWorkflow();
+    const contractStep = w.find((s) => s.key === 'contract')!;
+    const quoteStep = w.find((s) => s.key === 'quote')!;
+    quoteStep.status = 'done';          // đã done → tín hiệu 'done' không hạ
+    contractStep.status = 'blocked';    // blocked → bỏ qua
+    const out = applySignals(w, { contract: 'done', quote: 'doing', departure: 'done' });
+    expect(out.find((s) => s.key === 'contract')!.status).toBe('blocked');
+    expect(out.find((s) => s.key === 'quote')!.status).toBe('done');
+    expect(out.find((s) => s.key === 'departure')!.status).toBe('done');
+  });
+  it('suggestionFor only when higher than current', () => {
+    const step = { id: 'x', label: 'Ký kết hợp đồng', status: 'todo', key: 'contract' } as WorkflowStep;
+    expect(suggestionFor(step, { contract: 'done' })).toBe('done');
+    expect(suggestionFor({ ...step, status: 'done' }, { contract: 'done' })).toBeNull();
+  });
+});
+
+describe('fillDueDates', () => {
+  it('fills only empty due dates from departure − offset; negative = after', () => {
+    const w: WorkflowStep[] = [
+      { id: 'a', label: 'A', status: 'todo', dueOffset: 7 },
+      { id: 'b', label: 'B', status: 'todo', dueOffset: -7 },
+      { id: 'c', label: 'C', status: 'todo', dueOffset: 3, dueDate: '2026-01-01' },
+    ];
+    const out = fillDueDates(w, '2026-06-15');
+    expect(out[0].dueDate).toBe('2026-06-08');  // D-7
+    expect(out[1].dueDate).toBe('2026-06-22');  // D+7 (sau)
+    expect(out[2].dueDate).toBe('2026-01-01');  // không ghi đè
+  });
+  it('no-op without departure', () => {
+    const w: WorkflowStep[] = [{ id: 'a', label: 'A', status: 'todo', dueOffset: 7 }];
+    expect(fillDueDates(w, null)).toBe(w);
   });
 });
 

@@ -122,6 +122,8 @@ export type WorkflowStep = {
   id: string;
   label: string;
   status: WorkflowStatus;
+  key?: string;               // khoá ổn định (đổi tên vẫn nhận tín hiệu auto) — bước mặc định
+  dueOffset?: number;         // hạn = N ngày TRƯỚC khởi hành (âm = sau khởi hành)
   startDate?: string | null;  // ISO yyyy-mm-dd (cho Gantt)
   dueDate?: string | null;
   doneDate?: string | null;

@@ -34,6 +34,9 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
             </TextField>
             <TextField type="date" label="Ngày bắt đầu" value={s.startDate ?? ''} onChange={(e) => set({ startDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true } }} />
             <TextField type="date" label="Hạn hoàn thành" value={s.dueDate ?? ''} onChange={(e) => set({ dueDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField type="number" label="Hạn = N ngày trước khởi hành" value={s.dueOffset ?? ''}
+              onChange={(e) => set({ dueOffset: e.target.value === '' ? undefined : +e.target.value })}
+              helperText="Dùng cho nút Tự tính hạn (âm = sau khởi hành)" slotProps={{ inputLabel: { shrink: true } }} />
           </Box>
           <TextField label="Ghi chú" value={s.note ?? ''} onChange={(e) => set({ note: e.target.value })} fullWidth multiline minRows={2} />
         </Stack>

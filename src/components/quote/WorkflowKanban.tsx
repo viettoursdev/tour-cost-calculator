@@ -8,11 +8,12 @@ import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 type Props = {
   steps: WorkflowStep[];
   users: User[];
+  suggestions?: Record<string, WorkflowStatus>;
   onMove: (id: string, status: WorkflowStatus) => void;
   onOpen: (step: WorkflowStep) => void;
 };
 
-export function WorkflowKanban({ steps, users, onMove, onOpen }: Props) {
+export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen }: Props) {
   const refs = useRef<Partial<Record<WorkflowStatus, HTMLDivElement | null>>>({});
   const moveRef = useRef(onMove);
   moveRef.current = onMove;
@@ -67,6 +68,10 @@ export function WorkflowKanban({ steps, users, onMove, onOpen }: Props) {
                       <Chip size="small" label={numOf(s.id)} sx={{ height: 20, fontWeight: 800, bgcolor: meta.color + '22', color: meta.color }} />
                       <Typography fontSize={13.5} fontWeight={600} sx={{ flex: 1 }}>{s.label}</Typography>
                     </Stack>
+                    {suggestions[s.id] && (
+                      <Chip size="small" label={`↗ nên: ${WORKFLOW_STATUS_META[suggestions[s.id]].label}`}
+                        sx={{ mt: 0.5, height: 20, fontWeight: 700, bgcolor: WORKFLOW_STATUS_META[suggestions[s.id]].color, color: '#fff' }} />
+                    )}
                     {(s.assignee || dl) && (
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
                         {s.assignee && <Chip size="small" variant="outlined" label={`👤 ${nameOf(s.assignee)}`} />}
