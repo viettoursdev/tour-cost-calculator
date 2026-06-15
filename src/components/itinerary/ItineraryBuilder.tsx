@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import {
   Autocomplete, Box, Button, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from '@mui/material';
@@ -13,6 +13,7 @@ import {
   ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, newActivity, newDay, newSegment, TRANSPORT_PRESETS,
 } from './constants';
 import { parseFlights } from './parseFlights';
+import { parseFlights as parseFlightsAI } from '@/lib/flightParse';
 import { flightDep, flightArr, normalizeFlight } from './flightFields';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
@@ -28,10 +29,12 @@ import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
-import type { Activity, Day, Flight, Itinerary, ItineraryType, Segment, User } from '@/types';
+import type { Activity, Day, Flight, Itinerary, ItineraryType, QuoteFlight, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import BoltIcon from '@mui/icons-material/Bolt';
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ImageIcon from '@mui/icons-material/Image';
 
 type Props = {
   initial: Itinerary | null;
@@ -69,6 +72,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   useUndoRedoShortcuts(undo, redo);
   const [saving, setSaving] = useState(false);
   const [flightPaste, setFlightPaste] = useState('');
+  const [flightAiBusy, setFlightAiBusy] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
@@ -120,6 +124,33 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     }
     setIt((p) => ({ ...p, flights: parsed.map(normalizeFlight) }));
     setFlightPaste('');
+  };
+
+  // AI: phân tích chuyến bay từ text/ảnh (dùng /chat Sonnet) → map sang Flight lịch trình.
+  const qfToFlight = (qf: QuoteFlight): Flight => normalizeFlight({
+    id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    group: 'Nhóm 1', leg: qf.date || '', flightNo: qf.flightNo, dep: '', arr: '',
+    depAirport: qf.depAirport, depTime: qf.depTime, depDayOffset: qf.depDayOffset,
+    arrAirport: qf.arrAirport, arrTime: qf.arrTime, arrDayOffset: qf.arrDayOffset,
+  });
+  const runFlightAI = async (payload: { text?: string; imageB64?: string }) => {
+    setFlightAiBusy(true);
+    try {
+      const qfs = await parseFlightsAI(payload);
+      if (!qfs.length) { window.alert('Không nhận diện được chuyến bay. Thử ảnh rõ hơn hoặc dán code.'); return; }
+      setIt((p) => ({ ...p, flights: qfs.map(qfToFlight) }));
+      setFlightPaste('');
+    } catch (e) {
+      window.alert('❌ ' + (e as Error).message);
+    } finally {
+      setFlightAiBusy(false);
+    }
+  };
+  const onPickFlightImage = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file) return;
+    const b64 = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result ?? '').split(',')[1] ?? ''); r.onerror = rej; r.readAsDataURL(file); });
+    void runFlightAI({ imageB64: b64, text: flightPaste.trim() || undefined });
   };
 
   // ── Day / Segment / Activity ops ──
@@ -416,20 +447,30 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
 
           <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: 'rgba(41,128,185,0.05)', border: '1px dashed rgba(41,128,185,0.3)' }}>
             <Typography variant="caption" fontWeight={700} sx={{ color: '#2980b9', display: 'block', mb: 0.5 }}>
-              📋 Dán đoạn thông tin chuyến bay → tự phân tích
+              📋 Dán code GDS (Phân tích nhanh) — hoặc dán thông tin bất kỳ / tải ảnh để AI nhận diện
             </Typography>
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} alignItems="flex-start">
               <TextField
                 fullWidth size="small" multiline minRows={2}
-                value={flightPaste}
+                value={flightPaste} disabled={flightAiBusy}
                 onChange={(e) => setFlightPaste(e.target.value)}
-                placeholder={"Dán code GDS/PNR, VD:\n1  BR 396 10JUN SGN TPE  1545 2010\n2  BR 051 24JUN IAH TPE  0120 0605"}
+                placeholder={"Dán code GDS/PNR, VD:\n1  BR 396 10JUN SGN TPE  1545 2010\nHoặc dán text/ảnh vé → bấm ✨ AI"}
                 InputProps={{ sx: { fontSize: 12, fontFamily: 'monospace' } }}
               />
-              <Button variant="contained" startIcon={<BoltIcon />} onClick={doParseFlights}
-                sx={{ background: 'linear-gradient(135deg,#2980b9,#3498db)', whiteSpace: 'nowrap' }}>
-                Phân tích
-              </Button>
+              <Stack spacing={0.75} sx={{ flexShrink: 0 }}>
+                <Button variant="contained" size="small" startIcon={<BoltIcon />} onClick={doParseFlights} disabled={flightAiBusy}
+                  sx={{ background: 'linear-gradient(135deg,#2980b9,#3498db)', whiteSpace: 'nowrap' }}>
+                  Phân tích
+                </Button>
+                <Button variant="outlined" size="small" startIcon={<AutoAwesomeIcon />} disabled={flightAiBusy || !flightPaste.trim()}
+                  onClick={() => void runFlightAI({ text: flightPaste.trim() })} sx={{ whiteSpace: 'nowrap' }}>
+                  {flightAiBusy ? 'Đang…' : '✨ AI'}
+                </Button>
+                <Button component="label" variant="outlined" size="small" startIcon={<ImageIcon />} disabled={flightAiBusy} sx={{ whiteSpace: 'nowrap' }}>
+                  Ảnh
+                  <input type="file" hidden accept="image/*" onChange={onPickFlightImage} />
+                </Button>
+              </Stack>
             </Stack>
           </Paper>
 
