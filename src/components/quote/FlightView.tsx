@@ -97,7 +97,7 @@ export function FlightView() {
       price: fare?.amount ?? 0,
       qtyMode: 'per_pax',
       unit: '/người',
-      note: [air, (f.depTime || f.arrTime) ? `${f.depTime}-${f.arrTime}` : ''].filter(Boolean).join(' · '),
+      note: [air, (f.depTime || f.arrTime) ? `${f.depTime}-${f.arrTime}${(f.arrDayOffset ?? 0) > 0 ? `+${f.arrDayOffset}` : ''}` : ''].filter(Boolean).join(' · '),
     });
     if (window.confirm(`✅ Đã thêm "${f.flightNo}" vào bảng báo giá (Vé máy bay). Mở tab Bảng báo giá để xem?`)) setView('cost');
   };
@@ -184,12 +184,18 @@ export function FlightView() {
                         <Typography variant="caption" color="text.secondary" noWrap>{cityOf(f.arrAirport, f.arrCity)}</Typography>
                       </TableCell>
                       <TableCell>
-                        <TextField variant="standard" type="time" value={f.depTime}
-                          onChange={(e) => upd(f.id, { depTime: e.target.value })} sx={{ ...cellInput, width: 100 }} />
+                        <Stack direction="row" alignItems="center" spacing={0.25}>
+                          <TextField variant="standard" type="time" value={f.depTime}
+                            onChange={(e) => upd(f.id, { depTime: e.target.value })} sx={{ ...cellInput, width: 92 }} />
+                          {(f.depDayOffset ?? 0) > 0 && <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{f.depDayOffset}</Typography>}
+                        </Stack>
                       </TableCell>
                       <TableCell>
-                        <TextField variant="standard" type="time" value={f.arrTime}
-                          onChange={(e) => upd(f.id, { arrTime: e.target.value })} sx={{ ...cellInput, width: 100 }} />
+                        <Stack direction="row" alignItems="center" spacing={0.25}>
+                          <TextField variant="standard" type="time" value={f.arrTime}
+                            onChange={(e) => upd(f.id, { arrTime: e.target.value })} sx={{ ...cellInput, width: 92 }} />
+                          {(f.arrDayOffset ?? 0) > 0 && <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{f.arrDayOffset}</Typography>}
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         <Button size="small" startIcon={<SellIcon />} onClick={() => setEditing(f)} sx={{ color: '#0d7a6a', whiteSpace: 'nowrap' }}>

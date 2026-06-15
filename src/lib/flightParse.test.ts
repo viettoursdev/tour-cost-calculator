@@ -33,4 +33,13 @@ describe('mapToFlight', () => {
     expect(f.depAirport).toBe('');
     expect(f.airlineName).toBeUndefined();
   });
+  it('captures explicit day offsets from source', () => {
+    const f = mapToFlight({ flightNo: 'MU281', depTime: '22:15', arrTime: '01:35', depOffset: 1, arrOffset: 2 });
+    expect(f.depDayOffset).toBe(1);
+    expect(f.arrDayOffset).toBe(2);
+  });
+  it('auto +1 when arrival time is before departure time (overnight)', () => {
+    const f = mapToFlight({ flightNo: 'VN1', depTime: '23:00', arrTime: '01:00' });
+    expect(f.arrDayOffset).toBe(1);
+  });
 });

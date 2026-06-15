@@ -108,6 +108,8 @@ export type QuoteFlight = {
   arrCity?: string;
   depTime: string;       // Giờ khởi hành HH:MM
   arrTime: string;       // Giờ đáp HH:MM
+  depDayOffset?: number; // +N ngày trên giờ khởi hành (qua đêm); 0/không = cùng ngày
+  arrDayOffset?: number; // +N ngày trên giờ đáp
   fares: FlightFare[];
   note?: string;
 };

@@ -40,10 +40,20 @@ export function FlightEditor({ flight, onClose, onSave }: Props) {
             <TextField size="small" label="Điểm đến (IATA)" value={f.arrAirport} placeholder="SGN"
               onChange={(e) => set({ arrAirport: e.target.value.toUpperCase() })} helperText={arrCity || ' '} />
             <Box />
-            <TextField size="small" type="time" label="Giờ đi" value={f.depTime}
-              onChange={(e) => set({ depTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField size="small" type="time" label="Giờ đến" value={f.arrTime}
-              onChange={(e) => set({ arrTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+            <Stack direction="row" spacing={0.75}>
+              <TextField size="small" type="time" label="Giờ đi" value={f.depTime} fullWidth
+                onChange={(e) => set({ depTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField size="small" type="number" label="+ngày" value={f.depDayOffset ?? 0} sx={{ width: 76 }}
+                onChange={(e) => set({ depDayOffset: Math.max(0, +e.target.value) || undefined })}
+                slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
+            </Stack>
+            <Stack direction="row" spacing={0.75}>
+              <TextField size="small" type="time" label="Giờ đến" value={f.arrTime} fullWidth
+                onChange={(e) => set({ arrTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
+              <TextField size="small" type="number" label="+ngày" value={f.arrDayOffset ?? 0} sx={{ width: 76 }}
+                onChange={(e) => set({ arrDayOffset: Math.max(0, +e.target.value) || undefined })}
+                slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
+            </Stack>
           </Box>
 
           <Box>

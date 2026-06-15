@@ -32,6 +32,8 @@ export interface Flight {
   depTime?: string;     // Giờ bay (vd 05:40)
   arrAirport?: string;  // Sân bay đến (vd PEK)
   arrTime?: string;     // Giờ đáp (vd 11:35)
+  depDayOffset?: number; // +N ngày trên giờ bay (qua đêm)
+  arrDayOffset?: number; // +N ngày trên giờ đáp
 }
 
 export type ItineraryType = 'NN' | 'ND';

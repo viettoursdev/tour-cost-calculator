@@ -11,8 +11,10 @@ const FLIGHT_PARSE_PROMPT = [
   'lịch bay, hoặc ảnh chụp) và trả về CHỈ một MẢNG JSON các chuyến bay — không kèm giải',
   'thích, không markdown. Mỗi phần tử có dạng:',
   '{"date":"DDMMM viết HOA, vd 01JAN","flightNo":"vd VN310","depAirport":"IATA 3 ký tự",',
-  '"arrAirport":"IATA 3 ký tự","depTime":"HH:MM 24 giờ","arrTime":"HH:MM"}.',
-  'Nếu thiếu trường nào để chuỗi rỗng. Giữ NGUYÊN giá trị đọc được, KHÔNG bịa.',
+  '"arrAirport":"IATA 3 ký tự","depTime":"HH:MM 24 giờ","arrTime":"HH:MM",',
+  '"depOffset":số ngày cộng thêm trên GIỜ ĐI (ký hiệu nhỏ +1/+2 cạnh giờ, mặc định 0),',
+  '"arrOffset":số ngày cộng thêm trên GIỜ ĐÁP (ký hiệu +1/+2, mặc định 0)}.',
+  'Nếu thiếu trường nào để chuỗi rỗng hoặc 0. Giữ NGUYÊN giá trị đọc được, KHÔNG bịa.',
 ].join(' ');
 
 /** Đoán media_type từ vài byte đầu của base64 (cho Claude vision). */
@@ -35,16 +37,25 @@ export function extractFlightJson(raw: string): string {
 }
 
 /** Map 1 object AI → QuoteFlight (suy hãng/sân bay, chuẩn hoá HOA). */
+/** Số ngày offset hợp lệ (>0) hoặc 0. */
+const offNum = (v: unknown): number => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
+
 export function mapToFlight(o: Record<string, unknown>): QuoteFlight {
   const flightNo = String(o.flightNo ?? '').toUpperCase().trim();
   const dep = String(o.depAirport ?? '').toUpperCase().trim();
   const arr = String(o.arrAirport ?? '').toUpperCase().trim();
   const air = deriveAirline(flightNo);
+  const depTime = String(o.depTime ?? '').trim();
+  const arrTime = String(o.arrTime ?? '').trim();
+  const depOff = offNum(o.depOffset);
+  // Giờ đáp < giờ đi (cùng định dạng HH:MM) ⇒ qua đêm ⇒ +1 nếu nguồn không ghi.
+  let arrOff = offNum(o.arrOffset);
+  if (!arrOff && depTime && arrTime && arrTime < depTime) arrOff = 1;
   return newFlight({
     date: String(o.date ?? '').toUpperCase().trim(),
-    flightNo, depAirport: dep, arrAirport: arr,
-    depTime: String(o.depTime ?? '').trim(),
-    arrTime: String(o.arrTime ?? '').trim(),
+    flightNo, depAirport: dep, arrAirport: arr, depTime, arrTime,
+    depDayOffset: depOff || undefined,
+    arrDayOffset: arrOff || undefined,
     airlineCode: air.code || undefined,
     airlineName: air.name || undefined,
     depCity: deriveAirport(dep) || undefined,

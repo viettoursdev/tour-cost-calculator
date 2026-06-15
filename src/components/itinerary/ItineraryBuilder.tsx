@@ -455,13 +455,15 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                   placeholder="TSN" />
                 <TextField size="small" value={flightDep(f).time}
                   onChange={(e) => updFlight(f.id, { depTime: e.target.value })}
-                  placeholder="05:40" />
+                  placeholder="05:40"
+                  InputProps={flightDep(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightDep(f).offset}</Typography> } : undefined} />
                 <TextField size="small" value={flightArr(f).airport}
                   onChange={(e) => updFlight(f.id, { arrAirport: e.target.value.toUpperCase() })}
                   placeholder="PEK" />
                 <TextField size="small" value={flightArr(f).time}
                   onChange={(e) => updFlight(f.id, { arrTime: e.target.value })}
-                  placeholder="11:35" />
+                  placeholder="11:35"
+                  InputProps={flightArr(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightArr(f).offset}</Typography> } : undefined} />
                 <IconButton size="small" color="error" onClick={() => delFlight(f.id)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
