@@ -13,4 +13,10 @@ module.exports = {
     'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
   },
+  overrides: [
+    {
+      files: ['scripts/**/*.mjs'],
+      env: { node: true },
+    },
+  ],
 };
