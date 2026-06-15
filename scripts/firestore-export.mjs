@@ -1,27 +1,27 @@
 #!/usr/bin/env node
 /**
- * Stage 2 of the Firebase project switch.
+ * Firestore export — direction-agnostic.
  *
- * Reads every known doc + dynamic collection from the OLD project
- * (viettours-cost-calculator, named database `viettours`) and writes a
- * single JSON file: firestore-dump.json.
+ * Reads every known doc + dynamic collection from whichever project the
+ * service-account JSON at SA_PATH belongs to, and writes a single JSON file
+ * (OUT_PATH). Assumes the source project uses the DEFAULT Firestore database.
  *
  * Run from the repo root:
  *   node scripts/firestore-export.mjs
+ *   SA_PATH=new-service-account.json node scripts/firestore-export.mjs   # alt source
  *
- * Requires `old-service-account.json` at the repo root (a Firebase service
- * account key downloaded from the OLD project's Console: Project Settings →
- * Service accounts → Generate new private key). Gitignored.
+ * Env vars:
+ *   SA_PATH   default: old-service-account.json
+ *   OUT_PATH  default: firestore-dump.json
  *
- * Idempotent: safe to re-run; later runs overwrite firestore-dump.json.
+ * Idempotent: safe to re-run; later runs overwrite OUT_PATH.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const SA_PATH = 'old-service-account.json';
-const OUT_PATH = 'firestore-dump.json';
-const OLD_DB_NAME = 'viettours';
+const SA_PATH = process.env.SA_PATH || 'old-service-account.json';
+const OUT_PATH = process.env.OUT_PATH || 'firestore-dump.json';
 
 const SINGLE_DOCS = [
   ['viettours', 'master_rate_card'],
@@ -31,12 +31,26 @@ const SINGLE_DOCS = [
   ['viettours', 'quote_history'],
   ['viettours', 'dmc_quote_history'],
   ['viettours', 'customer_list'],
+  ['viettours', 'fx_rates'],
+  ['viettours', 'payment_approvals'],
+  ['viettours', 'itinerary_index'],
+  ['viettours', 'restaurant_list'],
+  ['viettours', 'menu_index'],
+  ['viettours', 'visa_products'],
+  ['viettours', 'visa_proc_index'],
+  ['viettours', 'visa_projects'],
+  ['viettours', 'poi_library'],
 ];
 
 const DYNAMIC_COLLECTIONS = [
   'quote_projects',
   'dmc_quote_projects',
   'user_notifications',
+  'notification_threads',
+  'tour_payments',
+  'tour_itineraries',
+  'tour_menus',
+  'visa_procedures',
 ];
 
 function loadKey() {
@@ -55,7 +69,7 @@ function loadKey() {
 async function main() {
   const sa = loadKey();
   const app = initializeApp({ credential: cert(sa) }, 'export');
-  const db = getFirestore(app, OLD_DB_NAME);
+  const db = getFirestore(app);
 
   const dump = { singles: {}, collections: {} };
 
