@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
-  FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, PoiEntry,
+  FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
@@ -1014,6 +1014,26 @@ export async function fbPushPois(
 ): Promise<void> {
   await setDoc(POI_LIBRARY_DOC, {
     pois: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── Catalog sản phẩm NCC (single-doc, dùng chung) ──
+const NCC_PRODUCTS_DOC = doc(db, 'viettours', 'ncc_products');
+
+export function fbSubscribeNccProducts(cb: (list: NccProduct[]) => void): Unsubscribe {
+  return subDoc(NCC_PRODUCTS_DOC, (s) => {
+    cb(s.exists() ? ((s.data().products as NccProduct[]) ?? []) : []);
+  });
+}
+
+export async function fbPushNccProducts(
+  list: NccProduct[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(NCC_PRODUCTS_DOC, {
+    products: list,
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });

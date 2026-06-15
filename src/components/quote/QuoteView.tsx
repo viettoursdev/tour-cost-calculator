@@ -15,6 +15,7 @@ import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { ContractView } from '@/components/contract/ContractView';
 import { CustomerView } from '@/components/customer/CustomerView';
 import { NCCView } from '@/components/ncc/NCCView';
+import { NccProductView } from '@/components/ncc/NccProductView';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 
@@ -81,6 +82,7 @@ export function QuoteView() {
             {view === 'contract' && <ContractView />}
             {view === 'customer' && <CustomerView />}
             {view === 'ncc' && <NCCView />}
+            {view === 'nccProducts' && <NccProductView />}
           </Box>
 
           <SaveCloudQuoteModal

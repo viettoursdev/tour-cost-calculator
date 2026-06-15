@@ -82,6 +82,8 @@ export const fbPushVisaProjects = vi.fn(async () => {});
 
 export const fbSubscribePois = vi.fn(() => () => {});
 export const fbPushPois = vi.fn(async () => {});
+export const fbSubscribeNccProducts = vi.fn(() => () => {});
+export const fbPushNccProducts = vi.fn(async () => {});
 
 // ── Auth ──
 export const auth = {};

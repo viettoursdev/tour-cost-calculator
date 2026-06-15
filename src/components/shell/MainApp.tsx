@@ -8,6 +8,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
+import { useNccProductsStore } from '@/stores/nccProductsStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { usePaymentStore } from '@/stores/paymentStore';
@@ -79,6 +80,7 @@ export function MainApp() {
     const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
     const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
     const nccUnsub = sync ? useNccStore.getState().init() : undefined;
+    const nccProdUnsub = sync ? useNccProductsStore.getState().init() : undefined;
     const contractUnsub = sync ? useContractStore.getState().init() : undefined;
     const itinUnsub = sync ? useItineraryStore.getState().init() : undefined;
     const menuUnsub = sync ? useMenuStore.getState().init() : undefined;
@@ -93,6 +95,7 @@ export function MainApp() {
       qhUnsub?.();
       custUnsub?.();
       nccUnsub?.();
+      nccProdUnsub?.();
       contractUnsub?.();
       notifUnsub?.();
       paUnsub?.();

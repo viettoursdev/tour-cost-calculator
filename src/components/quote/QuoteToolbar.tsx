@@ -246,6 +246,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         ...(canContract ? [{ v: 'contract' as QuoteViewKey, label: '📜 Hợp đồng' }] : []),
         ...(hasPerm(currentUser, 'manageCustomers') ? [{ v: 'customer' as QuoteViewKey, label: '👥 Khách hàng' }] : []),
         ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'ncc' as QuoteViewKey, label: '🏢 Nhà Cung Cấp' }] : []),
+        ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'nccProducts' as QuoteViewKey, label: '📦 Sản phẩm NCC' }] : []),
       ];
   const tabValue = TAB_DEFS.some((t) => t.v === view) ? view : false;
 

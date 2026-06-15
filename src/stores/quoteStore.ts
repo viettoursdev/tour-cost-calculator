@@ -46,7 +46,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts';
 
 type QuoteState = {
   draft: QuoteDraft;
