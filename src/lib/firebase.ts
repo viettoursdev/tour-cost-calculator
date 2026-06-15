@@ -12,7 +12,7 @@ import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
-  QuoteDraft, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
+  QuoteDraft, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
 } from '@/types';
 
@@ -200,6 +200,7 @@ type SaveEntry = {
   totalCost: number;
   customerId?: string;
   customerName?: string;
+  status?: QuoteStatus;
   collaborators?: Collaborator[];
   attachment?: FileAttachment;
   attachments?: FileAttachment[];
@@ -233,6 +234,7 @@ function makeQuoteHistoryApi(
       const idx = quotes.findIndex((q) => q.id === entry.id);
 
       const optionalFields: Partial<CloudQuoteEntry> = {};
+      if (entry.status !== undefined) optionalFields.status = entry.status;
       if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
       if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
       if (entry.attachment !== undefined) optionalFields.attachment = entry.attachment;
@@ -366,6 +368,17 @@ function makeQuoteHistoryApi(
       quotes[i] = { ...quotes[i], ...link };
       await setDoc(historyDoc, { quotes });
     },
+
+    /** Cập nhật nhanh trạng thái báo giá lên bản ghi lịch sử (theo cloudId). */
+    async fbSetEntryStatus(cloudId: string, status: QuoteStatus): Promise<void> {
+      const snap = await getDoc(historyDoc);
+      if (!snap.exists()) return;
+      const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+      const i = quotes.findIndex((q) => q.cloudId === cloudId);
+      if (i < 0) return;
+      quotes[i] = { ...quotes[i], status };
+      await setDoc(historyDoc, { quotes });
+    },
   };
 }
 
@@ -377,6 +390,7 @@ export const fbDeleteQuote           = _regular.fbDeleteQuote;
 export const fbUpdateCollaborators   = _regular.fbUpdateCollaborators;
 export const fbGetQuoteProject       = _regular.fbGetQuoteProject;
 export const fbSetRegularEntryLink   = _regular.fbSetEntryLink;
+export const fbSetQuoteStatus        = _regular.fbSetEntryStatus;
 
 const _dmc = makeQuoteHistoryApi(DMC_QUOTE_HISTORY_DOC, dmcQuoteProjectDoc);
 export const fbSubscribeDMCQuoteHistory = _dmc.fbSubscribeQuoteHistory;
@@ -386,6 +400,7 @@ export const fbDeleteDMCQuote            = _dmc.fbDeleteQuote;
 export const fbUpdateDMCCollaborators    = _dmc.fbUpdateCollaborators;
 export const fbGetDMCQuoteProject        = _dmc.fbGetQuoteProject;
 export const fbSetDMCEntryLink           = _dmc.fbSetEntryLink;
+export const fbSetDMCQuoteStatus         = _dmc.fbSetEntryStatus;
 
 // ── Customers ──
 

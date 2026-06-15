@@ -1,4 +1,17 @@
-import type { CategoryId, Item, Template } from '@/types';
+import type { CategoryId, Item, QuoteStatus, Template } from '@/types';
+
+// Trạng thái báo giá (pipeline bán) — nhãn + màu theo tính chất.
+export const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; color: string }> = {
+  in_progress:  { label: 'Đang triển khai',      color: '#2563eb' },
+  sent:         { label: 'Đã gửi khách hàng',    color: '#0891b2' },
+  negotiating:  { label: 'Đang deal giá',        color: '#f5a623' },
+  won:          { label: 'Thành công',           color: '#27ae60' },
+  not_selected: { label: 'Không được lựa chọn',  color: '#dc3250' },
+  cancelled:    { label: 'Huỷ',                  color: '#64748b' },
+};
+
+export const QUOTE_STATUS_ORDER: QuoteStatus[] =
+  ['in_progress', 'sent', 'negotiating', 'won', 'not_selected', 'cancelled'];
 
 // Currency rates (default values; user can override per quote).
 // Source: public/legacy.html:1397

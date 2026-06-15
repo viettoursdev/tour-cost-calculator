@@ -83,6 +83,15 @@ export type QuoteGroup = {
   catEnabled: Record<CategoryId, boolean>;
 };
 
+/** Trạng thái pipeline bán của một báo giá. */
+export type QuoteStatus =
+  | 'in_progress'    // Đang triển khai
+  | 'sent'           // Đã gửi khách hàng
+  | 'negotiating'    // Đang deal giá
+  | 'won'            // Thành công
+  | 'not_selected'   // Không được lựa chọn
+  | 'cancelled';     // Huỷ
+
 export type QuoteDraft = {
   template: Template | null;
   info: QuoteInfo;
@@ -95,6 +104,7 @@ export type QuoteDraft = {
   items: Partial<Record<CategoryId, Item[]>>;
   catEnabled: Record<CategoryId, boolean>;
   currentQuoteId: string | null;
+  status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
   // Customer-facing terms (optional — absent until edited).
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm
@@ -144,6 +154,7 @@ export type CloudQuoteEntry = {
   totalCost: number;
   customerId?: string;
   customerName?: string;
+  status?: QuoteStatus;
   createdByUsername: string;
   createdByName: string;
   collaborators: Collaborator[];

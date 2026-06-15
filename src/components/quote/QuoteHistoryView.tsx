@@ -9,9 +9,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { fmtVND } from './calc';
+import { QUOTE_STATUS_META } from './constants';
 import { workerFileUrl } from '@/lib/aiWorker';
 import { attMeta } from '@/lib/util';
-import type { CloudQuoteEntry, Collaborator, Template, User } from '@/types';
+import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import Delete from '@mui/icons-material/Delete';
 import AttachFile from '@mui/icons-material/AttachFile';
@@ -174,6 +175,15 @@ export function QuoteHistoryView() {
       renderCell: (p: GridRenderCellParams<CloudQuoteEntry, Template>) => (
         <Chip size="small" label={TEMPLATE_LABEL[p.value as Template]} />
       ),
+    },
+    {
+      field: 'status',
+      headerName: 'Trạng thái',
+      width: 150,
+      renderCell: (p: GridRenderCellParams<CloudQuoteEntry, QuoteStatus>) => {
+        const meta = QUOTE_STATUS_META[(p.value ?? 'in_progress') as QuoteStatus];
+        return <Chip size="small" label={meta.label} sx={{ bgcolor: meta.color + '22', color: meta.color, fontWeight: 700 }} />;
+      },
     },
     { field: 'pax', headerName: 'Khách', width: 80, align: 'right', headerAlign: 'right' },
     {

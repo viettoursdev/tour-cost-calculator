@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AppBar, Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
-  Stack, Tab, Tabs, TextField, Toolbar, Typography,
+  Stack, Tab, Tabs, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -40,10 +40,10 @@ import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
-import { TEMPLATES } from './constants';
+import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
-import type { Contract, OutputCurrency } from '@/types';
+import type { Contract, OutputCurrency, QuoteStatus } from '@/types';
 
 type RateModalState =
   | { kind: 'none' }
@@ -99,6 +99,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const outputCurrency = (useQuoteStore((s) => s.draft.outputCurrency) ?? 'USD') as OutputCurrency;
 
   const draft = useQuoteStore((s) => s.draft);
+  const status = useQuoteStore((s) => s.draft.status) ?? 'in_progress';
+  const setStatus = useQuoteStore((s) => s.setStatus);
   const currentUser = useAuthStore((s) => s.currentUser);
 
   const isDMC = template === 'dmc';
@@ -112,6 +114,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [statusAnchor, setStatusAnchor] = useState<HTMLElement | null>(null);
   const undoDraft = useQuoteStore((s) => s.undoDraft);
   const redoDraft = useQuoteStore((s) => s.redoDraft);
   const canUndo = useQuoteStore((s) => s.draftPast.length > 0);
@@ -551,6 +554,27 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             />
           </Box>
         )}
+        <Tooltip title="Trạng thái báo giá">
+          <Button
+            size="small" variant="contained"
+            onClick={(e) => setStatusAnchor(e.currentTarget)}
+            endIcon={<ExpandMoreIcon />}
+            sx={{ fontWeight: 800, color: '#fff', bgcolor: QUOTE_STATUS_META[status].color, '&:hover': { bgcolor: QUOTE_STATUS_META[status].color, filter: 'brightness(0.93)' } }}
+          >
+            ● {QUOTE_STATUS_META[status].label}
+          </Button>
+        </Tooltip>
+        <Menu anchorEl={statusAnchor} open={!!statusAnchor} onClose={() => setStatusAnchor(null)}>
+          {QUOTE_STATUS_ORDER.map((st: QuoteStatus) => (
+            <MenuItem
+              key={st} selected={st === status}
+              onClick={() => { setStatus(st); setStatusAnchor(null); }}
+              sx={{ fontWeight: 700, color: QUOTE_STATUS_META[st].color }}
+            >
+              ● {QUOTE_STATUS_META[st].label}
+            </MenuItem>
+          ))}
+        </Menu>
         <UndoRedoButtons undo={undoDraft} redo={redoDraft} canUndo={canUndo} canRedo={canRedo} />
         <Button
           size="small" variant="contained" startIcon={<CloudUploadIcon />}

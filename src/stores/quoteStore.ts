@@ -8,6 +8,7 @@ import {
   fbDeleteDMCQuote, fbGetDMCQuoteProject, fbSaveDMCQuote, fbSaveDMCQuoteState,
   fbUpdateDMCCollaborators,
   fbSetRegularEntryLink,
+  fbSetQuoteStatus, fbSetDMCQuoteStatus,
   fbPushFxRates,
   generateQuoteCode,
 } from '@/lib/firebase';
@@ -17,7 +18,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
-  QuoteDraft, QuoteInfo, QuotePayment, QuotePricingOptions, Snapshot, Template, User,
+  QuoteDraft, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, User,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -40,6 +41,7 @@ const EMPTY_DRAFT: QuoteDraft = {
   items: {},
   catEnabled: Object.fromEntries(CATS.map(c => [c.id, c.id !== 'dmc'])) as Record<CategoryId, boolean>,
   currentQuoteId: null,
+  status: 'in_progress',
 };
 
 export type QuoteViewKey =
@@ -76,6 +78,7 @@ type QuoteState = {
 
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
+  setStatus: (status: QuoteStatus) => void;
   setRate: (cur: string, rate: number) => void;
   setRatesSynced: (rates: Record<string, number>, pushedAt?: string, pushedBy?: string, persistLocal?: boolean) => void;
   setMargin: (n: number) => void;
@@ -325,6 +328,16 @@ export const useQuoteStore = create<QuoteState>()(
           set((s) => ({ draft: { ...s.draft, info: { ...s.draft.info, ...patch } } })),
 
         setPax: (n) => set((s) => ({ draft: { ...s.draft, pax: Math.max(1, n) } })),
+
+        // Đổi trạng thái báo giá. Nếu báo giá đã lưu cloud → ghi NGAY lên lịch sử.
+        setStatus: (status) => {
+          set((s) => ({ draft: { ...s.draft, status } }));
+          const { draft } = get();
+          if (draft.currentQuoteId && draft.template) {
+            const fn = draft.template === 'dmc' ? fbSetDMCQuoteStatus : fbSetQuoteStatus;
+            void fn(draft.currentQuoteId, status).catch((e) => console.warn('setStatus cloud:', (e as Error).message));
+          }
+        },
 
         // Sửa tỷ giá của BÁO GIÁ đang mở (per-quote, lưu hành nội bộ trong báo giá đó).
         setRate: (cur, rate) =>
@@ -645,6 +658,7 @@ export const useQuoteStore = create<QuoteState>()(
               pax: draft.pax,
               totalCost,
               collaborators,
+              status: draft.status ?? 'in_progress',
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
               ...(attachments ? { attachments } : {}),
               ...(linkedForeign
@@ -713,8 +727,12 @@ export const useQuoteStore = create<QuoteState>()(
               } catch { /* giữ tỷ giá của chính DMC nếu không lấy được báo giá liên kết */ }
             }
           }
+          // Trạng thái lấy từ bản ghi lịch sử (cập nhật tức thì qua setStatus có thể mới
+          // hơn currentState đã lưu); fallback về currentState rồi 'in_progress'.
+          const idxList = isDmc ? useQuoteHistoryStore.getState().dmcQuotes : useQuoteHistoryStore.getState().quotes;
+          const status = idxList.find((q) => q.cloudId === cloudId)?.status ?? project.currentState.status ?? 'in_progress';
           muted(() => set(() => ({
-            draft: { ...project.currentState, currentQuoteId: cloudId, rates },
+            draft: { ...project.currentState, currentQuoteId: cloudId, rates, status },
             view: 'cost',
             ...CLEAR_HIST,
           })));

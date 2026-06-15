@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TEMPLATES, CATS, DMC_CAT_IDS, mkItem } from './constants';
+import { TEMPLATES, CATS, DMC_CAT_IDS, mkItem, QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
 
 describe('TEMPLATES', () => {
   it('declares the 7 documented templates', () => {
@@ -47,5 +47,20 @@ describe('mkItem', () => {
     const it = mkItem();
     expect(it.enabled).toBe(true);
     expect(it.foc).toBe(false);
+  });
+});
+
+describe('QUOTE_STATUS', () => {
+  it('order covers exactly the 6 statuses with meta (label + color)', () => {
+    expect(QUOTE_STATUS_ORDER).toHaveLength(6);
+    expect([...QUOTE_STATUS_ORDER].sort()).toEqual(Object.keys(QUOTE_STATUS_META).sort());
+    for (const s of QUOTE_STATUS_ORDER) {
+      expect(QUOTE_STATUS_META[s].label).toBeTruthy();
+      expect(QUOTE_STATUS_META[s].color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+  });
+
+  it('won maps to "Thành công"', () => {
+    expect(QUOTE_STATUS_META.won.label).toBe('Thành công');
   });
 });
