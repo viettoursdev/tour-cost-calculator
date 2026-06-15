@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/lib/aiWorker', () => ({ callAIWorker: vi.fn() }));
 vi.mock('./tools', () => ({
   ASSISTANT_TOOLS: [{ name: 'search_records', description: '', input_schema: {} }],
+  PROPOSAL_TOOLS: new Set(['propose_itinerary', 'propose_quote']),
   runAssistantTool: vi.fn(),
 }));
 
@@ -35,6 +36,17 @@ describe('runAssistant', () => {
     expect(mockCall).toHaveBeenCalledTimes(1);
     expect(mockTool).not.toHaveBeenCalled();
     expect(r.text).toBe('Chào bạn.');
+  });
+
+  it('collects a draft proposal from propose_itinerary tool', async () => {
+    mockCall
+      .mockResolvedValueOnce({ content: [{ type: 'tool_use', id: 'p1', name: 'propose_itinerary', input: { title: 'Tour Nhật 5N', schedule: [] } }], stop_reason: 'tool_use' })
+      .mockResolvedValueOnce({ content: [{ type: 'text', text: 'Đã tạo nháp.' }], stop_reason: 'end_turn' });
+    mockTool.mockResolvedValue('{"ok":true}');
+    const r = await runAssistant([{ role: 'user', content: 'soạn lịch trình Nhật' }]);
+    expect(r.proposals).toHaveLength(1);
+    expect(r.proposals[0]).toMatchObject({ kind: 'itinerary' });
+    expect(r.proposals[0].payload.title).toBe('Tour Nhật 5N');
   });
 
   it('collects web citations from text blocks', async () => {

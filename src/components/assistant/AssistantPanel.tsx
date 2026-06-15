@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Box, Chip, Drawer, IconButton, Link, Stack, TextField, Typography,
+  Box, Button, Chip, Drawer, IconButton, Link, Stack, TextField, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import PublicIcon from '@mui/icons-material/Public';
-import { runAssistant } from '@/lib/assistant/agent';
+import { runAssistant, type AssistantProposal } from '@/lib/assistant/agent';
+import { applyItineraryDraft, applyQuoteDraft } from '@/lib/assistant/draftBuilders';
 import { LEGACY } from '@/theme';
 import type { ChatMessage, Citation } from '@/lib/aiWorker';
 
-type UiMsg = { role: 'user' | 'assistant'; text: string; pending?: boolean; citations?: Citation[] };
+type UiMsg = { role: 'user' | 'assistant'; text: string; pending?: boolean; citations?: Citation[]; proposals?: AssistantProposal[] };
 
 const SUGGESTIONS = [
   'Tìm báo giá đi Nhật Bản',
@@ -54,7 +55,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       setHistory(r.messages);
       setUi((p) => {
         const copy = [...p];
-        copy[copy.length - 1] = { role: 'assistant', text: r.text || '(không có nội dung)', citations: dedupeCitations(r.citations) };
+        copy[copy.length - 1] = { role: 'assistant', text: r.text || '(không có nội dung)', citations: dedupeCitations(r.citations), proposals: r.proposals };
         return copy;
       });
     } catch (e) {
@@ -65,6 +66,16 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
       });
     } finally {
       setBusy(false); setActivity('');
+    }
+  };
+
+  const openDraft = async (p: AssistantProposal) => {
+    try {
+      if (p.kind === 'itinerary') await applyItineraryDraft(p.payload);
+      else applyQuoteDraft(p.payload);
+      onClose();
+    } catch (e) {
+      window.alert('Không mở được bản nháp: ' + (e as Error).message);
     }
   };
 
@@ -119,6 +130,16 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                         ))}
                       </Stack>
                     </Box>
+                  )}
+                  {m.proposals && m.proposals.length > 0 && (
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.25 }}>
+                      {m.proposals.map((p, k) => (
+                        <Button key={k} size="small" variant="contained" onClick={() => void openDraft(p)}
+                          sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', fontWeight: 700 }}>
+                          {p.kind === 'itinerary' ? '📋 Mở nháp lịch trình' : '📋 Mở nháp báo giá'}
+                        </Button>
+                      ))}
+                    </Stack>
                   )}
                 </Box>
               </Box>

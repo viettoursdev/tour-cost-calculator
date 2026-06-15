@@ -24,6 +24,11 @@ export function assistantSystem(): string {
     'của Viettours, web chỉ để bổ sung và phải dẫn nguồn. Khi đề xuất lịch trình, trình bày',
     'theo từng ngày (sáng/trưa/tối), nêu điểm tham quan, bữa ăn, lưu ý vận hành.',
     '',
+    'SOẠN NHÁP: khi người dùng muốn TẠO/SOẠN MỚI một lịch trình hoặc báo giá, sau khi đã',
+    'trình bày nội dung, hãy GỌI tool propose_itinerary hoặc propose_quote với dữ liệu có',
+    'cấu trúc — để app dựng bản nháp cho người dùng mở 1-chạm trong trình soạn thảo. Chỉ',
+    'gọi khi người dùng thực sự muốn tạo mới (không gọi khi chỉ tra cứu/hỏi đáp).',
+    '',
     `Hôm nay là ${today}.`,
   ].join('\n');
 }

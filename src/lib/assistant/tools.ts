@@ -22,6 +22,11 @@ const KIND_ENUM = [
   'contract', 'visaProject', 'visaProc', 'customer', 'ncc',
 ];
 
+export const CATEGORY_ENUM = [
+  'flight', 'hotel', 'transport', 'meal', 'sight', 'gala', 'logistics',
+  'staff', 'insurance', 'visa', 'other',
+];
+
 export const ASSISTANT_TOOLS: ToolDef[] = [
   {
     name: 'search_records',
@@ -102,6 +107,71 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
     name: 'get_menu',
     description: 'Chi tiết một thực đơn theo id: tiêu đề, điểm đến, và từng ngày (nhà hàng, thành phố, món gợi ý, giá).',
     input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'propose_itinerary',
+    description: 'Đề xuất một bản NHÁP lịch trình để người dùng mở trong trình soạn thảo (1-chạm). CHỈ gọi khi người dùng muốn TẠO/SOẠN lịch trình mới. Sau khi gọi, báo cho người dùng bấm nút bên dưới để mở nháp.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        destination: { type: 'string' },
+        country: { type: 'string' },
+        days: { type: 'number' },
+        nights: { type: 'number' },
+        intro: { type: 'string' },
+        schedule: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              day: { type: 'number' },
+              title: { type: 'string' },
+              meals: {
+                type: 'object',
+                properties: { breakfast: { type: 'boolean' }, lunch: { type: 'boolean' }, dinner: { type: 'boolean' } },
+              },
+              activities: { type: 'array', items: { type: 'string' }, description: 'Các hoạt động trong ngày (mỗi mục 1 dòng)' },
+            },
+            required: ['title', 'activities'],
+          },
+        },
+        includes: { type: 'array', items: { type: 'string' } },
+        excludes: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['title', 'schedule'],
+    },
+  },
+  {
+    name: 'propose_quote',
+    description: 'Đề xuất một bản NHÁP báo giá để người dùng mở trong trình soạn thảo (1-chạm). CHỈ gọi khi người dùng muốn TẠO/SOẠN báo giá mới. Giá theo VND.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        destination: { type: 'string' },
+        days: { type: 'number' },
+        pax: { type: 'number' },
+        template: { type: 'string', enum: ['domestic', 'intl'], description: 'domestic = nội địa, intl = nước ngoài' },
+        margin: { type: 'number', description: 'Lợi nhuận %' },
+        vat: { type: 'number', description: 'VAT %' },
+        svcBasis: { type: 'number', description: 'Service charge (VND)' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              category: { type: 'string', enum: CATEGORY_ENUM },
+              name: { type: 'string' },
+              price: { type: 'number', description: 'Đơn giá VND' },
+              perPax: { type: 'boolean', description: 'true = tính theo khách, false = theo đoàn' },
+            },
+            required: ['category', 'name', 'price'],
+          },
+        },
+      },
+      required: ['title', 'items'],
+    },
   },
 ];
 
@@ -256,6 +326,9 @@ async function toolGetMenu(input: Record<string, unknown>): Promise<unknown> {
   };
 }
 
+/** Các tool "đề xuất nháp" — không đổi dữ liệu, chỉ báo cho UI dựng nút mở nháp. */
+export const PROPOSAL_TOOLS = new Set(['propose_itinerary', 'propose_quote']);
+
 /** Thực thi một tool, trả chuỗi JSON cho tool_result. */
 export async function runAssistantTool(name: string, input: Record<string, unknown>): Promise<string> {
   try {
@@ -271,6 +344,12 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
       case 'search_pois': result = await toolSearchPois(input); break;
       case 'list_menus': result = await toolListMenus(input); break;
       case 'get_menu': result = await toolGetMenu(input); break;
+      case 'propose_itinerary':
+        result = { ok: true, message: `Đã chuẩn bị bản nháp lịch trình "${str(input, 'title')}". Mời người dùng bấm nút "📋 Mở nháp lịch trình" bên dưới để mở trong trình soạn thảo.` };
+        break;
+      case 'propose_quote':
+        result = { ok: true, message: `Đã chuẩn bị bản nháp báo giá "${str(input, 'title')}". Mời người dùng bấm nút "📋 Mở nháp báo giá" bên dưới.` };
+        break;
       default: result = { error: `Tool không hỗ trợ: ${name}` };
     }
     return JSON.stringify(result);

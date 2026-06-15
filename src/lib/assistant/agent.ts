@@ -4,12 +4,18 @@
  * tool_result và lặp. `web_search` do API Anthropic tự xử lý (server tool).
  */
 import { callAIWorker, type ChatMessage, type ContentBlock, type Citation } from '@/lib/aiWorker';
-import { ASSISTANT_TOOLS, runAssistantTool } from './tools';
+import { ASSISTANT_TOOLS, PROPOSAL_TOOLS, runAssistantTool } from './tools';
 import { assistantSystem } from './prompt';
+
+export interface AssistantProposal {
+  kind: 'itinerary' | 'quote';
+  payload: Record<string, unknown>;
+}
 
 export interface AssistantResult {
   text: string;
   citations: Citation[];
+  proposals: AssistantProposal[];
   messages: ChatMessage[];
 }
 
@@ -21,6 +27,7 @@ export async function runAssistant(
 ): Promise<AssistantResult> {
   const messages: ChatMessage[] = [...history];
   const citations: Citation[] = [];
+  const proposals: AssistantProposal[] = [];
 
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
     opts.onActivity?.(turn === 0 ? 'Đang suy nghĩ…' : 'Đang phân tích…');
@@ -38,13 +45,18 @@ export async function runAssistant(
     // Kết thúc khi không còn tool custom cần chạy (web_search đã được API xử lý).
     if (res.stop_reason !== 'tool_use' || toolUses.length === 0) {
       const text = content.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('\n').trim();
-      return { text, citations, messages };
+      return { text, citations, proposals, messages };
     }
 
     const results: ContentBlock[] = [];
     for (const tu of toolUses) {
-      opts.onActivity?.(`Tra cứu: ${tu.name}…`);
-      const out = await runAssistantTool(tu.name ?? '', (tu.input ?? {}) as Record<string, unknown>);
+      const tname = tu.name ?? '';
+      const tinput = (tu.input ?? {}) as Record<string, unknown>;
+      if (PROPOSAL_TOOLS.has(tname)) {
+        proposals.push({ kind: tname === 'propose_quote' ? 'quote' : 'itinerary', payload: tinput });
+      }
+      opts.onActivity?.(`Tra cứu: ${tname}…`);
+      const out = await runAssistantTool(tname, tinput);
       results.push({ type: 'tool_result', tool_use_id: tu.id, content: out });
     }
     messages.push({ role: 'user', content: results });
@@ -52,6 +64,6 @@ export async function runAssistant(
 
   return {
     text: '⚠ Trợ lý dừng vì vượt số bước phân tích cho phép. Hãy thử hỏi cụ thể hơn.',
-    citations, messages,
+    citations, proposals, messages,
   };
 }
