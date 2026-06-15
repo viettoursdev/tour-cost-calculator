@@ -16,14 +16,19 @@ import type {
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
 } from '@/types';
 
+const env = import.meta.env;
 const firebaseConfig = {
-  apiKey: "AIzaSyBZBJIoq_WXw_-2ykCiGQniJHTuWxRwge8",
-  authDomain: "tour-cost-calculator-4336c.firebaseapp.com",
-  projectId: "tour-cost-calculator-4336c",
-  storageBucket: "tour-cost-calculator-4336c.firebasestorage.app",
-  messagingSenderId: "763125494718",
-  appId: "1:763125494718:web:7d754d9031e4decaabffef",
+  apiKey: env.VITE_FIREBASE_API_KEY,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: env.VITE_FIREBASE_APP_ID,
 };
+
+for (const [k, v] of Object.entries(firebaseConfig)) {
+  if (!v) throw new Error(`Missing Firebase env var for "${k}". Check your .env file (see .env.example).`);
+}
 
 const app = initializeApp(firebaseConfig);
 // ignoreUndefinedProperties: Firestore rejects `undefined` field values in

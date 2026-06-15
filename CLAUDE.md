@@ -100,9 +100,10 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 Project ID:    tour-cost-calculator-4336c
 Database name: (default)
 Location:      asia-southeast1
-API Key:       AIzaSyBZBJIoq_WXw_-2ykCiGQniJHTuWxRwge8
 Auth Domain:   tour-cost-calculator-4336c.firebaseapp.com
 ```
+
+Web SDK config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) is read from `VITE_FIREBASE_*` env vars — see `.env.example`. Local dev uses `.env` (gitignored); CI uses repo secrets injected by `.github/workflows/deploy.yml`. These values are public (shipped in the browser bundle) — access control is enforced by Firestore Rules + Auth domain allowlist, not by hiding the key.
 
 Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tools deploy --only firestore:rules`. Every collection requires `request.auth != null` plus a `@viettours.com.vn` email — anonymous and external-domain clients are denied across the board.
 
