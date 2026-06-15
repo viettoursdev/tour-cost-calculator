@@ -16,6 +16,7 @@ import { ContractView } from '@/components/contract/ContractView';
 import { CustomerView } from '@/components/customer/CustomerView';
 import { NCCView } from '@/components/ncc/NCCView';
 import { NccProductView } from '@/components/ncc/NccProductView';
+import { FlightView } from './FlightView';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 
@@ -78,6 +79,7 @@ export function QuoteView() {
             {view === 'summary' && <SummaryView />}
             {view === 'dashboard' && <DashboardView />}
             {view === 'payment' && <PaymentView />}
+            {view === 'flights' && <FlightView />}
             {view === 'history' && <QuoteHistoryView />}
             {view === 'contract' && <ContractView />}
             {view === 'customer' && <CustomerView />}

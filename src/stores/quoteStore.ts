@@ -18,7 +18,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
-  QuoteDraft, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, User,
+  QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, User,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -42,11 +42,12 @@ const EMPTY_DRAFT: QuoteDraft = {
   catEnabled: Object.fromEntries(CATS.map(c => [c.id, c.id !== 'dmc'])) as Record<CategoryId, boolean>,
   currentQuoteId: null,
   status: 'in_progress',
+  flights: [],
 };
 
 export type QuoteViewKey =
   | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights';
 
 type QuoteState = {
   draft: QuoteDraft;
@@ -86,6 +87,7 @@ type QuoteState = {
   setSvcBasis: (n: number) => void;
   setRounding: (n: number) => void;
   setInclusions: (v: string[]) => void;
+  setFlights: (v: QuoteFlight[]) => void;
   setExclusions: (v: string[]) => void;
   setPayments: (v: QuotePayment[]) => void;
   setPricingOptions: (v: QuotePricingOptions) => void;
@@ -386,6 +388,7 @@ export const useQuoteStore = create<QuoteState>()(
         setSvcBasis: (n) => set((s) => ({ draft: { ...s.draft, svcBasis: n } })),
         setRounding: (n) => set((s) => ({ draft: { ...s.draft, rounding: Math.max(1, n) } })),
         setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
+        setFlights: (v) => set((s) => ({ draft: { ...s.draft, flights: v } })),
         setExclusions: (v) => set((s) => ({ draft: { ...s.draft, exclusions: v } })),
         setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
         setPricingOptions: (v) => set((s) => ({ draft: { ...s.draft, pricingOptions: v } })),
@@ -543,6 +546,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.exclusions ? { exclusions: data.exclusions } : {}),
                 ...(data.payments ? { payments: data.payments } : {}),
                 ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
+                ...(data.flights ? { flights: data.flights } : {}),
                 ...(data.groups ? { groups: data.groups } : {}),
                 ...(data.activeGroupId ? { activeGroupId: data.activeGroupId } : {}),
               },
@@ -573,6 +577,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.exclusions ? { exclusions: data.exclusions } : {}),
               ...(data.payments ? { payments: data.payments } : {}),
               ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
+              ...(data.flights ? { flights: data.flights } : {}),
               currentQuoteId: null, // imported file starts a new quote
             },
             view: 'cost',

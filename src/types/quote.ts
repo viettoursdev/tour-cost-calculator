@@ -92,6 +92,26 @@ export type QuoteStatus =
   | 'not_selected'   // Không được lựa chọn
   | 'cancelled';     // Huỷ
 
+/** Một hạng giá tạm tính của chuyến bay (đa tiền tệ). */
+export type FlightFare = { id: string; label: string; amount: number; cur: string };
+
+/** Một chuyến bay trong tab Thông tin chuyến bay của báo giá. */
+export type QuoteFlight = {
+  id: string;
+  date: string;          // Ngày khởi hành dạng DD/MMM (vd "01JAN")
+  flightNo: string;      // Số hiệu (vd "VN310")
+  airlineCode?: string;  // Tiền tố hãng (vd "VN") — suy từ flightNo
+  airlineName?: string;  // Tên hãng (vd "Vietnam Airlines")
+  depAirport: string;    // IATA điểm đi (vd "HAN")
+  arrAirport: string;    // IATA điểm đến (vd "SGN")
+  depCity?: string;      // Tên điểm đi (vd "Hanoi")
+  arrCity?: string;
+  depTime: string;       // Giờ khởi hành HH:MM
+  arrTime: string;       // Giờ đáp HH:MM
+  fares: FlightFare[];
+  note?: string;
+};
+
 export type QuoteDraft = {
   template: Template | null;
   info: QuoteInfo;
@@ -105,6 +125,7 @@ export type QuoteDraft = {
   catEnabled: Record<CategoryId, boolean>;
   currentQuoteId: string | null;
   status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
+  flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   // Customer-facing terms (optional — absent until edited).
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm

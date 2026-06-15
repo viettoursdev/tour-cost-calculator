@@ -242,6 +242,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         { v: 'summary', label: '💰 Tổng kết & Định giá' },
         { v: 'dashboard', label: '📈 Dashboard biên lợi' },
         { v: 'payment', label: '🧾 Quản lý thanh toán' },
+        { v: 'flights', label: '✈️ Chuyến bay' },
         { v: 'history', label: '🕐 Lịch sử báo giá' },
         ...(canContract ? [{ v: 'contract' as QuoteViewKey, label: '📜 Hợp đồng' }] : []),
         ...(hasPerm(currentUser, 'manageCustomers') ? [{ v: 'customer' as QuoteViewKey, label: '👥 Khách hàng' }] : []),
