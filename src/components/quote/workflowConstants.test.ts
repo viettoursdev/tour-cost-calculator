@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep,
+  defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 
@@ -41,6 +41,21 @@ describe('setStepStatus', () => {
     const w = [newWorkflowStep('A'), newWorkflowStep('B')];
     const out = setStepStatus(w, w[0].id, 'doing');
     expect(out[1]).toBe(w[1]);
+  });
+});
+
+describe('ganttBounds', () => {
+  it('returns null when no dates set', () => {
+    expect(ganttBounds(defaultWorkflow())).toBeNull();
+  });
+  it('spans min/max of step dates and includes today', () => {
+    const today = Date.parse('2026-06-15');
+    const w = [newWorkflowStep('A'), newWorkflowStep('B')];
+    w[0].startDate = '2026-06-10'; w[0].dueDate = '2026-06-12';
+    w[1].dueDate = '2026-06-20';
+    const b = ganttBounds(w, today)!;
+    expect(b.min).toBe(Date.parse('2026-06-10'));
+    expect(b.max).toBe(Date.parse('2026-06-20'));
   });
 });
 

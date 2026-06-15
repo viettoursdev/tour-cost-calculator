@@ -43,6 +43,19 @@ export function workflowProgress(steps: WorkflowStep[]): { done: number; total: 
   return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 
+/** Khoảng thời gian (ms) bao toàn bộ ngày của workflow (gồm hôm nay) cho Gantt. */
+export function ganttBounds(steps: WorkflowStep[], todayMs = Date.now()): { min: number; max: number } | null {
+  const ms: number[] = [];
+  for (const s of steps) {
+    for (const d of [s.startDate, s.dueDate, s.doneDate]) {
+      if (d) { const t = Date.parse(d); if (!Number.isNaN(t)) ms.push(t); }
+    }
+  }
+  if (!ms.length) return null;
+  ms.push(todayMs);
+  return { min: Math.min(...ms), max: Math.max(...ms) };
+}
+
 /** Đổi trạng thái một bước (set/clear doneDate). Thuần — dùng cho kéo-thả Kanban. */
 export function setStepStatus(steps: WorkflowStep[], id: string, status: WorkflowStatus): WorkflowStep[] {
   const today = new Date().toISOString().slice(0, 10);

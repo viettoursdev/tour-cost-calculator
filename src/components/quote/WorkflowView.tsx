@@ -6,6 +6,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import ChecklistIcon from '@mui/icons-material/Checklist';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -14,10 +15,11 @@ import {
 import { WorkflowKanban } from './WorkflowKanban';
 import { WorkflowList } from './WorkflowList';
 import { WorkflowChecklist } from './WorkflowChecklist';
+import { WorkflowGantt } from './WorkflowGantt';
 import { WorkflowStepDialog } from './WorkflowStepDialog';
 import type { WorkflowStatus, WorkflowStep } from '@/types';
 
-type Mode = 'kanban' | 'list' | 'checklist';
+type Mode = 'kanban' | 'list' | 'checklist' | 'gantt';
 const MODE_KEY = 'vte_workflow_view';
 const NO_STEPS: WorkflowStep[] = [];
 
@@ -75,6 +77,7 @@ export function WorkflowView() {
               <ToggleButton value="kanban"><ViewKanbanIcon fontSize="small" sx={{ mr: 0.5 }} />Kanban</ToggleButton>
               <ToggleButton value="list"><ViewListIcon fontSize="small" sx={{ mr: 0.5 }} />List</ToggleButton>
               <ToggleButton value="checklist"><ChecklistIcon fontSize="small" sx={{ mr: 0.5 }} />Checklist</ToggleButton>
+              <ToggleButton value="gantt"><ViewTimelineIcon fontSize="small" sx={{ mr: 0.5 }} />Gantt</ToggleButton>
             </ToggleButtonGroup>
             <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={add}
               sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', whiteSpace: 'nowrap' }}>
@@ -87,6 +90,7 @@ export function WorkflowView() {
       {mode === 'kanban' && <WorkflowKanban steps={steps} users={users} onMove={setStatus} onOpen={setEditing} />}
       {mode === 'list' && <WorkflowList steps={steps} users={users} onUpdate={update} onDelete={del} onReorder={reorder} />}
       {mode === 'checklist' && <WorkflowChecklist steps={steps} users={users} onSetStatus={setStatus} />}
+      {mode === 'gantt' && <WorkflowGantt steps={steps} onOpen={setEditing} />}
 
       {editing && (
         <WorkflowStepDialog

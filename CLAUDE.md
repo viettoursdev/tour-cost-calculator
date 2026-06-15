@@ -113,6 +113,8 @@ Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tool
 | `viettours/master_rate_card` | Shared rate card (hotels, transport, staff, etc.) |
 | `viettours/fx_rates` | Tỷ giá ĐỒNG BỘ (→ VND). Chỉ CEO ghi (nút "Đồng bộ tỷ giá" → `pushGlobalRates`); chỉ seed cho báo giá MỚI. Mỗi báo giá giữ `draft.rates` riêng (lưu trong từng bản lịch sử) — bản đồng bộ KHÔNG ghi đè báo giá cũ. DMC linked mirror tỷ giá báo giá khi load. |
 | `viettours/ncc_products` | Catalog sản phẩm NCC (`nccProductsStore`): mỗi sản phẩm tham chiếu NCC master + bảng nhiều dòng giá + file R2. Tab "📦 Sản phẩm NCC" (view `nccProducts`, gate `manageNCC`); nút "Thanh toán" thêm `CustomCostItem` + supplier vào `paymentStore` của tour hiện tại. |
+
+**Per-quote draft fields (no new collection).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
 | `viettours/user_accounts` | All user accounts |
 | `viettours/ncc_master` | Supplier list |
 | `viettours/contracts_master` | All contracts |
