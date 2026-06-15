@@ -90,6 +90,10 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 **Dual quote history:** local `HistPanel` (fast, per-user localStorage) + cloud history (versioned, cross-device, collaborative). DMC quotes are stored separately (`viettours/dmc_quote_history`, `dmc_quote_projects/{id}`).
 
+**AI features via Cloudflare Worker.** `src/lib/aiWorker.ts:callAIWorker(path, body)` proxies to `cloudflare-worker/viettours-ai-worker.js` (holds `ANTHROPIC_API_KEY` + R2). Endpoints: `/ai` (tour program, Haiku), `/ocr` (structure-preserving Markdown, Sonnet), `/translate` (visa-grade VI→EN, Sonnet), `/chat` (assistant tool-use, Sonnet, optional `web_search`). **The worker is NOT auto-deployed by CI — redeploy manually** after editing it.
+
+**Trợ lý ảo (AI assistant).** `src/components/assistant/AssistantPanel.tsx` (header "🤖 Trợ lý") runs a client-side tool-use loop (`src/lib/assistant/agent.ts`) against permission-filtered data (`assistant/data.ts` → reuses `visibleQuotes`/`canViewAll`/`visibleVisaProjects`). Tools (`assistant/tools.ts`) only READ; `propose_itinerary`/`propose_quote` stage a draft the user opens 1-click (`assistant/draftBuilders.ts`). Unified search index extracted to `src/lib/searchIndex.ts` (shared with `GlobalSearch`).
+
 ## Firebase
 
 ```
