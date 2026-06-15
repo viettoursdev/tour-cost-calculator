@@ -26,12 +26,20 @@ export const AIRPORT_BY_CODE: Record<string, string> = {
   PVG: 'Shanghai (Pudong)', PEK: 'Beijing', PKX: 'Beijing (Daxing)', CAN: 'Guangzhou',
   CTU: 'Chengdu', KMG: 'Kunming', NNG: 'Nanning', SZX: 'Shenzhen',
   DOH: 'Doha', DXB: 'Dubai', AUH: 'Abu Dhabi', IST: 'Istanbul',
-  CDG: 'Paris', LHR: 'London', FRA: 'Frankfurt', AMS: 'Amsterdam',
+  CDG: 'Paris', LHR: 'London', LGW: 'London (Gatwick)', FRA: 'Frankfurt', MUC: 'Munich',
+  AMS: 'Amsterdam', FCO: 'Rome', MXP: 'Milan (Malpensa)', LIN: 'Milan (Linate)',
+  VCE: 'Venice', NAP: 'Naples', BCN: 'Barcelona', MAD: 'Madrid', ZRH: 'Zurich',
+  GVA: 'Geneva', VIE: 'Vienna', BRU: 'Brussels', CPH: 'Copenhagen', ARN: 'Stockholm',
+  OSL: 'Oslo', HEL: 'Helsinki', PRG: 'Prague', BUD: 'Budapest', WAW: 'Warsaw',
+  ATH: 'Athens', LIS: 'Lisbon', DUB: 'Dublin', MAN: 'Manchester',
   SYD: 'Sydney', MEL: 'Melbourne', BNE: 'Brisbane', PER: 'Perth', AKL: 'Auckland',
-  LAX: 'Los Angeles', SFO: 'San Francisco', JFK: 'New York', SEA: 'Seattle',
+  LAX: 'Los Angeles', SFO: 'San Francisco', JFK: 'New York', EWR: 'Newark', SEA: 'Seattle',
+  ORD: 'Chicago', IAH: 'Houston', BOS: 'Boston', IAD: 'Washington D.C.', YVR: 'Vancouver',
+  YYZ: 'Toronto',
   MNL: 'Manila', CEB: 'Cebu', CGK: 'Jakarta', DPS: 'Bali (Denpasar)', SUB: 'Surabaya',
   RGN: 'Yangon', PNH: 'Phnom Penh', REP: 'Siem Reap', VTE: 'Vientiane', LPQ: 'Luang Prabang',
-  DEL: 'Delhi', BOM: 'Mumbai',
+  DEL: 'Delhi', BOM: 'Mumbai', MAA: 'Chennai', BLR: 'Bangalore', CMB: 'Colombo',
+  DAC: 'Dhaka', KTM: 'Kathmandu',
 };
 
 /** Tách tiền tố hãng (2 ký tự đầu) từ số hiệu chuyến bay. */
