@@ -114,6 +114,21 @@ export type QuoteFlight = {
   note?: string;
 };
 
+/** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */
+export type WorkflowStatus = 'todo' | 'doing' | 'done' | 'blocked';
+
+/** Một bước trong quy trình vận hành của báo giá. */
+export type WorkflowStep = {
+  id: string;
+  label: string;
+  status: WorkflowStatus;
+  startDate?: string | null;  // ISO yyyy-mm-dd (cho Gantt)
+  dueDate?: string | null;
+  doneDate?: string | null;
+  assignee?: string;          // username người phụ trách
+  note?: string;
+};
+
 export type QuoteDraft = {
   template: Template | null;
   info: QuoteInfo;
@@ -128,6 +143,7 @@ export type QuoteDraft = {
   currentQuoteId: string | null;
   status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
+  workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
   // Customer-facing terms (optional — absent until edited).
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm
