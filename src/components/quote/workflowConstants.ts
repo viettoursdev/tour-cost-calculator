@@ -107,6 +107,13 @@ export function applySignals(steps: WorkflowStep[], signals: Partial<Record<Work
   return next;
 }
 
+/** Tóm tắt bước CÓ HẠN & CHƯA hoàn tất — để index vào lịch sử báo giá cho nhắc việc. */
+export function workflowDueSummary(steps: WorkflowStep[]): { label: string; dueDate: string; assignee?: string }[] {
+  return steps
+    .filter((s) => s.dueDate && s.status !== 'done')
+    .map((s) => ({ label: s.label, dueDate: s.dueDate as string, ...(s.assignee ? { assignee: s.assignee } : {}) }));
+}
+
 /** Tự điền Hạn cho bước có dueOffset & dueDate đang TRỐNG (= khởi hành − dueOffset ngày). */
 export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null): WorkflowStep[] {
   if (!departureISO) return steps;

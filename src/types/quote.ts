@@ -196,6 +196,8 @@ export type CloudQuoteEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  /** Tóm tắt bước quy trình có hạn & chưa xong — để nhắc deadline toàn hệ thống. */
+  workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   createdByUsername: string;
   createdByName: string;
   collaborators: Collaborator[];

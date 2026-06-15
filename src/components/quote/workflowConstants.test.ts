@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
-  workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor,
+  workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -125,6 +125,17 @@ describe('fillDueDates', () => {
   it('no-op without departure', () => {
     const w: WorkflowStep[] = [{ id: 'a', label: 'A', status: 'todo', dueOffset: 7 }];
     expect(fillDueDates(w, null)).toBe(w);
+  });
+});
+
+describe('workflowDueSummary', () => {
+  it('includes only steps with dueDate & not done; carries assignee', () => {
+    const w: WorkflowStep[] = [
+      { id: 'a', label: 'A', status: 'todo', dueDate: '2026-06-10', assignee: 'op1' },
+      { id: 'b', label: 'B', status: 'done', dueDate: '2026-06-11' },     // done → bỏ
+      { id: 'c', label: 'C', status: 'doing' },                            // không hạn → bỏ
+    ];
+    expect(workflowDueSummary(w)).toEqual([{ label: 'A', dueDate: '2026-06-10', assignee: 'op1' }]);
   });
 });
 

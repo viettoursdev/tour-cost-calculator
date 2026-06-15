@@ -14,6 +14,7 @@ import {
 } from '@/lib/firebase';
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
+import { workflowDueSummary } from '@/components/quote/workflowConstants';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
@@ -668,6 +669,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
               ...(attachments ? { attachments } : {}),
               ...(linkedForeign

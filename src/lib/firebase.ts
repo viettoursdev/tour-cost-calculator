@@ -201,6 +201,7 @@ type SaveEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   collaborators?: Collaborator[];
   attachment?: FileAttachment;
   attachments?: FileAttachment[];
@@ -235,6 +236,7 @@ function makeQuoteHistoryApi(
 
       const optionalFields: Partial<CloudQuoteEntry> = {};
       if (entry.status !== undefined) optionalFields.status = entry.status;
+      if (entry.workflowDue !== undefined) optionalFields.workflowDue = entry.workflowDue;
       if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
       if (entry.customerName !== undefined) optionalFields.customerName = entry.customerName;
       if (entry.attachment !== undefined) optionalFields.attachment = entry.attachment;

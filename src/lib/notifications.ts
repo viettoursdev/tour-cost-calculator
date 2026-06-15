@@ -17,6 +17,7 @@ export function showBrowserNotif(title: string, body: string): void {
 
 import { fbGetContracts, fbSendNotification } from '@/lib/firebase';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { daysUntil } from '@/lib/dateUtils';
 import type { User } from '@/types';
 
@@ -93,5 +94,43 @@ export async function checkVisaDeadlines(user: User): Promise<void> {
     try { localStorage.setItem(VISA_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkVisaDeadlines failed:', (e as Error).message);
+  }
+}
+
+const WF_DDL_KEY = 'vte_workflow_deadline_notified';
+
+/**
+ * Nhắc các bước quy trình vận hành sắp/đã quá hạn cho người phụ trách (hoặc người
+ * tạo nếu bước không gán). Quét tóm tắt `workflowDue` trong index lịch sử báo giá
+ * (đã subscribe) → không cần mở từng báo giá. Mỗi (báo giá, bước, hạn) nhắc 1 lần.
+ */
+export async function checkWorkflowDeadlines(user: User): Promise<void> {
+  try {
+    const quotes = useQuoteHistoryStore.getState().quotes;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(WF_DDL_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const q of quotes) {
+      for (const w of q.workflowDue ?? []) {
+        const target = w.assignee || q.createdByUsername;
+        if (target !== user.u) continue;
+        const d = daysUntil(w.dueDate);
+        if (d == null || d > 7) continue; // gồm cả quá hạn (d < 0)
+        const key = `${q.cloudId}:${w.label}:${w.dueDate}`;
+        if (set.has(key)) continue;
+        set.add(key);
+        const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
+        await fbSendNotification(user.u, {
+          type: 'task',
+          title: d < 0 ? '🔴 Bước quy trình quá hạn' : '⏰ Bước quy trình sắp đến hạn',
+          message: `Báo giá "${q.name}" — ${w.label}: ${when} (${new Date(w.dueDate).toLocaleDateString('vi-VN')})`,
+          createdBy: 'Hệ thống',
+          data: { cloudId: q.cloudId },
+        });
+      }
+    }
+    try { localStorage.setItem(WF_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkWorkflowDeadlines failed:', (e as Error).message);
   }
 }
