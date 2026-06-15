@@ -1,25 +1,28 @@
 #!/usr/bin/env node
 /**
- * Stage 2 of the Firebase project switch.
+ * Firestore import — direction-agnostic.
  *
- * Reads firestore-dump.json and writes every doc to the NEW project
- * (tour-cost-calculator, default database).
+ * Reads DUMP_PATH (default firestore-dump.json) and writes every doc to
+ * whichever project the service-account JSON at SA_PATH belongs to. Writes
+ * to the DEFAULT Firestore database.
  *
  * Run from the repo root after `firestore-export.mjs`:
  *   node scripts/firestore-import.mjs
+ *   SA_PATH=old-service-account.json node scripts/firestore-import.mjs   # alt dest
  *
- * Requires `new-service-account.json` at the repo root (service account key
- * downloaded from the NEW project's Console). Gitignored.
+ * Env vars:
+ *   SA_PATH    default: new-service-account.json
+ *   DUMP_PATH  default: firestore-dump.json
  *
  * Uses set() — safe to re-run; existing docs are overwritten with dump data.
- * Bails early if firestore-dump.json is missing.
+ * Bails early if DUMP_PATH is missing.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const SA_PATH = 'new-service-account.json';
-const DUMP_PATH = 'firestore-dump.json';
+const SA_PATH = process.env.SA_PATH || 'new-service-account.json';
+const DUMP_PATH = process.env.DUMP_PATH || 'firestore-dump.json';
 
 function loadKey() {
   try {
