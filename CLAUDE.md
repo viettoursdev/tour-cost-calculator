@@ -80,7 +80,7 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 **48h inactivity sign-out (magic-link only).** Magic-link sessions auto-sign-out after 48 hours of no user interaction. `src/auth/sessionTimeout.ts` owns the per-user `vte_session_last_active_{username}` timestamp; `startActivityTracker` listens to `pointerdown`/`keydown` (throttled to one write per 30s) and runs a 60-second interval check plus an immediate check on `focus`/`visibilitychange`. `authStore.expireSession()` signs the user out and shows "Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại." DEV password sign-ins are intentionally exempt — they stay signed in indefinitely for testing convenience.
 
-**Default Firestore database.** The new project `tour-cost-calculator-4336c` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
+**Default Firestore database.** The current project `tour-cost-calculator-v2` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
 
 **Per-user persisted quote draft (gotcha).** `quoteStore` registers persist middleware with a placeholder name and overrides the storage adapter at write time to use `vte_quote_draft_{username}`. The `getItem` handler returns `null` on initial hydration; the real hydration happens in `quoteStore.init(user)` which reads `localStorage` directly. Don't "fix" this by giving persist a static name — you'll cross-leak users.
 
@@ -97,13 +97,15 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 ## Firebase
 
 ```
-Project ID:    tour-cost-calculator-4336c
+Project ID:    tour-cost-calculator-v2
 Database name: (default)
 Location:      asia-southeast1
-Auth Domain:   tour-cost-calculator-4336c.firebaseapp.com
+Auth Domain:   tour-cost-calculator-v2.firebaseapp.com
 ```
 
-Web SDK config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) is read from `VITE_FIREBASE_*` env vars — see `.env.example`. Local dev uses `.env` (gitignored); CI uses repo secrets injected by `.github/workflows/deploy.yml`. These values are public (shipped in the browser bundle) — access control is enforced by Firestore Rules + Auth domain allowlist, not by hiding the key.
+Web SDK config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) is read from `VITE_FIREBASE_*` env vars — see `.env.example`. Local dev uses `.env` (gitignored); CI uses repo secrets injected in `.github/workflows/deploy.yml`. The values are public (shipped in the browser bundle); access control is enforced by Firestore Rules + Auth domain allowlist.
+
+**Project history (2026-06-15 → 06-16).** Two prior Firebase projects sit unused: `viettours-cost-calculator` (named DB `viettours`, retired in the first migration) and `tour-cost-calculator-4336c` (default DB, browser API key suspended; the owner's Google account was banned during this migration so no data could be exported). `tour-cost-calculator-v2` was bootstrapped fresh — no historical quotes/contracts/customers/rate-card carried over. The single seeded user is `developer@viettours.com.vn` (CEO) written by `scripts/seed-user-accounts.mjs`. If `tour-cost-calculator-4336c` is ever recovered, its data can still be imported via `scripts/firestore-import.mjs` with `SA_PATH` pointing at a recovered service-account key.
 
 Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tools deploy --only firestore:rules`. Every collection requires `request.auth != null` plus a `@viettours.com.vn` email — anonymous and external-domain clients are denied across the board.
 
