@@ -42,4 +42,31 @@ describe('mapToFlight', () => {
     const f = mapToFlight({ flightNo: 'VN1', depTime: '23:00', arrTime: '01:00' });
     expect(f.arrDayOffset).toBe(1);
   });
+
+  it('maps a round-trip (outbound + return) into one flight', () => {
+    const f = mapToFlight({
+      outbound: { date: '01jan', flightNo: 'vn310', depAirport: 'han', arrAirport: 'sgn', depTime: '08:00', arrTime: '10:10' },
+      return: { date: '05jan', flightNo: 'vn317', depAirport: 'sgn', arrAirport: 'han', depTime: '18:30', arrTime: '20:40' },
+    });
+    expect(f.flightNo).toBe('VN310');
+    expect(f.depAirport).toBe('HAN');
+    expect(f.retFlightNo).toBe('VN317');
+    expect(f.retDepAirport).toBe('SGN');
+    expect(f.retArrAirport).toBe('HAN');
+    expect(f.retDate).toBe('05JAN');
+  });
+  it('leaves return fields empty for a one-way (return null)', () => {
+    const f = mapToFlight({ outbound: { flightNo: 'vj1', depAirport: 'sgn', arrAirport: 'dad' }, return: null });
+    expect(f.flightNo).toBe('VJ1');
+    expect(f.retFlightNo).toBeUndefined();
+    expect(f.retDepAirport).toBeUndefined();
+  });
+  it('applies overnight +1 to the return leg independently', () => {
+    const f = mapToFlight({
+      outbound: { flightNo: 'qr1', depTime: '08:00', arrTime: '12:00' },
+      return: { flightNo: 'qr2', depTime: '23:30', arrTime: '06:00' },
+    });
+    expect(f.arrDayOffset).toBeUndefined();
+    expect(f.retArrDayOffset).toBe(1);
+  });
 });

@@ -110,6 +110,15 @@ export type QuoteFlight = {
   arrTime: string;       // Giờ đáp HH:MM
   depDayOffset?: number; // +N ngày trên giờ khởi hành (qua đêm); 0/không = cùng ngày
   arrDayOffset?: number; // +N ngày trên giờ đáp
+  // Chiều VỀ (khứ hồi) — mỗi chuyến bay là 1 khứ hồi. Để trống = chỉ 1 chiều.
+  retDate?: string;
+  retFlightNo?: string;
+  retDepAirport?: string;
+  retArrAirport?: string;
+  retDepTime?: string;
+  retArrTime?: string;
+  retDepDayOffset?: number;
+  retArrDayOffset?: number;
   fares: FlightFare[];
   note?: string;
 };

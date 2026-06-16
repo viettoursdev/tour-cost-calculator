@@ -8,12 +8,15 @@ import type { QuoteFlight } from '@/types';
 
 const FLIGHT_PARSE_PROMPT = [
   'Bạn là trợ lý phân tích thông tin chuyến bay. Đọc dữ liệu (dòng code đặt chỗ/GDS, vé,',
-  'lịch bay, hoặc ảnh chụp) và trả về CHỈ một MẢNG JSON các chuyến bay — không kèm giải',
-  'thích, không markdown. Mỗi phần tử có dạng:',
-  '{"date":"DDMMM viết HOA, vd 01JAN","flightNo":"vd VN310","depAirport":"IATA 3 ký tự",',
+  'lịch bay, hoặc ảnh chụp) và trả về CHỈ một MẢNG JSON các CHUYẾN BAY KHỨ HỒI — không kèm',
+  'giải thích, không markdown. MỖI phần tử là 1 chuyến khứ hồi gồm chiều đi và (nếu có) chiều',
+  'về, dạng:',
+  '{"outbound":{"date":"DDMMM viết HOA vd 01JAN","flightNo":"vd VN310","depAirport":"IATA 3 ký tự",',
   '"arrAirport":"IATA 3 ký tự","depTime":"HH:MM 24 giờ","arrTime":"HH:MM",',
-  '"depOffset":số ngày cộng thêm trên GIỜ ĐI (ký hiệu nhỏ +1/+2 cạnh giờ, mặc định 0),',
-  '"arrOffset":số ngày cộng thêm trên GIỜ ĐÁP (ký hiệu +1/+2, mặc định 0)}.',
+  '"depOffset":số ngày cộng thêm GIỜ ĐI (ký hiệu nhỏ +1/+2 cạnh giờ, mặc định 0),',
+  '"arrOffset":số ngày cộng thêm GIỜ ĐÁP (mặc định 0)},"return":{cùng cấu trúc outbound} hoặc null}.',
+  'Hãy GHÉP cặp các lượt thành khứ hồi: lượt A→B rồi lượt B→A (ngày sau) là 1 phần tử',
+  '(B→A là "return"). Chuyến chỉ 1 chiều thì "return": null.',
   'Nếu thiếu trường nào để chuỗi rỗng hoặc 0. Giữ NGUYÊN giá trị đọc được, KHÔNG bịa.',
 ].join(' ');
 
@@ -36,30 +39,54 @@ export function extractFlightJson(raw: string): string {
   return '[]';
 }
 
-/** Map 1 object AI → QuoteFlight (suy hãng/sân bay, chuẩn hoá HOA). */
 /** Số ngày offset hợp lệ (>0) hoặc 0. */
 const offNum = (v: unknown): number => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? n : 0; };
 
-export function mapToFlight(o: Record<string, unknown>): QuoteFlight {
-  const flightNo = String(o.flightNo ?? '').toUpperCase().trim();
-  const dep = String(o.depAirport ?? '').toUpperCase().trim();
-  const arr = String(o.arrAirport ?? '').toUpperCase().trim();
-  const air = deriveAirline(flightNo);
+type Leg = {
+  date: string; flightNo: string; dep: string; arr: string; depTime: string; arrTime: string;
+  depOff?: number; arrOff?: number;
+};
+
+/** Chuẩn hoá 1 lượt bay (object AI) → Leg đã suy hãng/sân bay & qua đêm. */
+function parseLeg(o: Record<string, unknown>): Leg {
   const depTime = String(o.depTime ?? '').trim();
   const arrTime = String(o.arrTime ?? '').trim();
   const depOff = offNum(o.depOffset);
   // Giờ đáp < giờ đi (cùng định dạng HH:MM) ⇒ qua đêm ⇒ +1 nếu nguồn không ghi.
   let arrOff = offNum(o.arrOffset);
   if (!arrOff && depTime && arrTime && arrTime < depTime) arrOff = 1;
-  return newFlight({
+  return {
     date: String(o.date ?? '').toUpperCase().trim(),
-    flightNo, depAirport: dep, arrAirport: arr, depTime, arrTime,
-    depDayOffset: depOff || undefined,
-    arrDayOffset: arrOff || undefined,
+    flightNo: String(o.flightNo ?? '').toUpperCase().trim(),
+    dep: String(o.depAirport ?? '').toUpperCase().trim(),
+    arr: String(o.arrAirport ?? '').toUpperCase().trim(),
+    depTime, arrTime, depOff: depOff || undefined, arrOff: arrOff || undefined,
+  };
+}
+
+const asObj = (v: unknown): Record<string, unknown> | null =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+
+/** Map 1 phần tử AI (khứ hồi {outbound,return} hoặc 1 lượt phẳng) → QuoteFlight. */
+export function mapToFlight(o: Record<string, unknown>): QuoteFlight {
+  // Hỗ trợ cả dạng mới ({outbound, return}) lẫn dạng phẳng (1 lượt) cũ.
+  const outO = asObj(o.outbound) ?? o;
+  const out = parseLeg(outO);
+  const air = deriveAirline(out.flightNo);
+  const ret = asObj(o.return);
+  const r = ret ? parseLeg(ret) : null;
+  return newFlight({
+    date: out.date, flightNo: out.flightNo, depAirport: out.dep, arrAirport: out.arr,
+    depTime: out.depTime, arrTime: out.arrTime,
+    depDayOffset: out.depOff, arrDayOffset: out.arrOff,
     airlineCode: air.code || undefined,
     airlineName: air.name || undefined,
-    depCity: deriveAirport(dep) || undefined,
-    arrCity: deriveAirport(arr) || undefined,
+    depCity: deriveAirport(out.dep) || undefined,
+    arrCity: deriveAirport(out.arr) || undefined,
+    ...(r ? {
+      retDate: r.date, retFlightNo: r.flightNo, retDepAirport: r.dep, retArrAirport: r.arr,
+      retDepTime: r.depTime, retArrTime: r.arrTime, retDepDayOffset: r.depOff, retArrDayOffset: r.arrOff,
+    } : {}),
     fares: [newFare({ label: '' })],
   });
 }
