@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFlightJson, mapToFlight } from './flightParse';
+import { extractFlightJson, mapToFlight, parseSegment } from './flightParse';
 
 describe('extractFlightJson', () => {
   it('strips ``` fences and returns the array', () => {
@@ -17,56 +17,70 @@ describe('extractFlightJson', () => {
   });
 });
 
-describe('mapToFlight', () => {
+describe('parseSegment', () => {
   it('normalises and derives airline + cities', () => {
+    const s = parseSegment({ date: '20nov', flightNo: 'qr977', depAirport: 'han', arrAirport: 'doh', depTime: '19:10', arrTime: '23:10' });
+    expect(s.date).toBe('20NOV');
+    expect(s.flightNo).toBe('QR977');
+    expect(s.airlineName).toBe('Qatar Airways');
+    expect(s.depAirport).toBe('HAN');
+    expect(s.depCity).toBe('Hanoi');
+    expect(s.arrCity).toBe('Doha');
+  });
+  it('captures explicit day offsets from source', () => {
+    const s = parseSegment({ flightNo: 'MU281', depTime: '22:15', arrTime: '01:35', depOffset: 1, arrOffset: 2 });
+    expect(s.depDayOffset).toBe(1);
+    expect(s.arrDayOffset).toBe(2);
+  });
+  it('auto +1 when arrival time is before departure time (overnight)', () => {
+    const s = parseSegment({ flightNo: 'QR008', depTime: '14:55', arrTime: '00:35' });
+    expect(s.arrDayOffset).toBe(1);
+  });
+});
+
+describe('mapToFlight', () => {
+  it('maps a single flat leg into a 1-segment booking', () => {
     const f = mapToFlight({ date: '01jan', flightNo: 'vn310', depAirport: 'han', arrAirport: 'sgn', depTime: '08:00', arrTime: '10:10' });
-    expect(f.date).toBe('01JAN');
-    expect(f.flightNo).toBe('VN310');
-    expect(f.airlineName).toBe('Vietnam Airlines');
-    expect(f.depAirport).toBe('HAN');
-    expect(f.depCity).toBe('Hanoi');
-    expect(f.arrCity).toBe('Ho Chi Minh City');
+    expect(f.segments).toHaveLength(1);
+    expect(f.segments[0].flightNo).toBe('VN310');
+    expect(f.segments[0].depAirport).toBe('HAN');
     expect(f.fares).toHaveLength(1);
   });
   it('handles missing fields gracefully', () => {
     const f = mapToFlight({ flightNo: 'ZZ9' });
-    expect(f.depAirport).toBe('');
-    expect(f.airlineName).toBeUndefined();
-  });
-  it('captures explicit day offsets from source', () => {
-    const f = mapToFlight({ flightNo: 'MU281', depTime: '22:15', arrTime: '01:35', depOffset: 1, arrOffset: 2 });
-    expect(f.depDayOffset).toBe(1);
-    expect(f.arrDayOffset).toBe(2);
-  });
-  it('auto +1 when arrival time is before departure time (overnight)', () => {
-    const f = mapToFlight({ flightNo: 'VN1', depTime: '23:00', arrTime: '01:00' });
-    expect(f.arrDayOffset).toBe(1);
+    expect(f.segments).toHaveLength(1);
+    expect(f.segments[0].depAirport).toBe('');
+    expect(f.segments[0].airlineName).toBeUndefined();
   });
 
-  it('maps a round-trip (outbound + return) into one flight', () => {
-    const f = mapToFlight({
-      outbound: { date: '01jan', flightNo: 'vn310', depAirport: 'han', arrAirport: 'sgn', depTime: '08:00', arrTime: '10:10' },
-      return: { date: '05jan', flightNo: 'vn317', depAirport: 'sgn', arrAirport: 'han', depTime: '18:30', arrTime: '20:40' },
-    });
-    expect(f.flightNo).toBe('VN310');
-    expect(f.depAirport).toBe('HAN');
-    expect(f.retFlightNo).toBe('VN317');
-    expect(f.retDepAirport).toBe('SGN');
-    expect(f.retArrAirport).toBe('HAN');
-    expect(f.retDate).toBe('05JAN');
+  it('maps a multi-segment booking (4 legs on one PNR)', () => {
+    const f = mapToFlight({ segments: [
+      { date: '20nov', flightNo: 'qr977', depAirport: 'han', arrAirport: 'doh', depTime: '19:10', arrTime: '23:10' },
+      { date: '21nov', flightNo: 'qr031', depAirport: 'doh', arrAirport: 'edi', depTime: '01:20', arrTime: '06:00' },
+      { date: '26nov', flightNo: 'qr008', depAirport: 'lhr', arrAirport: 'doh', depTime: '14:55', arrTime: '00:35', arrOffset: 1 },
+      { date: '27nov', flightNo: 'qr976', depAirport: 'doh', arrAirport: 'han', depTime: '01:50', arrTime: '12:20' },
+    ] });
+    expect(f.segments).toHaveLength(4);
+    expect(f.segments.map((s) => s.flightNo)).toEqual(['QR977', 'QR031', 'QR008', 'QR976']);
+    expect(f.segments[0].depAirport).toBe('HAN');
+    expect(f.segments[3].arrAirport).toBe('HAN');
+    expect(f.segments[2].arrDayOffset).toBe(1);
   });
-  it('leaves return fields empty for a one-way (return null)', () => {
-    const f = mapToFlight({ outbound: { flightNo: 'vj1', depAirport: 'sgn', arrAirport: 'dad' }, return: null });
-    expect(f.flightNo).toBe('VJ1');
-    expect(f.retFlightNo).toBeUndefined();
-    expect(f.retDepAirport).toBeUndefined();
+  it('maps a round-trip (2 segments)', () => {
+    const f = mapToFlight({ segments: [
+      { flightNo: 'vn310', depAirport: 'han', arrAirport: 'sgn' },
+      { flightNo: 'vn317', depAirport: 'sgn', arrAirport: 'han' },
+    ] });
+    expect(f.segments).toHaveLength(2);
+    expect(f.segments[1].flightNo).toBe('VN317');
   });
-  it('applies overnight +1 to the return leg independently', () => {
+  it('still supports legacy {outbound, return} shape', () => {
     const f = mapToFlight({
-      outbound: { flightNo: 'qr1', depTime: '08:00', arrTime: '12:00' },
-      return: { flightNo: 'qr2', depTime: '23:30', arrTime: '06:00' },
+      outbound: { flightNo: 'vn310', depAirport: 'han', arrAirport: 'sgn' },
+      return: { flightNo: 'vn317', depAirport: 'sgn', arrAirport: 'han' },
     });
-    expect(f.arrDayOffset).toBeUndefined();
-    expect(f.retArrDayOffset).toBe(1);
+    expect(f.segments).toHaveLength(2);
+    expect(f.segments[0].flightNo).toBe('VN310');
+    expect(f.segments[1].depAirport).toBe('SGN');
   });
 });

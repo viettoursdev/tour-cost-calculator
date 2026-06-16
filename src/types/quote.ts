@@ -95,31 +95,42 @@ export type QuoteStatus =
 /** Một hạng giá tạm tính của chuyến bay (đa tiền tệ). */
 export type FlightFare = { id: string; label: string; amount: number; cur: string };
 
-/** Một chuyến bay trong tab Thông tin chuyến bay của báo giá. */
-export type QuoteFlight = {
-  id: string;
-  date: string;          // Ngày khởi hành dạng DD/MMM (vd "01JAN")
-  flightNo: string;      // Số hiệu (vd "VN310")
-  airlineCode?: string;  // Tiền tố hãng (vd "VN") — suy từ flightNo
-  airlineName?: string;  // Tên hãng (vd "Vietnam Airlines")
+/** Một CHẶNG bay (một lượt cất–hạ cánh) trong một booking. */
+export type FlightSegment = {
+  date: string;          // Ngày khởi hành dạng DD/MMM (vd "20NOV")
+  flightNo: string;      // Số hiệu (vd "QR977")
+  airlineCode?: string;  // Tiền tố hãng (vd "QR") — suy từ flightNo
+  airlineName?: string;  // Tên hãng (vd "Qatar Airways")
   depAirport: string;    // IATA điểm đi (vd "HAN")
-  arrAirport: string;    // IATA điểm đến (vd "SGN")
+  arrAirport: string;    // IATA điểm đến (vd "DOH")
   depCity?: string;      // Tên điểm đi (vd "Hanoi")
   arrCity?: string;
   depTime: string;       // Giờ khởi hành HH:MM
   arrTime: string;       // Giờ đáp HH:MM
   depDayOffset?: number; // +N ngày trên giờ khởi hành (qua đêm); 0/không = cùng ngày
   arrDayOffset?: number; // +N ngày trên giờ đáp
-  // Chiều VỀ (khứ hồi) — mỗi chuyến bay là 1 khứ hồi. Để trống = chỉ 1 chiều.
-  retDate?: string;
-  retFlightNo?: string;
-  retDepAirport?: string;
-  retArrAirport?: string;
-  retDepTime?: string;
-  retArrTime?: string;
-  retDepDayOffset?: number;
-  retArrDayOffset?: number;
+};
+
+/** Một BOOKING vé máy bay trong tab Thông tin chuyến bay của báo giá.
+ *  Mỗi booking gồm 1..N chặng (1 chiều, khứ hồi, hay đa chặng trên cùng mã đặt
+ *  chỗ) và một/nhiều hạng giá tạm tính. Hệ thống tự nhận diện số chặng từ input. */
+export type QuoteFlight = {
+  id: string;
+  segments: FlightSegment[];
   fares: FlightFare[];
+  note?: string;
+};
+
+/** Hình dạng dữ liệu chuyến bay CŨ (phẳng + chiều về ret*) — chỉ để migrate. */
+export type LegacyQuoteFlight = {
+  id: string;
+  date?: string; flightNo?: string; airlineCode?: string; airlineName?: string;
+  depAirport?: string; arrAirport?: string; depCity?: string; arrCity?: string;
+  depTime?: string; arrTime?: string; depDayOffset?: number; arrDayOffset?: number;
+  retDate?: string; retFlightNo?: string; retDepAirport?: string; retArrAirport?: string;
+  retDepTime?: string; retArrTime?: string; retDepDayOffset?: number; retArrDayOffset?: number;
+  segments?: FlightSegment[];
+  fares?: FlightFare[];
   note?: string;
 };
 

@@ -1,4 +1,4 @@
-import type { FlightFare, QuoteFlight } from '@/types';
+import type { FlightFare, FlightSegment, LegacyQuoteFlight, QuoteFlight } from '@/types';
 
 /** Tiền tố số hiệu (IATA airline code) → tên hãng. Mở rộng dần khi gặp mã mới. */
 export const AIRLINE_BY_CODE: Record<string, string> = {
@@ -60,8 +60,48 @@ const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36) + 
 export const newFare = (over: Partial<FlightFare> = {}): FlightFare =>
   ({ id: uid('ff'), label: 'Phổ thông', amount: 0, cur: 'VND', ...over });
 
+/** Một chặng trống — suy hãng/thành phố khi hiển thị, không cần lưu sẵn. */
+export const newSegment = (over: Partial<FlightSegment> = {}): FlightSegment =>
+  ({ date: '', flightNo: '', depAirport: '', arrAirport: '', depTime: '', arrTime: '', ...over });
+
+/** Một booking mới = 1 chặng trống + 1 hạng giá. */
 export const newFlight = (over: Partial<QuoteFlight> = {}): QuoteFlight =>
-  ({
-    id: uid('fl'), date: '', flightNo: '', depAirport: '', arrAirport: '',
-    depTime: '', arrTime: '', fares: [newFare()], ...over,
-  });
+  ({ id: uid('fl'), segments: [newSegment()], fares: [newFare()], ...over });
+
+/** Suy hãng + thành phố cho 1 chặng (không ghi đè giá trị đã có). */
+export const enrichSegment = (s: FlightSegment): FlightSegment => {
+  const air = deriveAirline(s.flightNo);
+  return {
+    ...s,
+    airlineCode: s.airlineCode ?? (air.code || undefined),
+    airlineName: s.airlineName ?? (air.name || undefined),
+    depCity: s.depCity ?? (deriveAirport(s.depAirport) || undefined),
+    arrCity: s.arrCity ?? (deriveAirport(s.arrAirport) || undefined),
+  };
+};
+
+/** Chuẩn hoá 1 booking về dạng có `segments`. Hỗ trợ dữ liệu CŨ:
+ *  phẳng (1 chặng) + chiều về `ret*` (khứ hồi) → mảng chặng. */
+export function migrateFlight(raw: QuoteFlight | LegacyQuoteFlight): QuoteFlight {
+  const r = raw as LegacyQuoteFlight;
+  const id = r.id || uid('fl');
+  const fares = r.fares && r.fares.length ? r.fares : [newFare()];
+  if (Array.isArray(r.segments) && r.segments.length) {
+    return { id, segments: r.segments, fares, note: r.note };
+  }
+  const segs: FlightSegment[] = [];
+  if (r.flightNo || r.depAirport || r.arrAirport) {
+    segs.push(newSegment({
+      date: r.date ?? '', flightNo: r.flightNo ?? '', depAirport: r.depAirport ?? '', arrAirport: r.arrAirport ?? '',
+      depTime: r.depTime ?? '', arrTime: r.arrTime ?? '', depDayOffset: r.depDayOffset, arrDayOffset: r.arrDayOffset,
+      airlineCode: r.airlineCode, airlineName: r.airlineName, depCity: r.depCity, arrCity: r.arrCity,
+    }));
+  }
+  if (r.retFlightNo || r.retDepAirport || r.retArrAirport) {
+    segs.push(newSegment({
+      date: r.retDate ?? '', flightNo: r.retFlightNo ?? '', depAirport: r.retDepAirport ?? '', arrAirport: r.retArrAirport ?? '',
+      depTime: r.retDepTime ?? '', arrTime: r.retArrTime ?? '', depDayOffset: r.retDepDayOffset, arrDayOffset: r.retArrDayOffset,
+    }));
+  }
+  return { id, segments: segs.length ? segs : [newSegment()], fares, note: r.note };
+}

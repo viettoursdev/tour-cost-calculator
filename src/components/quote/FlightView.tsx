@@ -11,9 +11,9 @@ import ImageIcon from '@mui/icons-material/Image';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { parseFlights } from '@/lib/flightParse';
-import { deriveAirline, deriveAirport, newFlight } from './flightConstants';
+import { deriveAirline, deriveAirport, migrateFlight, newFlight } from './flightConstants';
 import { FlightEditor } from './FlightEditor';
-import type { FlightFare, QuoteFlight } from '@/types';
+import type { FlightFare, FlightSegment, QuoteFlight } from '@/types';
 
 const fileToB64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
   const r = new FileReader();
@@ -24,36 +24,44 @@ const fileToB64 = (file: File): Promise<string> => new Promise((resolve, reject)
 
 const NO_FLIGHTS: QuoteFlight[] = [];
 const airName = (no: string, override?: string) => override || deriveAirline(no).name;
-const airCode = (no: string, override?: string) => override || deriveAirline(no).code;
+const airCode = (no: string) => deriveAirline(no).code;
 const fmtFare = (fr: FlightFare) => `${Math.round(fr.amount || 0).toLocaleString('vi-VN')} ${fr.cur}`;
 const off = (n?: number) => ((n ?? 0) > 0 ? `+${n}` : '');
 
-/** Dòng hiển thị 1 chiều bay. */
-function Leg({ icon, label, date, no, dep, arr, depTime, arrTime, depOff, arrOff }: {
-  icon: string; label: string; date?: string; no?: string; dep?: string; arr?: string;
-  depTime?: string; arrTime?: string; depOff?: number; arrOff?: number;
-}) {
-  if (!no && !dep && !arr) return <Typography variant="caption" color="text.disabled">{icon} {label}: — chưa nhập —</Typography>;
+/** Tuyến rút gọn của booking: HAN→DOH→EDI…→HAN. */
+const routeOf = (segs: FlightSegment[]) => {
+  if (!segs.length) return '—';
+  return [segs[0].depAirport || '?', ...segs.map((s) => s.arrAirport || '?')].join('→');
+};
+/** Tập hãng (tên) khác nhau trong booking. */
+const airlinesOf = (segs: FlightSegment[]) =>
+  [...new Set(segs.map((s) => airName(s.flightNo, s.airlineName)).filter(Boolean))];
+
+/** Một dòng hiển thị 1 chặng bay. */
+function SegRow({ idx, s }: { idx: number; s: FlightSegment }) {
   return (
     <Stack direction="row" spacing={1} alignItems="baseline" flexWrap="wrap" useFlexGap>
-      <Typography variant="caption" sx={{ width: 64, color: 'text.secondary', fontWeight: 700 }}>{icon} {label}</Typography>
-      {date && <Chip size="small" variant="outlined" label={date} sx={{ height: 20 }} />}
-      {no && <Typography fontWeight={800} fontSize={13.5}>{no}</Typography>}
-      {airName(no ?? '') && <Typography variant="caption" color="text.secondary">· {airName(no ?? '')}</Typography>}
+      <Typography variant="caption" sx={{ width: 58, color: 'text.secondary', fontWeight: 700 }}>Chặng {idx + 1}</Typography>
+      {s.date && <Chip size="small" variant="outlined" label={s.date} sx={{ height: 20 }} />}
+      {s.flightNo && <Typography fontWeight={800} fontSize={13.5}>{s.flightNo}</Typography>}
+      {airName(s.flightNo, s.airlineName) && <Typography variant="caption" color="text.secondary">· {airName(s.flightNo, s.airlineName)}</Typography>}
       <Typography fontSize={13.5}>
-        <b>{dep}</b>{deriveAirport(dep ?? '') ? ` (${deriveAirport(dep ?? '')})` : ''} {depTime}{off(depOff)}
+        <b>{s.depAirport}</b>{deriveAirport(s.depAirport) ? ` (${deriveAirport(s.depAirport)})` : ''} {s.depTime}{off(s.depDayOffset)}
         {'  →  '}
-        <b>{arr}</b>{deriveAirport(arr ?? '') ? ` (${deriveAirport(arr ?? '')})` : ''} {arrTime}{off(arrOff)}
+        <b>{s.arrAirport}</b>{deriveAirport(s.arrAirport) ? ` (${deriveAirport(s.arrAirport)})` : ''} {s.arrTime}{off(s.arrDayOffset)}
       </Typography>
     </Stack>
   );
 }
 
 export function FlightView() {
-  const flights = useQuoteStore((s) => s.draft.flights) ?? NO_FLIGHTS;
+  const rawFlights = useQuoteStore((s) => s.draft.flights) ?? NO_FLIGHTS;
   const setFlights = useQuoteStore((s) => s.setFlights);
   const addItem = useQuoteStore((s) => s.addItem);
   const setView = useQuoteStore((s) => s.setView);
+
+  // Chuẩn hoá dữ liệu cũ (phẳng/khứ hồi) → segments khi đọc.
+  const flights = useMemo(() => rawFlights.map(migrateFlight), [rawFlights]);
 
   const [search, setSearch] = useState('');
   const [filterDep, setFilterDep] = useState('');
@@ -70,17 +78,16 @@ export function FlightView() {
   const add = () => { const f = newFlight(); setFlights([...flights, f]); setEditing(f); };
   const saveOne = (f: QuoteFlight) => { setFlights(flights.map((x) => (x.id === f.id ? f : x))); setEditing(null); };
 
-  const depAirports = useMemo(() => [...new Set(flights.map((f) => f.depAirport).filter(Boolean))].sort(), [flights]);
-  const airlines = useMemo(() => [...new Set(flights.map((f) => airCode(f.flightNo)).filter(Boolean))].sort(), [flights]);
+  const depAirports = useMemo(() => [...new Set(flights.map((f) => f.segments[0]?.depAirport).filter(Boolean))].sort(), [flights]);
+  const airlineCodes = useMemo(() => [...new Set(flights.flatMap((f) => f.segments.map((s) => airCode(s.flightNo))).filter(Boolean))].sort(), [flights]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return flights.filter((f) => {
-      if (filterDep && f.depAirport !== filterDep) return false;
-      if (filterAir && airCode(f.flightNo) !== filterAir) return false;
+      if (filterDep && f.segments[0]?.depAirport !== filterDep) return false;
+      if (filterAir && !f.segments.some((s) => airCode(s.flightNo) === filterAir)) return false;
       if (q) {
-        const hay = [f.date, f.flightNo, f.retFlightNo, airName(f.flightNo), f.depAirport, f.arrAirport,
-          f.retDepAirport, f.retArrAirport, deriveAirport(f.depAirport), deriveAirport(f.arrAirport)].join(' ').toLowerCase();
+        const hay = f.segments.flatMap((s) => [s.date, s.flightNo, airName(s.flightNo, s.airlineName), s.depAirport, s.arrAirport, deriveAirport(s.depAirport), deriveAirport(s.arrAirport)]).join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -88,14 +95,14 @@ export function FlightView() {
   }, [flights, search, filterDep, filterAir]);
 
   const linkToQuote = (f: QuoteFlight, fare?: FlightFare) => {
-    const air = airName(f.flightNo, f.airlineName);
-    const roundtrip = !!(f.retFlightNo || f.retDepAirport);
+    const segs = f.segments;
+    const first = segs[0]; const last = segs[segs.length - 1];
     addItem('flight', {
-      name: `${f.flightNo} ${f.depAirport}${roundtrip ? '⇄' : '→'}${f.arrAirport}${f.date ? ` ${f.date}` : ''}${roundtrip ? ' (khứ hồi)' : ''}`.trim(),
+      name: `${first?.flightNo ?? ''} ${routeOf(segs)}${segs.length > 1 ? ` (${segs.length} chặng)` : ''}${first?.date ? ` ${first.date}` : ''}`.trim(),
       cur: fare?.cur ?? 'VND', price: fare?.amount ?? 0, qtyMode: 'per_pax', unit: '/người',
-      note: [air, (f.depTime || f.arrTime) ? `Đi ${f.depTime}-${f.arrTime}` : '', f.retDepTime ? `Về ${f.retDepTime}-${f.retArrTime}` : ''].filter(Boolean).join(' · '),
+      note: [airlinesOf(segs).join(', '), first ? `Đi ${first.date} ${first.depTime}` : '', last ? `Đến ${last.arrAirport} ${last.arrTime}` : ''].filter(Boolean).join(' · '),
     });
-    if (window.confirm(`✅ Đã thêm "${f.flightNo}" vào bảng báo giá (Vé máy bay). Mở tab Bảng báo giá?`)) setView('cost');
+    if (window.confirm(`✅ Đã thêm "${first?.flightNo ?? 'chuyến bay'}" vào bảng báo giá (Vé máy bay). Mở tab Bảng báo giá?`)) setView('cost');
   };
   const onClickLink = (el: HTMLElement, f: QuoteFlight) => {
     const fares = f.fares ?? [];
@@ -127,7 +134,7 @@ export function FlightView() {
         </Select>
         <Select size="small" displayEmpty value={filterAir} onChange={(e) => setFilterAir(e.target.value)} sx={{ minWidth: 130 }}>
           <MenuItem value="">Mọi hãng</MenuItem>
-          {airlines.map((a) => <MenuItem key={a} value={a}>{a} — {deriveAirline(a + '0').name || a}</MenuItem>)}
+          {airlineCodes.map((a) => <MenuItem key={a} value={a}>{a} — {deriveAirline(a + '0').name || a}</MenuItem>)}
         </Select>
         <Box sx={{ flex: 1 }} />
         <Button variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => { setAiErr(''); setAiOpen(true); }} sx={{ fontWeight: 700, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}>Phân tích AI</Button>
@@ -136,37 +143,40 @@ export function FlightView() {
 
       {flights.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', color: 'text.disabled' }}>
-          Chưa có chuyến bay. Bấm “Thêm chuyến bay” — mỗi chuyến là 1 khứ hồi (chiều đi + chiều về).
+          Chưa có chuyến bay. Bấm “Thêm chuyến bay” hoặc “Phân tích AI” — mỗi booking có thể gồm 1, 2 hay nhiều chặng.
         </Paper>
       ) : (
         <Stack spacing={1.25}>
-          {visible.map((f, idx) => (
-            <Paper key={f.id} variant="outlined" sx={{ p: 1.75, borderLeft: '4px solid #0d7a6a' }}>
-              <Stack direction="row" alignItems="flex-start" spacing={1.5} flexWrap="wrap" useFlexGap>
-                <Box sx={{ flex: 1, minWidth: 280 }}>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
-                    <Chip size="small" label={flights.indexOf(f) + 1} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(20,150,140,0.15)', color: '#0d7a6a' }} />
-                    {airName(f.flightNo, f.airlineName) && <Chip size="small" label={airName(f.flightNo, f.airlineName)} sx={{ bgcolor: 'rgba(20,150,140,0.12)', color: '#0d7a6a', fontWeight: 700 }} />}
-                    <Box sx={{ flex: 1 }} />
-                    <Tooltip title="Hạng giá / xem & sửa chi tiết"><Button size="small" onClick={() => setEditing(f)} sx={{ color: '#0d7a6a' }}>
-                      {(f.fares?.length ?? 0) > 0 ? `${f.fares.length} hạng · ${fmtFare(f.fares[0])}` : 'Thêm giá'}
-                    </Button></Tooltip>
+          {visible.map((f) => {
+            const segs = f.segments;
+            return (
+              <Paper key={f.id} variant="outlined" sx={{ p: 1.75, borderLeft: '4px solid #0d7a6a' }}>
+                <Stack direction="row" alignItems="flex-start" spacing={1.5} flexWrap="wrap" useFlexGap>
+                  <Box sx={{ flex: 1, minWidth: 280 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
+                      <Chip size="small" label={flights.indexOf(f) + 1} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(20,150,140,0.15)', color: '#0d7a6a' }} />
+                      <Typography fontWeight={800} fontSize={14}>{routeOf(segs)}</Typography>
+                      <Chip size="small" variant="outlined" label={`${segs.length} chặng`} sx={{ height: 20 }} />
+                      {airlinesOf(segs).map((a) => <Chip key={a} size="small" label={a} sx={{ height: 20, bgcolor: 'rgba(20,150,140,0.12)', color: '#0d7a6a', fontWeight: 700 }} />)}
+                      <Box sx={{ flex: 1 }} />
+                      <Tooltip title="Hạng giá / xem & sửa chi tiết"><Button size="small" onClick={() => setEditing(f)} sx={{ color: '#0d7a6a' }}>
+                        {(f.fares?.length ?? 0) > 0 ? `${f.fares.length} hạng · ${fmtFare(f.fares[0])}` : 'Thêm giá'}
+                      </Button></Tooltip>
+                    </Stack>
+                    <Stack spacing={0.5}>
+                      {segs.map((s, i) => <SegRow key={i} idx={i} s={s} />)}
+                    </Stack>
+                    {f.note && <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>📝 {f.note}</Typography>}
+                  </Box>
+                  <Stack direction="row" spacing={0.5}>
+                    <Tooltip title="Thêm vào bảng báo giá"><IconButton size="small" sx={{ color: '#0d7a6a' }} onClick={(e) => onClickLink(e.currentTarget, f)}><AddShoppingCartIcon fontSize="small" /></IconButton></Tooltip>
+                    <Tooltip title="Sửa"><IconButton size="small" color="primary" onClick={() => setEditing(f)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                    <Tooltip title="Xoá"><IconButton size="small" color="error" onClick={() => del(f.id)}><DeleteOutlineIcon fontSize="small" /></IconButton></Tooltip>
                   </Stack>
-                  <Stack spacing={0.5}>
-                    <Leg icon="🛫" label="Chiều đi" date={f.date} no={f.flightNo} dep={f.depAirport} arr={f.arrAirport} depTime={f.depTime} arrTime={f.arrTime} depOff={f.depDayOffset} arrOff={f.arrDayOffset} />
-                    <Leg icon="🛬" label="Chiều về" date={f.retDate} no={f.retFlightNo} dep={f.retDepAirport} arr={f.retArrAirport} depTime={f.retDepTime} arrTime={f.retArrTime} depOff={f.retDepDayOffset} arrOff={f.retArrDayOffset} />
-                  </Stack>
-                  {f.note && <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>📝 {f.note}</Typography>}
-                </Box>
-                <Stack direction="row" spacing={0.5}>
-                  <Tooltip title="Thêm vào bảng báo giá"><IconButton size="small" sx={{ color: '#0d7a6a' }} onClick={(e) => onClickLink(e.currentTarget, f)}><AddShoppingCartIcon fontSize="small" /></IconButton></Tooltip>
-                  <Tooltip title="Sửa"><IconButton size="small" color="primary" onClick={() => setEditing(f)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-                  <Tooltip title="Xoá"><IconButton size="small" color="error" onClick={() => del(f.id)}><DeleteOutlineIcon fontSize="small" /></IconButton></Tooltip>
                 </Stack>
-              </Stack>
-              {idx < 0 && null}
-            </Paper>
-          ))}
+              </Paper>
+            );
+          })}
         </Stack>
       )}
 
@@ -183,10 +193,10 @@ export function FlightView() {
         <DialogTitle>✨ Phân tích chuyến bay bằng AI</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Dán code/booking hoặc tải ảnh (kể cả khứ hồi). AI điền sẵn vào form khứ hồi để bạn duyệt rồi Lưu.
+            Dán code/booking hoặc tải ảnh. AI tự nhận diện số chặng (1, 2 hay nhiều chặng) và điền sẵn vào form để bạn duyệt rồi Lưu.
           </Typography>
-          <TextField fullWidth multiline minRows={4} value={aiText} onChange={(e) => setAiText(e.target.value)} disabled={aiBusy}
-            placeholder={'VD:\nVN310 01JAN HAN SGN 0800 1010\nVN317 05JAN SGN HAN 1830 2040'} />
+          <TextField fullWidth multiline minRows={5} value={aiText} onChange={(e) => setAiText(e.target.value)} disabled={aiBusy}
+            placeholder={'VD (booking 4 chặng):\n1  QR 977 N 20NOV 5 HANDOH HK1  1910 2310\n2  QR 031 N 21NOV 6 DOHEDI HK1  0120 0600\n3  QR 008 N 26NOV 4 LHRDOH HK1  1455 0035+1\n4  QR 976 N 27NOV 5 DOHHAN HK1  0150 1220'} />
           {aiErr && <Alert severity="error" sx={{ mt: 1.5 }}>{aiErr}</Alert>}
         </DialogContent>
         <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
@@ -199,7 +209,7 @@ export function FlightView() {
 
       {queue.length > 0 && (
         <FlightEditor key={queue[0].id} flight={queue[0]} onClose={() => setQueue((q) => q.slice(1))}
-          onSave={(f) => { setFlights([...useQuoteStore.getState().draft.flights ?? [], f]); setQueue((q) => q.slice(1)); }} />
+          onSave={(f) => { setFlights([...(useQuoteStore.getState().draft.flights ?? []).map(migrateFlight), f]); setQueue((q) => q.slice(1)); }} />
       )}
       {editing && <FlightEditor flight={editing} onClose={() => setEditing(null)} onSave={saveOne} />}
     </Box>

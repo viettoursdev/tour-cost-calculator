@@ -126,19 +126,19 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     setFlightPaste('');
   };
 
-  // AI: phân tích chuyến bay từ text/ảnh (dùng /chat Sonnet) → map sang Flight lịch trình.
-  const qfToFlight = (qf: QuoteFlight): Flight => normalizeFlight({
-    id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
-    group: 'Nhóm 1', leg: qf.date || '', flightNo: qf.flightNo, dep: '', arr: '',
-    depAirport: qf.depAirport, depTime: qf.depTime, depDayOffset: qf.depDayOffset,
-    arrAirport: qf.arrAirport, arrTime: qf.arrTime, arrDayOffset: qf.arrDayOffset,
-  });
+  // AI: phân tích chuyến bay từ text/ảnh (dùng /chat Sonnet) → map MỖI chặng sang 1 Flight lịch trình.
+  const qfToFlights = (qf: QuoteFlight): Flight[] => qf.segments.map((s) => normalizeFlight({
+    id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + s.flightNo,
+    group: 'Nhóm 1', leg: s.date || '', flightNo: s.flightNo, dep: '', arr: '',
+    depAirport: s.depAirport, depTime: s.depTime, depDayOffset: s.depDayOffset,
+    arrAirport: s.arrAirport, arrTime: s.arrTime, arrDayOffset: s.arrDayOffset,
+  }));
   const runFlightAI = async (payload: { text?: string; imageB64?: string }) => {
     setFlightAiBusy(true);
     try {
       const qfs = await parseFlightsAI(payload);
       if (!qfs.length) { window.alert('Không nhận diện được chuyến bay. Thử ảnh rõ hơn hoặc dán code.'); return; }
-      setIt((p) => ({ ...p, flights: qfs.map(qfToFlight) }));
+      setIt((p) => ({ ...p, flights: qfs.flatMap(qfToFlights) }));
       setFlightPaste('');
     } catch (e) {
       window.alert('❌ ' + (e as Error).message);

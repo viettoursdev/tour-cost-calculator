@@ -1,68 +1,87 @@
 import { useState } from 'react';
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem,
+  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem,
   Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import { MENU_CUR } from '@/components/menu/constants';
-import { deriveAirline, deriveAirport, newFare } from './flightConstants';
-import type { FlightFare, QuoteFlight } from '@/types';
+import { deriveAirline, deriveAirport, newFare, newSegment } from './flightConstants';
+import type { FlightFare, FlightSegment, QuoteFlight } from '@/types';
 
 type Props = { flight: QuoteFlight; onClose: () => void; onSave: (f: QuoteFlight) => void };
 
-function LegFields({
+function SegmentFields({
   date, flightNo, dep, arr, depTime, arrTime, depOff, arrOff, onChange,
 }: {
   date: string; flightNo: string; dep: string; arr: string; depTime: string; arrTime: string;
   depOff?: number; arrOff?: number;
-  onChange: (patch: Record<string, unknown>) => void;
+  onChange: (patch: Partial<FlightSegment>) => void;
 }) {
   const airline = deriveAirline(flightNo).name;
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 1fr 1fr' }, gap: 1.5 }}>
-      <TextField size="small" label="Ngày (DD/MMM)" value={date} placeholder="01JAN" onChange={(e) => onChange({ date: e.target.value.toUpperCase() })} />
-      <TextField size="small" label="Số hiệu" value={flightNo} placeholder="VN310" onChange={(e) => onChange({ flightNo: e.target.value.toUpperCase() })} helperText={airline || ' '} />
+      <TextField size="small" label="Ngày (DDMMM)" value={date} placeholder="20NOV" onChange={(e) => onChange({ date: e.target.value.toUpperCase() })} />
+      <TextField size="small" label="Số hiệu" value={flightNo} placeholder="QR977" onChange={(e) => onChange({ flightNo: e.target.value.toUpperCase() })} helperText={airline || ' '} />
       <Box />
-      <TextField size="small" label="Điểm đi (IATA)" value={dep} placeholder="HAN" onChange={(e) => onChange({ dep: e.target.value.toUpperCase() })} helperText={deriveAirport(dep) || ' '} />
-      <TextField size="small" label="Điểm đến (IATA)" value={arr} placeholder="SGN" onChange={(e) => onChange({ arr: e.target.value.toUpperCase() })} helperText={deriveAirport(arr) || ' '} />
+      <TextField size="small" label="Điểm đi (IATA)" value={dep} placeholder="HAN" onChange={(e) => onChange({ depAirport: e.target.value.toUpperCase() })} helperText={deriveAirport(dep) || ' '} />
+      <TextField size="small" label="Điểm đến (IATA)" value={arr} placeholder="DOH" onChange={(e) => onChange({ arrAirport: e.target.value.toUpperCase() })} helperText={deriveAirport(arr) || ' '} />
       <Box />
       <Stack direction="row" spacing={0.75}>
         <TextField size="small" type="time" label="Giờ đi" value={depTime} fullWidth onChange={(e) => onChange({ depTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField size="small" type="number" label="+ngày" value={depOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ depOff: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
+        <TextField size="small" type="number" label="+ngày" value={depOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ depDayOffset: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
       </Stack>
       <Stack direction="row" spacing={0.75}>
         <TextField size="small" type="time" label="Giờ đến" value={arrTime} fullWidth onChange={(e) => onChange({ arrTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField size="small" type="number" label="+ngày" value={arrOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ arrOff: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
+        <TextField size="small" type="number" label="+ngày" value={arrOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ arrDayOffset: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
       </Stack>
     </Box>
   );
 }
 
 export function FlightEditor({ flight, onClose, onSave }: Props) {
-  const [f, setF] = useState<QuoteFlight>(() => ({ ...flight, fares: (flight.fares ?? []).map((x) => ({ ...x })) }));
-  const set = (patch: Partial<QuoteFlight>) => setF((prev) => ({ ...prev, ...patch }));
-  const updFare = (id: string, patch: Partial<FlightFare>) => setF((prev) => ({ ...prev, fares: prev.fares.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const [f, setF] = useState<QuoteFlight>(() => ({
+    ...flight,
+    segments: (flight.segments ?? []).map((s) => ({ ...s })),
+    fares: (flight.fares ?? []).map((x) => ({ ...x })),
+  }));
+  const segs = f.segments.length ? f.segments : [newSegment()];
 
-  // Lấy chiều về = đảo điểm đi/đến của chiều đi (giữ giờ/ngày để sửa).
-  const fillReturn = () => set({ retDepAirport: f.arrAirport, retArrAirport: f.depAirport });
+  const updSeg = (i: number, patch: Partial<FlightSegment>) =>
+    setF((prev) => ({ ...prev, segments: prev.segments.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
+  const delSeg = (i: number) =>
+    setF((prev) => ({ ...prev, segments: prev.segments.filter((_, j) => j !== i) }));
+  const addSeg = () => setF((prev) => {
+    const last = prev.segments[prev.segments.length - 1];
+    // Chặng mới nối tiếp: điểm đi = điểm đến chặng trước (sửa được).
+    return { ...prev, segments: [...prev.segments, newSegment({ depAirport: last?.arrAirport ?? '', date: last?.date ?? '' })] };
+  });
+  const updFare = (id: string, patch: Partial<FlightFare>) =>
+    setF((prev) => ({ ...prev, fares: prev.fares.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Chuyến bay khứ hồi</DialogTitle>
+      <DialogTitle>Booking chuyến bay · {segs.length} chặng</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="caption" fontWeight={800} color="#0d7a6a" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>🛫 Chiều đi</Typography>
-          <LegFields date={f.date} flightNo={f.flightNo} dep={f.depAirport} arr={f.arrAirport} depTime={f.depTime} arrTime={f.arrTime} depOff={f.depDayOffset} arrOff={f.arrDayOffset}
-            onChange={(p) => set({ date: p.date as string ?? f.date, flightNo: p.flightNo as string ?? f.flightNo, depAirport: p.dep as string ?? f.depAirport, arrAirport: p.arr as string ?? f.arrAirport, depTime: p.depTime as string ?? f.depTime, arrTime: p.arrTime as string ?? f.arrTime, depDayOffset: 'depOff' in p ? (p.depOff as number | undefined) : f.depDayOffset, arrDayOffset: 'arrOff' in p ? (p.arrOff as number | undefined) : f.arrDayOffset })} />
-
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography variant="caption" fontWeight={800} color="#b8761e" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>🛬 Chiều về</Typography>
-            <Button size="small" startIcon={<SwapHorizIcon />} onClick={fillReturn}>Đảo điểm đi/đến</Button>
-          </Stack>
-          <LegFields date={f.retDate ?? ''} flightNo={f.retFlightNo ?? ''} dep={f.retDepAirport ?? ''} arr={f.retArrAirport ?? ''} depTime={f.retDepTime ?? ''} arrTime={f.retArrTime ?? ''} depOff={f.retDepDayOffset} arrOff={f.retArrDayOffset}
-            onChange={(p) => set({ retDate: p.date as string ?? f.retDate, retFlightNo: p.flightNo as string ?? f.retFlightNo, retDepAirport: p.dep as string ?? f.retDepAirport, retArrAirport: p.arr as string ?? f.retArrAirport, retDepTime: p.depTime as string ?? f.retDepTime, retArrTime: p.arrTime as string ?? f.retArrTime, retDepDayOffset: 'depOff' in p ? (p.depOff as number | undefined) : f.retDepDayOffset, retArrDayOffset: 'arrOff' in p ? (p.arrOff as number | undefined) : f.retArrDayOffset })} />
+          {segs.map((s, i) => (
+            <Box key={i} sx={{ p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, bgcolor: 'rgba(20,150,140,0.03)' }}>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                <Chip size="small" icon={<FlightTakeoffIcon sx={{ fontSize: 16 }} />} label={`Chặng ${i + 1}`} sx={{ fontWeight: 800, bgcolor: 'rgba(20,150,140,0.12)', color: '#0d7a6a' }} />
+                <Box sx={{ flex: 1 }} />
+                {segs.length > 1 && (
+                  <IconButton size="small" color="error" onClick={() => delSeg(i)} aria-label={`Xoá chặng ${i + 1}`}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                )}
+              </Stack>
+              <SegmentFields
+                date={s.date} flightNo={s.flightNo} dep={s.depAirport} arr={s.arrAirport}
+                depTime={s.depTime} arrTime={s.arrTime} depOff={s.depDayOffset} arrOff={s.arrDayOffset}
+                onChange={(patch) => updSeg(i, patch)}
+              />
+            </Box>
+          ))}
+          <Button size="small" startIcon={<AddIcon />} onClick={addSeg} sx={{ alignSelf: 'flex-start', color: '#0d7a6a' }}>Thêm chặng</Button>
 
           <Box>
             <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Hạng giá tạm tính (đa tiền tệ)</Typography>
@@ -81,12 +100,12 @@ export function FlightEditor({ flight, onClose, onSave }: Props) {
             <Button size="small" startIcon={<AddIcon />} onClick={() => setF((prev) => ({ ...prev, fares: [...prev.fares, newFare({ label: '' })] }))} sx={{ mt: 0.5, color: '#0d7a6a' }}>Thêm hạng giá</Button>
           </Box>
 
-          <TextField size="small" label="Ghi chú" value={f.note ?? ''} onChange={(e) => set({ note: e.target.value })} fullWidth multiline minRows={2} />
+          <TextField size="small" label="Ghi chú" value={f.note ?? ''} onChange={(e) => setF((prev) => ({ ...prev, note: e.target.value }))} fullWidth multiline minRows={2} />
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">Huỷ</Button>
-        <Button onClick={() => onSave({ ...f, fares: f.fares.filter((x) => x.label.trim() || x.amount > 0) })} variant="contained" sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
+        <Button onClick={() => onSave({ ...f, segments: segs, fares: f.fares.filter((x) => x.label.trim() || x.amount > 0) })} variant="contained" sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
       </DialogActions>
     </Dialog>
   );
