@@ -137,6 +137,13 @@ export type LegacyQuoteFlight = {
 /** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */
 export type WorkflowStatus = 'todo' | 'doing' | 'done' | 'blocked';
 
+/** Một dòng nhật ký hoạt động của bước quy trình. */
+export type WorkflowLogEntry = {
+  at: string;    // ISO timestamp
+  by: string;    // tên người thao tác
+  action: string; // mô tả ngắn (vd "Trạng thái → Hoàn tất")
+};
+
 /** Một bước trong quy trình vận hành của báo giá. */
 export type WorkflowStep = {
   id: string;
@@ -149,6 +156,8 @@ export type WorkflowStep = {
   doneDate?: string | null;
   assignee?: string;          // username người phụ trách
   note?: string;
+  log?: WorkflowLogEntry[];   // nhật ký thay đổi (giữ tối đa 50 dòng gần nhất)
+  attachments?: FileAttachment[]; // file đính kèm theo bước (R2 qua AI Worker)
 };
 
 export type QuoteDraft = {

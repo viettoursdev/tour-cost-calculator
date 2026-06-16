@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
   workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
+  appendLog, roleOfStep,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -146,5 +147,34 @@ describe('status meta', () => {
       expect(WORKFLOW_STATUS_META[s].label).toBeTruthy();
       expect(WORKFLOW_STATUS_META[s].color).toMatch(/^#[0-9a-f]{6}$/i);
     }
+  });
+});
+
+describe('appendLog', () => {
+  it('appends entries newest-last and stamps by/at', () => {
+    const s0 = newWorkflowStep('X');
+    const s1 = appendLog(s0, ['Trạng thái → Hoàn tất'], 'Mai');
+    expect(s1.log).toHaveLength(1);
+    expect(s1.log?.[0]).toMatchObject({ by: 'Mai', action: 'Trạng thái → Hoàn tất' });
+    expect(s1.log?.[0].at).toBeTruthy();
+    const s2 = appendLog(s1, ['Đính kèm file'], 'Mai');
+    expect(s2.log?.map((l) => l.action)).toEqual(['Trạng thái → Hoàn tất', 'Đính kèm file']);
+  });
+  it('no-op when actions empty; caps history at 50', () => {
+    const s0 = newWorkflowStep('X');
+    expect(appendLog(s0, [], 'Mai')).toBe(s0);
+    let s = s0;
+    for (let i = 0; i < 60; i++) s = appendLog(s, [`a${i}`], 'Mai');
+    expect(s.log).toHaveLength(50);
+    expect(s.log?.[49].action).toBe('a59');
+  });
+});
+
+describe('roleOfStep', () => {
+  it('maps default steps to a department, undefined for custom steps', () => {
+    const wf = defaultWorkflow();
+    expect(roleOfStep(wf[3])).toBe('Operations'); // visa
+    expect(roleOfStep(wf[5])).toBe('Accountant'); // deposit_ncc
+    expect(roleOfStep(newWorkflowStep('Bước tự thêm'))).toBeUndefined();
   });
 });

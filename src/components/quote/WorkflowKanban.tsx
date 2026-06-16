@@ -68,6 +68,7 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
                     <Stack direction="row" spacing={0.75} alignItems="flex-start">
                       <Chip size="small" label={numOf(s.id)} sx={{ height: 20, fontWeight: 800, bgcolor: meta.color + '22', color: meta.color }} />
                       <Typography fontSize={13.5} fontWeight={600} sx={{ flex: 1 }}>{s.label}</Typography>
+                      {(s.attachments?.length ?? 0) > 0 && <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>📎 {s.attachments!.length}</Typography>}
                     </Stack>
                     {suggestions[s.id] && (
                       <Chip size="small" label={`↗ nên: ${WORKFLOW_STATUS_META[suggestions[s.id]].label}`}

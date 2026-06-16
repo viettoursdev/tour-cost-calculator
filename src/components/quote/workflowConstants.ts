@@ -163,6 +163,14 @@ export function ganttBounds(steps: WorkflowStep[], todayMs = Date.now()): { min:
   return { min: Math.min(...ms), max: Math.max(...ms) };
 }
 
+/** Ghi 1..N dòng nhật ký vào bước (mới nhất ở cuối; giữ tối đa 50 dòng). */
+export function appendLog(step: WorkflowStep, actions: string[], by: string): WorkflowStep {
+  if (!actions.length) return step;
+  const at = new Date().toISOString();
+  const entries = actions.map((action) => ({ at, by, action }));
+  return { ...step, log: [...(step.log ?? []), ...entries].slice(-50) };
+}
+
 /** Đổi trạng thái một bước (set/clear doneDate). Thuần — dùng cho kéo-thả Kanban. */
 export function setStepStatus(steps: WorkflowStep[], id: string, status: WorkflowStatus): WorkflowStep[] {
   const today = new Date().toISOString().slice(0, 10);

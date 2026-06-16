@@ -18,7 +18,7 @@ import { usePaymentStore } from '@/stores/paymentStore';
 import { buildAllItems, buildSourceItems, computePaymentTotals, slugifyTourKey } from './paymentUtils';
 import { getCATS } from './constants';
 import {
-  applySignals, defaultWorkflow, fillDueDates, newWorkflowStep, setStepStatus, suggestionFor,
+  appendLog, applySignals, defaultWorkflow, fillDueDates, newWorkflowStep, setStepStatus, suggestionFor,
   workflowProgress, workflowSignals, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import { WorkflowKanban } from './WorkflowKanban';
@@ -36,6 +36,9 @@ export function WorkflowView() {
   const draft = useQuoteStore((s) => s.draft);
   const setWorkflow = useQuoteStore((s) => s.setWorkflow);
   const users = useAuthStore((s) => s.users);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const byName = currentUser?.name ?? '?';
+  const nameOf = (u?: string) => users.find((x) => x.u === u)?.name ?? u ?? '';
   const contracts = useContractStore((s) => s.contracts);
   const visaProjects = useVisaProjectStore((s) => s.projects);
   const steps = draft.workflow ?? NO_STEPS;
@@ -86,11 +89,29 @@ export function WorkflowView() {
   const suggCount = Object.keys(suggestions).length;
 
   const update = (id: string, patch: Partial<WorkflowStep>) => {
+    const before = steps.find((s) => s.id === id);
     let next = steps.map((s) => (s.id === id ? { ...s, ...patch } : s));
     if (patch.status) next = setStepStatus(next, id, patch.status);
+    // Ghi nhật ký các thay đổi đáng kể.
+    const acts: string[] = [];
+    if (before) {
+      if (patch.status && patch.status !== before.status) acts.push(`Trạng thái → ${WORKFLOW_STATUS_META[patch.status].label}`);
+      if ('assignee' in patch && patch.assignee !== before.assignee) acts.push(patch.assignee ? `Giao cho ${nameOf(patch.assignee)}` : 'Bỏ người phụ trách');
+      const nBefore = before.attachments?.length ?? 0;
+      const nAfter = patch.attachments?.length ?? nBefore;
+      if (nAfter !== nBefore) acts.push(nAfter > nBefore ? 'Đính kèm file' : 'Gỡ file đính kèm');
+      if (!acts.length) acts.push('Cập nhật chi tiết');
+    }
+    next = next.map((s) => (s.id === id ? appendLog(s, acts, byName) : s));
     setWorkflow(next);
   };
-  const setStatus = (id: string, status: WorkflowStatus) => setWorkflow(setStepStatus(steps, id, status));
+  const setStatus = (id: string, status: WorkflowStatus) => {
+    const before = steps.find((s) => s.id === id);
+    if (before && before.status === status) return;
+    const next = setStepStatus(steps, id, status)
+      .map((s) => (s.id === id ? appendLog(s, [`Trạng thái → ${WORKFLOW_STATUS_META[status].label}`], byName) : s));
+    setWorkflow(next);
+  };
   const del = (id: string) => { if (window.confirm('Xoá bước này khỏi quy trình?')) setWorkflow(steps.filter((s) => s.id !== id)); };
   const add = () => setWorkflow([...steps, newWorkflowStep()]);
   const resetDefault = () => {
