@@ -89,3 +89,33 @@ If the new project misbehaves after cutover, the recovery path depends on the mi
 ## Appendix — actual 2026-06-15 migration to `tour-cost-calculator-v2`
 
 Followed Path B because the owner's Google account hosting `tour-cost-calculator-4336c` was banned mid-migration. No data was migrated; the new project was bootstrapped via `scripts/seed-user-accounts.mjs` with `developer@viettours.com.vn` (CEO). Rules deploy used the REST API workaround. See `CLAUDE.md` → `## Firebase` for the historical project record.
+
+---
+
+## Backup arrangement (Phase 2)
+
+After Stage 5 cutover, an hourly artifact backup runs automatically in CI. See `.github/workflows/backup.yml` for the source.
+
+**What it does:**
+- Runs at `:00` UTC every hour (cron `0 * * * *`) plus manual `workflow_dispatch`.
+- Authenticates with `FIREBASE_BACKUP_SRC_SA_JSON` (GitHub Actions secret — the production project's service-account JSON).
+- Materializes the secret into a tmpfile, runs `scripts/firestore-export.mjs` against the production project, uploads `firestore-dump.json` as a workflow artifact named `firestore-dump-<run_id>` with 30-day retention, scrubs the tmpfile on every exit.
+
+**What it does NOT do:**
+- It does not mirror to a second Firestore project. The originally planned NEW → OLD live mirror was dropped when the OLD project's Google account was banned.
+
+**Restoring from a backup artifact:**
+
+1. Open https://github.com/viettoursdev/tour-cost-calculator/actions/workflows/backup.yml, pick a successful run, download the `firestore-dump-<run_id>` artifact. The download is a zip containing `firestore-dump.json`.
+2. Unzip into the repo root.
+3. Generate (or reuse) a service-account JSON for the target project — save it next to the dump.
+4. Run the import:
+   ```bash
+   SA_PATH=target-sa.json node scripts/firestore-import.mjs
+   ```
+   This will overwrite the target project's documents with the dump contents. `set()` semantics — safe to re-run.
+5. Delete the local SA JSON and dump immediately after.
+
+**Cost guard:** ~720 cron runs/month at ~1 minute each ≈ 12 hrs/month of GitHub Actions runner time (free on public repos; significant slice on private). One Firestore read per doc per run from the production project. To pause the backup, disable the workflow in the Actions UI or delete the `.github/workflows/backup.yml` file.
+
+**Audit:** if new top-level Firestore collections are added to the app, they must be added to `SINGLE_DOCS` or `DYNAMIC_COLLECTIONS` in `scripts/firestore-export.mjs` or the hourly backup will silently miss them. The audit pattern: every `doc(db, 'viettours', X)` call in `src/lib/firebase.ts` must appear in `SINGLE_DOCS`; every `doc(db, 'X', ...)` for X other than 'viettours' must appear in `DYNAMIC_COLLECTIONS`.
