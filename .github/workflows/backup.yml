@@ -26,7 +26,7 @@ name: Firestore Backup
 
 on:
   schedule:
-    - cron: '0 * * * *'   # top of every hour, UTC
+    - cron: '17 * * * *'  # :17 of every hour, UTC — avoid top-of-hour cron contention
   workflow_dispatch:        # manual trigger
 
 permissions:
