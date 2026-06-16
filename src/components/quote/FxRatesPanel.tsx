@@ -40,7 +40,7 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
   // Tiền tệ mặc định cho ô Đơn giá khi thêm dòng mới (chỉ báo giá nước ngoài & DMC).
   // Bảng tỷ giá vẫn luôn hiển thị → VND; lựa chọn này chỉ ảnh hưởng cur dòng mới.
   const allowBase = !isGlobal && (template === 'intl' || template === 'dmc');
-  const base = allowBase ? (rateBase || 'VND') : 'VND';
+  const base = allowBase ? (rateBase || 'USD') : 'VND'; // báo giá nước ngoài/DMC mặc định USD
   const baseOptions = [...new Set(['VND', ...Object.keys(rates)])]
     .sort((a, b) => (a === 'VND' ? -1 : b === 'VND' ? 1 : fxRank(a) - fxRank(b)));
 
