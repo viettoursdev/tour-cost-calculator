@@ -27,6 +27,7 @@ const SINGLE_DOCS = [
   ['viettours', 'master_rate_card'],
   ['viettours', 'user_accounts'],
   ['viettours', 'ncc_master'],
+  ['viettours', 'ncc_products'],
   ['viettours', 'contracts_master'],
   ['viettours', 'quote_history'],
   ['viettours', 'dmc_quote_history'],
