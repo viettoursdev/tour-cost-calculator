@@ -1,4 +1,4 @@
-import type { WorkflowStatus, WorkflowStep } from '@/types';
+import type { Role, WorkflowStatus, WorkflowStep } from '@/types';
 
 /** 13 bước quy trình vận hành mặc định (chỉnh được sau). */
 export const WORKFLOW_DEFAULT_STEPS: string[] = [
@@ -46,6 +46,20 @@ export const WORKFLOW_OFFSETS: Record<WorkflowStepKey, number> = {
   receive: 45, quote: 35, confirm_service: 28, visa: 35, contract: 21, deposit_ncc: 18,
   final_service: 10, comms: 7, deposit_pretrip: 5, departure: 0, acceptance: -1,
   final_payment: -7, close: -10,
+};
+
+/** Phòng/bộ phận phụ trách mặc định mỗi bước — để gợi ý gán người phụ trách. */
+export const WORKFLOW_STEP_ROLE: Record<WorkflowStepKey, Role> = {
+  receive: 'Sales', quote: 'Sales', confirm_service: 'Operations', visa: 'Operations',
+  contract: 'Sales', deposit_ncc: 'Accountant', final_service: 'Operations', comms: 'Marketing',
+  deposit_pretrip: 'Accountant', departure: 'Operations', acceptance: 'Operations',
+  final_payment: 'Accountant', close: 'Operations',
+};
+
+/** Phòng phụ trách gợi ý của 1 bước (theo khoá ổn định). */
+export const roleOfStep = (s: WorkflowStep): Role | undefined => {
+  const k = keyOf(s);
+  return k ? WORKFLOW_STEP_ROLE[k] : undefined;
 };
 
 const LABEL_TO_KEY = new Map<string, WorkflowStepKey>(WORKFLOW_DEFAULT_STEPS.map((l, i) => [l, WORKFLOW_STEP_KEYS[i]]));

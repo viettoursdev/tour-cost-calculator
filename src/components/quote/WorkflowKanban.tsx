@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import Sortable from 'sortablejs';
 import { deadlineMeta } from '@/components/visa/constants';
-import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER } from './workflowConstants';
+import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep } from './workflowConstants';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
 type Props = {
@@ -58,6 +58,7 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
             >
               {items.map((s) => {
                 const dl = s.dueDate ? deadlineMeta(s.dueDate, s.status === 'done') : null;
+                const dept = s.assignee ? undefined : roleOfStep(s);
                 return (
                   <Paper
                     key={s.id} data-id={s.id} elevation={0} onClick={() => onOpen(s)}
@@ -72,9 +73,10 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
                       <Chip size="small" label={`↗ nên: ${WORKFLOW_STATUS_META[suggestions[s.id]].label}`}
                         sx={{ mt: 0.5, height: 20, fontWeight: 700, bgcolor: WORKFLOW_STATUS_META[suggestions[s.id]].color, color: '#fff' }} />
                     )}
-                    {(s.assignee || dl) && (
+                    {(s.assignee || dept || dl) && (
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
                         {s.assignee && <Chip size="small" variant="outlined" label={`👤 ${nameOf(s.assignee)}`} />}
+                        {dept && <Chip size="small" variant="outlined" label={`🏢 ${dept}`} sx={{ color: 'text.secondary', borderStyle: 'dashed' }} />}
                         {dl && <Typography variant="caption" sx={{ color: dl.color, fontWeight: 700 }}>⏱ {dl.text}</Typography>}
                       </Stack>
                     )}
