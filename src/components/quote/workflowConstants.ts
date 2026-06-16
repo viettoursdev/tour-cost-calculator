@@ -7,12 +7,12 @@ export const WORKFLOW_DEFAULT_STEPS: string[] = [
   'Xác nhận dịch vụ',
   'Triển khai visa, hồ sơ',
   'Ký kết hợp đồng',
-  'Nhận đặt cọc & thanh toán NCC',
+  'Nhận đặt cọc và thanh toán NCC',
   'Xác nhận dịch vụ cuối cùng',
   'Truyền thông trước chuyến đi',
-  'Nhận đặt cọc & thanh toán trước chuyến đi',
+  'Nhận đặt cọc và thanh toán trước chuyến đi',
   'Khởi hành',
-  'Nghiệm thu với KH & NCC',
+  'Nghiệm thu với KH và NCC',
   'Nhận thanh toán còn lại',
   'Kết tour, lưu trữ dữ liệu',
 ];
@@ -49,6 +49,10 @@ export const WORKFLOW_OFFSETS: Record<WorkflowStepKey, number> = {
 };
 
 const LABEL_TO_KEY = new Map<string, WorkflowStepKey>(WORKFLOW_DEFAULT_STEPS.map((l, i) => [l, WORKFLOW_STEP_KEYS[i]]));
+// Nhãn CŨ (dùng "&") — để workflow đã lưu trước đây vẫn suy đúng khoá khi thiếu key.
+LABEL_TO_KEY.set('Nhận đặt cọc & thanh toán NCC', 'deposit_ncc');
+LABEL_TO_KEY.set('Nhận đặt cọc & thanh toán trước chuyến đi', 'deposit_pretrip');
+LABEL_TO_KEY.set('Nghiệm thu với KH & NCC', 'acceptance');
 /** Suy khoá từ nhãn mặc định (cho workflow cũ chưa có key). */
 export const keyByLabel = (label: string): WorkflowStepKey | undefined => LABEL_TO_KEY.get(label);
 /** Khoá hiệu lực của bước: key đã lưu, hoặc suy từ nhãn. */
