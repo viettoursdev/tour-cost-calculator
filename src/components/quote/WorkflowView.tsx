@@ -3,6 +3,7 @@ import {
   Badge, Box, Button, Chip, LinearProgress, Paper, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SyncIcon from '@mui/icons-material/Sync';
 import EventIcon from '@mui/icons-material/Event';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
@@ -92,6 +93,11 @@ export function WorkflowView() {
   const setStatus = (id: string, status: WorkflowStatus) => setWorkflow(setStepStatus(steps, id, status));
   const del = (id: string) => { if (window.confirm('Xoá bước này khỏi quy trình?')) setWorkflow(steps.filter((s) => s.id !== id)); };
   const add = () => setWorkflow([...steps, newWorkflowStep()]);
+  const resetDefault = () => {
+    if (window.confirm('Khôi phục về 13 bước mặc định? Mọi bước đã thêm/sửa và trạng thái hiện tại sẽ bị thay thế.')) {
+      setWorkflow(defaultWorkflow());
+    }
+  };
   const reorder = (from: number, to: number) => { const a = [...steps]; const [m] = a.splice(from, 1); a.splice(to, 0, m); setWorkflow(a); };
   const syncNow = () => setWorkflow(applySignals(steps, signals));
   const fillDue = () => {
@@ -137,6 +143,9 @@ export function WorkflowView() {
               <ToggleButton value="checklist"><ChecklistIcon fontSize="small" sx={{ mr: 0.5 }} />Checklist</ToggleButton>
               <ToggleButton value="gantt"><ViewTimelineIcon fontSize="small" sx={{ mr: 0.5 }} />Gantt</ToggleButton>
             </ToggleButtonGroup>
+            <Tooltip title="Khôi phục về 13 bước quy trình mặc định">
+              <Button variant="outlined" size="small" color="warning" startIcon={<RestartAltIcon />} onClick={resetDefault} sx={{ whiteSpace: 'nowrap' }}>Khôi phục mặc định</Button>
+            </Tooltip>
             <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={add} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', whiteSpace: 'nowrap' }}>Thêm bước</Button>
           </Stack>
         </Stack>
