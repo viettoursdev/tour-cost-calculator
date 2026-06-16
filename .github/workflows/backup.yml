@@ -1,23 +1,26 @@
 # backup.yml
 #
-# Artifact-only Firestore backup for the production Firebase project.
-# Project ID is determined by the service-account JSON in the backup secret —
-# see CLAUDE.md for the currently-active project.
+# Hourly Firestore backup with TWO safety nets:
+#   1. Mirror — re-imports the dump into a second Firebase project so its
+#      Firestore lags production by at most ~1 hour.
+#   2. Artifact — uploads the dump as a 30-day GitHub Actions artifact for
+#      point-in-time recovery against any project.
 #
-# Background: the original plan mirrored data from NEW → OLD project via a
-# second Firestore destination. That was dropped because the OLD project's owner
-# Google account was banned and is no longer accessible. This workflow exports
-# the NEW project's Firestore to a JSON file and uploads it as a GitHub Actions
-# artifact with 30-day retention. Recovery: download the artifact from the
-# Actions run page and run `node scripts/firestore-import.mjs` against a target
-# project.
+# Currently SRC is tour-cost-calculator-v2 (production) and DEST is
+# tour-cost-calculator-4336c (backup-only — not served to clients; its
+# browser API key is suspended and that's intentional). See CLAUDE.md.
 #
-# Secret required (set in: GitHub repo → Settings → Secrets and variables → Actions):
-#   FIREBASE_BACKUP_SRC_SA_JSON — service-account JSON for the production project.
+# Secrets required (set in: GitHub repo → Settings → Secrets and variables → Actions):
+#   FIREBASE_BACKUP_SRC_SA_JSON  — service-account JSON for the SOURCE (production) project.
+#   FIREBASE_BACKUP_DEST_SA_JSON — service-account JSON for the DEST (mirror) project.
 #
-# Env vars forwarded to the export script:
-#   SA_PATH=src-sa.json   (materialized from the secret; scrubbed after upload)
-#   OUT_PATH=firestore-dump.json (default; explicitly documented here)
+# Failure semantics:
+#   - export fails → upload + import skip; run is red.
+#   - export ok, upload fails → import skips; run is red (the mirror skip is
+#     acceptable because the artifact is the more reliable safety net).
+#   - export + upload ok, import fails → run is red but the artifact is
+#     already preserved.
+#   - SA files are scrubbed unconditionally on exit.
 
 name: Firestore Backup
 
@@ -50,14 +53,16 @@ jobs:
 
       - run: npm ci
 
-      - name: Materialize SA JSON
+      - name: Materialize SA JSONs
         env:
-          SA_JSON: ${{ secrets.FIREBASE_BACKUP_SRC_SA_JSON }}
+          SRC_SA_JSON: ${{ secrets.FIREBASE_BACKUP_SRC_SA_JSON }}
+          DEST_SA_JSON: ${{ secrets.FIREBASE_BACKUP_DEST_SA_JSON }}
         run: |
-          printf '%s' "$SA_JSON" > src-sa.json
-          chmod 600 src-sa.json
+          printf '%s' "$SRC_SA_JSON" > src-sa.json
+          printf '%s' "$DEST_SA_JSON" > dest-sa.json
+          chmod 600 src-sa.json dest-sa.json
 
-      - name: Export Firestore to JSON
+      - name: Export Firestore from SRC
         run: SA_PATH=src-sa.json node scripts/firestore-export.mjs
 
       - name: Upload dump artifact
@@ -69,6 +74,10 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      - name: Scrub SA file
+      - name: Import Firestore into DEST (mirror)
+        if: success()
+        run: SA_PATH=dest-sa.json node scripts/firestore-import.mjs
+
+      - name: Scrub SA files
         if: always()
-        run: rm -f src-sa.json
+        run: rm -f src-sa.json dest-sa.json

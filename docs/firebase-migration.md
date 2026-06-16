@@ -94,17 +94,23 @@ Followed Path B because the owner's Google account hosting `tour-cost-calculator
 
 ## Backup arrangement (Phase 2)
 
-After Stage 5 cutover, an hourly artifact backup runs automatically in CI. See `.github/workflows/backup.yml` for the source.
+After Stage 5 cutover, an hourly backup runs automatically in CI with two safety nets. See `.github/workflows/backup.yml` for the source.
 
 **What it does:**
 - Runs at `:00` UTC every hour (cron `0 * * * *`) plus manual `workflow_dispatch`.
-- Authenticates with `FIREBASE_BACKUP_SRC_SA_JSON` (GitHub Actions secret — the production project's service-account JSON).
-- Materializes the secret into a tmpfile, runs `scripts/firestore-export.mjs` against the production project, uploads `firestore-dump.json` as a workflow artifact named `firestore-dump-<run_id>` with 30-day retention, scrubs the tmpfile on every exit.
+- Authenticates with two secrets: `FIREBASE_BACKUP_SRC_SA_JSON` (production project SA) and `FIREBASE_BACKUP_DEST_SA_JSON` (backup-destination project SA).
+- Materializes both into tmpfiles, runs `scripts/firestore-export.mjs` against the production project to produce `firestore-dump.json`.
+- **Safety net 1 — artifact upload:** uploads `firestore-dump.json` as a workflow artifact named `firestore-dump-<run_id>` with 30-day retention (point-in-time recovery against any project).
+- **Safety net 2 — live mirror:** runs `scripts/firestore-import.mjs` against the backup-destination project so its Firestore lags production by at most ~1 hour.
+- Scrubs both tmpfiles on every exit (success or failure).
 
-**What it does NOT do:**
-- It does not mirror to a second Firestore project. The originally planned NEW → OLD live mirror was dropped when the OLD project's Google account was banned.
+**Restoring from the live mirror (fast):**
 
-**Restoring from a backup artifact:**
+1. Have a working web SDK config for the backup project (or lift its API-key suspension if applicable).
+2. Repoint the six `VITE_FIREBASE_*` GitHub Actions secrets to the backup project's values.
+3. Re-deploy via `gh workflow run Deploy --ref main`. Within ~3 minutes prod serves from the backup project. Worst-case data loss: ~1 hour.
+
+**Restoring from a backup artifact (slow, point-in-time):**
 
 1. Open https://github.com/viettoursdev/tour-cost-calculator/actions/workflows/backup.yml, pick a successful run, download the `firestore-dump-<run_id>` artifact. The download is a zip containing `firestore-dump.json`.
 2. Unzip into the repo root.
@@ -116,6 +122,6 @@ After Stage 5 cutover, an hourly artifact backup runs automatically in CI. See `
    This will overwrite the target project's documents with the dump contents. `set()` semantics — safe to re-run.
 5. Delete the local SA JSON and dump immediately after.
 
-**Cost guard:** ~720 cron runs/month at ~1 minute each ≈ 12 hrs/month of GitHub Actions runner time (free on public repos; significant slice on private). One Firestore read per doc per run from the production project. To pause the backup, disable the workflow in the Actions UI or delete the `.github/workflows/backup.yml` file.
+**Cost guard:** ~720 cron runs/month. Each run does one full read of the production Firestore + one full write to the backup Firestore + one artifact upload. At current data volume (~136 KB dump), this is well under both free-tier thresholds and bandwidth caps. To pause the backup, disable the workflow in the Actions UI or delete the `.github/workflows/backup.yml` file.
 
 **Audit:** if new top-level Firestore collections are added to the app, they must be added to `SINGLE_DOCS` or `DYNAMIC_COLLECTIONS` in `scripts/firestore-export.mjs` or the hourly backup will silently miss them. The audit pattern: every `doc(db, 'viettours', X)` call in `src/lib/firebase.ts` must appear in `SINGLE_DOCS`; every `doc(db, 'X', ...)` for X other than 'viettours' must appear in `DYNAMIC_COLLECTIONS`.
