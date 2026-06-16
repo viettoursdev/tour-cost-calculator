@@ -1,0 +1,74 @@
+# backup.yml
+#
+# Artifact-only Firestore backup for the production Firebase project.
+# Project ID is determined by the service-account JSON in the backup secret —
+# see CLAUDE.md for the currently-active project.
+#
+# Background: the original plan mirrored data from NEW → OLD project via a
+# second Firestore destination. That was dropped because the OLD project's owner
+# Google account was banned and is no longer accessible. This workflow exports
+# the NEW project's Firestore to a JSON file and uploads it as a GitHub Actions
+# artifact with 30-day retention. Recovery: download the artifact from the
+# Actions run page and run `node scripts/firestore-import.mjs` against a target
+# project.
+#
+# Secret required (Task 12):
+#   FIREBASE_BACKUP_SRC_SA_JSON — service-account JSON for the NEW project.
+#
+# Env vars forwarded to the export script:
+#   SA_PATH=src-sa.json   (materialized from the secret; scrubbed after upload)
+#   OUT_PATH=firestore-dump.json (default; explicitly documented here)
+
+name: Firestore Backup
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # top of every hour, UTC
+  workflow_dispatch:        # manual trigger
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-backup
+  cancel-in-progress: false  # queue overlapping runs; do not drop them
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Materialize SA JSON
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_BACKUP_SRC_SA_JSON }}
+        run: |
+          printf '%s' "$SA_JSON" > src-sa.json
+          chmod 600 src-sa.json
+
+      - name: Export Firestore to JSON
+        run: SA_PATH=src-sa.json node scripts/firestore-export.mjs
+
+      - name: Upload dump artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-dump-${{ github.run_id }}
+          path: firestore-dump.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Scrub SA file
+        if: always()
+        run: rm -f src-sa.json
