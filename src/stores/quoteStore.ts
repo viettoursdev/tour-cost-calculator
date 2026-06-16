@@ -14,7 +14,7 @@ import {
 } from '@/lib/firebase';
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
-import { workflowDueSummary } from '@/components/quote/workflowConstants';
+import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/workflowConstants';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
@@ -48,7 +48,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard';
 
 type QuoteState = {
   draft: QuoteDraft;
@@ -678,7 +678,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
-              ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow) } : {}),
+              ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow), workflowSummary: workflowBoardSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
               ...(attachments ? { attachments } : {}),
               ...(linkedForeign

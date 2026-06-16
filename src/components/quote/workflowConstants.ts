@@ -132,6 +132,30 @@ export function workflowDueSummary(steps: WorkflowStep[]): { label: string; dueD
     .map((s) => ({ label: s.label, dueDate: s.dueDate as string, ...(s.assignee ? { assignee: s.assignee } : {}) }));
 }
 
+/** Tóm tắt gọn cho BẢNG ĐIỀU PHỐI toàn hệ thống (index vào lịch sử báo giá). */
+export type WorkflowBoardSummary = {
+  current?: string;          // nhãn bước hiện tại (bước chưa hoàn tất đầu tiên)
+  currentAssignee?: string;  // username phụ trách bước hiện tại
+  donePct: number;           // % bước đã hoàn tất
+  total: number;             // tổng số bước
+  overdue: number;           // số bước quá hạn & chưa xong
+};
+
+export function workflowBoardSummary(steps: WorkflowStep[], todayISO?: string): WorkflowBoardSummary {
+  const total = steps.length;
+  const done = steps.filter((s) => s.status === 'done').length;
+  const cur = steps.find((s) => s.status !== 'done');
+  const today = todayISO ?? new Date().toISOString().slice(0, 10);
+  const overdue = steps.filter((s) => s.dueDate && s.status !== 'done' && (s.dueDate as string) < today).length;
+  return {
+    ...(cur?.label ? { current: cur.label } : {}),
+    ...(cur?.assignee ? { currentAssignee: cur.assignee } : {}),
+    donePct: total ? Math.round((done / total) * 100) : 0,
+    total,
+    overdue,
+  };
+}
+
 /** Tự điền Hạn cho bước có dueOffset & dueDate đang TRỐNG (= khởi hành − dueOffset ngày). */
 export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null): WorkflowStep[] {
   if (!departureISO) return steps;

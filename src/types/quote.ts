@@ -230,6 +230,8 @@ export type CloudQuoteEntry = {
   status?: QuoteStatus;
   /** Tóm tắt bước quy trình có hạn & chưa xong — để nhắc deadline toàn hệ thống. */
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
+  /** Tóm tắt tiến độ quy trình cho Bảng điều phối toàn hệ thống. */
+  workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
   createdByUsername: string;
   createdByName: string;
   collaborators: Collaborator[];

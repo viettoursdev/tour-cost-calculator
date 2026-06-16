@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
   workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
-  appendLog, roleOfStep,
+  appendLog, roleOfStep, workflowBoardSummary,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -167,6 +167,29 @@ describe('appendLog', () => {
     for (let i = 0; i < 60; i++) s = appendLog(s, [`a${i}`], 'Mai');
     expect(s.log).toHaveLength(50);
     expect(s.log?.[49].action).toBe('a59');
+  });
+});
+
+describe('workflowBoardSummary', () => {
+  const mk = (over: Partial<WorkflowStep>): WorkflowStep => ({ ...newWorkflowStep('x'), ...over });
+  it('reports current step, assignee, progress and overdue count', () => {
+    const steps: WorkflowStep[] = [
+      mk({ label: 'A', status: 'done' }),
+      mk({ label: 'B', status: 'doing', assignee: 'sale1', dueDate: '2026-01-01' }),
+      mk({ label: 'C', status: 'todo', dueDate: '2030-01-01' }),
+      mk({ label: 'D', status: 'todo' }),
+    ];
+    const sum = workflowBoardSummary(steps, '2026-06-17');
+    expect(sum.current).toBe('B');
+    expect(sum.currentAssignee).toBe('sale1');
+    expect(sum.total).toBe(4);
+    expect(sum.donePct).toBe(25);
+    expect(sum.overdue).toBe(1); // chỉ B (đã qua hạn & chưa xong)
+  });
+  it('100% done leaves current undefined', () => {
+    const sum = workflowBoardSummary([newWorkflowStep('a', 'done')], '2026-06-17');
+    expect(sum.donePct).toBe(100);
+    expect(sum.current).toBeUndefined();
   });
 });
 
