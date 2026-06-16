@@ -135,6 +135,24 @@ describe('quoteStore — setter clamps', () => {
   });
 });
 
+describe('quoteStore.addItem — default currency follows rateBase', () => {
+  it('new line items default to mkItem currency when no rateBase set', () => {
+    useQuoteStore.setState({ draft: { ...useQuoteStore.getState().draft, rateBase: undefined, items: {} } });
+    useQuoteStore.getState().addItem('hotel');
+    expect(useQuoteStore.getState().draft.items.hotel?.[0].cur).toBe('USD');
+  });
+  it('new line items adopt rateBase as default currency', () => {
+    useQuoteStore.setState({ draft: { ...useQuoteStore.getState().draft, rateBase: 'EUR', items: {} } });
+    useQuoteStore.getState().addItem('hotel');
+    expect(useQuoteStore.getState().draft.items.hotel?.[0].cur).toBe('EUR');
+  });
+  it('explicit override currency still wins over rateBase', () => {
+    useQuoteStore.setState({ draft: { ...useQuoteStore.getState().draft, rateBase: 'EUR', items: {} } });
+    useQuoteStore.getState().addItem('flight', { cur: 'VND' });
+    expect(useQuoteStore.getState().draft.items.flight?.[0].cur).toBe('VND');
+  });
+});
+
 describe('quoteStore.importJSON', () => {
   it('rejects files with the wrong _meta.app', () => {
     const raw = JSON.stringify({ _meta: { app: 'something else' }, template: 'domestic' });

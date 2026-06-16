@@ -479,12 +479,16 @@ export const useQuoteStore = create<QuoteState>()(
           })),
 
         addItem: (cid, override = {}) => {
-          set((s) => ({
-            draft: {
-              ...s.draft,
-              items: { ...s.draft.items, [cid]: [...(s.draft.items[cid] ?? []), mkItem(override)] },
-            },
-          }));
+          set((s) => {
+            // Đơn giá mặc định theo tiền tệ hiển thị đã chọn (nếu chưa chỉ định cur).
+            const ov = s.draft.rateBase && override.cur == null ? { ...override, cur: s.draft.rateBase } : override;
+            return {
+              draft: {
+                ...s.draft,
+                items: { ...s.draft.items, [cid]: [...(s.draft.items[cid] ?? []), mkItem(ov)] },
+              },
+            };
+          });
         },
 
         updItem: (cid, item) =>
