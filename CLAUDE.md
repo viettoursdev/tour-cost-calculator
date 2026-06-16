@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Internal tool for Viettours sales/operations — tour cost calculation, quotes, contracts, suppliers, customers, itineraries, menus, visa & doc translation.
 
 - **Live:** https://viettoursdev.github.io/tour-cost-calculator/
-- **Stack:** Vite 5 · React 18 · TypeScript 5 (strict) · MUI v6 + MUI X · Zustand 4 · Firebase 10 (Firestore, named DB `viettours`) · GitHub Pages
+- **Stack:** Vite 5 · React 18 · TypeScript 5 (strict) · MUI v6 + MUI X · Zustand 4 · Firebase 10 (Firestore, default DB) · GitHub Pages
 - **Build step required** — this is no longer a single-file Babel-in-browser app. See `package.json` and `vite.config.ts`.
 
 ## Commands

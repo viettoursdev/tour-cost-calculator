@@ -12,8 +12,8 @@
 # Actions run page and run `node scripts/firestore-import.mjs` against a target
 # project.
 #
-# Secret required (Task 12):
-#   FIREBASE_BACKUP_SRC_SA_JSON — service-account JSON for the NEW project.
+# Secret required (set in: GitHub repo → Settings → Secrets and variables → Actions):
+#   FIREBASE_BACKUP_SRC_SA_JSON — service-account JSON for the production project.
 #
 # Env vars forwarded to the export script:
 #   SA_PATH=src-sa.json   (materialized from the secret; scrubbed after upload)
