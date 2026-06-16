@@ -156,6 +156,9 @@ export type QuoteDraft = {
   info: QuoteInfo;
   pax: number;
   rates: Record<string, number>;
+  /** Tiền tệ HIỂN THỊ của bảng tỷ giá ('VND' mặc định). Chỉ đổi cách hiển thị —
+   *  `rates` luôn quy về VND. Dùng cho báo giá nước ngoài & DMC breakdown. */
+  rateBase?: string;
   margin: number;
   vat: number;
   svcBasis: number;

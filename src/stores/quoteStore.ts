@@ -82,6 +82,8 @@ type QuoteState = {
   setPax: (n: number) => void;
   setStatus: (status: QuoteStatus) => void;
   setRate: (cur: string, rate: number) => void;
+  /** Đổi tiền tệ HIỂN THỊ của bảng tỷ giá (không đổi giá trị quy về VND). */
+  setRateBase: (cur: string) => void;
   setRatesSynced: (rates: Record<string, number>, pushedAt?: string, pushedBy?: string, persistLocal?: boolean) => void;
   setMargin: (n: number) => void;
   setVat: (n: number) => void;
@@ -389,6 +391,7 @@ export const useQuoteStore = create<QuoteState>()(
         setVat: (n) => set((s) => ({ draft: { ...s.draft, vat: n } })),
         setSvcBasis: (n) => set((s) => ({ draft: { ...s.draft, svcBasis: n } })),
         setRounding: (n) => set((s) => ({ draft: { ...s.draft, rounding: Math.max(1, n) } })),
+        setRateBase: (cur) => set((s) => ({ draft: { ...s.draft, rateBase: cur } })),
         setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
         setFlights: (v) => set((s) => ({ draft: { ...s.draft, flights: v } })),
         setWorkflow: (v) => set((s) => ({ draft: { ...s.draft, workflow: v } })),
@@ -539,6 +542,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
                 // Giữ nguyên tỷ giá nhúng trong file (báo giá tự lưu tỷ giá của nó).
                 rates: keepSavedRates(data.rates),
+                ...(data.rateBase ? { rateBase: data.rateBase } : {}),
                 ...(data.margin != null ? { margin: data.margin } : {}),
                 ...(data.vat != null ? { vat: data.vat } : {}),
                 ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
@@ -571,6 +575,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.pax != null ? { pax: Math.max(1, Number(data.pax) || 1) } : {}),
               // Giữ nguyên tỷ giá nhúng trong dữ liệu import (báo giá tự giữ tỷ giá).
               rates: keepSavedRates(data.rates),
+              ...(data.rateBase ? { rateBase: data.rateBase } : {}),
               ...(data.margin != null ? { margin: data.margin } : {}),
               ...(data.vat != null ? { vat: data.vat } : {}),
               ...(data.svcBasis != null ? { svcBasis: data.svcBasis } : {}),
