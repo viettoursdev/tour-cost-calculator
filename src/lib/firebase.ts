@@ -288,7 +288,12 @@ function makeQuoteHistoryApi(
         };
         quotes.unshift(saved);
       }
-      await setDoc(historyDoc, { quotes: quotes.slice(0, 500) });
+      // Giữ doc index dưới giới hạn 1 MB: cắt bớt entry cũ nhất nếu quá lớn.
+      let kept = quotes.slice(0, 500);
+      while (kept.length > 1 && new TextEncoder().encode(JSON.stringify({ quotes: kept })).length > 1_000_000) {
+        kept = kept.slice(0, -1);
+      }
+      await setDoc(historyDoc, { quotes: kept });
       return saved;
     },
 
@@ -313,14 +318,19 @@ function makeQuoteHistoryApi(
         note: note?.trim() || `Phiên bản ${versionNo}`,
         state,
       };
-      const versions = [...(existing.versions ?? []), newVersion].slice(-20);
-      await setDoc(projectDoc(cloudId), {
-        ...existing,
-        versions,
-        currentState: state,
-        updatedAt: nowIso,
-        updatedBy: savedBy.name,
-      });
+      // Firestore giới hạn 1 doc ≤ 1.048.576 byte. Doc này chứa tới 20 snapshot
+      // draft → khi báo giá lớn dễ vượt → setDoc ném lỗi "không lưu được". Bỏ bớt
+      // phiên bản CŨ NHẤT cho tới khi doc dưới ngưỡng an toàn (luôn giữ bản mới nhất).
+      const SIZE_LIMIT = 1_000_000;
+      const byteSize = (o: unknown) => new TextEncoder().encode(JSON.stringify(o)).length;
+      let versions = [...(existing.versions ?? []), newVersion].slice(-20);
+      const build = (vs: typeof versions) => ({ ...existing, versions: vs, currentState: state, updatedAt: nowIso, updatedBy: savedBy.name });
+      let payload = build(versions);
+      while (versions.length > 1 && byteSize(payload) > SIZE_LIMIT) {
+        versions = versions.slice(1); // bỏ phiên bản cũ nhất
+        payload = build(versions);
+      }
+      await setDoc(projectDoc(cloudId), payload);
     },
 
     async fbDeleteQuote(id: number, cloudId: string): Promise<void> {
