@@ -73,7 +73,9 @@ trong bundle). App tự đính kèm token (header `Authorization: Bearer …`) c
    chạy y như cũ (chưa bắt buộc auth) — không gì gãy.
 2. Kiểm tra các tính năng AI/dịch/upload vẫn chạy bình thường trong app.
 3. Khi sẵn sàng **bật xác thực**: Settings → Variables and Secrets → Add
-   - Name: `FIREBASE_PROJECT_ID`  ·  Value: `tour-cost-calculator-v2`  → Save/Deploy.
+   - Name: `FIREBASE_PROJECT_ID`  ·  Value: `tour-cost-calculator-4336c`  → Save/Deploy.
+   - ⚠ Phải khớp **đúng project production hiện tại** (xem CLAUDE.md → Firebase → Project ID).
+     Đặt sai project = mọi token bị từ chối (sai `aud`) → AI/dịch/upload đều 401.
 4. Từ giờ mọi request thiếu/sai token (gồm curl ngoài) bị **401**. App đã đăng nhập vẫn chạy.
 5. **Rollback:** xoá biến `FIREBASE_PROJECT_ID` → quay lại không bắt buộc auth ngay.
 
