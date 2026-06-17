@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Box } from '@mui/material';
 import { TemplateSelectorModal } from './TemplateSelectorModal';
 import { QuoteToolbar } from './QuoteToolbar';
+import { HomeView } from './HomeView';
 import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
 import { DashboardView } from './DashboardView';
@@ -82,6 +83,7 @@ export function QuoteView() {
           />
 
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
+            {view === 'home' && <HomeView />}
             {view === 'cost' && <CostView />}
             {view === 'summary' && <SummaryView />}
             {view === 'dashboard' && <DashboardView />}

@@ -48,7 +48,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 };
 
 export type QuoteViewKey =
-  | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
+  | 'home' | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
   | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics';
 
 type QuoteState = {
@@ -246,7 +246,7 @@ export const useQuoteStore = create<QuoteState>()(
         init: (user) => {
           const key = persistKey(user.u);
           let storedDraft: QuoteDraft | null = null;
-          let storedView: QuoteState['view'] = 'cost';
+          let storedView: QuoteState['view'] = 'home'; // mở app vào Trang chủ tổng quan
           try {
             const raw = localStorage.getItem(key);
             if (raw) {

@@ -239,6 +239,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         { v: 'history', label: '🕐 Lịch sử Breakdown' },
       ]
     : [
+        { v: 'home', label: '🏠 Hôm nay' },
         { v: 'cost', label: '📊 Bảng báo giá' },
         { v: 'summary', label: '💰 Tổng kết & Định giá' },
         { v: 'dashboard', label: '📈 Dashboard biên lợi' },
