@@ -1,7 +1,8 @@
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
+  Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
+import { CUSTOMER_SOURCES, CUSTOMER_TAGS } from './constants';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
@@ -163,6 +164,20 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
             placeholder="VD: 0312345678"
             disabled={!canEdit}
           />
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <Autocomplete
+              freeSolo options={CUSTOMER_SOURCES} value={form.source ?? ''} disabled={!canEdit}
+              onChange={(_, v) => setF('source', v ?? '')}
+              onInputChange={(_, v) => setF('source', v)}
+              renderInput={(params) => <TextField {...params} label="Nguồn khách" placeholder="Giới thiệu / Web…" />}
+            />
+            <Autocomplete
+              multiple freeSolo options={CUSTOMER_TAGS} value={form.tags ?? []} disabled={!canEdit}
+              onChange={(_, v) => setF('tags', v as string[])}
+              renderInput={(params) => <TextField {...params} label="Phân loại (tags)" placeholder="VIP…" />}
+            />
+          </Box>
 
           {/* Contacts */}
           <Box>

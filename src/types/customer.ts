@@ -24,6 +24,10 @@ export type Customer = {
   taxCode?: string;   // mã số thuế
   contacts: CustomerContact[];
   note: string;
+  /** Nguồn khách (giới thiệu/web/hội chợ…) — cho phân tích & lọc. */
+  source?: string;
+  /** Nhãn phân loại (VIP, doanh nghiệp lớn…). */
+  tags?: string[];
   /** Dòng thời gian chăm sóc khách (CRM) — mới nhất ở cuối. */
   interactions?: CustomerInteraction[];
   createdAt: string;

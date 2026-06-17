@@ -4,6 +4,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
@@ -24,6 +25,7 @@ const Bar = ({ pct, color }: { pct: number; color: string }) => (
 export function SalesAnalytics() {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const visibleQuotes = useQuoteHistoryStore((s) => s.visibleQuotes);
+  const customers = useCustomerStore((s) => s.customers);
   const [owner, setOwner] = useState('');
 
   const owners = useMemo(() => [...new Set(visibleQuotes().map((q) => q.createdByName).filter(Boolean))].sort(), [quotes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -63,6 +65,17 @@ export function SalesAnalytics() {
     }
     const byMonth = [...byMonthMap.entries()].map(([month, value]) => ({ month, value })).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
 
+    // Doanh số thắng theo NGUỒN khách (join quote→customer).
+    const srcById = new Map(customers.map((c) => [c.id, c.source?.trim() || '']));
+    const srcByName = new Map(customers.map((c) => [c.name, c.source?.trim() || '']));
+    const bySourceMap = new Map<string, number>();
+    for (const q of wonItems) {
+      const src = (q.customerId ? srcById.get(q.customerId) : undefined) ?? srcByName.get(q.customerName ?? '') ?? '';
+      const key = src || '(chưa rõ nguồn)';
+      bySourceMap.set(key, (bySourceMap.get(key) ?? 0) + (q.totalCost ?? 0));
+    }
+    const bySource = [...bySourceMap.entries()].map(([source, value]) => ({ source, value })).sort((a, b) => b.value - a.value);
+
     const lossAll = list.filter((q) => LOSS_STATUSES.includes(stOf(q)));
     const lrMap = new Map<string, number>();
     for (const q of lossAll) {
@@ -71,11 +84,12 @@ export function SalesAnalytics() {
     }
     const lossReasons = [...lrMap.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
 
-    return { total: list.length, byStatus, winRate, wonItems: wonItems.length, wonValue, openItems: openItems.length, openValue, bySale, byMonth, lossReasons, lostTotal: lossAll.length };
-  }, [quotes, owner]); // eslint-disable-line react-hooks/exhaustive-deps
+    return { total: list.length, byStatus, winRate, wonItems: wonItems.length, wonValue, openItems: openItems.length, openValue, bySale, byMonth, bySource, lossReasons, lostTotal: lossAll.length };
+  }, [quotes, customers, owner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const maxStatusVal = Math.max(1, ...data.byStatus.map((s) => s.value));
   const maxMonthVal = Math.max(1, ...data.byMonth.map((m) => m.value));
+  const maxSourceVal = Math.max(1, ...data.bySource.map((s) => s.value));
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1100, mx: 'auto' }}>
@@ -133,6 +147,25 @@ export function SalesAnalytics() {
             ))}
           </TableBody>
         </Table>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Doanh số đã chốt theo nguồn khách</Typography>
+        {data.bySource.length === 0 ? (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1 }}>Chưa có deal thắng nào.</Typography>
+        ) : (
+          <Stack spacing={1} sx={{ mt: 1 }}>
+            {data.bySource.map((s) => (
+              <Box key={s.source}>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.25 }}>
+                  <Typography variant="caption" fontWeight={700}>{s.source}</Typography>
+                  <Typography variant="caption" color="text.secondary">{fmtVND(s.value)}</Typography>
+                </Stack>
+                <Bar pct={(s.value / maxSourceVal) * 100} color="#7c3aed" />
+              </Box>
+            ))}
+          </Stack>
+        )}
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>

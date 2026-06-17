@@ -66,7 +66,7 @@ export function CustomerView() {
       return true;
     });
     const text = (c: Customer) => [
-      c.name, c.note, c.address, c.taxCode,
+      c.name, c.note, c.address, c.taxCode, c.source, ...(c.tags ?? []),
       ...(c.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
@@ -358,14 +358,12 @@ function CustomerCard({
         )}
       </Stack>
 
-      {/* Type badge */}
-      <Chip
-        size="small"
-        label={isCompany ? '🏢 Công ty' : '👤 Cá nhân'}
-        color={isCompany ? 'primary' : 'success'}
-        variant="outlined"
-        sx={{ mb: 1.5, fontSize: 11 }}
-      />
+      {/* Type badge + nguồn + tags */}
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+        <Chip size="small" label={isCompany ? '🏢 Công ty' : '👤 Cá nhân'} color={isCompany ? 'primary' : 'success'} variant="outlined" sx={{ fontSize: 11 }} />
+        {c.source && <Chip size="small" label={`📥 ${c.source}`} variant="outlined" sx={{ fontSize: 11, color: 'text.secondary' }} />}
+        {(c.tags ?? []).map((t) => <Chip key={t} size="small" label={t} sx={{ fontSize: 11, bgcolor: 'rgba(20,150,140,0.12)', color: '#0d7a6a', fontWeight: 700 }} />)}
+      </Stack>
 
       {/* Address + tax code */}
       {(c.address || c.taxCode) && (
