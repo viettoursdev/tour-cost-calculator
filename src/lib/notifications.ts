@@ -18,6 +18,7 @@ export function showBrowserNotif(title: string, body: string): void {
 import { fbGetContracts, fbSendNotification } from '@/lib/firebase';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { daysUntil } from '@/lib/dateUtils';
@@ -199,5 +200,38 @@ export async function checkSalesFollowups(user: User): Promise<void> {
     try { localStorage.setItem(SALES_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkSalesFollowups failed:', (e as Error).message);
+  }
+}
+
+const CUST_FU_KEY = 'vte_customer_followup_notified';
+/**
+ * Nhắc lịch hẹn liên hệ lại khách (next action) tới hạn/quá hạn cho người đã đặt.
+ * Quét customerStore; dedup theo (khách, ngày hẹn, NGÀY hôm nay).
+ */
+export async function checkCustomerFollowups(user: User): Promise<void> {
+  try {
+    const customers = useCustomerStore.getState().customers;
+    const today = new Date().toISOString().slice(0, 10);
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(CUST_FU_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const c of customers) {
+      const fu = c.nextFollowUp;
+      if (!fu || fu.byU !== user.u) continue;     // hẹn của chính mình
+      if (fu.date > today) continue;              // chưa tới hạn
+      const key = `${c.id}:${fu.date}:${today}`;
+      if (set.has(key)) continue;
+      set.add(key);
+      const overdueDays = Math.floor((Date.parse(today) - Date.parse(fu.date)) / 86400000);
+      await fbSendNotification(user.u, {
+        type: 'task',
+        title: '📅 Hẹn liên hệ lại khách hàng',
+        message: `${c.name} — ${overdueDays > 0 ? `QUÁ HẠN ${overdueDays} ngày` : 'đến hẹn hôm nay'}${fu.note ? `: ${fu.note}` : ''}`,
+        createdBy: 'Hệ thống',
+      });
+    }
+    try { localStorage.setItem(CUST_FU_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkCustomerFollowups failed:', (e as Error).message);
   }
 }

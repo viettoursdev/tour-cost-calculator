@@ -30,6 +30,8 @@ export type Customer = {
   tags?: string[];
   /** Dòng thời gian chăm sóc khách (CRM) — mới nhất ở cuối. */
   interactions?: CustomerInteraction[];
+  /** Lịch hẹn liên hệ lại đang chờ (next action). */
+  nextFollowUp?: { date: string; note: string; byU: string; byName: string };
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

@@ -17,6 +17,10 @@ type CustomerState = {
   addInteraction: (customerId: string, type: CustomerInteractionType, text: string) => Promise<void>;
   /** Xoá 1 dòng chăm sóc. */
   deleteInteraction: (customerId: string, interactionId: string) => Promise<void>;
+  /** Đặt lịch hẹn liên hệ lại (+ ghi 1 dòng vào timeline). */
+  setFollowUp: (customerId: string, date: string, note: string) => Promise<void>;
+  /** Hoàn tất / xoá lịch hẹn liên hệ lại. */
+  clearFollowUp: (customerId: string) => Promise<void>;
 };
 
 let iseq = 0;
@@ -129,6 +133,29 @@ export const useCustomerStore = create<CustomerState>()(
       set({ customers: next, syncing: true });
       try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
+    },
+
+    setFollowUp: async (customerId, date, note) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u || !date) return;
+      const log: CustomerInteraction = { id: newInteractionId(), at: new Date().toISOString(), byU: u.u, byName: u.name, type: 'note', text: `📅 Hẹn liên hệ lại ${date}${note.trim() ? ` — ${note.trim()}` : ''}` };
+      const next = get().customers.map((c) =>
+        c.id === customerId ? { ...c, nextFollowUp: { date, note: note.trim(), byU: u.u, byName: u.name }, interactions: [...(c.interactions ?? []), log], updatedAt: log.at, updatedBy: u.name } : c);
+      set({ customers: next, syncing: true });
+      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      catch (e) { window.alert('❌ Lỗi đặt lịch: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
+    },
+
+    clearFollowUp: async (customerId) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return;
+      const next = get().customers.map((c) =>
+        c.id === customerId ? { ...c, nextFollowUp: undefined } : c);
+      set({ customers: next, syncing: true });
+      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      catch (e) { window.alert('❌ Lỗi: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
   })),

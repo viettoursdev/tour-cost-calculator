@@ -41,9 +41,16 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
   const live = useCustomerStore((s) => s.customers.find((c) => c.id === customer.id));
   const addInteraction = useCustomerStore((s) => s.addInteraction);
   const deleteInteraction = useCustomerStore((s) => s.deleteInteraction);
-  const interactions = [...((live ?? customer).interactions ?? [])].reverse(); // mới nhất lên đầu
+  const setFollowUp = useCustomerStore((s) => s.setFollowUp);
+  const clearFollowUp = useCustomerStore((s) => s.clearFollowUp);
+  const cust = live ?? customer;
+  const interactions = [...(cust.interactions ?? [])].reverse(); // mới nhất lên đầu
+  const fu = cust.nextFollowUp;
+  const fuOverdue = !!fu && fu.date < new Date().toISOString().slice(0, 10);
   const [itype, setItype] = useState<CustomerInteractionType>('call');
   const [itext, setItext] = useState('');
+  const [fuDate, setFuDate] = useState('');
+  const [fuNote, setFuNote] = useState('');
   const submitInteraction = () => {
     if (!itext.trim()) return;
     void addInteraction(customer.id, itype, itext);
@@ -147,6 +154,25 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
         )}
 
         <Divider sx={{ my: 2 }} />
+        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Lịch hẹn liên hệ lại</Typography>
+        {fu ? (
+          <Paper variant="outlined" sx={{ p: 1.25, mt: 0.75, mb: 1.5, borderLeft: `4px solid ${fuOverdue ? '#dc3250' : '#14a08c'}` }}>
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+              <Typography fontSize={13} fontWeight={700} sx={{ flex: 1, minWidth: 0 }}>
+                📅 {new Date(fu.date).toLocaleDateString('vi-VN')}{fuOverdue ? ' · QUÁ HẠN' : ''}{fu.note ? ` — ${fu.note}` : ''}
+                <Typography component="span" variant="caption" color="text.secondary"> · {fu.byName}</Typography>
+              </Typography>
+              <Button size="small" variant="outlined" color="success" onClick={() => void clearFollowUp(customer.id)}>✓ Hoàn tất</Button>
+            </Stack>
+          </Paper>
+        ) : (
+          <Stack direction="row" spacing={1} sx={{ mt: 0.75, mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
+            <TextField size="small" type="date" value={fuDate} onChange={(e) => setFuDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} label="Hẹn ngày" />
+            <TextField size="small" value={fuNote} onChange={(e) => setFuNote(e.target.value)} placeholder="Nội dung cần làm…" sx={{ flex: 1, minWidth: 160 }} />
+            <Button size="small" variant="contained" disabled={!fuDate} onClick={() => { void setFollowUp(customer.id, fuDate, fuNote); setFuDate(''); setFuNote(''); }} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Đặt lịch</Button>
+          </Stack>
+        )}
+
         <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Chăm sóc khách hàng ({interactions.length})</Typography>
         <Stack direction="row" spacing={1} sx={{ mt: 0.75, mb: 1 }} alignItems="flex-start">
           <Select size="small" value={itype} onChange={(e) => setItype(e.target.value as CustomerInteractionType)} sx={{ minWidth: 120 }}>
