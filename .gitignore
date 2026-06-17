@@ -21,3 +21,7 @@ firestore-dump.json
 
 # Transient migration scratch notes — never commit.
 MIGRATION_NOTES.md
+
+# Supabase local dev — transient dirs, never commit.
+supabase/.branches
+supabase/.temp
