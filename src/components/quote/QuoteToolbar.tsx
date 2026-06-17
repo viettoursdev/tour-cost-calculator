@@ -41,7 +41,7 @@ import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
-import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
+import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES, promptLossReason } from './constants';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
 import type { Contract, OutputCurrency, QuoteStatus } from '@/types';
@@ -578,7 +578,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           {QUOTE_STATUS_ORDER.map((st: QuoteStatus) => (
             <MenuItem
               key={st} selected={st === status}
-              onClick={() => { setStatus(st); setStatusAnchor(null); }}
+              onClick={() => {
+                if (LOSS_STATUSES.includes(st)) {
+                  const reason = promptLossReason(draft.lossReason);
+                  if (reason === null) { setStatusAnchor(null); return; }
+                  setStatus(st, reason);
+                } else setStatus(st);
+                setStatusAnchor(null);
+              }}
               sx={{ fontWeight: 700, color: QUOTE_STATUS_META[st].color }}
             >
               ● {QUOTE_STATUS_META[st].label}

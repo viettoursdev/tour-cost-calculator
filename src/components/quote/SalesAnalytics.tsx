@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { fmtVND } from './calc';
-import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
+import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 
 const Stat = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) => (
@@ -63,7 +63,15 @@ export function SalesAnalytics() {
     }
     const byMonth = [...byMonthMap.entries()].map(([month, value]) => ({ month, value })).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 12);
 
-    return { total: list.length, byStatus, winRate, wonItems: wonItems.length, wonValue, openItems: openItems.length, openValue, bySale, byMonth };
+    const lossAll = list.filter((q) => LOSS_STATUSES.includes(stOf(q)));
+    const lrMap = new Map<string, number>();
+    for (const q of lossAll) {
+      const r = q.lossReason?.trim() || '(chưa nêu)';
+      lrMap.set(r, (lrMap.get(r) ?? 0) + 1);
+    }
+    const lossReasons = [...lrMap.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+
+    return { total: list.length, byStatus, winRate, wonItems: wonItems.length, wonValue, openItems: openItems.length, openValue, bySale, byMonth, lossReasons, lostTotal: lossAll.length };
   }, [quotes, owner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const maxStatusVal = Math.max(1, ...data.byStatus.map((s) => s.value));
@@ -125,6 +133,25 @@ export function SalesAnalytics() {
             ))}
           </TableBody>
         </Table>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Lý do mất deal ({data.lostTotal})</Typography>
+        {data.lossReasons.length === 0 ? (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1 }}>Chưa có deal nào ở trạng thái thua.</Typography>
+        ) : (
+          <Stack spacing={1} sx={{ mt: 1 }}>
+            {data.lossReasons.map((r) => (
+              <Box key={r.reason}>
+                <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.25 }}>
+                  <Typography variant="caption" fontWeight={700}>{r.reason}</Typography>
+                  <Typography variant="caption" color="text.secondary">{r.count} deal</Typography>
+                </Stack>
+                <Bar pct={(r.count / data.lostTotal) * 100} color="#dc3250" />
+              </Box>
+            ))}
+          </Stack>
+        )}
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2 }}>

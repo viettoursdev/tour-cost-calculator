@@ -81,7 +81,7 @@ type QuoteState = {
 
   patchInfo: (patch: Partial<QuoteInfo>) => void;
   setPax: (n: number) => void;
-  setStatus: (status: QuoteStatus) => void;
+  setStatus: (status: QuoteStatus, lossReason?: string) => void;
   setRate: (cur: string, rate: number) => void;
   /** Đổi tiền tệ HIỂN THỊ của bảng tỷ giá (không đổi giá trị quy về VND). */
   setRateBase: (cur: string) => void;
@@ -337,12 +337,14 @@ export const useQuoteStore = create<QuoteState>()(
         setPax: (n) => set((s) => ({ draft: { ...s.draft, pax: Math.max(1, n) } })),
 
         // Đổi trạng thái báo giá. Nếu báo giá đã lưu cloud → ghi NGAY lên lịch sử.
-        setStatus: (status) => {
-          set((s) => ({ draft: { ...s.draft, status } }));
+        setStatus: (status, lossReason) => {
+          const isLoss = status === 'not_selected' || status === 'cancelled';
+          const nextLoss = isLoss ? (lossReason ?? get().draft.lossReason) : undefined;
+          set((s) => ({ draft: { ...s.draft, status, lossReason: nextLoss } }));
           const { draft } = get();
           if (draft.currentQuoteId && draft.template) {
             const fn = draft.template === 'dmc' ? fbSetDMCQuoteStatus : fbSetQuoteStatus;
-            void fn(draft.currentQuoteId, status).catch((e) => console.warn('setStatus cloud:', (e as Error).message));
+            void fn(draft.currentQuoteId, status, nextLoss).catch((e) => console.warn('setStatus cloud:', (e as Error).message));
           }
         },
 
@@ -680,6 +682,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              ...(draft.lossReason ? { lossReason: draft.lossReason } : {}),
               ...(draft.info.startDate ? { departDate: draft.info.startDate } : {}),
               ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow), workflowSummary: workflowBoardSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),

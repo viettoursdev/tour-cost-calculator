@@ -7,7 +7,7 @@ import { fbSetQuoteStatus } from '@/lib/firebase';
 import { logAudit } from '@/lib/audit';
 import { filterRank } from '@/lib/search';
 import { fmtVND } from './calc';
-import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
+import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES, promptLossReason } from './constants';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 
 export function SalesPipeline() {
@@ -36,9 +36,15 @@ export function SalesPipeline() {
   const move = (cloudId: string, status: QuoteStatus) => {
     const q = useQuoteHistoryStore.getState().quotes.find((x) => x.cloudId === cloudId);
     if (!q || (q.status ?? 'in_progress') === status) return;
-    void fbSetQuoteStatus(cloudId, status).catch((e) => window.alert('Đổi trạng thái lỗi: ' + (e as Error).message));
-    logAudit('update', 'Báo giá', q.name, `Trạng thái → ${QUOTE_STATUS_META[status].label}`);
-    if (currentQuoteId === cloudId) setStatus(status); // đồng bộ báo giá đang mở
+    let reason: string | undefined;
+    if (LOSS_STATUSES.includes(status)) {
+      const r = promptLossReason(q.lossReason);
+      if (r === null) return; // huỷ
+      reason = r;
+    }
+    void fbSetQuoteStatus(cloudId, status, reason).catch((e) => window.alert('Đổi trạng thái lỗi: ' + (e as Error).message));
+    logAudit('update', 'Báo giá', q.name, `Trạng thái → ${QUOTE_STATUS_META[status].label}${reason ? ` (${reason})` : ''}`);
+    if (currentQuoteId === cloudId) setStatus(status, reason); // đồng bộ báo giá đang mở
   };
   const moveRef = useRef(move);
   moveRef.current = move;

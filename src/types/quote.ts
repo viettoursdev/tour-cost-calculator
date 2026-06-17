@@ -176,6 +176,7 @@ export type QuoteDraft = {
   catEnabled: Record<CategoryId, boolean>;
   currentQuoteId: string | null;
   status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
+  lossReason?: string;     // Lý do thua (khi status = not_selected/cancelled)
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
   // Customer-facing terms (optional — absent until edited).
@@ -228,6 +229,8 @@ export type CloudQuoteEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  /** Lý do thua deal (khi status = not_selected/cancelled) — cho phân tích. */
+  lossReason?: string;
   /** Ngày khởi hành (ISO yyyy-mm-dd) — index cho Lịch khởi hành. */
   departDate?: string;
   /** Tóm tắt bước quy trình có hạn & chưa xong — để nhắc deadline toàn hệ thống. */

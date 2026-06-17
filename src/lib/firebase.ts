@@ -228,6 +228,7 @@ type SaveEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  lossReason?: string;
   departDate?: string;
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
@@ -265,6 +266,7 @@ function makeQuoteHistoryApi(
 
       const optionalFields: Partial<CloudQuoteEntry> = {};
       if (entry.status !== undefined) optionalFields.status = entry.status;
+      if (entry.lossReason !== undefined) optionalFields.lossReason = entry.lossReason;
       if (entry.departDate !== undefined) optionalFields.departDate = entry.departDate;
       if (entry.workflowDue !== undefined) optionalFields.workflowDue = entry.workflowDue;
       if (entry.workflowSummary !== undefined) optionalFields.workflowSummary = entry.workflowSummary;
@@ -457,14 +459,16 @@ function makeQuoteHistoryApi(
       return n;
     },
 
-    /** Cập nhật nhanh trạng thái báo giá lên bản ghi lịch sử (theo cloudId). */
-    async fbSetEntryStatus(cloudId: string, status: QuoteStatus): Promise<void> {
+    /** Cập nhật nhanh trạng thái (và lý do thua) báo giá lên lịch sử (theo cloudId). */
+    async fbSetEntryStatus(cloudId: string, status: QuoteStatus, lossReason?: string): Promise<void> {
       const snap = await getDoc(historyDoc);
       if (!snap.exists()) return;
       const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
       const i = quotes.findIndex((q) => q.cloudId === cloudId);
       if (i < 0) return;
-      quotes[i] = { ...quotes[i], status };
+      // Loại trạng thái thắng/đang chạy thì xoá lý do thua cũ.
+      const isLoss = status === 'not_selected' || status === 'cancelled';
+      quotes[i] = { ...quotes[i], status, lossReason: isLoss ? (lossReason ?? quotes[i].lossReason) : undefined };
       await setDoc(historyDoc, { quotes });
     },
   };

@@ -13,6 +13,16 @@ export const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; color: stri
 export const QUOTE_STATUS_ORDER: QuoteStatus[] =
   ['in_progress', 'sent', 'negotiating', 'won', 'not_selected', 'cancelled'];
 
+/** Trạng thái "thua" (mất deal) — dùng để hỏi & thống kê lý do. */
+export const LOSS_STATUSES: QuoteStatus[] = ['not_selected', 'cancelled'];
+export const LOSS_REASONS = ['Giá cao', 'Chọn đối thủ', 'Đổi/huỷ kế hoạch', 'Hết ngân sách', 'Không phản hồi', 'Khác'];
+
+/** Hỏi lý do thua deal (free text + gợi ý). null = huỷ, '' = không nêu lý do. */
+export function promptLossReason(current?: string): string | null {
+  const r = window.prompt(`Lý do thua deal? (gợi ý: ${LOSS_REASONS.join(' · ')})`, current ?? '');
+  return r === null ? null : r.trim();
+}
+
 // Currency rates (default values; user can override per quote).
 // Source: public/legacy.html:1397
 export const RATES_INIT: Record<string, number> = {
