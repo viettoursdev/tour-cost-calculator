@@ -6,9 +6,11 @@ select col_is_pk('public', 'profiles', 'id', 'id is PK');
 select fk_ok('public', 'profiles', 'id', 'auth', 'users', 'id');
 select ok( (select relrowsecurity from pg_class where oid = 'public.profiles'::regclass), 'RLS enabled');
 
--- Ensure the bootstrap CEO setting is visible in this session (alter database applies
--- to new connections; db reset → test db connects fresh, so it should already be set.
--- set_config here is a belt-and-suspenders guard that costs nothing if already set).
+-- This test unit-tests the trigger's CEO-vs-Standard branching by injecting
+-- the bootstrap-email GUC into the session (the migration's ALTER DATABASE
+-- cannot run on the local non-superuser image). It verifies trigger LOGIC,
+-- not that production durably set the GUC — that is an operational check
+-- performed on first cloud deploy (see docs/supabase-setup.md / cutover runbook).
 select set_config('app.bootstrap_ceo_email', 'developer@viettours.com.vn', false);
 
 -- Trigger provisions a profile when an auth user is created.

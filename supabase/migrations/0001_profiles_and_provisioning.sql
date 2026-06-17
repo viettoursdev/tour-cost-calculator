@@ -25,9 +25,9 @@ create policy profiles_company_write on public.profiles for all
 do $$
 begin
   execute 'alter database postgres set "app.bootstrap_ceo_email" = ''developer@viettours.com.vn''';
-exception when others then
-  raise notice 'Could not ALTER DATABASE to set app.bootstrap_ceo_email (requires superuser). '
-               'Set this manually in production. Error: %', sqlerrm;
+exception
+  when insufficient_privilege then
+    raise notice 'app.bootstrap_ceo_email not set (insufficient privilege — expected on local non-superuser dev; set by supabase_admin in cloud)';
 end;
 $$;
 
