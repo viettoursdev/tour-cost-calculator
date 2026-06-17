@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
+import { normalizeVN } from '@/lib/search';
 import { LEGACY } from '@/theme';
 import type { CloudQuoteEntry, Collaborator, Customer, FileAttachment, User } from '@/types';
 import { attMeta } from '@/lib/util';
@@ -91,6 +92,12 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   );
 
   const confirmSave = async () => {
+    // Cảnh báo trùng tên khi tạo báo giá MỚI (bản đã lưu thì cập nhật bình thường).
+    if (!currentQuoteId) {
+      const norm = normalizeVN(name);
+      const dup = sourceQuotes.find((q) => normalizeVN(q.name) === norm);
+      if (dup && !window.confirm(`⚠ Đã có báo giá trùng tên "${dup.name}"${dup.quoteCode ? ` (${dup.quoteCode})` : ''}. Vẫn tạo báo giá mới?`)) return;
+    }
     setBusy(true);
     setError(null);
     try {

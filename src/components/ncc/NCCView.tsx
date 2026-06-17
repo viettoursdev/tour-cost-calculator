@@ -17,7 +17,7 @@ import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
-import { filterRank } from '@/lib/search';
+import { filterRank, normalizeVN } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 
@@ -71,6 +71,9 @@ export function NCCView() {
   }, [suppliers, search, filterSector, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Ncc) => {
+    const norm = normalizeVN(form.name);
+    const dup = suppliers.find((s) => s.id !== form.id && normalizeVN(s.name) === norm);
+    if (dup && !window.confirm(`⚠ Đã có nhà cung cấp trùng tên "${dup.name}". Vẫn lưu?`)) return;
     await save(form);
     setModal(null);
   };
