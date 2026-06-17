@@ -73,7 +73,7 @@ export function DepartureCalendar() {
   };
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1100, mx: 'auto' }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1100, mx: 'auto' }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
         <Box>
           <Typography fontWeight={900} fontSize={16}>📅 Lịch khởi hành</Typography>

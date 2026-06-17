@@ -86,7 +86,7 @@ export function PaymentBoard() {
   };
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1180, mx: 'auto' }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1180, mx: 'auto' }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
         <Box>
           <Typography fontWeight={900} fontSize={16}>💰 Công nợ phải trả NCC — toàn hệ thống</Typography>
@@ -114,8 +114,8 @@ export function PaymentBoard() {
           Không có công nợ khớp bộ lọc. Số liệu cập nhật khi mở tab Thanh toán của báo giá (hoặc bấm “Tổng hợp”).
         </Paper>
       ) : (
-        <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
-          <Table size="small" sx={{ '& td, & th': { borderColor: 'rgba(0,0,0,0.06)' } }}>
+        <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 720, '& td, & th': { borderColor: 'rgba(0,0,0,0.06)' } }}>
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 800, bgcolor: 'rgba(20,150,140,0.06)' } }}>
                 <TableCell>Báo giá</TableCell>

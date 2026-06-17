@@ -152,7 +152,7 @@ export function WorkflowView() {
   const current = steps.find((s) => s.status !== 'done');
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: 'auto' }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1200, mx: 'auto' }}>
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
           <Box sx={{ flex: 1, minWidth: 260 }}>
