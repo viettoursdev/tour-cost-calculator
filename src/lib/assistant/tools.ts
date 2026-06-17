@@ -3,13 +3,17 @@
  * liệu ĐÃ LỌC QUYỀN (xem `data.ts`). Tất cả chỉ ĐỌC.
  */
 import { filterRank, normalizeVN } from '@/lib/search';
-import { computeTotals } from '@/components/quote/calc';
+import { computeTotals, fmtVND } from '@/components/quote/calc';
 import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
+import { useAuthStore } from '@/stores/authStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { usePoiStore } from '@/stores/poiStore';
+import { daysUntil } from '@/lib/dateUtils';
 import { permittedIndex, permittedData, visibleQuotesAll } from './data';
 import type { CloudQuoteEntry } from '@/types';
+
+const nameOf = (u?: string) => useAuthStore.getState().users.find((x) => x.u === u)?.name ?? u ?? null;
 
 export interface ToolDef {
   name: string;
@@ -80,6 +84,39 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
         template: { type: 'string', enum: ['domestic', 'intl', 'dmc'], description: 'Lọc loại báo giá (tuỳ chọn)' },
         keyword: { type: 'string', description: 'Lọc theo tên tour / khách / điểm đến (tuỳ chọn)' },
         max: { type: 'number', description: 'Số báo giá lấy mẫu tối đa (mặc định 15, trần 25)' },
+      },
+    },
+  },
+  {
+    name: 'upcoming_departures',
+    description: 'Liệt kê các tour SẮP KHỞI HÀNH trong N ngày tới (mặc định 14), kèm bước quy trình hiện tại, người phụ trách, % tiến độ và số bước quá hạn. Dùng cho câu hỏi điều hành như "tour nào sắp khởi hành tuần này".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: { type: 'number', description: 'Số ngày tới (mặc định 14)' },
+        mineOnly: { type: 'boolean', description: 'true = chỉ tour user hiện tại phụ trách/tạo' },
+      },
+    },
+  },
+  {
+    name: 'workflow_status',
+    description: 'Tình trạng quy trình vận hành các tour: bước hiện tại, người phụ trách, % tiến độ, bước sắp/đã quá hạn. scope: all (tất cả) | mine (việc của tôi) | overdue (đang có bước trễ).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['all', 'mine', 'overdue'], description: 'Phạm vi (mặc định all)' },
+        limit: { type: 'number', description: 'Số tour tối đa (mặc định 20)' },
+      },
+    },
+  },
+  {
+    name: 'payment_dues',
+    description: 'Công nợ phải trả NCC theo tour: tổng phải trả, đã trả, còn lại. scope: owing (còn nợ) | overdue (đã khởi hành mà còn nợ). Dùng cho "tour nào còn công nợ / chưa trả xong NCC".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        scope: { type: 'string', enum: ['owing', 'overdue'], description: 'Phạm vi (mặc định owing)' },
+        limit: { type: 'number', description: 'Số tour tối đa (mặc định 20)' },
       },
     },
   },
@@ -326,6 +363,69 @@ async function toolGetMenu(input: Record<string, unknown>): Promise<unknown> {
   };
 }
 
+async function toolUpcomingDepartures(input: Record<string, unknown>): Promise<unknown> {
+  const days = typeof input.days === 'number' ? input.days : 14;
+  const mineOnly = input.mineOnly === true;
+  const u = useAuthStore.getState().currentUser;
+  let list = visibleQuotesAll().filter((q) => {
+    if (!q.departDate) return false;
+    const d = daysUntil(q.departDate);
+    return d != null && d >= 0 && d <= days;
+  });
+  if (mineOnly && u) list = list.filter((q) => q.workflowSummary?.currentAssignee === u.u || q.createdByUsername === u.u);
+  list = [...list].sort((a, b) => (a.departDate ?? '').localeCompare(b.departDate ?? ''));
+  return {
+    days, count: list.length,
+    note: 'Chỉ gồm tour ĐÃ LƯU CLOUD có ngày khởi hành trong index.',
+    tours: list.map((q) => ({
+      cloudId: q.cloudId, quoteCode: q.quoteCode, name: q.name, customer: q.customerName ?? null,
+      departDate: q.departDate, daysUntil: daysUntil(q.departDate!), pax: q.pax,
+      currentStep: q.workflowSummary?.current ?? null, assignee: nameOf(q.workflowSummary?.currentAssignee),
+      progressPct: q.workflowSummary?.donePct ?? null, overdueSteps: q.workflowSummary?.overdue ?? 0,
+    })),
+  };
+}
+
+async function toolWorkflowStatus(input: Record<string, unknown>): Promise<unknown> {
+  const scope = str(input, 'scope') || 'all';
+  const limit = Math.min(typeof input.limit === 'number' ? input.limit : 20, 50);
+  const u = useAuthStore.getState().currentUser;
+  let list = visibleQuotesAll().filter((q) => q.workflowSummary && q.workflowSummary.total > 0);
+  if (scope === 'mine' && u) list = list.filter((q) => q.workflowSummary?.currentAssignee === u.u || (q.workflowDue ?? []).some((w) => w.assignee === u.u) || q.createdByUsername === u.u);
+  if (scope === 'overdue') list = list.filter((q) => (q.workflowSummary?.overdue ?? 0) > 0);
+  list = [...list].sort((a, b) => (b.workflowSummary!.overdue - a.workflowSummary!.overdue) || (a.workflowSummary!.donePct - b.workflowSummary!.donePct)).slice(0, limit);
+  return {
+    scope, count: list.length,
+    tours: list.map((q) => ({
+      cloudId: q.cloudId, quoteCode: q.quoteCode, name: q.name, customer: q.customerName ?? null,
+      departDate: q.departDate ?? null, currentStep: q.workflowSummary?.current ?? null,
+      assignee: nameOf(q.workflowSummary?.currentAssignee), progressPct: q.workflowSummary?.donePct ?? 0,
+      overdueSteps: q.workflowSummary?.overdue ?? 0,
+      nextDue: [...(q.workflowDue ?? [])].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null,
+    })),
+  };
+}
+
+async function toolPaymentDues(input: Record<string, unknown>): Promise<unknown> {
+  const scope = str(input, 'scope') || 'owing';
+  const limit = Math.min(typeof input.limit === 'number' ? input.limit : 20, 50);
+  const today = new Date().toISOString().slice(0, 10);
+  let list = visibleQuotesAll().filter((q) => (q.paymentSummary?.remaining ?? 0) > 0);
+  if (scope === 'overdue') list = list.filter((q) => q.departDate != null && (daysUntil(q.departDate) ?? 1) < 0);
+  list = [...list].sort((a, b) => (b.paymentSummary!.remaining - a.paymentSummary!.remaining)).slice(0, limit);
+  const totalRemaining = list.reduce((s, q) => s + (q.paymentSummary?.remaining ?? 0), 0);
+  return {
+    scope, count: list.length, todayISO: today,
+    totalRemainingVND: totalRemaining, totalRemainingText: fmtVND(totalRemaining),
+    note: 'Công nợ phải trả NCC; cập nhật khi mở tab Thanh toán hoặc bấm "Tổng hợp" ở Bảng công nợ.',
+    tours: list.map((q) => ({
+      cloudId: q.cloudId, quoteCode: q.quoteCode, name: q.name, customer: q.customerName ?? null,
+      departDate: q.departDate ?? null, departed: q.departDate != null && (daysUntil(q.departDate) ?? 1) < 0,
+      payableVND: q.paymentSummary?.payable ?? 0, paidVND: q.paymentSummary?.paid ?? 0, remainingVND: q.paymentSummary?.remaining ?? 0,
+    })),
+  };
+}
+
 /** Các tool "đề xuất nháp" — không đổi dữ liệu, chỉ báo cho UI dựng nút mở nháp. */
 export const PROPOSAL_TOOLS = new Set(['propose_itinerary', 'propose_quote']);
 
@@ -339,6 +439,9 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
       case 'customer_tours': result = await toolCustomerTours(input); break;
       case 'supplier_usage': result = await toolSupplierUsage(input); break;
       case 'pricing_stats': result = await toolPricingStats(input); break;
+      case 'upcoming_departures': result = await toolUpcomingDepartures(input); break;
+      case 'workflow_status': result = await toolWorkflowStatus(input); break;
+      case 'payment_dues': result = await toolPaymentDues(input); break;
       case 'list_itineraries': result = await toolListItineraries(input); break;
       case 'get_itinerary': result = await toolGetItinerary(input); break;
       case 'search_pois': result = await toolSearchPois(input); break;
