@@ -19,11 +19,7 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { QuoteViewKey } from '@/stores/quoteStore';
-import { exportExcelQuote } from '@/lib/exports/exportExcel';
-import { importExcelQuote } from '@/lib/exports/importExcel';
-import { exportPDFQuote } from '@/lib/exports/exportPDF';
-import { exportDMCPDF } from '@/lib/exports/exportDMCPDF';
-import { exportPDFImage } from '@/lib/exports/exportPDFImage';
+// Trình xuất (PDF/Excel) nạp ĐỘNG khi bấm — tránh kéo thư viện nặng vào bundle khởi động.
 import { emptyContract } from '@/components/contract/constants';
 import { QuotePrintable } from './QuotePrintable';
 import { FxRatesPanel } from './FxRatesPanel';
@@ -169,7 +165,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     e.target.value = '';
     if (!file) return;
     try {
-      const data = await importExcelQuote(file);
+      const data = await (await import('@/lib/exports/importExcel')).importExcelQuote(file);
       applyImport(data);
       alert('✅ Đã nhập báo giá từ Excel!');
     } catch (err) {
@@ -182,7 +178,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     const safe = (info.name || 'Tour').replace(/[^a-zA-Z0-9_À-ỹ]/g, '_');
     const dateStr = new Date().toLocaleDateString('vi-VN').replace(/\//g, '-');
     try {
-      await exportPDFImage(node, `${prefix}_${safe}_${dateStr}.pdf`);
+      await (await import('@/lib/exports/exportPDFImage')).exportPDFImage(node, `${prefix}_${safe}_${dateStr}.pdf`);
     } catch (err) {
       alert('❌ Lỗi xuất PDF ảnh: ' + (err as Error).message);
     }
@@ -477,7 +473,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         >
           {/* Excel & data files */}
           <MenuItem onClick={() => {
-            if (template && currentUser) void exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } });
+            if (template && currentUser) void import('@/lib/exports/exportExcel').then((m) => m.exportExcelQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role } }));
             setExportAnchor(null);
           }}>
             <ListItemIcon><TableChartIcon fontSize="small" /></ListItemIcon>
@@ -499,7 +495,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           {/* PDF outputs */}
           {isDMC ? (
             <MenuItem onClick={() => {
-              if (currentUser) exportDMCPDF({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
+              if (currentUser) void import('@/lib/exports/exportDMCPDF').then((m) => m.exportDMCPDF({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } }));
               setExportAnchor(null);
             }}>
               <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
@@ -516,14 +512,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                 <ListItemText>PDF Ảnh (Tour trọn gói)</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => {
-                if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } });
+                if (canExport && currentUser) void import('@/lib/exports/exportPDF').then((m) => m.exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } }));
                 setExportAnchor(null);
               }}>
                 <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
                 <ListItemText>PDF Báo Giá</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => {
-                if (canExport && currentUser) exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' });
+                if (canExport && currentUser) void import('@/lib/exports/exportPDF').then((m) => m.exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' }));
                 setExportAnchor(null);
               }}>
                 <ListItemIcon><Inventory2Icon fontSize="small" /></ListItemIcon>

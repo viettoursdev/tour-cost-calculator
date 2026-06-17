@@ -4,7 +4,7 @@ import {
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useAuthStore } from '@/stores/authStore';
-import { exportAcceptanceCertPDF } from '@/lib/exports/exportAcceptanceCert';
+// exportAcceptanceCertPDF nạp động khi bấm.
 import type { Contract } from '@/types';
 
 type Props = {
@@ -21,7 +21,7 @@ export function AcceptanceCertModal({ contract, onSave, onClose }: Props) {
 
   const handleExportPDF = () => {
     if (currentUser) {
-      exportAcceptanceCertPDF(contract, { date, note }, { name: currentUser.name, role: currentUser.role });
+      void import('@/lib/exports/exportAcceptanceCert').then((m) => m.exportAcceptanceCertPDF(contract, { date, note }, { name: currentUser.name, role: currentUser.role }));
     }
   };
 

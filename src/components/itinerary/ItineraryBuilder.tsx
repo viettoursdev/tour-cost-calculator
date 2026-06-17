@@ -18,9 +18,7 @@ import { flightDep, flightArr, normalizeFlight } from './flightFields';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { callAIWorker } from '@/lib/aiWorker';
-import { exportItineraryDocx } from '@/lib/exports/exportItineraryDocx';
-import { exportItineraryExecutionPDF } from '@/lib/exports/exportItineraryExecutionPDF';
-import { exportItineraryExecutionDocx } from '@/lib/exports/exportItineraryExecutionDocx';
+// Trình xuất lịch trình nạp động khi bấm.
 import { useMenuStore } from '@/stores/menuStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { filterRank } from '@/lib/search';
@@ -104,8 +102,8 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     const idx = useMenuStore.getState().list.find((x) => x.linkedItineraryId === it.id);
     const menu = idx ? await useMenuStore.getState().load(idx.id) : null;
     const restaurants = useRestaurantStore.getState().list;
-    if (format === 'pdf') exportItineraryExecutionPDF(withCode, menu, restaurants);
-    else await exportItineraryExecutionDocx(withCode, menu, restaurants);
+    if (format === 'pdf') await import('@/lib/exports/exportItineraryExecutionPDF').then((m) => m.exportItineraryExecutionPDF(withCode, menu, restaurants));
+    else await import('@/lib/exports/exportItineraryExecutionDocx').then((m) => m.exportItineraryExecutionDocx(withCode, menu, restaurants));
   };
 
   const addFlight = () => setIt((p) => ({
@@ -322,7 +320,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             </Button>
             <Button color="inherit" variant="contained"
               startIcon={<DescriptionIcon />}
-              onClick={() => void exportItineraryDocx(it, code)}
+              onClick={() => void import('@/lib/exports/exportItineraryDocx').then((m) => m.exportItineraryDocx(it, code))}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Xuất Word
             </Button>

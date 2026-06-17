@@ -11,8 +11,7 @@ import { saveAs } from 'file-saver';
 import { callAIWorker, getAIWorker, setAIWorker } from '@/lib/aiWorker';
 import { chunkText, extractDocx, extractImage, extractPdf } from '@/lib/docExtract';
 import { translateDocxInPlace } from '@/lib/docxTranslate';
-import { exportTranslationDocxMd } from '@/lib/exports/exportTranslationDocx';
-import { exportTranslationPDF } from '@/lib/exports/exportTranslationPDF';
+// Trình xuất bản dịch nạp động khi bấm.
 
 type Props = { onExit: () => void };
 
@@ -194,11 +193,11 @@ export function DocTranslateApp({ onExit }: Props) {
                   Copy
                 </Button>
                 <Button size="small" variant="outlined" startIcon={<DescriptionIcon />}
-                  onClick={() => void exportTranslationDocxMd(result, file?.name ?? null)}>
+                  onClick={() => void import('@/lib/exports/exportTranslationDocx').then((m) => m.exportTranslationDocxMd(result, file?.name ?? null))}>
                   Word (giữ bố cục)
                 </Button>
                 <Button size="small" variant="outlined" color="error" startIcon={<PictureAsPdfIcon />}
-                  onClick={() => exportTranslationPDF(result, file?.name ?? null)}>
+                  onClick={() => void import('@/lib/exports/exportTranslationPDF').then((m) => m.exportTranslationPDF(result, file?.name ?? null))}>
                   PDF
                 </Button>
               </Stack>

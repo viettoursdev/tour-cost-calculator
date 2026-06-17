@@ -17,21 +17,11 @@ export default defineConfig({
             return 'mui';
           }
           if (id.includes('node_modules/firebase')) return 'firebase';
-          // Group third-party export libs (PDF, DOCX, Excel, etc.).
-          if (
-            id.includes('node_modules/xlsx')
-            || id.includes('node_modules/jspdf')
-            || id.includes('node_modules/html2canvas')
-            || id.includes('node_modules/docx')
-            || id.includes('node_modules/file-saver')
-            || id.includes('node_modules/exceljs')
-          ) {
-            return 'exports';
-          }
-          // Group our own export source files (including the large embedded
-          // DejaVu font and VTE_LOGO base64) so they're only loaded when an
-          // export path runs, not in the initial app bundle.
-          if (id.includes('/src/lib/exports/')) return 'exports';
+          // KHÔNG gộp thủ công thư viện xuất (jspdf/docx/xlsx/html2canvas/exceljs)
+          // hay src/lib/exports/* nữa: mọi call site đã dùng dynamic import(), nên
+          // Rollup tự tách chúng thành chunk ASYNC — chỉ nạp khi bấm Xuất, không
+          // preload lúc khởi động. (Gộp thủ công vô tình tạo cạnh tĩnh qua dependency
+          // dùng chung → kéo cả chunk nặng ~2MB vào bundle đầu.)
         },
       },
     },

@@ -4,7 +4,7 @@ import {
   Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import { fmtVND, type Totals } from './calc';
-import { exportInvoicePDF, type InvoiceCustomer } from '@/lib/exports/exportInvoicePDF';
+import type { InvoiceCustomer } from '@/lib/exports/exportInvoicePDF';
 import type { QuoteDraft, User } from '@/types';
 
 const LS_CUSTOMER = 'vte_last_customer';
@@ -75,14 +75,14 @@ export function InvoiceModal({ open, onClose, draft, totals, user }: Props) {
     if (!canExport) return;
     try { localStorage.setItem(LS_CUSTOMER, JSON.stringify(customer)); } catch { /* ignore */ }
     try { localStorage.setItem(LS_TERMS, paymentTerms); } catch { /* ignore */ }
-    exportInvoicePDF({
+    void import('@/lib/exports/exportInvoicePDF').then((m) => m.exportInvoicePDF({
       draft,
       totals,
       customer,
       lang,
       paymentTerms,
       savedBy: { name: user.name },
-    });
+    }));
     onClose();
   };
 

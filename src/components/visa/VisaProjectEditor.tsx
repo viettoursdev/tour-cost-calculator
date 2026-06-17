@@ -19,7 +19,7 @@ import { attMeta } from '@/lib/util';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
-import { exportVisaProjectPDF } from '@/lib/exports/exportVisaProjectPDF';
+// exportVisaProjectPDF nạp động khi bấm.
 import {
   APPLICANT_DOC_META, APPLICANT_RESULT_META, countsFromApplicants,
   deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaApplicant, newVisaMilestone,
@@ -388,7 +388,7 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={() => exportVisaProjectPDF(doc, (u) => users.find((x) => x.u === u)?.name ?? u)}
+        <Button onClick={() => void import('@/lib/exports/exportVisaProjectPDF').then((m) => m.exportVisaProjectPDF(doc, (u) => users.find((x) => x.u === u)?.name ?? u))}
           startIcon={<PictureAsPdfIcon />} color="inherit">
           Xuất PDF
         </Button>

@@ -18,8 +18,7 @@ import {
   MEAL_TYPES, MENU_CUR, freshMenu, generateMenuCode, newMenuDay, newMenuMeal,
 } from './constants';
 import { StarRating } from './StarRating';
-import { exportMenuDocx } from '@/lib/exports/exportMenuDocx';
-import { exportMenuPDF } from '@/lib/exports/exportMenuPDF';
+// Trình xuất thực đơn nạp động khi bấm.
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
@@ -189,13 +188,13 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
             />
             <Button color="inherit" variant="contained"
               startIcon={<DescriptionIcon />}
-              onClick={() => void exportMenuDocx(it, code, includePrices)}
+              onClick={() => void import('@/lib/exports/exportMenuDocx').then((m) => m.exportMenuDocx(it, code, includePrices))}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Word
             </Button>
             <Button color="inherit" variant="contained"
               startIcon={<PictureAsPdfIcon />}
-              onClick={() => exportMenuPDF(it, code, includePrices)}
+              onClick={() => void import('@/lib/exports/exportMenuPDF').then((m) => m.exportMenuPDF(it, code, includePrices))}
               sx={{ bgcolor: '#fff', color: '#c0392b' }}>
               PDF
             </Button>

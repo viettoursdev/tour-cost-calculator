@@ -22,7 +22,7 @@ import {
 } from './constants';
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
-import { downloadVisaApplicantsTemplate, parseVisaApplicantsExcel } from '@/lib/exports/importVisaApplicants';
+// importVisaApplicants nạp động khi bấm (thư viện Excel nặng).
 import type { ApplicantDoc, VisaApplicant, VisaProjectDoc } from '@/types';
 
 type Props = {
@@ -108,7 +108,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     e.target.value = '';
     if (!file) return;
     try {
-      const incoming = await parseVisaApplicantsExcel(file);
+      const incoming = await (await import('@/lib/exports/importVisaApplicants')).parseVisaApplicantsExcel(file);
       if (!incoming.length) { window.alert('Không đọc được khách nào từ file.'); return; }
       const r = mergeIncoming(list, incoming);
       setList(r.list);
@@ -163,7 +163,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
             <input type="file" hidden accept=".xlsx,.xls" onChange={onImport} />
           </Button>
           <Button color="inherit" variant="outlined" startIcon={<FileDownloadIcon />}
-            onClick={() => void downloadVisaApplicantsTemplate()}>
+            onClick={() => void import('@/lib/exports/importVisaApplicants').then((m) => m.downloadVisaApplicantsTemplate())}>
             Tải mẫu
           </Button>
           <Button color="inherit" variant="outlined" startIcon={<PlaylistRemoveIcon />} onClick={onDedupe}>

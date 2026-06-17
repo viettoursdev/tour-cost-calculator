@@ -7,7 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SyncIcon from '@mui/icons-material/Sync';
-import { exportWorkflowPDF } from '@/lib/exports/exportWorkflowPDF';
+// exportWorkflowPDF nạp động khi bấm.
 import EventIcon from '@mui/icons-material/Event';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import ViewListIcon from '@mui/icons-material/ViewList';
@@ -141,7 +141,7 @@ export function WorkflowView() {
   const syncNow = () => setWorkflow(applySignals(steps, signals));
   const exportPdf = () => {
     if (!steps.length) { window.alert('Chưa có bước quy trình để xuất.'); return; }
-    exportWorkflowPDF(draft.info, steps, nameOf);
+    void import('@/lib/exports/exportWorkflowPDF').then((m) => m.exportWorkflowPDF(draft.info, steps, nameOf));
   };
   const fillDue = () => {
     if (!draft.info.startDate) { window.alert('Báo giá chưa có ngày khởi hành — đặt ở phần thông tin tour trước.'); return; }

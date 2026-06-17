@@ -12,7 +12,7 @@ import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { attMeta } from '@/lib/util';
 import { slugifyTourKey } from './paymentUtils';
 import { fmtVND } from './calc';
-import { exportPaymentRequestPDF, type PaymentRequestForm } from '@/lib/exports/exportPaymentRequestPDF';
+import type { PaymentRequestForm } from '@/lib/exports/exportPaymentRequestPDF';
 import type {
   Installment, NotifLink, PaymentApprovalEntry, PaymentItem, QuoteInfo, TourPaymentApprovalData, User,
 } from '@/types';
@@ -102,7 +102,7 @@ export function PaymentRequestModal({
     setForm((p) => ({ ...p, [k]: v }));
 
   const handleExport = () => {
-    exportPaymentRequestPDF(form, ci, info, currentUser, approvalEntry);
+    void import('@/lib/exports/exportPaymentRequestPDF').then((m) => m.exportPaymentRequestPDF(form, ci, info, currentUser, approvalEntry));
     onClose();
   };
 

@@ -9,8 +9,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ArticleIcon from '@mui/icons-material/Article';
-import { exportContractPDF } from '@/lib/exports/exportContractPDF';
-import { exportContractDocx } from '@/lib/exports/exportContractDocx';
+// Trình xuất nạp động khi bấm (giảm bundle khởi động).
 import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -210,7 +209,7 @@ export function ContractView() {
                   startIcon={<PictureAsPdfIcon />}
                   color="error"
                   variant="outlined"
-                  onClick={() => exportContractPDF(c)}
+                  onClick={() => void import('@/lib/exports/exportContractPDF').then((m) => m.exportContractPDF(c))}
                 >
                   PDF
                 </Button>
@@ -219,7 +218,7 @@ export function ContractView() {
                   startIcon={<ArticleIcon />}
                   color="primary"
                   variant="outlined"
-                  onClick={() => void exportContractDocx(c)}
+                  onClick={() => void import('@/lib/exports/exportContractDocx').then((m) => m.exportContractDocx(c))}
                 >
                   Word (.docx)
                 </Button>

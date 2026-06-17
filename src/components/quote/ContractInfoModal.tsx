@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { useCustomerStore } from '@/stores/customerStore';
-import { exportContractPDF } from '@/lib/exports/exportContractPDF';
+// exportContractPDF nạp động khi bấm.
 import { LEGACY } from '@/theme';
 import type { Contract, ContractPartyB, Customer } from '@/types';
 
@@ -59,7 +59,7 @@ export function ContractInfoModal({ open, onClose, baseContract }: Props) {
     setBusy(true);
     try {
       // 1) Export the contract PDF with the filled Bên B info.
-      exportContractPDF({ ...baseContract, partyB: { ...form } });
+      await import('@/lib/exports/exportContractPDF').then((m) => m.exportContractPDF({ ...baseContract, partyB: { ...form } }));
 
       // 2) Save back into the customer list (update if an existing one was picked).
       const customer: Customer = {

@@ -19,8 +19,7 @@ import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { PROC_KIND_ICON, VISAP_TYPES, newProcField, newProcRow, newProcSection } from './constants';
-import { exportVisaProcDocx } from '@/lib/exports/exportVisaProcDocx';
-import { exportVisaProcPDF } from '@/lib/exports/exportVisaProcPDF';
+// Trình xuất visa nạp động khi bấm.
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { attMeta } from '@/lib/util';
 import { VisaProcCollabModal } from './VisaProcCollabModal';
@@ -202,13 +201,13 @@ export function VisaProcBuilder({ initial, user, onBack }: Props) {
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Button color="inherit" variant="contained"
               startIcon={<DescriptionIcon />}
-              onClick={() => void exportVisaProcDocx(doc)}
+              onClick={() => void import('@/lib/exports/exportVisaProcDocx').then((m) => m.exportVisaProcDocx(doc))}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Word
             </Button>
             <Button color="inherit" variant="contained"
               startIcon={<PictureAsPdfIcon />}
-              onClick={() => exportVisaProcPDF(doc)}
+              onClick={() => void import('@/lib/exports/exportVisaProcPDF').then((m) => m.exportVisaProcPDF(doc))}
               sx={{ bgcolor: '#fff', color: '#c0392b' }}>
               PDF
             </Button>
