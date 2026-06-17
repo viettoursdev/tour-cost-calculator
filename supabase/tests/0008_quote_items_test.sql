@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select has_table('public','quote_line_items','line items exist');
+select has_table('public','quote_groups','groups exist');
+select has_table('public','quote_collaborators','collaborators exist');
+select has_table('public','quote_payments','payments exist');
+select fk_ok('public','quote_line_items','quote_id','public','quotes','id');
+select fk_ok('public','quote_collaborators','user_id','public','profiles','id');
+select * from finish();
+rollback;
