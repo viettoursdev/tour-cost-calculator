@@ -4,6 +4,7 @@ import {
   IconButton, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
+import { toast } from '@/stores/toastStore';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
@@ -112,7 +113,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
       if (!incoming.length) { window.alert('Không đọc được khách nào từ file.'); return; }
       const r = mergeIncoming(list, incoming);
       setList(r.list);
-      window.alert(`✅ Import xong: thêm mới ${r.added} khách, gộp trùng ${r.merged}.`);
+      toast(`✅ Import xong: thêm mới ${r.added} khách, gộp trùng ${r.merged}.`);
     } catch (err) {
       window.alert('❌ ' + (err as Error).message);
     }
@@ -123,7 +124,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     if (r.removed === 0) { window.alert('Không phát hiện khách trùng.'); return; }
     if (!window.confirm(`Phát hiện ${r.removed} bản trùng. Gộp thông tin & loại bỏ bản thừa?`)) return;
     setList(r.list);
-    window.alert(`✅ Đã gộp & loại ${r.removed} bản trùng.`);
+    toast(`✅ Đã gộp & loại ${r.removed} bản trùng.`);
   };
 
   const handleSave = async () => {

@@ -4,6 +4,7 @@ import {
   Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { LEGACY } from '@/theme';
+import { toast } from '@/stores/toastStore';
 
 export type ImportCol = { key: string; label: string; aliases?: string[] };
 
@@ -116,7 +117,7 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
     setBusy(true);
     try {
       const added = await onImport(rows);
-      window.alert(`✅ Đã nhập ${added} mục mới (bỏ qua trùng tên / để trống).`);
+      toast(`✅ Đã nhập ${added} mục mới (bỏ qua trùng tên / để trống).`);
       reset();
       onClose();
     } catch (e) {

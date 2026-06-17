@@ -9,6 +9,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { normalizeVN } from '@/lib/search';
+import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
 import type { CloudQuoteEntry, Collaborator, Customer, FileAttachment, User } from '@/types';
 import { attMeta } from '@/lib/util';
@@ -135,6 +136,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
 
       await saveCloud(name, collaborators, note, custArg, attachments, linked);
       onClose();
+      toast(`☁️ Đã lưu "${name.trim() || 'báo giá'}" lên cloud.`);
     } catch (e) {
       setError((e as Error).message || 'Lỗi không xác định');
     } finally {

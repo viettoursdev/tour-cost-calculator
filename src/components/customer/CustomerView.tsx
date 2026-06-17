@@ -18,6 +18,7 @@ import { customerToNcc } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import type { Customer } from '@/types';
 import { filterRank, normalizeVN } from '@/lib/search';
+import { toast } from '@/stores/toastStore';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 
@@ -92,7 +93,7 @@ export function CustomerView() {
     await nccSave(customerToNcc(convertTarget));
     await del(convertTarget.id);
     setConvertTarget(null);
-    window.alert(`✅ Đã chuyển "${moved}" sang danh sách Nhà cung cấp.`);
+    toast(`✅ Đã chuyển "${moved}" sang danh sách Nhà cung cấp.`);
   };
 
   return (

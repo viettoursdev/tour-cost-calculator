@@ -3,6 +3,7 @@ import {
   Alert, Box, Button, Dialog, DialogContent, DialogTitle, Paper, Stack, Tab,
   Tabs, Typography,
 } from '@mui/material';
+import { toast } from '@/stores/toastStore';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -180,7 +181,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
     if (!importPreview) return;
     if (!window.confirm('Áp dụng master rate card này?\n\n⚠ Toàn bộ rate card hiện tại trên máy này sẽ bị ghi đè!')) return;
     useRateCardStore.setState({ rates: importPreview.data });
-    window.alert('✅ Đồng bộ thành công! Tải lại trang để áp dụng đầy đủ.');
+    toast('✅ Đồng bộ tỷ giá thành công! Tải lại trang để áp dụng đầy đủ.', 'success');
     setImportPreview(null);
     onClose();
     setTimeout(() => window.location.reload(), 500);

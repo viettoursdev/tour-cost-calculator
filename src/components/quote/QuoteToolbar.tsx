@@ -3,6 +3,7 @@ import {
   AppBar, Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
   Stack, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
+import { toast } from '@/stores/toastStore';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -194,7 +195,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       const raw = String(ev.target?.result ?? '');
       const result = importJSON(raw);
       if (!result.ok) alert('⚠ ' + result.error);
-      else alert('✅ Nhập báo giá thành công!');
+      else toast('✅ Nhập báo giá thành công!');
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -207,7 +208,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     try {
       const data = await (await import('@/lib/exports/importExcel')).importExcelQuote(file);
       applyImport(data);
-      alert('✅ Đã nhập báo giá từ Excel!');
+      toast('✅ Đã nhập báo giá từ Excel!');
     } catch (err) {
       alert('❌ ' + (err as Error).message);
     }

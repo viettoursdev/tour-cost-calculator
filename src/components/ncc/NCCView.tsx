@@ -18,6 +18,7 @@ import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc } from '@/types';
 import { filterRank, normalizeVN } from '@/lib/search';
+import { toast } from '@/stores/toastStore';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 
@@ -90,7 +91,7 @@ export function NCCView() {
     await custSave(nccToCustomer(convertTarget));
     await del(convertTarget.id);
     setConvertTarget(null);
-    window.alert(`✅ Đã chuyển "${moved}" sang danh sách Khách hàng.`);
+    toast(`✅ Đã chuyển "${moved}" sang danh sách Khách hàng.`);
   };
 
   return (

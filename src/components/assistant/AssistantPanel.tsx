@@ -7,6 +7,7 @@ import SendIcon from '@mui/icons-material/Send';
 import PublicIcon from '@mui/icons-material/Public';
 import { runAssistant, type AssistantProposal } from '@/lib/assistant/agent';
 import { applyItineraryDraft, applyQuoteDraft, applySupplierDraft } from '@/lib/assistant/draftBuilders';
+import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
 import type { ChatMessage, Citation } from '@/lib/aiWorker';
 
@@ -73,7 +74,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     try {
       if (p.kind === 'supplier') {
         const name = await applySupplierDraft(p.payload);
-        window.alert(`✅ Đã lưu "${name}" vào Nhà cung cấp. Hãy mở tab Nhà Cung Cấp để kiểm tra & bổ sung thông tin.`);
+        toast(`✅ Đã lưu "${name}" vào NCC — kiểm tra lại ở tab Nhà Cung Cấp.`);
         return; // giữ panel để tiếp tục hỏi
       }
       if (p.kind === 'itinerary') await applyItineraryDraft(p.payload);

@@ -4,6 +4,7 @@ import {
   Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField,
   Tooltip, Typography,
 } from '@mui/material';
+import { toast } from '@/stores/toastStore';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -67,7 +68,7 @@ export function NccProductView() {
       store.setCustomItems(tourKey, [...cur.customItems, item]);
       store.setPayments(tourKey, { ...cur.payments, [key]: { supplier: p.nccName, installments: [], note: '' } });
       store.releaseSubscription(tourKey);
-      window.alert(`✅ Đã thêm "${item.name}"${amountVND ? ` (${amountVND.toLocaleString('vi-VN')} ₫)` : ''} vào tab Quản lý thanh toán.`);
+      toast(`✅ Đã thêm "${item.name}"${amountVND ? ` (${amountVND.toLocaleString('vi-VN')} ₫)` : ''} vào Quản lý thanh toán.`);
     }, 700);
   };
 
