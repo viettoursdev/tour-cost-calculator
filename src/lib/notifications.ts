@@ -162,3 +162,42 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
     console.warn('checkWorkflowDeadlines failed:', (e as Error).message);
   }
 }
+
+const SALES_KEY = 'vte_sales_followup_notified';
+/** Số ngày KHÔNG cập nhật trước khi nhắc follow-up, theo trạng thái deal. */
+const FOLLOWUP_DAYS: Partial<Record<string, number>> = { sent: 4, negotiating: 3 };
+
+/**
+ * Nhắc follow-up bán hàng: báo giá ở trạng thái "Đã gửi"/"Đang deal" mà quá N ngày
+ * KHÔNG cập nhật → nhắc người tạo liên hệ khách. Quét index lịch sử (đã subscribe).
+ * Dedup theo (báo giá, trạng thái, NGÀY) — tối đa 1 lần/ngày cho mỗi deal nguội.
+ */
+export async function checkSalesFollowups(user: User): Promise<void> {
+  try {
+    const quotes = useQuoteHistoryStore.getState().quotes;
+    const today = new Date().toISOString().slice(0, 10);
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(SALES_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const q of quotes) {
+      const threshold = q.status ? FOLLOWUP_DAYS[q.status] : undefined;
+      if (threshold == null) continue;                 // chỉ sent/negotiating
+      if (q.createdByUsername !== user.u) continue;     // deal của chính mình
+      const since = q.updatedAt ? Math.floor((Date.now() - Date.parse(q.updatedAt)) / 86400000) : null;
+      if (since == null || since < threshold) continue;
+      const key = `${q.cloudId}:${q.status}:${today}`;
+      if (set.has(key)) continue;
+      set.add(key);
+      await fbSendNotification(user.u, {
+        type: 'task',
+        title: '📞 Cần follow-up báo giá',
+        message: `"${q.name}" (${q.status === 'sent' ? 'đã gửi khách' : 'đang deal'}) — ${since} ngày chưa cập nhật. Liên hệ ${q.customerName || 'khách'} để chốt.`,
+        createdBy: 'Hệ thống',
+        data: { cloudId: q.cloudId },
+      });
+    }
+    try { localStorage.setItem(SALES_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkSalesFollowups failed:', (e as Error).message);
+  }
+}
