@@ -43,7 +43,6 @@ export function NCCView() {
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Ncc | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useNccStore((s) => s.importMany);
   // Chuyển sang Khách hàng: cần quyền quản lý Khách hàng để thêm vào danh sách đích.
@@ -79,10 +78,9 @@ export function NCCView() {
     setModal(null);
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await del(deleteTarget.id);
-    setDeleteTarget(null);
+  const handleDeleteNow = (s: Ncc) => {
+    void del(s.id);
+    toast(`Đã xoá NCC "${s.name}".`, 'info', { label: 'Hoàn tác', onClick: () => void save(s) });
   };
 
   const handleConvert = async () => {
@@ -183,7 +181,7 @@ export function NCCView() {
               canEdit={canEdit}
               canConvert={canConvert}
               onEdit={() => setModal({ ncc: s })}
-              onDelete={() => setDeleteTarget(s)}
+              onDelete={() => handleDeleteNow(s)}
               onConvert={() => setConvertTarget(s)}
               onClick={() => setModal({ ncc: s })}
             />
@@ -224,20 +222,6 @@ export function NCCView() {
           note: r.note || '', createdAt: '', createdBy: '',
         })))}
       />
-
-      {/* Delete confirm */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
-        <DialogTitle>Xoá NCC?</DialogTitle>
-        <DialogContent>
-          <Alert severity="warning">
-            Xoá <strong>{deleteTarget?.name}</strong>? Không thể hoàn tác.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>Huỷ</Button>
-          <Button variant="contained" color="error" onClick={handleDelete}>Xoá</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Convert → Customer confirm */}
       <Dialog open={!!convertTarget} onClose={() => setConvertTarget(null)}>

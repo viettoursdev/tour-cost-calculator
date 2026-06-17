@@ -47,7 +47,6 @@ export function CustomerView() {
   const [view360, setView360] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useCustomerStore((s) => s.importMany);
-  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
   // Chuyển sang NCC: cần quyền quản lý NCC để thêm vào danh sách đích.
   const nccSave = useNccStore((s) => s.save);
   const suppliers = useNccStore((s) => s.suppliers);
@@ -81,10 +80,10 @@ export function CustomerView() {
     setModal(null);
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    await del(deleteTarget.id);
-    setDeleteTarget(null);
+  // Xoá ngay + toast Hoàn tác (thay hộp thoại xác nhận).
+  const handleDeleteNow = (c: Customer) => {
+    void del(c.id);
+    toast(`Đã xoá khách "${c.name}".`, 'info', { label: 'Hoàn tác', onClick: () => void save(c) });
   };
 
   const handleConvert = async () => {
@@ -206,7 +205,7 @@ export function CustomerView() {
               canEdit={canEdit}
               canConvert={canConvert}
               onEdit={() => setModal({ customer: c })}
-              onDelete={() => setDeleteTarget(c)}
+              onDelete={() => handleDeleteNow(c)}
               onConvert={() => setConvertTarget(c)}
               onClick={() => setView360(c)}
             />
@@ -248,22 +247,6 @@ export function CustomerView() {
           note: r.note || '', createdAt: '', createdBy: '',
         })))}
       />
-
-      {/* Delete confirm dialog */}
-      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>
-        <DialogTitle>Xoá khách hàng?</DialogTitle>
-        <DialogContent>
-          <Alert severity="warning">
-            Xoá <strong>{deleteTarget?.name}</strong>? Không thể hoàn tác.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteTarget(null)}>Huỷ</Button>
-          <Button variant="contained" color="error" onClick={handleDelete}>
-            Xoá
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Convert → NCC confirm dialog */}
       <Dialog open={!!convertTarget} onClose={() => setConvertTarget(null)}>
