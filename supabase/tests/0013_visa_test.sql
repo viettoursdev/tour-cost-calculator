@@ -1,0 +1,11 @@
+begin;
+select plan(7);
+select has_table('public','visa_products','visa_products exist');
+select has_table('public','visa_product_fees','fees exist');
+select has_table('public','visa_procedures','procedures exist');
+select has_table('public','visa_projects','projects exist');
+select col_type_is('public','visa_procedures','sections','jsonb','sections jsonb');
+select col_type_is('public','visa_projects','applicants','jsonb','applicants jsonb');
+select col_type_is('public','visa_projects','main_staff','uuid[]','main_staff uuid array');
+select * from finish();
+rollback;
