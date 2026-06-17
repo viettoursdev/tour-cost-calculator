@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select has_table('public','contracts','contracts exists');
+select has_table('public','contract_payments','contract_payments exists');
+select has_table('public','contract_cancels','contract_cancels exists');
+select col_type_is('public','contracts','party_b','jsonb','party_b is jsonb');
+select col_type_is('public','contracts','includes','text[]','includes is text array');
+select fk_ok('public','contract_payments','contract_id','public','contracts','id');
+select * from finish();
+rollback;
