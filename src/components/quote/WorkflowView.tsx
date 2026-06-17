@@ -4,7 +4,9 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SyncIcon from '@mui/icons-material/Sync';
+import { exportWorkflowPDF } from '@/lib/exports/exportWorkflowPDF';
 import EventIcon from '@mui/icons-material/Event';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import ViewListIcon from '@mui/icons-material/ViewList';
@@ -131,6 +133,10 @@ export function WorkflowView() {
   };
   const reorder = (from: number, to: number) => { const a = [...steps]; const [m] = a.splice(from, 1); a.splice(to, 0, m); setWorkflow(a); };
   const syncNow = () => setWorkflow(applySignals(steps, signals));
+  const exportPdf = () => {
+    if (!steps.length) { window.alert('Chưa có bước quy trình để xuất.'); return; }
+    exportWorkflowPDF(draft.info, steps, nameOf);
+  };
   const fillDue = () => {
     if (!draft.info.startDate) { window.alert('Báo giá chưa có ngày khởi hành — đặt ở phần thông tin tour trước.'); return; }
     setWorkflow(fillDueDates(steps, draft.info.startDate));
@@ -174,6 +180,9 @@ export function WorkflowView() {
               <ToggleButton value="checklist"><ChecklistIcon fontSize="small" sx={{ mr: 0.5 }} />Checklist</ToggleButton>
               <ToggleButton value="gantt"><ViewTimelineIcon fontSize="small" sx={{ mr: 0.5 }} />Gantt</ToggleButton>
             </ToggleButtonGroup>
+            <Tooltip title="Xuất checklist quy trình ra PDF để in / bàn giao">
+              <Button variant="outlined" size="small" startIcon={<PictureAsPdfIcon />} onClick={exportPdf} sx={{ whiteSpace: 'nowrap' }}>Xuất PDF</Button>
+            </Tooltip>
             <Tooltip title="Khôi phục về 13 bước quy trình mặc định">
               <Button variant="outlined" size="small" color="warning" startIcon={<RestartAltIcon />} onClick={resetDefault} sx={{ whiteSpace: 'nowrap' }}>Khôi phục mặc định</Button>
             </Tooltip>
