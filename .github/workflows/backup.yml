@@ -73,8 +73,11 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+      # Mirror to v2 is paused: v2 was banned by Google on 2026-06-17.
+      # Remove the `false &&` once the ban is lifted to resume the live mirror.
+      # The artifact upload above continues to run every hour regardless.
       - name: Import Firestore into DEST (mirror)
-        if: success()
+        if: false && success()
         run: SA_PATH=dest-sa.json node scripts/firestore-import.mjs
 
       - name: Scrub SA files
