@@ -61,6 +61,26 @@ curl -X POST https://tour-cost-calculator.<tên>.workers.dev/ai \
 # → {"text":"OK"}   (nếu vẫn {"error":"Request not allowed"} → key vẫn sai)
 ```
 
+## 🔐 Bảo mật: bắt buộc đăng nhập (Firebase ID token)
+
+Worker này xác thực **Firebase ID token** của người dùng trước khi gọi Claude / ghi R2
+→ chặn người ngoài đốt `ANTHROPIC_API_KEY` hay upload file vào R2 (URL worker là công khai
+trong bundle). App tự đính kèm token (header `Authorization: Bearer …`) cho mọi lời gọi.
+
+**Bật/tắt bằng 1 biến — rollout an toàn, rollback tức thì:**
+
+1. Deploy bản worker mới (dán lại `viettours-ai-worker.js`). **Chưa đặt biến** → worker
+   chạy y như cũ (chưa bắt buộc auth) — không gì gãy.
+2. Kiểm tra các tính năng AI/dịch/upload vẫn chạy bình thường trong app.
+3. Khi sẵn sàng **bật xác thực**: Settings → Variables and Secrets → Add
+   - Name: `FIREBASE_PROJECT_ID`  ·  Value: `tour-cost-calculator-v2`  → Save/Deploy.
+4. Từ giờ mọi request thiếu/sai token (gồm curl ngoài) bị **401**. App đã đăng nhập vẫn chạy.
+5. **Rollback:** xoá biến `FIREBASE_PROJECT_ID` → quay lại không bắt buộc auth ngay.
+
+> Lưu ý: endpoint `GET /file/<key>` vẫn mở (key là UUID ngẫu nhiên, dùng trong `<img>`/
+> link tải nên không gắn được header). Rủi ro thấp; nếu cần siết, chuyển sang signed URL —
+> báo để bổ sung. Sau khi đổi worker phải **redeploy thủ công** (CI không tự deploy).
+
 ## Ghi chú
 
 - **Model:** mặc định `claude-haiku-4-5-20251001` (rẻ & nhanh nhất). Đổi hằng `MODEL` thành

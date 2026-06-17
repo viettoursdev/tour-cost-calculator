@@ -10,6 +10,22 @@
 const LS_KEY = 'vte_ai_worker';
 
 /**
+ * Header xác thực gửi kèm mọi lời gọi Worker: Firebase ID token của người đang đăng
+ * nhập. Worker (sau khi redeploy bản có auth) sẽ verify token + domain @viettours
+ * trước khi gọi Anthropic / ghi R2 — chặn lạm dụng API key & file từ bên ngoài.
+ * Worker CŨ (chưa auth) bỏ qua header này nên không ảnh hưởng.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  try {
+    const { auth } = await import('@/lib/firebase'); // lazy — tránh khởi tạo Firebase khi import module
+    const token = await auth.currentUser?.getIdToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Default deployed Cloudflare Worker (holds upstream keys + R2 bucket).
  * Used when the user hasn't set a custom URL via ⚙️ AI, so file upload and
  * translation work out of the box.
@@ -81,7 +97,7 @@ export async function uploadFileToWorker(file: File): Promise<{ key: string; nam
   const url =
     base.replace(/\/+$/, '') +
     `/upload?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`;
-  const r = await fetch(url, { method: 'POST', body: file });
+  const r = await fetch(url, { method: 'POST', body: file, headers: await authHeaders() });
   const d = (await r.json().catch(() => ({}))) as { key?: string; name?: string; error?: string };
   if (!r.ok || d.error) throw new Error(d.error || 'Upload lỗi ' + r.status);
   if (!d.key) throw new Error('Worker không trả về key');
@@ -103,7 +119,7 @@ export async function callAIWorker(
   }
   const r = await fetch(url.replace(/\/+$/, '') + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(body),
   });
   // Đọc body trước để giữ lại thông báo lỗi thật từ worker (vd "Request not allowed"),

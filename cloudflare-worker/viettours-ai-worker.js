@@ -90,8 +90,8 @@ const OCR_STRUCTURE_PROMPT = [
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 function json(obj, status = 200) {
@@ -134,6 +134,106 @@ async function callClaude(env, content, maxTokens = 8000, model = MODEL) {
     .trim();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Xác thực Firebase ID token (RS256). CHỈ bật khi env.FIREBASE_PROJECT_ID được đặt
+// (vd "tour-cost-calculator-v2"). Chưa đặt → bỏ qua (giữ nguyên hành vi cũ) để
+// deploy an toàn: bật/tắt tức thì bằng cách thêm/xoá biến này.
+// Chặn lạm dụng ANTHROPIC_API_KEY & ghi R2 từ bên ngoài app.
+// ─────────────────────────────────────────────────────────────────────────────
+const CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+let CERT_CACHE = { exp: 0, certs: null };
+
+async function getGoogleCerts() {
+  if (CERT_CACHE.certs && Date.now() < CERT_CACHE.exp) return CERT_CACHE.certs;
+  const r = await fetch(CERT_URL);
+  const certs = await r.json();
+  const m = /max-age=(\d+)/.exec(r.headers.get('cache-control') || '');
+  CERT_CACHE = { exp: Date.now() + (m ? +m[1] * 1000 : 3600000), certs };
+  return certs;
+}
+
+function b64urlBytes(s) {
+  s = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+const jsonFromB64url = (s) => JSON.parse(new TextDecoder().decode(b64urlBytes(s)));
+
+function pemToDer(pem) {
+  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const bin = atob(b64);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+
+// Đọc 1 TLV (tag-length-value) DER tại offset.
+function readTLV(buf, off) {
+  let i = off + 1;
+  let len = buf[i++];
+  if (len & 0x80) {
+    const n = len & 0x7f;
+    len = 0;
+    for (let k = 0; k < n; k++) len = (len << 8) | buf[i++];
+  }
+  return { tag: buf[off], end: i + len };
+}
+
+// Offset nội dung (content start) của TLV tại off — dùng để "bước vào" 1 SEQUENCE.
+function tlvContentStart(buf, off) {
+  let i = off + 1;
+  const lenByte = buf[i++];
+  if (lenByte & 0x80) i += (lenByte & 0x7f);
+  return i;
+}
+
+// Trích SubjectPublicKeyInfo (SPKI DER) từ certificate X.509 DER.
+// Certificate ::= SEQ { tbsCertificate SEQ { [0]version?, serial, sig, issuer,
+//   validity, subject, subjectPublicKeyInfo, ... }, ... }
+function extractSPKI(certDer) {
+  let off = tlvContentStart(certDer, 0);   // vào Certificate → tbsCertificate
+  off = tlvContentStart(certDer, off);     // vào tbsCertificate → phần tử đầu
+  let el = readTLV(certDer, off);
+  if (el.tag === 0xA0) { off = el.end; el = readTLV(certDer, off); } // bỏ [0] version
+  // bỏ serial, signature, issuer, validity, subject (5 phần tử) → tới SPKI
+  for (let k = 0; k < 5; k++) { off = el.end; el = readTLV(certDer, off); }
+  return certDer.slice(off, el.end);
+}
+
+async function verifyFirebaseToken(token, projectId) {
+  const parts = String(token).split('.');
+  if (parts.length !== 3) throw new Error('token sai định dạng');
+  const header = jsonFromB64url(parts[0]);
+  const payload = jsonFromB64url(parts[1]);
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.aud !== projectId) throw new Error('sai aud');
+  if (payload.iss !== `https://securetoken.google.com/${projectId}`) throw new Error('sai iss');
+  if (!payload.exp || payload.exp < now) throw new Error('token hết hạn');
+  if (!/@viettours\.com\.vn$/.test(String(payload.email || '').toLowerCase())) throw new Error('email ngoài miền');
+  const certs = await getGoogleCerts();
+  const pem = certs[header.kid];
+  if (!pem) throw new Error('không có chứng chỉ (kid)');
+  const key = await crypto.subtle.importKey('spki', extractSPKI(pemToDer(pem)),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key,
+    b64urlBytes(parts[2]), new TextEncoder().encode(parts[0] + '.' + parts[1]));
+  if (!ok) throw new Error('chữ ký không hợp lệ');
+  return payload;
+}
+
+/** Trả về Response lỗi nếu xác thực bật & token không hợp lệ; null nếu hợp lệ/đang tắt. */
+async function requireAuth(request, env) {
+  if (!env.FIREBASE_PROJECT_ID) return null; // chưa cấu hình → không bắt buộc
+  const h = request.headers.get('Authorization') || '';
+  const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+  if (!token) return json({ error: 'Thiếu xác thực (Bearer token)' }, 401);
+  try { await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID); return null; }
+  catch (e) { return json({ error: 'Xác thực thất bại: ' + (e.message || e) }, 401); }
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -154,6 +254,10 @@ export default {
     }
 
     if (request.method !== 'POST') return json({ error: 'Chỉ hỗ trợ POST' }, 405);
+
+    // Xác thực mọi endpoint POST (AI + upload) — chặn lạm dụng từ ngoài app.
+    const authErr = await requireAuth(request, env);
+    if (authErr) return authErr;
 
     // ── POST /upload?name=&type= — lưu file lên R2 (body nhị phân) ──
     if (path.endsWith('/upload')) {
