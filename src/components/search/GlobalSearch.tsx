@@ -12,10 +12,18 @@ import { useMenuStore } from '@/stores/menuStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
+import { ROLE_RANK } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
 import { buildSearchIndex, type IndexItem, type IndexKind } from '@/lib/searchIndex';
 import { LEGACY } from '@/theme';
 import type { Template } from '@/types';
+import type { QuoteViewKey } from '@/stores/quoteStore';
+
+type NavCmd = { v: QuoteViewKey; label: string; icon: string };
+/** Lệnh điều hướng (nhảy tới tab) — phần "command" của command palette. */
+type Row = { t: 'nav'; nav: NavCmd } | { t: 'rec'; it: IndexItem };
 
 type Kind = IndexKind;
 type SItem = IndexItem;
@@ -87,14 +95,45 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
     return index.filter((it) => kinds.includes(it.kind));
   }, [index, scope]);
 
-  const results = useMemo<SItem[]>(() => {
-    if (!q.trim()) {
-      const recent = readRecent();
-      const byKey = new Map(scopedIndex.map((it) => [it.kind + ':' + it.id, it]));
-      return recent.map((r) => byKey.get(r.kind + ':' + r.id)).filter((x): x is SItem => !!x).slice(0, 8);
-    }
-    return filterRank(scopedIndex, q, (it) => it.text).slice(0, 40);
-  }, [q, scopedIndex]);
+  const me = useAuthStore((s) => s.currentUser);
+  const navCmds = useMemo<NavCmd[]>(() => {
+    const base: NavCmd[] = [
+      { v: 'home', label: 'Hôm nay', icon: '🏠' },
+      { v: 'cost', label: 'Bảng báo giá', icon: '📊' },
+      { v: 'summary', label: 'Tổng kết & định giá', icon: '💰' },
+      { v: 'pipeline', label: 'Pipeline bán hàng', icon: '🧲' },
+      { v: 'salesanalytics', label: 'Phân tích bán hàng', icon: '📊' },
+      { v: 'workflow', label: 'Quy trình vận hành', icon: '🗂️' },
+      { v: 'opsboard', label: 'Điều phối', icon: '🧭' },
+      { v: 'departures', label: 'Lịch khởi hành', icon: '📅' },
+      { v: 'payboard', label: 'Công nợ tổng', icon: '💰' },
+      { v: 'payment', label: 'Quản lý thanh toán', icon: '🧾' },
+      { v: 'flights', label: 'Chuyến bay', icon: '✈️' },
+      { v: 'dashboard', label: 'Dashboard biên lợi', icon: '📈' },
+      { v: 'history', label: 'Lịch sử báo giá', icon: '🕐' },
+    ];
+    if (hasPerm(me, 'manageContracts') || hasPerm(me, 'viewContracts')) base.push({ v: 'contract', label: 'Hợp đồng', icon: '📜' });
+    if (hasPerm(me, 'manageCustomers')) base.push({ v: 'customer', label: 'Khách hàng', icon: '👥' });
+    if (hasPerm(me, 'manageNCC')) base.push({ v: 'ncc', label: 'Nhà cung cấp', icon: '🏢' }, { v: 'nccProducts', label: 'Sản phẩm NCC', icon: '📦' });
+    if (me && ROLE_RANK[me.role] >= ROLE_RANK['Trưởng Phòng']) base.push({ v: 'audit', label: 'Nhật ký hệ thống', icon: '📋' });
+    return base;
+  }, [me]);
+
+  const rows = useMemo<Row[]>(() => {
+    const recRows = (q.trim()
+      ? filterRank(scopedIndex, q, (it) => it.text).slice(0, 40)
+      : (() => {
+          const recent = readRecent();
+          const byKey = new Map(scopedIndex.map((it) => [it.kind + ':' + it.id, it]));
+          return recent.map((r) => byKey.get(r.kind + ':' + r.id)).filter((x): x is SItem => !!x).slice(0, 8);
+        })()
+    ).map<Row>((it) => ({ t: 'rec', it }));
+    // Lệnh điều hướng chỉ hiện khi có từ khoá + đang ở scope "Tất cả".
+    const navRows: Row[] = (q.trim() && scope === 'all')
+      ? filterRank(navCmds, q, (c) => c.label).slice(0, 6).map((nav) => ({ t: 'nav', nav }))
+      : [];
+    return [...navRows, ...recRows];
+  }, [q, scopedIndex, scope, navCmds]);
 
   useEffect(() => { setActive(0); }, [q, scope]);
 
@@ -125,10 +164,21 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
     onClose();
   };
 
+  const goNav = (nav: NavCmd) => {
+    const st = useQuoteStore.getState();
+    if (st.draft.template !== 'domestic' && st.draft.template !== 'intl') {
+      if (!window.confirm('Mở mục này? Thay đổi chưa lưu ở màn hình hiện tại có thể mất.')) return;
+      useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } }));
+    }
+    st.setView(nav.v);
+    onClose();
+  };
+  const goRow = (r: Row) => (r.t === 'nav' ? goNav(r.nav) : go(r.it));
+
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, results.length - 1)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(a + 1, rows.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); const it = results[active]; if (it) go(it); }
+    else if (e.key === 'Enter') { e.preventDefault(); const r = rows[active]; if (r) goRow(r); }
     else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
   };
 
@@ -158,19 +208,32 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
       </Stack>
 
       <Box sx={{ maxHeight: 460, overflowY: 'auto' }}>
-        {results.length === 0 ? (
+        {rows.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>
-            {q.trim() ? 'Không tìm thấy kết quả.' : 'Gõ để tìm — hoặc xem mục mở gần đây.'}
+            {q.trim() ? 'Không tìm thấy kết quả.' : 'Gõ để tìm hoặc nhảy tới màn hình — hoặc xem mục mở gần đây.'}
           </Box>
         ) : (
           <>
             {!q.trim() && <Typography variant="caption" sx={{ px: 2, pt: 1, display: 'block', color: 'text.disabled' }}>GẦN ĐÂY</Typography>}
-            {results.map((it, i) => {
-              const m = META[it.kind];
+            {rows.map((r, i) => {
               const on = i === active;
+              if (r.t === 'nav') {
+                return (
+                  <Stack key={`nav-${r.nav.v}`} direction="row" alignItems="center" spacing={1.25}
+                    onMouseEnter={() => setActive(i)} onClick={() => goRow(r)}
+                    sx={{ px: 2, py: 1, cursor: 'pointer', bgcolor: on ? 'rgba(20,150,140,0.1)' : 'transparent',
+                      borderLeft: `3px solid ${on ? LEGACY.teal : 'transparent'}` }}>
+                    <Box sx={{ fontSize: 18, width: 24, textAlign: 'center' }}>{r.nav.icon}</Box>
+                    <Typography fontSize={14} fontWeight={700} sx={{ flex: 1 }} noWrap>Đi tới: {r.nav.label}</Typography>
+                    <Chip size="small" label="Điều hướng" sx={{ bgcolor: 'rgba(20,150,140,0.15)', color: LEGACY.teal, fontWeight: 700, flexShrink: 0 }} />
+                  </Stack>
+                );
+              }
+              const it = r.it;
+              const m = META[it.kind];
               return (
                 <Stack key={it.kind + it.id} direction="row" alignItems="center" spacing={1.25}
-                  onMouseEnter={() => setActive(i)} onClick={() => go(it)}
+                  onMouseEnter={() => setActive(i)} onClick={() => goRow(r)}
                   sx={{ px: 2, py: 1, cursor: 'pointer', bgcolor: on ? 'rgba(20,150,140,0.1)' : 'transparent',
                     borderLeft: `3px solid ${on ? m.color : 'transparent'}` }}>
                   <Box sx={{ fontSize: 18, width: 24, textAlign: 'center' }}>{m.icon}</Box>
