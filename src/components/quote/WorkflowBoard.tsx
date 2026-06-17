@@ -4,11 +4,15 @@ import {
   TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { deadlineMeta } from '@/components/visa/constants';
 import { filterRank } from '@/lib/search';
+import { ROLE_RANK } from '@/auth/ROLES';
+import { fbGetQuoteProject, fbBackfillWorkflowIndex } from '@/lib/firebase';
+import { workflowBoardSummary, workflowDueSummary } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
 import type { CloudQuoteEntry } from '@/types';
 
@@ -30,6 +34,32 @@ export function WorkflowBoard() {
   const [scope, setScope] = useState<Scope>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [search, setSearch] = useState('');
+  const [backfilling, setBackfilling] = useState(false);
+  const canBackfill = !!me && ROLE_RANK[me.role] >= ROLE_RANK['Trưởng Phòng'];
+
+  // Cập nhật chỉ số quy trình cho báo giá cũ (chưa có workflowSummary trong index).
+  const runBackfill = async () => {
+    const missing = visibleQuotes().filter((q) => !q.workflowSummary);
+    if (!missing.length) { window.alert('Tất cả báo giá đã có chỉ số quy trình.'); return; }
+    if (!window.confirm(`Quét ${missing.length} báo giá để cập nhật chỉ số quy trình? (đọc dữ liệu từng báo giá, có thể mất chút thời gian)`)) return;
+    setBackfilling(true);
+    try {
+      const updates: Record<string, { workflowDue: ReturnType<typeof workflowDueSummary>; workflowSummary: ReturnType<typeof workflowBoardSummary> }> = {};
+      for (const q of missing) {
+        const proj = await fbGetQuoteProject(q.cloudId).catch(() => null);
+        const steps = proj?.currentState?.workflow;
+        if (steps && steps.length) {
+          updates[q.cloudId] = { workflowDue: workflowDueSummary(steps), workflowSummary: workflowBoardSummary(steps) };
+        }
+      }
+      const n = await fbBackfillWorkflowIndex(updates);
+      window.alert(n ? `✅ Đã cập nhật chỉ số cho ${n} báo giá.` : 'Không có báo giá nào có quy trình để cập nhật.');
+    } catch (e) {
+      window.alert('❌ Cập nhật chỉ số lỗi: ' + (e as Error).message);
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   const nameOf = (u?: string) => users.find((x) => x.u === u)?.name ?? u ?? '';
 
@@ -85,6 +115,13 @@ export function WorkflowBoard() {
             <ToggleButton value="mine">Việc của tôi</ToggleButton>
           </ToggleButtonGroup>
           <ToggleButton size="small" value="overdue" selected={overdueOnly} onChange={() => setOverdueOnly((v) => !v)} color="error">⏱ Chỉ quá hạn</ToggleButton>
+          {canBackfill && (
+            <Tooltip title="Tổng hợp chỉ số quy trình cho báo giá cũ chưa có trong bảng">
+              <span><Button size="small" variant="outlined" startIcon={<RefreshIcon />} disabled={backfilling} onClick={() => void runBackfill()}>
+                {backfilling ? 'Đang cập nhật…' : 'Cập nhật chỉ số'}
+              </Button></span>
+            </Tooltip>
+          )}
         </Stack>
       </Stack>
 

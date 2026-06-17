@@ -388,6 +388,25 @@ function makeQuoteHistoryApi(
       await setDoc(historyDoc, { quotes });
     },
 
+    /** Backfill chỉ số quy trình (workflowDue/workflowSummary) cho nhiều báo giá
+     *  trong index — đọc 1 lần, ghi 1 lần. Trả về số bản ghi được cập nhật. */
+    async fbBackfillWorkflowIndex(
+      updates: Record<string, Pick<CloudQuoteEntry, 'workflowDue' | 'workflowSummary'>>,
+    ): Promise<number> {
+      const ids = Object.keys(updates);
+      if (!ids.length) return 0;
+      const snap = await getDoc(historyDoc);
+      if (!snap.exists()) return 0;
+      const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+      let n = 0;
+      for (let i = 0; i < quotes.length; i++) {
+        const u = updates[quotes[i].cloudId];
+        if (u) { quotes[i] = { ...quotes[i], ...u }; n++; }
+      }
+      if (n) await setDoc(historyDoc, { quotes });
+      return n;
+    },
+
     /** Cập nhật nhanh trạng thái báo giá lên bản ghi lịch sử (theo cloudId). */
     async fbSetEntryStatus(cloudId: string, status: QuoteStatus): Promise<void> {
       const snap = await getDoc(historyDoc);
@@ -410,6 +429,7 @@ export const fbUpdateCollaborators   = _regular.fbUpdateCollaborators;
 export const fbGetQuoteProject       = _regular.fbGetQuoteProject;
 export const fbSetRegularEntryLink   = _regular.fbSetEntryLink;
 export const fbSetQuoteStatus        = _regular.fbSetEntryStatus;
+export const fbBackfillWorkflowIndex = _regular.fbBackfillWorkflowIndex;
 
 const _dmc = makeQuoteHistoryApi(DMC_QUOTE_HISTORY_DOC, dmcQuoteProjectDoc);
 export const fbSubscribeDMCQuoteHistory = _dmc.fbSubscribeQuoteHistory;
