@@ -21,6 +21,7 @@ import { WorkflowView } from './WorkflowView';
 import { WorkflowBoard } from './WorkflowBoard';
 import { DepartureCalendar } from './DepartureCalendar';
 import { PaymentBoard } from './PaymentBoard';
+import { SalesPipeline } from './SalesPipeline';
 import { AuditView } from '@/components/admin/AuditView';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
@@ -89,6 +90,7 @@ export function QuoteView() {
             {view === 'opsboard' && <WorkflowBoard />}
             {view === 'departures' && <DepartureCalendar />}
             {view === 'payboard' && <PaymentBoard />}
+            {view === 'pipeline' && <SalesPipeline />}
             {view === 'audit' && <AuditView />}
             {view === 'history' && <QuoteHistoryView />}
             {view === 'contract' && <ContractView />}
