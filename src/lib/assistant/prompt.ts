@@ -28,6 +28,8 @@ export function assistantSystem(): string {
     '  web_search tìm DMC/công ty event/nhà cung cấp; trình bày dạng BẢNG: Tên · Khu vực ·',
     '  Dịch vụ chính · Website/Liên hệ · Nguồn. Tách rõ 2 nhóm: "Đối tác nội bộ (đã hợp tác)"',
     '  và "Trên thị trường (từ web — CẦN XÁC MINH)". Luôn nhắc tự kiểm tra trước khi hợp tác.',
+    '• Khi người dùng muốn LƯU một đối tác (nội bộ chưa có) → gọi propose_supplier với dữ liệu',
+    '  có cấu trúc (kèm nguồn web trong note) để app tạo nút "💾 Lưu vào NCC" 1-chạm.',
     '',
     'TƯ VẤN LỊCH TRÌNH: trước tiên tham khảo dữ liệu nội bộ (list_itineraries/get_itinerary',
     'để xem chương trình tương tự đã làm, search_pois để lấy điểm tham quan & lời thuyết minh,',

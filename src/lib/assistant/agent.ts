@@ -8,9 +8,15 @@ import { ASSISTANT_TOOLS, PROPOSAL_TOOLS, runAssistantTool } from './tools';
 import { assistantSystem } from './prompt';
 
 export interface AssistantProposal {
-  kind: 'itinerary' | 'quote';
+  kind: 'itinerary' | 'quote' | 'supplier';
   payload: Record<string, unknown>;
 }
+
+const PROPOSAL_KIND: Record<string, AssistantProposal['kind']> = {
+  propose_itinerary: 'itinerary',
+  propose_quote: 'quote',
+  propose_supplier: 'supplier',
+};
 
 export interface AssistantResult {
   text: string;
@@ -53,7 +59,7 @@ export async function runAssistant(
       const tname = tu.name ?? '';
       const tinput = (tu.input ?? {}) as Record<string, unknown>;
       if (PROPOSAL_TOOLS.has(tname)) {
-        proposals.push({ kind: tname === 'propose_quote' ? 'quote' : 'itinerary', payload: tinput });
+        proposals.push({ kind: PROPOSAL_KIND[tname] ?? 'itinerary', payload: tinput });
       }
       opts.onActivity?.(`Tra cứu: ${tname}…`);
       const out = await runAssistantTool(tname, tinput);

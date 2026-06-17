@@ -6,7 +6,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import PublicIcon from '@mui/icons-material/Public';
 import { runAssistant, type AssistantProposal } from '@/lib/assistant/agent';
-import { applyItineraryDraft, applyQuoteDraft } from '@/lib/assistant/draftBuilders';
+import { applyItineraryDraft, applyQuoteDraft, applySupplierDraft } from '@/lib/assistant/draftBuilders';
 import { LEGACY } from '@/theme';
 import type { ChatMessage, Citation } from '@/lib/aiWorker';
 
@@ -71,13 +71,20 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
 
   const openDraft = async (p: AssistantProposal) => {
     try {
+      if (p.kind === 'supplier') {
+        const name = await applySupplierDraft(p.payload);
+        window.alert(`✅ Đã lưu "${name}" vào Nhà cung cấp. Hãy mở tab Nhà Cung Cấp để kiểm tra & bổ sung thông tin.`);
+        return; // giữ panel để tiếp tục hỏi
+      }
       if (p.kind === 'itinerary') await applyItineraryDraft(p.payload);
       else applyQuoteDraft(p.payload);
       onClose();
     } catch (e) {
-      window.alert('Không mở được bản nháp: ' + (e as Error).message);
+      window.alert('Không xử lý được: ' + (e as Error).message);
     }
   };
+  const proposalLabel = (kind: AssistantProposal['kind']) =>
+    kind === 'itinerary' ? '📋 Mở nháp lịch trình' : kind === 'quote' ? '📋 Mở nháp báo giá' : '💾 Lưu vào NCC';
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose}
@@ -136,7 +143,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                       {m.proposals.map((p, k) => (
                         <Button key={k} size="small" variant="contained" onClick={() => void openDraft(p)}
                           sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', fontWeight: 700 }}>
-                          {p.kind === 'itinerary' ? '📋 Mở nháp lịch trình' : '📋 Mở nháp báo giá'}
+                          {proposalLabel(p.kind)}
                         </Button>
                       ))}
                     </Stack>

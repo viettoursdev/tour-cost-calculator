@@ -5,10 +5,34 @@
 import { useAuthStore } from '@/stores/authStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { useNccStore } from '@/stores/nccStore';
 import { useLinkNavStore } from '@/stores/linkNavStore';
 import { getCATS } from '@/components/quote/constants';
+import { hasPerm } from '@/auth/PERMISSIONS';
 import { CATEGORY_ENUM } from './tools';
-import type { CategoryId, Item, Itinerary, QuoteDraft, Template } from '@/types';
+import type { CategoryId, Item, Itinerary, Ncc, QuoteDraft, Template } from '@/types';
+
+const sText = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+/** Lưu nhà cung cấp do Trợ lý đề xuất vào danh sách NCC (cần quyền manageNCC). */
+export async function applySupplierDraft(payload: Record<string, unknown>): Promise<string> {
+  const user = useAuthStore.getState().currentUser;
+  if (!user || !hasPerm(user, 'manageNCC')) throw new Error('Bạn không có quyền thêm Nhà cung cấp.');
+  const name = sText(payload.name);
+  if (!name) throw new Error('Thiếu tên NCC.');
+  const website = sText(payload.website);
+  const note = [sText(payload.note), website ? `Website: ${website}` : '', '— Lưu từ Trợ lý (cần xác minh).']
+    .filter(Boolean).join('\n');
+  const ncc: Ncc = {
+    id: '', name,
+    sectors: Array.isArray(payload.sectors) ? (payload.sectors as unknown[]).map(sText).filter(Boolean) : [],
+    location: sText(payload.location),
+    contacts: [{ name: sText(payload.contactName), phone: sText(payload.phone), email: sText(payload.email), position: '' }],
+    note, createdAt: '', createdBy: '',
+  };
+  await useNccStore.getState().save(ncc);
+  return name;
+}
 
 let seq = 0;
 const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36) + Math.random().toString(36).slice(2, 5);

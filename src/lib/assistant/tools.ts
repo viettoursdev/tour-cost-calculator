@@ -193,6 +193,24 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
     },
   },
   {
+    name: 'propose_supplier',
+    description: 'Đề xuất LƯU một nhà cung cấp/đối tác (tìm được trên web hoặc do người dùng cung cấp) vào danh sách NCC — người dùng bấm 1-chạm để lưu. CHỈ gọi khi người dùng muốn lưu/thêm 1 đối tác cụ thể. Dữ liệu thị trường CẦN XÁC MINH; nêu rõ nguồn trong note.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Tên NCC/đối tác' },
+        sectors: { type: 'array', items: { type: 'string' }, description: 'Lĩnh vực (vd "Khách sạn", "DMC", "Tổ chức sự kiện", "Vận chuyển")' },
+        location: { type: 'string', description: 'Khu vực/điểm đến' },
+        contactName: { type: 'string' },
+        phone: { type: 'string' },
+        email: { type: 'string' },
+        website: { type: 'string' },
+        note: { type: 'string', description: 'Ghi chú + NGUỒN (link web) + lưu ý xác minh' },
+      },
+      required: ['name'],
+    },
+  },
+  {
     name: 'propose_quote',
     description: 'Đề xuất một bản NHÁP báo giá để người dùng mở trong trình soạn thảo (1-chạm). CHỈ gọi khi người dùng muốn TẠO/SOẠN báo giá mới. Giá theo VND.',
     input_schema: {
@@ -479,7 +497,7 @@ async function toolPaymentDues(input: Record<string, unknown>): Promise<unknown>
 }
 
 /** Các tool "đề xuất nháp" — không đổi dữ liệu, chỉ báo cho UI dựng nút mở nháp. */
-export const PROPOSAL_TOOLS = new Set(['propose_itinerary', 'propose_quote']);
+export const PROPOSAL_TOOLS = new Set(['propose_itinerary', 'propose_quote', 'propose_supplier']);
 
 /** Thực thi một tool, trả chuỗi JSON cho tool_result. */
 export async function runAssistantTool(name: string, input: Record<string, unknown>): Promise<string> {
@@ -505,6 +523,9 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
         break;
       case 'propose_quote':
         result = { ok: true, message: `Đã chuẩn bị bản nháp báo giá "${str(input, 'title')}". Mời người dùng bấm nút "📋 Mở nháp báo giá" bên dưới.` };
+        break;
+      case 'propose_supplier':
+        result = { ok: true, message: `Đã chuẩn bị lưu NCC "${str(input, 'name')}". Mời người dùng bấm nút "💾 Lưu vào NCC" bên dưới (nhớ xác minh thông tin trước khi hợp tác).` };
         break;
       default: result = { error: `Tool không hỗ trợ: ${name}` };
     }
