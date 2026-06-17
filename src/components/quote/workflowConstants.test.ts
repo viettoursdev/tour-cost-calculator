@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
   workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
-  appendLog, roleOfStep, workflowBoardSummary,
+  appendLog, roleOfStep, workflowBoardSummary, cycleTimeMs,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -22,12 +22,29 @@ describe('defaultWorkflow', () => {
 });
 
 describe('workflowProgress', () => {
-  it('counts done steps and percentage', () => {
+  it('counts done steps with WEIGHTED percentage', () => {
     const w = defaultWorkflow();
     w[0].status = 'done'; w[1].status = 'done'; w[2].status = 'doing';
-    expect(workflowProgress(w)).toEqual({ done: 2, total: 13, pct: 15 });
+    // done = receive(w1) + quote(w2) = 3 / tổng trọng số 23 ≈ 13%
+    expect(workflowProgress(w)).toEqual({ done: 2, total: 13, pct: 13 });
   });
   it('handles empty', () => expect(workflowProgress([])).toEqual({ done: 0, total: 0, pct: 0 }));
+});
+
+describe('cycleTimeMs', () => {
+  it('measures from first Đang làm to last Hoàn tất in the log', () => {
+    const step = {
+      ...newWorkflowStep('X'),
+      log: [
+        { at: '2026-06-01T00:00:00.000Z', by: 'A', action: 'Trạng thái → Đang làm' },
+        { at: '2026-06-03T00:00:00.000Z', by: 'A', action: 'Trạng thái → Hoàn tất' },
+      ],
+    };
+    expect(cycleTimeMs(step)).toBe(2 * 24 * 3600 * 1000);
+  });
+  it('returns null without both milestones', () => {
+    expect(cycleTimeMs(newWorkflowStep('X'))).toBeNull();
+  });
 });
 
 describe('setStepStatus', () => {

@@ -48,6 +48,24 @@ export const WORKFLOW_OFFSETS: Record<WorkflowStepKey, number> = {
   final_payment: -7, close: -10,
 };
 
+/** Trọng số mỗi bước cho tiến độ có trọng số (bước nặng = ảnh hưởng tiến độ nhiều hơn). */
+export const WORKFLOW_WEIGHTS: Record<WorkflowStepKey, number> = {
+  receive: 1, quote: 2, confirm_service: 1, visa: 2, contract: 2, deposit_ncc: 3,
+  final_service: 1, comms: 1, deposit_pretrip: 3, departure: 2, acceptance: 1,
+  final_payment: 3, close: 1,
+};
+const weightOf = (s: WorkflowStep): number => {
+  const k = keyOf(s);
+  return (k && WORKFLOW_WEIGHTS[k]) || 1;
+};
+/** % hoàn thành CÓ TRỌNG SỐ (bước đã 'done' tính theo trọng số / tổng trọng số). */
+export function weightedPct(steps: WorkflowStep[]): number {
+  const wTotal = steps.reduce((a, s) => a + weightOf(s), 0);
+  if (!wTotal) return 0;
+  const wDone = steps.filter((s) => s.status === 'done').reduce((a, s) => a + weightOf(s), 0);
+  return Math.round((wDone / wTotal) * 100);
+}
+
 /** Phòng/bộ phận phụ trách mặc định mỗi bước — để gợi ý gán người phụ trách. */
 export const WORKFLOW_STEP_ROLE: Record<WorkflowStepKey, Role> = {
   receive: 'Sales', quote: 'Sales', confirm_service: 'Operations', visa: 'Operations',
@@ -143,14 +161,13 @@ export type WorkflowBoardSummary = {
 
 export function workflowBoardSummary(steps: WorkflowStep[], todayISO?: string): WorkflowBoardSummary {
   const total = steps.length;
-  const done = steps.filter((s) => s.status === 'done').length;
   const cur = steps.find((s) => s.status !== 'done');
   const today = todayISO ?? new Date().toISOString().slice(0, 10);
   const overdue = steps.filter((s) => s.dueDate && s.status !== 'done' && (s.dueDate as string) < today).length;
   return {
     ...(cur?.label ? { current: cur.label } : {}),
     ...(cur?.assignee ? { currentAssignee: cur.assignee } : {}),
-    donePct: total ? Math.round((done / total) * 100) : 0,
+    donePct: weightedPct(steps),
     total,
     overdue,
   };
@@ -167,11 +184,22 @@ export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null
   });
 }
 
-/** Tiến độ: số bước hoàn tất / tổng + phần trăm. */
+/** Tiến độ: số bước hoàn tất / tổng (đếm) + phần trăm CÓ TRỌNG SỐ. */
 export function workflowProgress(steps: WorkflowStep[]): { done: number; total: number; pct: number } {
-  const total = steps.length;
-  const done = steps.filter((s) => s.status === 'done').length;
-  return { done, total, pct: total ? Math.round((done / total) * 100) : 0 };
+  return { done: steps.filter((s) => s.status === 'done').length, total: steps.length, pct: weightedPct(steps) };
+}
+
+/** Thời gian xử lý 1 bước (ms) = từ lần chuyển 'Đang làm' đầu tiên → 'Hoàn tất' gần nhất.
+ *  Suy từ nhật ký; null nếu thiếu mốc. */
+export function cycleTimeMs(step: WorkflowStep): number | null {
+  const log = step.log ?? [];
+  const doingTag = `→ ${WORKFLOW_STATUS_META.doing.label}`;
+  const doneTag = `→ ${WORKFLOW_STATUS_META.done.label}`;
+  const start = log.find((l) => l.action.endsWith(doingTag));
+  const end = [...log].reverse().find((l) => l.action.endsWith(doneTag));
+  if (!start || !end) return null;
+  const a = Date.parse(start.at), b = Date.parse(end.at);
+  return Number.isNaN(a) || Number.isNaN(b) || b < a ? null : b - a;
 }
 
 /** Khoảng thời gian (ms) bao toàn bộ ngày của workflow (gồm hôm nay) cho Gantt. */

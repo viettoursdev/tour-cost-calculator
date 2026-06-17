@@ -7,7 +7,7 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import HistoryIcon from '@mui/icons-material/History';
-import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep } from './workflowConstants';
+import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs } from './workflowConstants';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
@@ -44,6 +44,11 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
   };
   const removeAtt = (i: number) => setS((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }));
   const logDesc = [...(s.log ?? [])].reverse(); // mới nhất lên đầu
+  const cycleMs = cycleTimeMs(s);
+  const cycleText = cycleMs == null ? null : (() => {
+    const h = Math.round(cycleMs / 3600000);
+    return h < 24 ? `${h} giờ` : `${Math.round((h / 24) * 10) / 10} ngày`;
+  })();
 
   // Phòng phụ trách gợi ý cho bước → đẩy người đúng phòng lên đầu danh sách chọn.
   const deptRole = roleOfStep(step);
@@ -112,6 +117,11 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               <input type="file" hidden multiple onChange={onPickFiles} />
             </Button>
           </Box>
+
+          {cycleText && (
+            <Chip size="small" color="success" variant="outlined" sx={{ alignSelf: 'flex-start' }}
+              label={`⏳ Thời gian xử lý: ${cycleText}`} />
+          )}
 
           {logDesc.length > 0 && (
             <Box>
