@@ -1,9 +1,10 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AppBar, Box, Button, Divider, ListItemIcon, ListItemText, Menu, MenuItem,
-  Stack, Tab, Tabs, TextField, Toolbar, Tooltip, Typography,
+  Stack, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
@@ -52,6 +53,45 @@ type Props = {
   onOpenSelector: () => void;
   onOpenSaveCloud: () => void;
 };
+
+type NavItem = { v: QuoteViewKey; label: string };
+type NavNode = NavItem | { group: string; items: NavItem[] };
+
+/** Nút điều hướng phẳng (tab đơn). */
+function NavTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <Button onClick={onClick} disableRipple
+      sx={{ textTransform: 'none', fontSize: 14, fontWeight: active ? 800 : 600, minHeight: 48, px: 1.75, borderRadius: 0,
+        color: active ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: active ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
+        whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+      {label}
+    </Button>
+  );
+}
+
+/** Nút nhóm điều hướng (mở menu các mục con). */
+function NavGroup({ label, items, view, onSelect }: { label: string; items: NavItem[]; view: QuoteViewKey; onSelect: (v: QuoteViewKey) => void }) {
+  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const activeItem = items.find((i) => i.v === view);
+  return (
+    <>
+      <Button onClick={(e) => setAnchor(e.currentTarget)} disableRipple endIcon={<ArrowDropDownIcon />}
+        sx={{ textTransform: 'none', fontSize: 14, fontWeight: activeItem ? 800 : 600, minHeight: 48, px: 1.75, borderRadius: 0,
+          color: activeItem ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: activeItem ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
+          whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+        {activeItem ? activeItem.label : label}
+      </Button>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+        {items.map((i) => (
+          <MenuItem key={i.v} selected={i.v === view} onClick={() => { onSelect(i.v); setAnchor(null); }}
+            sx={{ fontWeight: 600, fontSize: 14, color: i.v === view ? LEGACY.teal : undefined }}>
+            {i.label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
 
 /** Translucent "glass pill" used in the teal header band (legacy style). */
 function HeaderPill({ icon, children }: { icon: string; children: ReactNode }) {
@@ -229,32 +269,39 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
   // Unified nav tabs (legacy order + icons). DMC shows only Breakdown + history.
   const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
-  const TAB_DEFS: { v: QuoteViewKey; label: string }[] = isDMC
-    ? [
-        { v: 'cost', label: '📊 Bảng chi phí Breakdown' },
-        { v: 'history', label: '🕐 Lịch sử Breakdown' },
-      ]
+  const canCust = hasPerm(currentUser, 'manageCustomers');
+  const canNcc = hasPerm(currentUser, 'manageNCC');
+  const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
+  const item = (v: QuoteViewKey, label: string) => ({ v, label });
+  // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
+  const NAV: NavNode[] = isDMC
+    ? [item('cost', '📊 Bảng chi phí Breakdown'), item('history', '🕐 Lịch sử Breakdown')]
     : [
-        { v: 'home', label: '🏠 Hôm nay' },
-        { v: 'cost', label: '📊 Bảng báo giá' },
-        { v: 'summary', label: '💰 Tổng kết & Định giá' },
-        { v: 'dashboard', label: '📈 Dashboard biên lợi' },
-        { v: 'payment', label: '🧾 Quản lý thanh toán' },
-        { v: 'workflow', label: '🗂️ Quy trình vận hành' },
-        { v: 'pipeline', label: '🧲 Pipeline' },
-        { v: 'salesanalytics', label: '📊 Phân tích bán' },
-        { v: 'opsboard', label: '🧭 Điều phối' },
-        { v: 'departures', label: '📅 Lịch khởi hành' },
-        { v: 'payboard', label: '💰 Công nợ tổng' },
-        { v: 'flights', label: '✈️ Chuyến bay' },
-        { v: 'history', label: '🕐 Lịch sử báo giá' },
-        ...(canContract ? [{ v: 'contract' as QuoteViewKey, label: '📜 Hợp đồng' }] : []),
-        ...(hasPerm(currentUser, 'manageCustomers') ? [{ v: 'customer' as QuoteViewKey, label: '👥 Khách hàng' }] : []),
-        ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'ncc' as QuoteViewKey, label: '🏢 Nhà Cung Cấp' }] : []),
-        ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'nccProducts' as QuoteViewKey, label: '📦 Sản phẩm NCC' }] : []),
-        ...(currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'] ? [{ v: 'audit' as QuoteViewKey, label: '📋 Nhật ký' }] : []),
-      ];
-  const tabValue = TAB_DEFS.some((t) => t.v === view) ? view : false;
+        item('home', '🏠 Hôm nay'),
+        item('cost', '📊 Báo giá'),
+        item('summary', '💰 Tổng kết'),
+        { group: '🧲 Bán hàng', items: [
+          item('pipeline', '🧲 Pipeline bán hàng'),
+          item('salesanalytics', '📊 Phân tích bán hàng'),
+          item('history', '🕐 Lịch sử báo giá'),
+        ] },
+        { group: '🗂️ Vận hành', items: [
+          item('workflow', '🗂️ Quy trình vận hành'),
+          item('opsboard', '🧭 Điều phối'),
+          item('departures', '📅 Lịch khởi hành'),
+          item('payboard', '💰 Công nợ tổng'),
+          item('payment', '🧾 Quản lý thanh toán'),
+          item('flights', '✈️ Chuyến bay'),
+          item('dashboard', '📈 Dashboard biên lợi'),
+        ] },
+        { group: '📇 Danh mục', items: [
+          ...(canContract ? [item('contract', '📜 Hợp đồng')] : []),
+          ...(canCust ? [item('customer', '👥 Khách hàng')] : []),
+          ...(canNcc ? [item('ncc', '🏢 Nhà Cung Cấp')] : []),
+          ...(canNcc ? [item('nccProducts', '📦 Sản phẩm NCC')] : []),
+        ] },
+        ...(isMgr ? [item('audit', '📋 Nhật ký')] : []),
+      ].filter((n) => !('group' in n) || n.items.length > 0);
 
   return (
     <AppBar
@@ -396,36 +443,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         </Stack>
       </Box>
 
-      {/* ── Unified nav tab bar (legacy style: icons, underline, spacious) ── */}
-      <Tabs
-        value={tabValue}
-        onChange={(_, v) => setView(v as QuoteViewKey)}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{
-          px: 2,
-          minHeight: 48,
-          borderBottom: '1px solid rgba(20,150,140,0.12)',
-          '& .MuiTab-root': {
-            textTransform: 'none',
-            fontSize: 14,
-            fontWeight: 600,
-            minHeight: 48,
-            px: 2.25,
-            color: 'rgba(15,58,74,0.6)',
-          },
-          '& .MuiTab-root.Mui-selected': { color: LEGACY.teal, fontWeight: 800 },
-          '& .MuiTabs-indicator': {
-            height: 3,
-            borderRadius: '3px 3px 0 0',
-            backgroundColor: LEGACY.teal,
-          },
-        }}
-      >
-        {TAB_DEFS.map((t) => (
-          <Tab key={t.v} value={t.v} label={t.label} />
+      {/* ── Thanh điều hướng gom nhóm (tab phẳng + menu nhóm) ── */}
+      <Box sx={{ px: 1.5, display: 'flex', alignItems: 'stretch', gap: 0.25, overflowX: 'auto', borderBottom: '1px solid rgba(20,150,140,0.12)',
+        '&::-webkit-scrollbar': { height: 0 } }}>
+        {NAV.map((n, i) => ('group' in n
+          ? <NavGroup key={`g${i}`} label={n.group} items={n.items} view={view} onSelect={(v) => setView(v)} />
+          : <NavTab key={n.v} label={n.label} active={view === n.v} onClick={() => setView(n.v)} />
         ))}
-      </Tabs>
+      </Box>
 
       <Toolbar sx={{ flexWrap: 'wrap', gap: 1.5, py: 1, minHeight: 'auto' }}>
         <Box sx={{ flexGrow: 1 }} />
