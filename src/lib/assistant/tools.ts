@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { usePoiStore } from '@/stores/poiStore';
+import { useNccProductsStore } from '@/stores/nccProductsStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { permittedIndex, permittedData, visibleQuotesAll } from './data';
 import type { CloudQuoteEntry } from '@/types';
@@ -64,6 +65,18 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
       type: 'object',
       properties: { name: { type: 'string', description: 'Tên khách hàng (một phần cũng được)' } },
       required: ['name'],
+    },
+  },
+  {
+    name: 'find_suppliers',
+    description: 'Tìm & GỢI Ý NCC nội bộ phù hợp nhất theo nhu cầu (từ khoá/lĩnh vực/khu vực). Trả về NCC kèm lĩnh vực, khu vực, liên hệ, SỐ HỢP ĐỒNG đã ký (track record) và SỐ SẢN PHẨM có báo giá — đã xếp hạng ưu tiên đối tác đã hợp tác. Dùng khi cần chọn nhà cung cấp cho 1 hạng mục (khách sạn, xe, nhà hàng, DMC, event…). Nếu nội bộ chưa đủ, kết hợp web_search để tìm thêm trên thị trường.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Từ khoá nhu cầu (vd "khách sạn 4 sao Đà Nẵng", "DMC Thái Lan", "tổ chức gala")' },
+        sector: { type: 'string', description: 'Lĩnh vực cần lọc (tuỳ chọn)' },
+        location: { type: 'string', description: 'Khu vực/điểm đến cần lọc (tuỳ chọn)' },
+      },
     },
   },
   {
@@ -271,6 +284,45 @@ async function toolCustomerTours(input: Record<string, unknown>): Promise<unknow
   };
 }
 
+async function toolFindSuppliers(input: Record<string, unknown>): Promise<unknown> {
+  const q = normalizeVN(str(input, 'query'));
+  const sector = normalizeVN(str(input, 'sector'));
+  const location = normalizeVN(str(input, 'location'));
+  const data = permittedData();
+  const products = useNccProductsStore.getState().products;
+  const contracts = data.contracts;
+  const matches = data.suppliers.filter((s) => {
+    if (sector && !normalizeVN((s.sectors ?? []).join(' ')).includes(sector)) return false;
+    if (location && !normalizeVN(s.location ?? '').includes(location)) return false;
+    if (q) {
+      const hay = normalizeVN(`${s.name} ${(s.sectors ?? []).join(' ')} ${s.location ?? ''} ${s.note ?? ''}`);
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const rows = matches.map((s) => {
+    const sName = normalizeVN(s.name);
+    const prods = products.filter((p) => p.nccId === s.id || normalizeVN(p.nccName) === sName);
+    const cons = contracts.filter((c) => normalizeVN(c.partyB?.name ?? '').includes(sName) && sName.length > 2);
+    const c0 = s.contacts?.[0];
+    return {
+      id: s.id, name: s.name, sectors: s.sectors ?? [], location: s.location || null,
+      contact: c0 ? { name: c0.name || null, phone: c0.phone || null, email: c0.email || null } : null,
+      contractCount: cons.length, productCount: prods.length,
+      sampleProducts: prods.slice(0, 3).map((p) => ({
+        name: p.name, category: p.category,
+        price: p.prices?.[0] ? `${Math.round(p.prices[0].amount).toLocaleString('vi-VN')} ${p.prices[0].cur}/${p.prices[0].unit}` : null,
+      })),
+      note: s.note || undefined,
+    };
+  }).sort((a, b) => (b.contractCount - a.contractCount) || (b.productCount - a.productCount));
+  return {
+    count: rows.length,
+    note: 'NCC NỘI BỘ, xếp hạng ưu tiên đối tác đã ký hợp đồng (track record) rồi tới có báo giá. Nếu chưa đủ/không khớp, hãy dùng web_search tìm thêm trên thị trường và nêu rõ "cần xác minh".',
+    suppliers: rows.slice(0, 15),
+  };
+}
+
 async function toolSupplierUsage(input: Record<string, unknown>): Promise<unknown> {
   const q = normalizeVN(str(input, 'name'));
   if (!q) return { error: 'Thiếu tên nhà cung cấp.' };
@@ -437,6 +489,7 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
       case 'search_records': result = await toolSearch(input); break;
       case 'get_quote': result = await toolGetQuote(input); break;
       case 'customer_tours': result = await toolCustomerTours(input); break;
+      case 'find_suppliers': result = await toolFindSuppliers(input); break;
       case 'supplier_usage': result = await toolSupplierUsage(input); break;
       case 'pricing_stats': result = await toolPricingStats(input); break;
       case 'upcoming_departures': result = await toolUpcomingDepartures(input); break;
