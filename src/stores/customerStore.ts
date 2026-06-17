@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { fbSubscribeCustomers, fbPushCustomers } from '@/lib/firebase';
 import { useAuthStore } from './authStore';
-import type { Customer } from '@/types';
+import type { Customer, CustomerInteraction, CustomerInteractionType } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 
 type CustomerState = {
@@ -13,7 +13,14 @@ type CustomerState = {
   save: (form: Customer) => Promise<void>;
   importMany: (rows: Customer[]) => Promise<number>;
   delete: (id: string) => Promise<void>;
+  /** Ghi 1 lần chăm sóc khách (CRM timeline). */
+  addInteraction: (customerId: string, type: CustomerInteractionType, text: string) => Promise<void>;
+  /** Xoá 1 dòng chăm sóc. */
+  deleteInteraction: (customerId: string, interactionId: string) => Promise<void>;
 };
+
+let iseq = 0;
+const newInteractionId = () => 'ci' + Date.now().toString(36) + (iseq++).toString(36) + Math.random().toString(36).slice(2, 4);
 
 export const useCustomerStore = create<CustomerState>()(
   subscribeWithSelector((set, get) => ({
@@ -100,6 +107,29 @@ export const useCustomerStore = create<CustomerState>()(
       } finally {
         set({ syncing: false });
       }
+    },
+
+    addInteraction: async (customerId, type, text) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u || !text.trim()) return;
+      const entry: CustomerInteraction = { id: newInteractionId(), at: new Date().toISOString(), byU: u.u, byName: u.name, type, text: text.trim() };
+      const next = get().customers.map((c) =>
+        c.id === customerId ? { ...c, interactions: [...(c.interactions ?? []), entry], updatedAt: entry.at, updatedBy: u.name } : c);
+      set({ customers: next, syncing: true });
+      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      catch (e) { window.alert('❌ Lỗi ghi chăm sóc: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
+    },
+
+    deleteInteraction: async (customerId, interactionId) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return;
+      const next = get().customers.map((c) =>
+        c.id === customerId ? { ...c, interactions: (c.interactions ?? []).filter((i) => i.id !== interactionId) } : c);
+      set({ customers: next, syncing: true });
+      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      catch (e) { window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
     },
   })),
 );

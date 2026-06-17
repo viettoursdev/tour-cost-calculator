@@ -1,16 +1,26 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, IconButton, Paper, Stack, Typography,
+  Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, IconButton, MenuItem, Paper,
+  Select, Stack, TextField, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { fmtVND } from '@/components/quote/calc';
 import { QUOTE_STATUS_META } from '@/components/quote/constants';
-import type { Customer } from '@/types';
+import type { Customer, CustomerInteractionType } from '@/types';
+
+const ITYPE_META: Record<CustomerInteractionType, { label: string; icon: string }> = {
+  call: { label: 'Gọi điện', icon: '📞' },
+  email: { label: 'Email', icon: '✉️' },
+  meeting: { label: 'Gặp mặt', icon: '🤝' },
+  note: { label: 'Ghi chú', icon: '📝' },
+};
 
 const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
   <Paper variant="outlined" sx={{ px: 1.5, py: 1, flex: 1, minWidth: 110, textAlign: 'center' }}>
@@ -27,6 +37,18 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setView = useQuoteStore((s) => s.setView);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
+  // Bản LIVE từ store để timeline cập nhật ngay sau khi ghi.
+  const live = useCustomerStore((s) => s.customers.find((c) => c.id === customer.id));
+  const addInteraction = useCustomerStore((s) => s.addInteraction);
+  const deleteInteraction = useCustomerStore((s) => s.deleteInteraction);
+  const interactions = [...((live ?? customer).interactions ?? [])].reverse(); // mới nhất lên đầu
+  const [itype, setItype] = useState<CustomerInteractionType>('call');
+  const [itext, setItext] = useState('');
+  const submitInteraction = () => {
+    if (!itext.trim()) return;
+    void addInteraction(customer.id, itype, itext);
+    setItext('');
+  };
 
   const { tours, cloudIds, totalValue, totalOwing } = useMemo(() => {
     const all = [...quotes, ...dmcQuotes];
@@ -122,6 +144,36 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
               {linkedVisa.map((p) => <Chip key={p.id} size="small" variant="outlined" label={`🛂 ${p.name || p.code || p.id}`} />)}
             </Stack>
           </Box>
+        )}
+
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Chăm sóc khách hàng ({interactions.length})</Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 0.75, mb: 1 }} alignItems="flex-start">
+          <Select size="small" value={itype} onChange={(e) => setItype(e.target.value as CustomerInteractionType)} sx={{ minWidth: 120 }}>
+            {(Object.keys(ITYPE_META) as CustomerInteractionType[]).map((t) => <MenuItem key={t} value={t}>{ITYPE_META[t].icon} {ITYPE_META[t].label}</MenuItem>)}
+          </Select>
+          <TextField size="small" fullWidth multiline maxRows={3} value={itext} onChange={(e) => setItext(e.target.value)}
+            placeholder="Nội dung trao đổi với khách…"
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitInteraction(); }} />
+          <Button variant="contained" disabled={!itext.trim()} onClick={submitInteraction} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', whiteSpace: 'nowrap' }}>Ghi nhận</Button>
+        </Stack>
+        {interactions.length === 0 ? (
+          <Typography variant="caption" color="text.disabled">Chưa có lịch sử chăm sóc. Ghi lại cuộc gọi/email/gặp để theo dõi.</Typography>
+        ) : (
+          <Stack spacing={0.75}>
+            {interactions.map((it) => (
+              <Stack key={it.id} direction="row" spacing={1} alignItems="flex-start" sx={{ borderLeft: '2px solid rgba(20,150,140,0.3)', pl: 1 }}>
+                <Typography fontSize={15} sx={{ lineHeight: 1.4 }}>{ITYPE_META[it.type].icon}</Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography fontSize={13} sx={{ whiteSpace: 'pre-wrap' }}>{it.text}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {ITYPE_META[it.type].label} · {it.byName} · {new Date(it.at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </Typography>
+                </Box>
+                <IconButton size="small" color="error" onClick={() => { if (window.confirm('Xoá dòng chăm sóc này?')) void deleteInteraction(customer.id, it.id); }}><DeleteOutlineIcon fontSize="small" /></IconButton>
+              </Stack>
+            ))}
+          </Stack>
         )}
       </DialogContent>
       <Box sx={{ p: 1.5, textAlign: 'right' }}>
