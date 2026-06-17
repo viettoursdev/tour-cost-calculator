@@ -90,11 +90,39 @@ export const keyByLabel = (label: string): WorkflowStepKey | undefined => LABEL_
 /** Khoá hiệu lực của bước: key đã lưu, hoặc suy từ nhãn. */
 export const keyOf = (s: WorkflowStep): WorkflowStepKey | undefined => (s.key as WorkflowStepKey | undefined) ?? keyByLabel(s.label);
 
-/** Quy trình mặc định: 13 bước (todo), kèm khoá + hạn mặc định. */
-export const defaultWorkflow = (): WorkflowStep[] => WORKFLOW_DEFAULT_STEPS.map((l, i) => {
-  const key = WORKFLOW_STEP_KEYS[i];
-  return { ...newWorkflowStep(l), key, dueOffset: WORKFLOW_OFFSETS[key] };
-});
+/** Mẫu quy trình theo loại tour. */
+export type WorkflowPreset = 'standard' | 'domestic' | 'mice';
+export const WORKFLOW_PRESET_META: Record<WorkflowPreset, { label: string; desc: string }> = {
+  standard: { label: 'Tiêu chuẩn (nước ngoài)', desc: '13 bước đầy đủ, gồm visa & hồ sơ' },
+  domestic: { label: 'Nội địa', desc: 'Bỏ bước visa, hồ sơ' },
+  mice: { label: 'MICE / Sự kiện', desc: 'Thêm khảo sát địa điểm, dàn dựng, điều hành sự kiện' },
+};
+
+/** 1 bước mặc định theo khoá ổn định. */
+const stepOfKey = (k: WorkflowStepKey): WorkflowStep => {
+  const i = WORKFLOW_STEP_KEYS.indexOf(k);
+  return { ...newWorkflowStep(WORKFLOW_DEFAULT_STEPS[i]), key: k, dueOffset: WORKFLOW_OFFSETS[k] };
+};
+/** Bước riêng của mẫu (không có khoá auto-sync) — quản lý tay. */
+const customStep = (label: string, dueOffset: number): WorkflowStep => ({ ...newWorkflowStep(label), dueOffset });
+
+/** Quy trình mặc định theo mẫu (mặc định 'standard' = 13 bước đầy đủ). */
+export const defaultWorkflow = (preset: WorkflowPreset = 'standard'): WorkflowStep[] => {
+  if (preset === 'domestic') {
+    return WORKFLOW_STEP_KEYS.filter((k) => k !== 'visa').map(stepOfKey);
+  }
+  if (preset === 'mice') {
+    const out: WorkflowStep[] = [];
+    for (const k of WORKFLOW_STEP_KEYS) {
+      out.push(stepOfKey(k));
+      if (k === 'confirm_service') out.push(customStep('Khảo sát địa điểm (site inspection)', 30));
+      if (k === 'deposit_ncc') out.push(customStep('Dàn dựng & tổng duyệt chương trình', 2));
+      if (k === 'departure') out.push(customStep('Điều hành sự kiện / Gala chính', 0));
+    }
+    return out;
+  }
+  return WORKFLOW_STEP_KEYS.map(stepOfKey);
+};
 
 // ── Tự đồng bộ trạng thái từ dữ liệu thật ──
 export interface WorkflowSignalCtx {

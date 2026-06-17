@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Badge, Box, Button, Chip, LinearProgress, Paper, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+  Badge, Box, Button, Chip, LinearProgress, ListItemText, Menu, MenuItem, Paper, Stack,
+  ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -21,7 +22,7 @@ import { buildAllItems, buildSourceItems, computePaymentTotals, slugifyTourKey }
 import { getCATS } from './constants';
 import {
   appendLog, applySignals, defaultWorkflow, fillDueDates, newWorkflowStep, setStepStatus, suggestionFor,
-  workflowProgress, workflowSignals, WORKFLOW_STATUS_META,
+  workflowProgress, workflowSignals, WORKFLOW_STATUS_META, WORKFLOW_PRESET_META, type WorkflowPreset,
 } from './workflowConstants';
 import { WorkflowKanban } from './WorkflowKanban';
 import { WorkflowList } from './WorkflowList';
@@ -51,9 +52,13 @@ export function WorkflowView() {
 
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) as Mode) || 'kanban');
   const [editing, setEditing] = useState<WorkflowStep | null>(null);
+  const [presetEl, setPresetEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
-    if (!useQuoteStore.getState().draft.workflow?.length) setWorkflow(defaultWorkflow());
+    // Seed lần đầu: nội địa bỏ visa, còn lại dùng mẫu tiêu chuẩn.
+    if (!useQuoteStore.getState().draft.workflow?.length) {
+      setWorkflow(defaultWorkflow(draft.template === 'domestic' ? 'domestic' : 'standard'));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -126,9 +131,10 @@ export function WorkflowView() {
   };
   const del = (id: string) => { if (window.confirm('Xoá bước này khỏi quy trình?')) setWorkflow(steps.filter((s) => s.id !== id)); };
   const add = () => setWorkflow([...steps, newWorkflowStep()]);
-  const resetDefault = () => {
-    if (window.confirm('Khôi phục về 13 bước mặc định? Mọi bước đã thêm/sửa và trạng thái hiện tại sẽ bị thay thế.')) {
-      setWorkflow(defaultWorkflow());
+  const applyPreset = (preset: WorkflowPreset) => {
+    setPresetEl(null);
+    if (window.confirm(`Áp mẫu "${WORKFLOW_PRESET_META[preset].label}"? Mọi bước đã thêm/sửa và trạng thái hiện tại sẽ bị thay thế.`)) {
+      setWorkflow(defaultWorkflow(preset));
     }
   };
   const reorder = (from: number, to: number) => { const a = [...steps]; const [m] = a.splice(from, 1); a.splice(to, 0, m); setWorkflow(a); };
@@ -183,9 +189,17 @@ export function WorkflowView() {
             <Tooltip title="Xuất checklist quy trình ra PDF để in / bàn giao">
               <Button variant="outlined" size="small" startIcon={<PictureAsPdfIcon />} onClick={exportPdf} sx={{ whiteSpace: 'nowrap' }}>Xuất PDF</Button>
             </Tooltip>
-            <Tooltip title="Khôi phục về 13 bước quy trình mặc định">
-              <Button variant="outlined" size="small" color="warning" startIcon={<RestartAltIcon />} onClick={resetDefault} sx={{ whiteSpace: 'nowrap' }}>Khôi phục mặc định</Button>
+            <Tooltip title="Áp một mẫu quy trình theo loại tour (thay toàn bộ bước hiện tại)">
+              <Button variant="outlined" size="small" color="warning" startIcon={<RestartAltIcon />} onClick={(e) => setPresetEl(e.currentTarget)} sx={{ whiteSpace: 'nowrap' }}>Mẫu quy trình</Button>
             </Tooltip>
+            <Menu anchorEl={presetEl} open={!!presetEl} onClose={() => setPresetEl(null)}>
+              {(Object.keys(WORKFLOW_PRESET_META) as WorkflowPreset[]).map((p) => (
+                <MenuItem key={p} onClick={() => applyPreset(p)} sx={{ maxWidth: 320 }}>
+                  <ListItemText primary={WORKFLOW_PRESET_META[p].label} secondary={WORKFLOW_PRESET_META[p].desc}
+                    primaryTypographyProps={{ fontWeight: 700, fontSize: 14 }} secondaryTypographyProps={{ fontSize: 12 }} />
+                </MenuItem>
+              ))}
+            </Menu>
             <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={add} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', whiteSpace: 'nowrap' }}>Thêm bước</Button>
           </Stack>
         </Stack>

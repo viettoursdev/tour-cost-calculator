@@ -210,6 +210,19 @@ describe('workflowBoardSummary', () => {
   });
 });
 
+describe('defaultWorkflow presets', () => {
+  it('standard = 13 bước; domestic bỏ visa; mice thêm 3 bước riêng', () => {
+    expect(defaultWorkflow()).toHaveLength(13);
+    const dom = defaultWorkflow('domestic');
+    expect(dom).toHaveLength(12);
+    expect(dom.some((s) => s.key === 'visa')).toBe(false);
+    const mice = defaultWorkflow('mice');
+    expect(mice).toHaveLength(16);
+    expect(mice.some((s) => s.label.includes('Khảo sát địa điểm'))).toBe(true);
+    expect(mice.filter((s) => !s.key)).toHaveLength(3); // 3 bước riêng không có khoá
+  });
+});
+
 describe('roleOfStep', () => {
   it('maps default steps to a department, undefined for custom steps', () => {
     const wf = defaultWorkflow();
