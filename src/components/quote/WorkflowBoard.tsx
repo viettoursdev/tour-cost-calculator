@@ -39,18 +39,20 @@ export function WorkflowBoard() {
 
   // Cập nhật chỉ số quy trình cho báo giá cũ (chưa có workflowSummary trong index).
   const runBackfill = async () => {
-    const missing = visibleQuotes().filter((q) => !q.workflowSummary);
+    const missing = visibleQuotes().filter((q) => !q.workflowSummary || !q.departDate);
     if (!missing.length) { window.alert('Tất cả báo giá đã có chỉ số quy trình.'); return; }
-    if (!window.confirm(`Quét ${missing.length} báo giá để cập nhật chỉ số quy trình? (đọc dữ liệu từng báo giá, có thể mất chút thời gian)`)) return;
+    if (!window.confirm(`Quét ${missing.length} báo giá để cập nhật chỉ số quy trình & ngày khởi hành? (đọc dữ liệu từng báo giá, có thể mất chút thời gian)`)) return;
     setBackfilling(true);
     try {
-      const updates: Record<string, { workflowDue: ReturnType<typeof workflowDueSummary>; workflowSummary: ReturnType<typeof workflowBoardSummary> }> = {};
+      const updates: Record<string, { workflowDue?: ReturnType<typeof workflowDueSummary>; workflowSummary?: ReturnType<typeof workflowBoardSummary>; departDate?: string }> = {};
       for (const q of missing) {
         const proj = await fbGetQuoteProject(q.cloudId).catch(() => null);
-        const steps = proj?.currentState?.workflow;
-        if (steps && steps.length) {
-          updates[q.cloudId] = { workflowDue: workflowDueSummary(steps), workflowSummary: workflowBoardSummary(steps) };
-        }
+        const state = proj?.currentState;
+        const steps = state?.workflow;
+        const upd: { workflowDue?: ReturnType<typeof workflowDueSummary>; workflowSummary?: ReturnType<typeof workflowBoardSummary>; departDate?: string } = {};
+        if (steps && steps.length) { upd.workflowDue = workflowDueSummary(steps); upd.workflowSummary = workflowBoardSummary(steps); }
+        if (state?.info?.startDate) upd.departDate = state.info.startDate;
+        if (Object.keys(upd).length) updates[q.cloudId] = upd;
       }
       const n = await fbBackfillWorkflowIndex(updates);
       window.alert(n ? `✅ Đã cập nhật chỉ số cho ${n} báo giá.` : 'Không có báo giá nào có quy trình để cập nhật.');

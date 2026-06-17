@@ -19,6 +19,7 @@ import { NccProductView } from '@/components/ncc/NccProductView';
 import { FlightView } from './FlightView';
 import { WorkflowView } from './WorkflowView';
 import { WorkflowBoard } from './WorkflowBoard';
+import { DepartureCalendar } from './DepartureCalendar';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 
@@ -84,6 +85,7 @@ export function QuoteView() {
             {view === 'flights' && <FlightView />}
             {view === 'workflow' && <WorkflowView />}
             {view === 'opsboard' && <WorkflowBoard />}
+            {view === 'departures' && <DepartureCalendar />}
             {view === 'history' && <QuoteHistoryView />}
             {view === 'contract' && <ContractView />}
             {view === 'customer' && <CustomerView />}

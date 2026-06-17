@@ -244,6 +244,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         { v: 'payment', label: '🧾 Quản lý thanh toán' },
         { v: 'workflow', label: '🗂️ Quy trình vận hành' },
         { v: 'opsboard', label: '🧭 Điều phối' },
+        { v: 'departures', label: '📅 Lịch khởi hành' },
         { v: 'flights', label: '✈️ Chuyến bay' },
         { v: 'history', label: '🕐 Lịch sử báo giá' },
         ...(canContract ? [{ v: 'contract' as QuoteViewKey, label: '📜 Hợp đồng' }] : []),

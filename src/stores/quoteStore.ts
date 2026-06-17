@@ -48,7 +48,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard' | 'departures';
 
 type QuoteState = {
   draft: QuoteDraft;
@@ -678,6 +678,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              ...(draft.info.startDate ? { departDate: draft.info.startDate } : {}),
               ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow), workflowSummary: workflowBoardSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
               ...(attachments ? { attachments } : {}),

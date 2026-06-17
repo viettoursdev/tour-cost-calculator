@@ -206,6 +206,7 @@ type SaveEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  departDate?: string;
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
   collaborators?: Collaborator[];
@@ -242,6 +243,7 @@ function makeQuoteHistoryApi(
 
       const optionalFields: Partial<CloudQuoteEntry> = {};
       if (entry.status !== undefined) optionalFields.status = entry.status;
+      if (entry.departDate !== undefined) optionalFields.departDate = entry.departDate;
       if (entry.workflowDue !== undefined) optionalFields.workflowDue = entry.workflowDue;
       if (entry.workflowSummary !== undefined) optionalFields.workflowSummary = entry.workflowSummary;
       if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;
@@ -391,7 +393,7 @@ function makeQuoteHistoryApi(
     /** Backfill chỉ số quy trình (workflowDue/workflowSummary) cho nhiều báo giá
      *  trong index — đọc 1 lần, ghi 1 lần. Trả về số bản ghi được cập nhật. */
     async fbBackfillWorkflowIndex(
-      updates: Record<string, Pick<CloudQuoteEntry, 'workflowDue' | 'workflowSummary'>>,
+      updates: Record<string, Pick<CloudQuoteEntry, 'workflowDue' | 'workflowSummary' | 'departDate'>>,
     ): Promise<number> {
       const ids = Object.keys(updates);
       if (!ids.length) return 0;

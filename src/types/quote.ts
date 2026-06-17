@@ -228,6 +228,8 @@ export type CloudQuoteEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  /** Ngày khởi hành (ISO yyyy-mm-dd) — index cho Lịch khởi hành. */
+  departDate?: string;
   /** Tóm tắt bước quy trình có hạn & chưa xong — để nhắc deadline toàn hệ thống. */
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   /** Tóm tắt tiến độ quy trình cho Bảng điều phối toàn hệ thống. */
