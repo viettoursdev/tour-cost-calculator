@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select has_table('public','quote_flights','flights exist');
+select has_table('public','quote_flight_segments','segments exist');
+select has_table('public','quote_workflow_steps','workflow steps exist');
+select has_table('public','quote_workflow_logs','workflow logs exist');
+select fk_ok('public','quote_flight_segments','flight_id','public','quote_flights','id');
+select fk_ok('public','quote_workflow_logs','step_id','public','quote_workflow_steps','id');
+select * from finish();
+rollback;
