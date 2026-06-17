@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Box, Button, Chip, LinearProgress, Paper, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+  TableRow, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -31,6 +31,8 @@ export function WorkflowBoard() {
   const setView = useQuoteStore((s) => s.setView);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [scope, setScope] = useState<Scope>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -131,6 +133,35 @@ export function WorkflowBoard() {
         <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', color: 'text.disabled' }}>
           Không có báo giá nào khớp. Quy trình được tổng hợp khi báo giá được <b>lưu cloud</b> (tab Quy trình → Lưu).
         </Paper>
+      ) : isMobile ? (
+        <Stack spacing={1}>
+          {rows.map((q) => {
+            const wf = q.workflowSummary!;
+            const due = nextDue(q);
+            const dl = due ? deadlineMeta(due.dueDate, false) : null;
+            const stMeta = q.status ? QUOTE_STATUS_META[q.status] : null;
+            return (
+              <Paper key={q.cloudId} variant="outlined" sx={{ p: 1.5, cursor: 'pointer', borderLeft: `4px solid ${wf.overdue ? '#dc3250' : '#14a08c'}` }} onClick={() => void open(q)}>
+                <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 0.5 }}>
+                  <Typography fontWeight={700} fontSize={13.5} sx={{ flex: 1, minWidth: 0 }}>{q.name}</Typography>
+                  {stMeta && <Chip size="small" label={stMeta.label} sx={{ height: 18, bgcolor: stMeta.color + '22', color: stMeta.color, fontWeight: 700 }} />}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {q.quoteCode ? `${q.quoteCode} · ` : ''}{q.customerName || q.createdByName}
+                </Typography>
+                <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                  ▶ {wf.current ?? '— hoàn tất —'}{wf.currentAssignee ? ` · 👤 ${nameOf(wf.currentAssignee)}` : ''}
+                </Typography>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 0.75 }}>
+                  <LinearProgress variant="determinate" value={wf.donePct} sx={{ flex: 1, height: 7, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: wf.donePct === 100 ? '#27ae60' : '#14a08c' } }} />
+                  <Typography variant="caption" fontWeight={700}>{wf.donePct}%</Typography>
+                  {wf.overdue > 0 && <Chip size="small" color="error" label={`${wf.overdue} trễ`} sx={{ height: 18, fontWeight: 700 }} />}
+                </Stack>
+                {dl && <Typography variant="caption" sx={{ color: dl.color, fontWeight: 700, mt: 0.5, display: 'block' }}>⏱ {dl.text}{due?.assignee ? ` · ${nameOf(due.assignee)}` : ''}</Typography>}
+              </Paper>
+            );
+          })}
+        </Stack>
       ) : (
         <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
           <Table size="small" sx={{ minWidth: 760, '& td, & th': { borderColor: 'rgba(0,0,0,0.06)' } }}>

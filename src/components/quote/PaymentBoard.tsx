@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Box, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableFooter, TableHead,
-  TableRow, TextField, ToggleButton, Tooltip, Typography,
+  TableRow, TextField, ToggleButton, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -32,6 +32,8 @@ export function PaymentBoard() {
   const setView = useQuoteStore((s) => s.setView);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [filter, setFilter] = useState<Filter>('owing');
   const [search, setSearch] = useState('');
   const [backfilling, setBackfilling] = useState(false);
@@ -113,6 +115,32 @@ export function PaymentBoard() {
         <Paper variant="outlined" sx={{ p: 5, textAlign: 'center', color: 'text.disabled' }}>
           Không có công nợ khớp bộ lọc. Số liệu cập nhật khi mở tab Thanh toán của báo giá (hoặc bấm “Tổng hợp”).
         </Paper>
+      ) : isMobile ? (
+        <Stack spacing={1}>
+          {rows.map((q) => {
+            const p = q.paymentSummary!;
+            const overdue = isOverdue(q);
+            const pct = p.payable > 0 ? Math.round((p.paid / p.payable) * 100) : 0;
+            return (
+              <Paper key={q.cloudId} variant="outlined" sx={{ p: 1.5, cursor: 'pointer', borderLeft: `4px solid ${overdue ? '#dc3250' : '#14a08c'}` }} onClick={() => void open(q)}>
+                <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Typography fontWeight={700} fontSize={13.5} sx={{ flex: 1, minWidth: 0 }}>{q.name}</Typography>
+                  {q.departDate && <Chip size="small" variant={overdue ? 'filled' : 'outlined'} color={overdue ? 'error' : 'default'}
+                    label={`${overdue ? '⚠ ' : ''}${new Date(q.departDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' })}`} sx={{ height: 18, fontWeight: 700 }} />}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{q.quoteCode ? `${q.quoteCode} · ` : ''}{q.customerName || q.createdByName}</Typography>
+                <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.75 }}>
+                  <Typography variant="caption">Phải trả <b>{fmtVND(p.payable)}</b></Typography>
+                  <Typography variant="caption" sx={{ color: '#27ae60' }}>Đã trả {fmtVND(p.paid)} · {pct}%</Typography>
+                </Stack>
+                <Typography fontSize={13} fontWeight={800} sx={{ color: p.remaining > 0 ? '#dc3250' : 'text.secondary', mt: 0.25 }}>Còn phải trả: {fmtVND(p.remaining)}</Typography>
+              </Paper>
+            );
+          })}
+          <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'rgba(20,150,140,0.06)' }}>
+            <Typography fontSize={13} fontWeight={800}>Tổng còn phải trả: <span style={{ color: '#dc3250' }}>{fmtVND(sum.remaining)}</span> / {fmtVND(sum.payable)}</Typography>
+          </Paper>
+        </Stack>
       ) : (
         <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
           <Table size="small" sx={{ minWidth: 720, '& td, & th': { borderColor: 'rgba(0,0,0,0.06)' } }}>
