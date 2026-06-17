@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewAll } from '@/auth/ROLES';
 import { CustomerModal } from './CustomerModal';
+import { Customer360 } from './Customer360';
 import { ImportListModal } from '@/components/common/ImportListModal';
 import { customerToNcc } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
@@ -42,6 +43,7 @@ export function CustomerView() {
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
+  const [view360, setView360] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useCustomerStore((s) => s.importMany);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
@@ -202,11 +204,13 @@ export function CustomerView() {
               onEdit={() => setModal({ customer: c })}
               onDelete={() => setDeleteTarget(c)}
               onConvert={() => setConvertTarget(c)}
-              onClick={() => setModal({ customer: c })}
+              onClick={() => setView360(c)}
             />
           ))}
         </Box>
       )}
+
+      {view360 && <Customer360 customer={view360} onClose={() => setView360(null)} />}
 
       {/* Modal */}
       {modal !== null && (
