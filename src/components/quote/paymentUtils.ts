@@ -95,3 +95,16 @@ export function computePaymentTotals(
   });
   return { totalCost, totalPaid, totalScheduled, totalRemaining: totalCost - totalPaid };
 }
+
+/** Tóm tắt công nợ phải trả NCC của 1 tour (để index cho Bảng công nợ tổng). */
+export interface PaymentSummaryIndex { payable: number; paid: number; remaining: number }
+export function computePaymentSummary(
+  draft: QuoteDraft,
+  activeCats: readonly CategoryDef[],
+  payments: Record<string, PaymentRecord>,
+  customItems: CustomCostItem[],
+): PaymentSummaryIndex {
+  const all = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems);
+  const t = computePaymentTotals(all, payments);
+  return { payable: t.totalCost, paid: t.totalPaid, remaining: t.totalRemaining };
+}

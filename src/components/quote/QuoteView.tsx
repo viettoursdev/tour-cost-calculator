@@ -20,6 +20,7 @@ import { FlightView } from './FlightView';
 import { WorkflowView } from './WorkflowView';
 import { WorkflowBoard } from './WorkflowBoard';
 import { DepartureCalendar } from './DepartureCalendar';
+import { PaymentBoard } from './PaymentBoard';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
 
@@ -86,6 +87,7 @@ export function QuoteView() {
             {view === 'workflow' && <WorkflowView />}
             {view === 'opsboard' && <WorkflowBoard />}
             {view === 'departures' && <DepartureCalendar />}
+            {view === 'payboard' && <PaymentBoard />}
             {view === 'history' && <QuoteHistoryView />}
             {view === 'contract' && <ContractView />}
             {view === 'customer' && <CustomerView />}

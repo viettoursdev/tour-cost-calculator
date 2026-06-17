@@ -6,6 +6,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import { fbSetQuotePaymentSummary } from '@/lib/firebase';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
@@ -62,6 +63,21 @@ export function PaymentView() {
   const trackedItems = allItems.filter((i) => i.tracked);
   const totals = computePaymentTotals(allItems, payments);
   const untracked = allItems.length - trackedItems.length;
+
+  // Index tóm tắt công nợ vào lịch sử báo giá (cho Bảng công nợ tổng) — debounce,
+  // chỉ khi báo giá đã lưu cloud và số liệu thay đổi.
+  const cloudId = draft.currentQuoteId;
+  const payKey = cloudId ? `${Math.round(totals.totalCost)}|${Math.round(totals.totalPaid)}` : '';
+  useEffect(() => {
+    if (!cloudId || !payKey) return;
+    const t = window.setTimeout(() => {
+      void fbSetQuotePaymentSummary(cloudId, {
+        payable: Math.round(totals.totalCost), paid: Math.round(totals.totalPaid), remaining: Math.round(totals.totalRemaining),
+      }).catch(() => { /* index không chặn UI */ });
+    }, 1200);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudId, payKey]);
 
   const grouped = useMemo(() => {
     const map = new Map<CategoryId, { label: string; icon: string; color: string; items: typeof trackedItems }>();

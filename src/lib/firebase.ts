@@ -409,6 +409,32 @@ function makeQuoteHistoryApi(
       return n;
     },
 
+    /** Cập nhật tóm tắt công nợ của 1 báo giá (theo cloudId). */
+    async fbSetEntryPaymentSummary(cloudId: string, paymentSummary: CloudQuoteEntry['paymentSummary']): Promise<void> {
+      const snap = await getDoc(historyDoc);
+      if (!snap.exists()) return;
+      const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+      const i = quotes.findIndex((q) => q.cloudId === cloudId);
+      if (i < 0) return;
+      quotes[i] = { ...quotes[i], paymentSummary };
+      await setDoc(historyDoc, { quotes });
+    },
+
+    /** Backfill tóm tắt công nợ cho nhiều báo giá — đọc 1 lần, ghi 1 lần. */
+    async fbBackfillPaymentIndex(updates: Record<string, CloudQuoteEntry['paymentSummary']>): Promise<number> {
+      const ids = Object.keys(updates);
+      if (!ids.length) return 0;
+      const snap = await getDoc(historyDoc);
+      if (!snap.exists()) return 0;
+      const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+      let n = 0;
+      for (let i = 0; i < quotes.length; i++) {
+        if (updates[quotes[i].cloudId] !== undefined) { quotes[i] = { ...quotes[i], paymentSummary: updates[quotes[i].cloudId] }; n++; }
+      }
+      if (n) await setDoc(historyDoc, { quotes });
+      return n;
+    },
+
     /** Cập nhật nhanh trạng thái báo giá lên bản ghi lịch sử (theo cloudId). */
     async fbSetEntryStatus(cloudId: string, status: QuoteStatus): Promise<void> {
       const snap = await getDoc(historyDoc);
@@ -432,6 +458,8 @@ export const fbGetQuoteProject       = _regular.fbGetQuoteProject;
 export const fbSetRegularEntryLink   = _regular.fbSetEntryLink;
 export const fbSetQuoteStatus        = _regular.fbSetEntryStatus;
 export const fbBackfillWorkflowIndex = _regular.fbBackfillWorkflowIndex;
+export const fbSetQuotePaymentSummary = _regular.fbSetEntryPaymentSummary;
+export const fbBackfillPaymentIndex  = _regular.fbBackfillPaymentIndex;
 
 const _dmc = makeQuoteHistoryApi(DMC_QUOTE_HISTORY_DOC, dmcQuoteProjectDoc);
 export const fbSubscribeDMCQuoteHistory = _dmc.fbSubscribeQuoteHistory;
@@ -678,6 +706,17 @@ export async function fbSaveTourPayments(
     updatedAt: new Date().toISOString(),
     updatedBy: savedBy || 'unknown',
   });
+}
+
+/** Đọc 1 lần payment doc của tour (cho backfill công nợ). */
+export async function fbGetTourPayments(tourKey: string): Promise<TourPayments | null> {
+  const snap = await getDoc(tourPaymentsDoc(tourKey));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    payments: (data.payments ?? {}) as Record<string, PaymentRecord>,
+    customItems: (data.customItems ?? []) as CustomCostItem[],
+  };
 }
 
 /**

@@ -234,6 +234,8 @@ export type CloudQuoteEntry = {
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   /** Tóm tắt tiến độ quy trình cho Bảng điều phối toàn hệ thống. */
   workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
+  /** Tóm tắt công nợ phải trả NCC (VND) — cho Bảng công nợ tổng. */
+  paymentSummary?: { payable: number; paid: number; remaining: number };
   createdByUsername: string;
   createdByName: string;
   collaborators: Collaborator[];
