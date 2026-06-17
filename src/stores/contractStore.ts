@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { fbSubscribeContracts, fbPushContracts } from '@/lib/firebase';
+import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import type { Contract, ContractPayment } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
@@ -65,6 +66,7 @@ export const useContractStore = create<ContractState>()(
       set({ contracts: next, syncing: true });
       try {
         await fbPushContracts(next, { name: u.name, role: u.role });
+        logAudit(isNew ? 'create' : 'update', 'Hợp đồng', saved.tourName || saved.id);
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -75,10 +77,12 @@ export const useContractStore = create<ContractState>()(
     delete: async (id) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
+      const target = get().contracts.find((c) => c.id === id);
       const next = get().contracts.filter((c) => c.id !== id);
       set({ contracts: next, syncing: true });
       try {
         await fbPushContracts(next, { name: u.name, role: u.role });
+        logAudit('delete', 'Hợp đồng', target?.tourName || id);
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
       } finally {

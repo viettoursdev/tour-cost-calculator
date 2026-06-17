@@ -15,6 +15,7 @@ import {
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
 import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/workflowConstants';
+import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
@@ -48,7 +49,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard' | 'departures' | 'payboard';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard' | 'departures' | 'payboard' | 'audit';
 
 type QuoteState = {
   draft: QuoteDraft;
@@ -378,6 +379,7 @@ export const useQuoteStore = create<QuoteState>()(
           lastFxPushAt = at;
           writeFxRatesLS(clean);
           set({ syncedRates: clean, fxSyncedAt: at, fxSyncedBy: by });
+          logAudit('update', 'Tỷ giá đồng bộ', 'Bảng tỷ giá toàn hệ thống');
         },
 
         // "Lưu tỷ giá": ghim tỷ giá hiện tại vào báo giá đang mở (persist local; sẽ
@@ -690,6 +692,7 @@ export const useQuoteStore = create<QuoteState>()(
           );
           await _saveS(cloudId, draft, note, { name: u.name, role: u.role });
           set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId } }));
+          logAudit(isNew ? 'create' : 'update', isDmc ? 'Breakdown DMC' : 'Báo giá', entry.name, entry.quoteCode);
 
           // "Lưu cả hai cùng lúc": khi lưu DMC breakdown có gắn báo giá nước
           // ngoài, ghi ngược liên kết lên bản ghi báo giá đó (non-blocking — vẫn
@@ -711,7 +714,10 @@ export const useQuoteStore = create<QuoteState>()(
         deleteCloud: async (id, cloudId) => {
           const isDmc = get().draft.template === 'dmc';
           const _del = isDmc ? fbDeleteDMCQuote : fbDeleteQuote;
+          const hist = useQuoteHistoryStore.getState();
+          const ent = (isDmc ? hist.dmcQuotes : hist.quotes).find((q) => q.cloudId === cloudId);
           await _del(id, cloudId);
+          logAudit('delete', isDmc ? 'Breakdown DMC' : 'Báo giá', ent?.name ?? cloudId, ent?.quoteCode);
           const { draft } = get();
           if (draft.currentQuoteId === cloudId) {
             set({ draft: { ...draft, currentQuoteId: null } });

@@ -9,3 +9,4 @@ export * from './payment';
 export * from './itinerary';
 export * from './menu';
 export * from './visa';
+export * from './audit';

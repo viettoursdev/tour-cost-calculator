@@ -9,6 +9,7 @@ import {
   type DocumentReference, type DocumentSnapshot, type DocumentData, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
+  AuditEntry,
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
@@ -687,6 +688,22 @@ export async function fbSendNotificationMany(
 }
 
 // ── Tour Payments ──
+
+// ── Audit log (nhật ký hoạt động cấp hệ thống) ──
+const AUDIT_DOC = doc(db, 'viettours', 'audit_log');
+const AUDIT_CAP = 2000;
+
+/** Ghi 1 dòng nhật ký (read-modify-write, giữ tối đa AUDIT_CAP dòng gần nhất). */
+export async function fbLogAudit(entry: AuditEntry): Promise<void> {
+  const snap = await getDoc(AUDIT_DOC);
+  const entries = snap.exists() ? ((snap.data().entries as AuditEntry[]) ?? []) : [];
+  const kept = [entry, ...entries].slice(0, AUDIT_CAP); // mới nhất ở đầu
+  await setDoc(AUDIT_DOC, { entries: kept });
+}
+
+export function fbSubscribeAuditLog(cb: (entries: AuditEntry[]) => void): Unsubscribe {
+  return subDoc(AUDIT_DOC, (snap) => cb(snap.exists() ? ((snap.data().entries as AuditEntry[]) ?? []) : []));
+}
 
 const tourPaymentsDoc = (tourKey: string) => doc(db, 'tour_payments', tourKey);
 

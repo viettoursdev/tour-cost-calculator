@@ -22,6 +22,12 @@ export const fbSaveQuoteState = vi.fn(async () => {});
 export const fbDeleteQuote = vi.fn(async () => {});
 export const fbUpdateCollaborators = vi.fn(async () => {});
 export const fbGetQuoteProject = vi.fn(async () => null);
+export const fbSetQuotePaymentSummary = vi.fn(async () => {});
+export const fbBackfillPaymentIndex = vi.fn(async () => 0);
+export const fbBackfillWorkflowIndex = vi.fn(async () => 0);
+export const fbGetTourPayments = vi.fn(async () => null);
+export const fbLogAudit = vi.fn(async () => {});
+export const fbSubscribeAuditLog = vi.fn(() => () => {});
 
 // ── DMC quote project ──
 export const fbSubscribeDMCQuoteHistory = vi.fn(() => () => {});

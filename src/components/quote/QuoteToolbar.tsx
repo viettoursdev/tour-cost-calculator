@@ -31,6 +31,7 @@ import { QuoteLinksModal } from './QuoteLinksModal';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { ROLE_RANK } from '@/auth/ROLES';
 import { fmtOutput } from '@/lib/currency';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
@@ -252,6 +253,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         ...(hasPerm(currentUser, 'manageCustomers') ? [{ v: 'customer' as QuoteViewKey, label: '👥 Khách hàng' }] : []),
         ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'ncc' as QuoteViewKey, label: '🏢 Nhà Cung Cấp' }] : []),
         ...(hasPerm(currentUser, 'manageNCC') ? [{ v: 'nccProducts' as QuoteViewKey, label: '📦 Sản phẩm NCC' }] : []),
+        ...(currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'] ? [{ v: 'audit' as QuoteViewKey, label: '📋 Nhật ký' }] : []),
       ];
   const tabValue = TAB_DEFS.some((t) => t.v === view) ? view : false;
 
