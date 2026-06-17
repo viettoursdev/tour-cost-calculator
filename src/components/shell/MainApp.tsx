@@ -20,7 +20,7 @@ import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { usePoiStore } from '@/stores/poiStore';
-import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkSalesFollowups, checkCustomerFollowups } from '@/lib/notifications';
+import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { LoginScreen } from './LoginScreen';
 
@@ -91,6 +91,7 @@ export function MainApp() {
     setTimeout(() => { void checkWorkflowDeadlines(currentUser); }, 5000);
     setTimeout(() => { void checkSalesFollowups(currentUser); }, 6000);
     setTimeout(() => { void checkCustomerFollowups(currentUser); }, 7000);
+    setTimeout(() => { void checkDormantCustomers(currentUser); }, 8000);
     return () => {
       window.removeEventListener('storage', onFxStorage);
       fxUnsub?.();

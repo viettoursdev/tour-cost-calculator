@@ -235,3 +235,52 @@ export async function checkCustomerFollowups(user: User): Promise<void> {
     console.warn('checkCustomerFollowups failed:', (e as Error).message);
   }
 }
+
+const DORMANT_KEY = 'vte_dormant_notified';
+const DORMANT_MONTHS = 6;   // chưa đi tour mới quá 6 tháng
+const RECENT_CONTACT_MONTHS = 3; // đã chăm sóc trong 3 tháng → bỏ qua
+const monthsAgoISO = (m: number) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
+
+/**
+ * Nhắc chăm sóc khách "ngủ": đã từng đi tour nhưng chưa quay lại quá N tháng và
+ * không được chăm sóc gần đây. Gửi 1 thông báo TÓM TẮT/tháng cho mỗi sale (khách
+ * do mình tạo) để tránh spam.
+ */
+export async function checkDormantCustomers(user: User): Promise<void> {
+  try {
+    const customers = useCustomerStore.getState().customers.filter((c) => c.createdBy === user.name);
+    if (!customers.length) return;
+    const quotes = useQuoteHistoryStore.getState().quotes;
+    const today = new Date().toISOString().slice(0, 10);
+    const dormantCut = monthsAgoISO(DORMANT_MONTHS);
+    const contactCut = monthsAgoISO(RECENT_CONTACT_MONTHS);
+    let count = 0;
+    for (const c of customers) {
+      const theirs = quotes.filter((q) => (q.customerId ? q.customerId === c.id : q.customerName === c.name) && q.departDate);
+      if (!theirs.length) continue;                                   // chưa từng có tour
+      const departs = theirs.map((q) => q.departDate as string).sort();
+      const lastDepart = departs[departs.length - 1];
+      if (lastDepart >= dormantCut || lastDepart >= today) continue;  // còn hoạt động / sắp đi
+      const contacts = (c.interactions ?? []).map((i) => i.at.slice(0, 10)).sort();
+      const lastContact = contacts[contacts.length - 1];
+      if (lastContact && lastContact >= contactCut) continue;         // vừa chăm sóc
+      if (c.nextFollowUp) continue;                                   // đã có lịch hẹn
+      count++;
+    }
+    if (!count) return;
+    const monthKey = `dormant:${user.u}:${today.slice(0, 7)}`;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(DORMANT_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    if (seen.includes(monthKey)) return;
+    seen.push(monthKey);
+    await fbSendNotification(user.u, {
+      type: 'task',
+      title: '💤 Khách hàng cần chăm sóc lại',
+      message: `Bạn có ${count} khách đã hơn ${DORMANT_MONTHS} tháng chưa quay lại. Vào tab Khách hàng để mời tour mới / chăm sóc.`,
+      createdBy: 'Hệ thống',
+    });
+    try { localStorage.setItem(DORMANT_KEY, JSON.stringify(seen.slice(-100))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkDormantCustomers failed:', (e as Error).message);
+  }
+}
