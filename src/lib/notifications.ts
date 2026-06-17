@@ -18,8 +18,13 @@ export function showBrowserNotif(title: string, body: string): void {
 import { fbGetContracts, fbSendNotification } from '@/lib/firebase';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import { useAuthStore } from '@/stores/authStore';
+import { ROLE_RANK } from '@/auth/ROLES';
 import { daysUntil } from '@/lib/dateUtils';
 import type { User } from '@/types';
+
+/** Số ngày quá hạn để tự báo lên quản lý (Trưởng Phòng trở lên). */
+const WF_ESCALATE_AFTER = 3;
 
 /**
  * Check contracts for payments due within 7 days and send reminder notifications.
@@ -127,6 +132,29 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
           createdBy: 'Hệ thống',
           data: { cloudId: q.cloudId },
         });
+      }
+    }
+    // Escalation: quản lý (Trưởng Phòng trở lên) được báo các bước quá hạn LÂU của
+    // người khác — để đốc thúc. Mỗi (báo giá, bước, hạn) escalate 1 lần.
+    if (ROLE_RANK[user.role] >= ROLE_RANK['Trưởng Phòng']) {
+      const nameOf = (u?: string) => useAuthStore.getState().users.find((x) => x.u === u)?.name ?? u ?? '';
+      for (const q of quotes) {
+        for (const w of q.workflowDue ?? []) {
+          const d = daysUntil(w.dueDate);
+          if (d == null || d >= -WF_ESCALATE_AFTER) continue; // chỉ quá hạn > N ngày
+          const owner = w.assignee || q.createdByUsername;
+          if (owner === user.u) continue; // việc của chính mình đã nhắc ở trên
+          const key = `esc:${q.cloudId}:${w.label}:${w.dueDate}`;
+          if (set.has(key)) continue;
+          set.add(key);
+          await fbSendNotification(user.u, {
+            type: 'task',
+            title: '🚩 Bước quy trình quá hạn lâu — cần đốc thúc',
+            message: `Báo giá "${q.name}" — ${w.label}: QUÁ HẠN ${Math.abs(d)} ngày · phụ trách ${nameOf(owner)}`,
+            createdBy: 'Hệ thống',
+            data: { cloudId: q.cloudId },
+          });
+        }
       }
     }
     try { localStorage.setItem(WF_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }

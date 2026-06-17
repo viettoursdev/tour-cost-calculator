@@ -44,6 +44,7 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
   };
   const removeAtt = (i: number) => setS((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }));
   const logDesc = [...(s.log ?? [])].reverse(); // mới nhất lên đầu
+  const blockedNoReason = s.status === 'blocked' && !(s.note ?? '').trim();
   const cycleMs = cycleTimeMs(s);
   const cycleText = cycleMs == null ? null : (() => {
     const h = Math.round(cycleMs / 3600000);
@@ -96,7 +97,9 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               <Chip size="small" color="primary" variant="outlined" label={`Gán ${suggested.name} (${suggested.role})`} onClick={() => set({ assignee: suggested.u })} />
             </Stack>
           )}
-          <TextField label="Ghi chú" value={s.note ?? ''} onChange={(e) => set({ note: e.target.value })} fullWidth multiline minRows={2} />
+          <TextField label={s.status === 'blocked' ? 'Ghi chú · LÝ DO TẠM HOÃN (bắt buộc)' : 'Ghi chú'}
+            value={s.note ?? ''} onChange={(e) => set({ note: e.target.value })} fullWidth multiline minRows={2}
+            error={blockedNoReason} helperText={blockedNoReason ? 'Cần nhập lý do khi để trạng thái Tạm hoãn.' : ' '} />
 
           <Box>
             <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>📎 File đính kèm</Typography>
@@ -143,7 +146,7 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">Huỷ</Button>
-        <Button variant="contained" disabled={uploading} onClick={() => onSave(s)} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
+        <Button variant="contained" disabled={uploading || blockedNoReason} onClick={() => onSave(s)} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
       </DialogActions>
     </Dialog>
   );

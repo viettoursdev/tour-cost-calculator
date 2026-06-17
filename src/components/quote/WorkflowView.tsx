@@ -108,8 +108,18 @@ export function WorkflowView() {
   const setStatus = (id: string, status: WorkflowStatus) => {
     const before = steps.find((s) => s.id === id);
     if (before && before.status === status) return;
-    const next = setStepStatus(steps, id, status)
-      .map((s) => (s.id === id ? appendLog(s, [`Trạng thái → ${WORKFLOW_STATUS_META[status].label}`], byName) : s));
+    // Tạm hoãn cần lý do — ghi vào ghi chú (nếu chưa có) + nhật ký.
+    let reason: string | undefined;
+    if (status === 'blocked' && !before?.note?.trim()) {
+      const r = window.prompt('Lý do tạm hoãn bước này?');
+      if (r == null) return;               // huỷ
+      reason = r.trim();
+      if (!reason) { window.alert('Cần nhập lý do để Tạm hoãn.'); return; }
+    }
+    let next = setStepStatus(steps, id, status);
+    if (reason) next = next.map((s) => (s.id === id ? { ...s, note: s.note?.trim() ? s.note : reason } : s));
+    const label = `Trạng thái → ${WORKFLOW_STATUS_META[status].label}${reason ? ` (${reason})` : ''}`;
+    next = next.map((s) => (s.id === id ? appendLog(s, [label], byName) : s));
     setWorkflow(next);
   };
   const del = (id: string) => { if (window.confirm('Xoá bước này khỏi quy trình?')) setWorkflow(steps.filter((s) => s.id !== id)); };
