@@ -1,0 +1,11 @@
+begin;
+select plan(7);
+select has_table('public','quotes','quotes exists');
+select col_is_pk('public','quotes','id','id PK');
+select has_column('public','quotes','cloud_id','cloud_id present');
+select col_type_is('public','quotes','rates','jsonb','rates jsonb');
+select col_type_is('public','quotes','depart_date','date','depart_date is date');
+select fk_ok('public','quotes','customer_id','public','customers','id');
+select has_index('public','quotes','quotes_template_idx','template index');
+select * from finish();
+rollback;
