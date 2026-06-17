@@ -6,6 +6,7 @@ export const db = {};
 // ── Users ──
 export const fbPullUsers = vi.fn(async () => []);
 export const fbPushUsers = vi.fn(async () => {});
+export const fbPurgeLegacyPasswords = vi.fn(async () => 0);
 
 // ── Rate card ──
 export const fbPullMasterRC = vi.fn(async () => null);

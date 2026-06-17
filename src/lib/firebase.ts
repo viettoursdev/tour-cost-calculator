@@ -106,15 +106,36 @@ const DMC_QUOTE_HISTORY_DOC = doc(db, 'viettours', 'dmc_quote_history');
 const dmcQuoteProjectDoc = (cloudId: string) => doc(db, 'dmc_quote_projects', cloudId);
 
 // ── Users ──
+/** Bỏ trường mật khẩu plaintext di sản khỏi 1 user. */
+const stripPwd = (u: User): User => {
+  if (u.p === undefined) return u;
+  const { p: _p, ...rest } = u;
+  void _p;
+  return rest;
+};
+
 export async function fbPullUsers(): Promise<User[]> {
   const snap = await getDoc(USERS_DOC);
   const data = snap.data();
   if (!data || !Array.isArray((data as { users?: User[] }).users)) return [];
-  return (data as { users: User[] }).users;
+  return (data as { users: User[] }).users.map(stripPwd);
 }
 
 export async function fbPushUsers(users: User[]): Promise<void> {
-  await setDoc(USERS_DOC, { users, updatedAt: new Date().toISOString() });
+  await setDoc(USERS_DOC, { users: users.map(stripPwd), updatedAt: new Date().toISOString() });
+}
+
+/** Xoá mật khẩu plaintext di sản khỏi MỌI bản ghi user trong Firestore.
+ *  Idempotent — chỉ ghi khi còn bản ghi chứa `p`. Trả về số bản ghi đã làm sạch. */
+export async function fbPurgeLegacyPasswords(): Promise<number> {
+  const snap = await getDoc(USERS_DOC);
+  const data = snap.data() as { users?: User[] } | undefined;
+  const users = data?.users;
+  if (!Array.isArray(users)) return 0;
+  const dirty = users.filter((u) => u.p !== undefined).length;
+  if (!dirty) return 0;
+  await setDoc(USERS_DOC, { users: users.map(stripPwd), updatedAt: new Date().toISOString() });
+  return dirty;
 }
 
 // ── Rate Card ──

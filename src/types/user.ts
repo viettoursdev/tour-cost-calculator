@@ -16,7 +16,9 @@ export type User = {
                       // pre-migration records still load. Migration to
                       // required happens in Phase 4 cleanup.
   phone?: string;     // contact phone shown on exported quotes
-  p: string;          // password (plaintext, legacy — removed in Phase 4)
+  /** @deprecated Mật khẩu plaintext (di sản). KHÔNG còn lưu lên Firestore —
+   *  fbPushUsers/fbPullUsers loại bỏ; fbPurgeLegacyPasswords xoá bản ghi cũ. */
+  p?: string;
   role: Role;
   name: string;
   color: string;      // hex

@@ -33,10 +33,10 @@ describe('DEFAULT_USERS', () => {
     }
   });
 
-  it('every seed has a non-empty name and password', () => {
+  it('every seed has a non-empty name and no plaintext password', () => {
     for (const u of DEFAULT_USERS) {
       expect(u.name.trim().length).toBeGreaterThan(0);
-      expect(u.p.trim().length).toBeGreaterThan(0);
+      expect(u.p).toBeUndefined(); // mật khẩu plaintext đã loại bỏ
     }
   });
 

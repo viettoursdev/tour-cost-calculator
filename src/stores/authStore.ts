@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import {
-  fbPullUsers, fbPushUsers,
+  fbPullUsers, fbPushUsers, fbPurgeLegacyPasswords,
   fbSendSignInLink, fbIsSignInLink, fbCompleteSignInLink, fbSignInWithPassword,
   fbSignOut, fbOnIdTokenChanged,
 } from '@/lib/firebase';
@@ -29,7 +29,6 @@ function makeBootstrapCEO(email: string): User {
   return {
     u: 'developer',
     email,
-    p: '',
     role: 'CEO',
     name: 'Developer',
     color: '#dc3250',
@@ -125,6 +124,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       }
       const verifiedEmail = (fbUser.email ?? '').toLowerCase();
       const match = cloud.find((u) => (u.email ?? '').toLowerCase() === verifiedEmail);
+      // Dọn mật khẩu plaintext di sản khỏi DB (idempotent, non-blocking).
+      if (match) void fbPurgeLegacyPasswords().catch(() => { /* không chặn đăng nhập */ });
 
       const finalizeRejection = async (msg: string) => {
         await fbSignOut();
