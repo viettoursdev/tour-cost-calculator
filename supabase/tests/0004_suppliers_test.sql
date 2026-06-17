@@ -1,0 +1,11 @@
+begin;
+select plan(7);
+select has_table('public','suppliers','suppliers exists');
+select has_table('public','supplier_contacts','supplier_contacts exists');
+select has_table('public','ncc_products','ncc_products exists');
+select has_table('public','ncc_product_prices','ncc_product_prices exists');
+select col_type_is('public','suppliers','sectors','text[]','sectors is text array');
+select fk_ok('public','ncc_product_prices','product_id','public','ncc_products','id');
+select fk_ok('public','ncc_products','supplier_id','public','suppliers','id');
+select * from finish();
+rollback;

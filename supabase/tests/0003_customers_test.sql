@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select has_table('public','customers','customers exists');
+select has_table('public','customer_contacts','customer_contacts exists');
+select col_has_check('public','customers','type','type is checked');
+select fk_ok('public','customer_contacts','customer_id','public','customers','id');
+select has_column('public','customers','legacy_id','legacy_id for ETL');
+select ok((select relrowsecurity from pg_class where oid='public.customers'::regclass),'customers RLS on');
+select * from finish();
+rollback;
