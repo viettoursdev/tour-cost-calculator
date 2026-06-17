@@ -245,6 +245,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         { v: 'payment', label: '🧾 Quản lý thanh toán' },
         { v: 'workflow', label: '🗂️ Quy trình vận hành' },
         { v: 'pipeline', label: '🧲 Pipeline' },
+        { v: 'salesanalytics', label: '📊 Phân tích bán' },
         { v: 'opsboard', label: '🧭 Điều phối' },
         { v: 'departures', label: '📅 Lịch khởi hành' },
         { v: 'payboard', label: '💰 Công nợ tổng' },
