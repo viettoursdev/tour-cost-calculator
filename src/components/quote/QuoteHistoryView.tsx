@@ -12,9 +12,11 @@ import { fmtVND } from './calc';
 import { QUOTE_STATUS_META } from './constants';
 import { workerFileUrl } from '@/lib/aiWorker';
 import { attMeta } from '@/lib/util';
-import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User } from '@/types';
+import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, WorkflowStep } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
+import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
+import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
 import AttachFile from '@mui/icons-material/AttachFile';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
@@ -103,6 +105,7 @@ export function QuoteHistoryView() {
   const users = useAuthStore((s) => s.users);
 
   const loadCloud = useQuoteStore((s) => s.loadCloud);
+  const applyImport = useQuoteStore((s) => s.applyImport);
   const deleteCloud = useQuoteStore((s) => s.deleteCloud);
   const updateCloudCollaborators = useQuoteStore((s) => s.updateCloudCollaborators);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
@@ -154,6 +157,24 @@ export function QuoteHistoryView() {
     if (!window.confirm(`Mở bản liên kết "${row.linkedQuoteName ?? ''}"? Thay đổi cục bộ chưa lưu có thể mất.`)) return;
     const r = await loadCloud(row.linkedQuoteId, { dmc: row.linkedQuoteTemplate === 'dmc' });
     if (!r.ok) window.alert('⚠ ' + r.error);
+  };
+
+  const handleDuplicate = async (row: CloudQuoteEntry) => {
+    if (!window.confirm(`Tạo báo giá MỚI từ "${row.name}"? Sao chép hạng mục & cấu hình; quy trình về "Chưa làm", chưa lưu.`)) return;
+    try {
+      const proj = row.template === 'dmc' ? await fbGetDMCQuoteProject(row.cloudId) : await fbGetQuoteProject(row.cloudId);
+      const st = proj?.currentState;
+      if (!st) { window.alert('Không tải được dữ liệu báo giá nguồn.'); return; }
+      const workflow = (st.workflow ?? []).map((s): WorkflowStep => ({ ...s, status: 'todo', doneDate: null, dueDate: null, log: undefined }));
+      applyImport({
+        ...st,
+        info: { ...st.info, name: `${st.info.name} (Bản sao)`, startDate: null },
+        status: 'in_progress',
+        ...(workflow.length ? { workflow } : {}),
+      });
+    } catch (e) {
+      window.alert('❌ Lỗi nhân bản: ' + (e as Error).message);
+    }
   };
 
   const handleDelete = async (row: CloudQuoteEntry) => {
@@ -253,7 +274,7 @@ export function QuoteHistoryView() {
     {
       field: 'actions',
       headerName: '',
-      width: 120,
+      width: 150,
       sortable: false,
       filterable: false,
       renderCell: (p) => (
@@ -261,6 +282,11 @@ export function QuoteHistoryView() {
           <Tooltip title="Tải báo giá">
             <IconButton size="small" onClick={() => handleLoad(p.row)}>
               <CloudDownload fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Nhân bản thành báo giá mới">
+            <IconButton size="small" onClick={() => void handleDuplicate(p.row)}>
+              <ContentCopy fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Xoá">
