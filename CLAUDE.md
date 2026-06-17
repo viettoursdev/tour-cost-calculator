@@ -80,7 +80,7 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 **48h inactivity sign-out (magic-link only).** Magic-link sessions auto-sign-out after 48 hours of no user interaction. `src/auth/sessionTimeout.ts` owns the per-user `vte_session_last_active_{username}` timestamp; `startActivityTracker` listens to `pointerdown`/`keydown` (throttled to one write per 30s) and runs a 60-second interval check plus an immediate check on `focus`/`visibilitychange`. `authStore.expireSession()` signs the user out and shows "Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại." DEV password sign-ins are intentionally exempt — they stay signed in indefinitely for testing convenience.
 
-**Default Firestore database.** The current project `tour-cost-calculator-v2` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
+**Default Firestore database.** The current project `tour-cost-calculator-4336c` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
 
 **Per-user persisted quote draft (gotcha).** `quoteStore` registers persist middleware with a placeholder name and overrides the storage adapter at write time to use `vte_quote_draft_{username}`. The `getItem` handler returns `null` on initial hydration; the real hydration happens in `quoteStore.init(user)` which reads `localStorage` directly. Don't "fix" this by giving persist a static name — you'll cross-leak users.
 
@@ -97,17 +97,17 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 ## Firebase
 
 ```
-Project ID:    tour-cost-calculator-v2
+Project ID:    tour-cost-calculator-4336c
 Database name: (default)
 Location:      asia-southeast1
-Auth Domain:   tour-cost-calculator-v2.firebaseapp.com
+Auth Domain:   tour-cost-calculator-4336c.firebaseapp.com
 ```
 
 Web SDK config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) is read from `VITE_FIREBASE_*` env vars — see `.env.example`. Local dev uses `.env` (gitignored); CI uses repo secrets injected in `.github/workflows/deploy.yml`. The values are public (shipped in the browser bundle); access control is enforced by Firestore Rules + Auth domain allowlist.
 
-**Project history (2026-06-15 → 06-16).** One prior Firebase project sits retired: `viettours-cost-calculator` (named DB `viettours`, retired in the first migration). The second prior project `tour-cost-calculator-4336c` (default DB, browser API key suspended) was thought lost mid-migration when its owner Google account was banned, but the account was later recovered. Its historical Firestore data was imported into `tour-cost-calculator-v2` on 2026-06-16 — quotes, DMC quotes, customers, NCC, FX rates, visa products/projects, payment approvals, user_accounts (16 documents and 5 collection docs total). `tour-cost-calculator-4336c` is now repurposed as the **live backup destination** for the hourly mirror — its browser API key remains suspended (it is not served to clients).
+**Project history (2026-06-15 → 06-17).** One prior Firebase project sits retired: `viettours-cost-calculator` (named DB `viettours`, retired in the first migration). On 2026-06-15 the project then-called `tour-cost-calculator-4336c` was thought lost mid-migration when its owner Google account was banned, so a new project `tour-cost-calculator-v2` was bootstrapped as production and `4336c` (after the account was recovered) was repurposed as the backup mirror destination. On **2026-06-17** the two were swapped back: `tour-cost-calculator-4336c` is once again production (browser API key suspension lifted), and `tour-cost-calculator-v2` is now the backup mirror destination. Worst-case data-loss window across the swap: ~1 hour (writes to `v2` after the last hourly mirror but before the cutover).
 
-**Hourly mirror + artifact backup.** `.github/workflows/backup.yml` runs every UTC hour with two safety nets: (1) it imports the production export into `tour-cost-calculator-4336c` so the backup project's Firestore lags production by at most ~1 hour, and (2) it uploads `firestore-dump.json` as a workflow artifact with 30-day retention for point-in-time recovery. Secrets: `FIREBASE_BACKUP_SRC_SA_JSON` (production project SA) and `FIREBASE_BACKUP_DEST_SA_JSON` (backup project SA). To restore from the mirror: repoint `VITE_FIREBASE_*` to the backup project (the suspension would need to be lifted first, or use a fresh project plus a one-off `firestore-import.mjs` from the latest artifact). Worst-case data-loss window: ~1 hour. Cost: ~720 read+write cycles/month, negligible.
+**Hourly mirror + artifact backup.** `.github/workflows/backup.yml` runs every UTC hour with two safety nets: (1) it imports the production export into `tour-cost-calculator-v2` so the backup project's Firestore lags production by at most ~1 hour, and (2) it uploads `firestore-dump.json` as a workflow artifact with 30-day retention for point-in-time recovery. Secrets: `FIREBASE_BACKUP_SRC_SA_JSON` (production project SA — currently `4336c`) and `FIREBASE_BACKUP_DEST_SA_JSON` (backup project SA — currently `v2`). To restore from the mirror: repoint `VITE_FIREBASE_*` to the backup project, or use a one-off `firestore-import.mjs` run from the latest artifact. Worst-case data-loss window: ~1 hour. Cost: ~720 read+write cycles/month, negligible.
 
 Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tools deploy --only firestore:rules`. Every collection requires `request.auth != null` plus a `@viettours.com.vn` email — anonymous and external-domain clients are denied across the board.
 

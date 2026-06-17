@@ -6,9 +6,8 @@
 #   2. Artifact — uploads the dump as a 30-day GitHub Actions artifact for
 #      point-in-time recovery against any project.
 #
-# Currently SRC is tour-cost-calculator-v2 (production) and DEST is
-# tour-cost-calculator-4336c (backup-only — not served to clients; its
-# browser API key is suspended and that's intentional). See CLAUDE.md.
+# Currently SRC is tour-cost-calculator-4336c (production) and DEST is
+# tour-cost-calculator-v2 (backup-only — not served to clients). See CLAUDE.md.
 #
 # Secrets required (set in: GitHub repo → Settings → Secrets and variables → Actions):
 #   FIREBASE_BACKUP_SRC_SA_JSON  — service-account JSON for the SOURCE (production) project.

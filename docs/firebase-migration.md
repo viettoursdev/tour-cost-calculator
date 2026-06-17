@@ -125,3 +125,22 @@ After Stage 5 cutover, an hourly backup runs automatically in CI with two safety
 **Cost guard:** ~720 cron runs/month. Each run does one full read of the production Firestore + one full write to the backup Firestore + one artifact upload. At current data volume (~136 KB dump), this is well under both free-tier thresholds and bandwidth caps. To pause the backup, disable the workflow in the Actions UI or delete the `.github/workflows/backup.yml` file.
 
 **Audit:** if new top-level Firestore collections are added to the app, they must be added to `SINGLE_DOCS` or `DYNAMIC_COLLECTIONS` in `scripts/firestore-export.mjs` or the hourly backup will silently miss them. The audit pattern: every `doc(db, 'viettours', X)` call in `src/lib/firebase.ts` must appear in `SINGLE_DOCS`; every `doc(db, 'X', ...)` for X other than 'viettours' must appear in `DYNAMIC_COLLECTIONS`.
+
+---
+
+## Appendix — 2026-06-17 swap: production ↔ backup
+
+The two Firebase projects were swapped: `tour-cost-calculator-4336c` is now production and `tour-cost-calculator-v2` is the backup mirror destination. Triggered by the `4336c` owner Google account being fully recovered and the browser API-key suspension lifted, making `4336c` once again the historically-stable production target.
+
+**Executed:**
+1. Lifted browser API-key suspension on `4336c` in GCP Console (manual, pre-cutover).
+2. Repointed `.env` to `4336c` SDK config values.
+3. Deployed `firestore.rules` to `4336c` via `npx firebase-tools deploy --only firestore:rules --project tour-cost-calculator-4336c`.
+4. Swapped `backup.yml` SRC/DEST comment (SRC is now `4336c`, DEST is now `v2`).
+5. In GitHub repo secrets: rotated all 6 `VITE_FIREBASE_*` to `4336c` values; swapped `FIREBASE_BACKUP_SRC_SA_JSON` ↔ `FIREBASE_BACKUP_DEST_SA_JSON`.
+6. Triggered Deploy workflow so the live app rebuilds against `4336c`.
+7. Triggered `Firestore Backup` once via `workflow_dispatch` to verify the new mirror direction (`4336c` → `v2`).
+
+**Cutover style:** accepted up to ~1 hour data loss (writes to `v2` after the last hourly mirror but before the cutover are not carried over). No write freeze was coordinated.
+
+**Rollback:** revert the steps above — swap `.env` / GitHub secrets back to `v2`, re-deploy rules to `v2` (already deployed at the previous swap), and flip `backup.yml` SRC/DEST.
