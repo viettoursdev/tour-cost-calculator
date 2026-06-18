@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
-import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry } from '@/types/visa';
+import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
@@ -1187,4 +1187,126 @@ export async function sbDeleteVisaProc(
   if (attErr) throw new Error('sbDeleteVisaProc attachments: ' + attErr.message);
   const { error } = await client.from('visa_procedures').delete().eq('legacy_id', id);
   if (error) throw new Error('sbDeleteVisaProc: ' + error.message);
+}
+
+// ── visa_projects ─────────────────────────────────────────────────────────────
+
+async function assembleVisaProjects(client: SupabaseClient): Promise<VisaProjectDoc[]> {
+  const { data, error } = await client
+    .from('visa_projects')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error('assembleVisaProjects: ' + error.message);
+  const rows = data ?? [];
+  if (!rows.length) return [];
+  const legacyIds = rows.map((r) => (r.legacy_id as string) ?? (r.id as string));
+  const attMap = await loadAttachmentsForParents(client, 'visa_project', legacyIds);
+  return rows.map((r): VisaProjectDoc => {
+    const legacyId = (r.legacy_id as string) ?? (r.id as string);
+    return {
+      id: legacyId,
+      code: (r.code as string) ?? '',
+      name: (r.name as string) ?? '',
+      country: (r.country as string) ?? '',
+      status: r.status as VisaProjectDoc['status'],
+      mainStaff: (r.main_staff_usernames as string[]) ?? [],
+      supportStaff: (r.support_staff_usernames as string[]) ?? [],
+      documentsSummary: (r.documents_summary as string) ?? '',
+      linkedQuoteId: (r.linked_quote_id as string) ?? null,
+      linkedQuoteName: (r.linked_quote_name as string) ?? '',
+      linkedProcIds: (r.linked_proc_ids as string[]) ?? [],
+      attachments: attMap.get(legacyId) ?? [],
+      applyCount: (r.apply_count as number) ?? 0,
+      passedCount: (r.passed_count as number) ?? 0,
+      failedCount: (r.failed_count as number) ?? 0,
+      haveVisaCount: (r.have_visa_count as number) ?? 0,
+      pendingCount: (r.pending_count as number) ?? 0,
+      startDate: (r.start_date as string) ?? null,
+      departureDate: (r.departure_date as string) ?? null,
+      endDate: (r.end_date as string) ?? null,
+      milestones: (r.milestones as VisaProjectDoc['milestones']) ?? [],
+      applicants: (r.applicants as VisaProjectDoc['applicants']) ?? [],
+      collaborators: (r.collaborator_usernames as string[]) ?? [],
+      createdByUsername: (r.created_by_username as string) ?? '',
+      createdByName: (r.created_by_name as string) ?? '',
+      createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
+      updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+      updatedBy: (r.updated_by_name as string) ?? undefined,
+    };
+  });
+}
+
+export function sbSubscribeVisaProjects(
+  cb: (list: VisaProjectDoc[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'visa_projects', assembleVisaProjects, cb);
+}
+
+export async function sbPushVisaProjects(
+  list: VisaProjectDoc[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  for (const p of list) {
+    const allUsernames = [...(p.mainStaff ?? []), ...(p.supportStaff ?? []), ...(p.collaborators ?? [])];
+    const idMap = await usernamesToIds(client, allUsernames);
+    const toIds = (names: string[]) => names.map((u) => idMap.get(u)).filter(Boolean) as string[];
+
+    const { error } = await client.from('visa_projects').upsert({
+      legacy_id: p.id,
+      code: p.code ?? '',
+      name: p.name ?? '',
+      country: p.country ?? '',
+      status: p.status ?? 'planning',
+      main_staff: toIds(p.mainStaff ?? []),
+      main_staff_usernames: p.mainStaff ?? [],
+      support_staff: toIds(p.supportStaff ?? []),
+      support_staff_usernames: p.supportStaff ?? [],
+      documents_summary: p.documentsSummary ?? '',
+      linked_quote_id: p.linkedQuoteId ?? null,
+      linked_quote_name: p.linkedQuoteName ?? '',
+      linked_proc_ids: p.linkedProcIds ?? [],
+      apply_count: p.applyCount ?? 0,
+      passed_count: p.passedCount ?? 0,
+      failed_count: p.failedCount ?? 0,
+      have_visa_count: p.haveVisaCount ?? 0,
+      pending_count: p.pendingCount ?? 0,
+      start_date: p.startDate ?? null,
+      departure_date: p.departureDate ?? null,
+      end_date: p.endDate ?? null,
+      milestones: p.milestones ?? [],
+      applicants: p.applicants ?? [],
+      collaborators: toIds(p.collaborators ?? []),
+      collaborator_usernames: p.collaborators ?? [],
+      created_by_username: p.createdByUsername ?? '',
+      created_by_name: p.createdByName ?? '',
+      created_at: p.createdAt,
+      updated_at: now,
+      updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
+    }, { onConflict: 'legacy_id' });
+    if (error) throw new Error('sbPushVisaProjects upsert: ' + error.message);
+
+    await saveAttachments(client, 'visa_project', p.id, p.attachments ?? []);
+  }
+
+  // Full-overwrite: delete projects removed from the list (safe fetch-then-delete).
+  const keepIds = list.map((p) => p.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('visa_projects').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushVisaProjects fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('visa_projects').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushVisaProjects delete stale: ' + del.error.message);
+    }
+  } else {
+    // Empty push = wipe all (full-overwrite parity with fbPushVisaProjects).
+    const del = await client.from('visa_projects').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushVisaProjects delete all: ' + del.error.message);
+  }
 }
