@@ -172,4 +172,33 @@ describe('notifications gateway', () => {
     expect(t!.updatedByName).toBe('Boss');
     expect(t!.updatedAt).toBeTruthy();
   });
+
+  it('Fix1: re-ensure with a new title updates title; re-ensure with empty title keeps existing', async () => {
+    const c = await getViettoursClient();
+    const base: NotifThread = {
+      id: 'thread-title', title: 'T1', members: ['tester'],
+      comments: [], createdAt: new Date().toISOString(), createdBy: 'tester',
+    };
+    await sbEnsureNotifThread(base, c);
+    // re-ensure with a new non-empty title → should update
+    await sbEnsureNotifThread({ ...base, title: 'T2' }, c);
+    const t1 = await once<NotifThread | null>((cb) => sbSubscribeNotifThread('thread-title', cb, c));
+    expect(t1!.title).toBe('T2');
+    // re-ensure with empty title → should keep T2
+    await sbEnsureNotifThread({ ...base, title: '' }, c);
+    const t2 = await once<NotifThread | null>((cb) => sbSubscribeNotifThread('thread-title', cb, c));
+    expect(t2!.title).toBe('T2');
+  });
+
+  it('Fix2: addThreadComment on missing thread resolves without throwing and inserts nothing', async () => {
+    const c = await getViettoursClient();
+    await expect(
+      sbAddThreadComment('nonexistent-thread', {
+        id: 'cmt-x', by: 'tester', byName: 'QA', text: 'ghost', at: new Date().toISOString(),
+      }, c),
+    ).resolves.toBeUndefined();
+    // verify nothing was inserted
+    const t = await once<NotifThread | null>((cb) => sbSubscribeNotifThread('nonexistent-thread', cb, c));
+    expect(t).toBeNull();
+  });
 });

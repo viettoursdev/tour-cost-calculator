@@ -238,6 +238,9 @@ export async function sbPushPois(
 
 // ── Audit log ─────────────────────────────────────────────────────────────────
 
+// Maximum rows retained in audit_log — mirrors fbLogAudit's AUDIT_CAP constant.
+const AUDIT_CAP = 2000;
+
 export async function sbLogAudit(entry: AuditEntry, client: SupabaseClient = sb): Promise<void> {
   const idMap = await usernamesToIds(client, [entry.byU]);
   const { error } = await client.from('audit_log').insert({
@@ -250,6 +253,15 @@ export async function sbLogAudit(entry: AuditEntry, client: SupabaseClient = sb)
     note: entry.note ?? null,
   });
   if (error) throw new Error('sbLogAudit: ' + error.message);
+
+  // Trim table to AUDIT_CAP most-recent rows (matches fbLogAudit's slice-to-2000 behaviour).
+  const { data: all } = await client.from('audit_log')
+    .select('id')
+    .order('at', { ascending: false });
+  const toDelete = (all ?? []).slice(AUDIT_CAP).map((r) => r.id as string);
+  if (toDelete.length > 0) {
+    await client.from('audit_log').delete().in('id', toDelete);
+  }
 }
 
 export function sbSubscribeAuditLog(cb: (entries: AuditEntry[]) => void, client: SupabaseClient = sb): () => void {
@@ -1988,12 +2000,14 @@ export async function sbEnsureNotifThread(
     .maybeSingle();
 
   if (existing) {
-    // merge: preserve existing link when caller doesn't supply one; never overwrite title
+    // merge: preserve existing link when caller doesn't supply one; update title like fb (thread.title || existing.title)
     const newLink = thread.link ?? (existing.link as string | null | undefined) ?? null;
+    const newTitle = thread.title || (existing.title as string) || '';
     const linkChanged = newLink !== (existing.link ?? null);
-    if (linkChanged) {
+    const titleChanged = newTitle !== (existing.title as string);
+    if (linkChanged || titleChanged) {
       await client.from('notification_threads')
-        .update({ link: newLink })
+        .update({ link: newLink, title: newTitle })
         .eq('id', thread.id);
     }
   } else {
@@ -2095,6 +2109,11 @@ export async function sbAddThreadComment(
   comment: NotifComment,
   client: SupabaseClient = sb,
 ): Promise<void> {
+  // Guard: no-op if thread doesn't exist (matches fbAddThreadComment: if (!snap.exists()) return)
+  const { data: threadRow } = await client.from('notification_threads')
+    .select('id').eq('id', id).maybeSingle();
+  if (!threadRow) return;
+
   const { data: maxRow } = await client.from('notification_comments')
     .select('sort_order')
     .eq('thread_id', id)

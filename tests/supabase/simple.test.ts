@@ -36,4 +36,16 @@ describe('fx_rates / pois / audit_log', () => {
     const entries = await once<AuditEntry[]>((cb) => sbSubscribeAuditLog(cb, c));
     expect(entries[0].name).toBe('X');
   });
+
+  it('Fix3: audit cap trim runs without error on a small table (no-op when count<=2000)', async () => {
+    const c = await getViettoursClient();
+    // Insert 3 rows — well below the 2000-cap so trim is a no-op, but the trim logic must not throw.
+    const base = { byU: 'tester', byName: 'QA', action: 'create' as const, entity: 'Test', name: 'cap-test' };
+    await sbLogAudit({ id: 'cap-1', at: '2026-01-01T01:00:00Z', ...base }, c);
+    await sbLogAudit({ id: 'cap-2', at: '2026-01-01T02:00:00Z', ...base }, c);
+    await sbLogAudit({ id: 'cap-3', at: '2026-01-01T03:00:00Z', ...base }, c);
+    const entries = await once<AuditEntry[]>((cb) => sbSubscribeAuditLog(cb, c));
+    // All 3 retained (table has 4 including the row from the previous test, all well under 2000)
+    expect(entries.length).toBeGreaterThanOrEqual(3);
+  });
 });
