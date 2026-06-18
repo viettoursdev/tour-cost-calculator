@@ -4,6 +4,7 @@ import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
 import { calcVND, fmtVND, qtyOf } from './calc';
 import { navFrom, type NavCol } from './cellNav';
+import { guessItemMeta } from './guessMeta';
 import { parseAmountVN } from '@/lib/numParse';
 import { docTienVN } from '@/lib/numToWords';
 import { recordItem, suggestItems, type ItemSuggestion } from '@/lib/itemSuggest';
@@ -274,6 +275,17 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
   const fmtMoney = (n: number) =>
     displayCurrency && displayCurrency !== 'VND' ? fmtOutput(n, displayCurrency, rates) : fmtVND(n);
 
+  // Đổi tên hạng mục: nếu dòng còn ở mặc định (chưa chỉnh đơn vị/kiểu SL) thì
+  // tự đoán đơn vị + cách tính SL hợp lý từ tên. Không đụng dòng đã chỉnh tay.
+  const onNameChange = (name: string) => {
+    const patch: Partial<Item> = { name };
+    if (item.unit === '/người' && item.qtyMode === 'per_pax') {
+      const g = guessItemMeta(name);
+      if (g) { patch.unit = g.unit; patch.qtyMode = g.qtyMode; }
+    }
+    u(patch);
+  };
+
   const qty = qtyOf(item, pax);
 
   // Rooms scale with pax (formula) → read-only. Only package/custom take a typed number.
@@ -326,7 +338,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
                 sx={{ flexShrink: 0, fontSize: 13, color: '#d18a13', cursor: 'help', lineHeight: 1 }}>⚠</Box>
             </Tooltip>
           )}
-          <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" fillFrom={prevItem?.name}
+          <EditText value={item.name} onChange={onNameChange} placeholder="Mô tả..." bold navCol="name" fillFrom={prevItem?.name}
             suggest onPick={(s) => u({ name: s.name, price: s.price, unit: s.unit, cur: s.cur })} />
         </Stack>
       </TableCell>
