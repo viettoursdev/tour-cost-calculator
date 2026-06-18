@@ -2317,6 +2317,9 @@ export async function sbSetApprovalStage(
       approval_key: key,
       current_stage: stage,
       final_status: finalStatus,
+      // Only include intended_* when provided. Supabase upsert(onConflict) updates only the columns
+      // present in the payload, so omitting these on a later stage call PRESERVES the names set
+      // earlier — do not change to always-write or it will null them.
       ...(intended.intendedApprover1Name
         ? { intended_approver1_name: intended.intendedApprover1Name } : {}),
       ...(intended.intendedApprover2Name

@@ -101,4 +101,23 @@ describe('payment approvals gateway', () => {
     const doc = await once<PaymentApprovalDoc>((cb) => sbSubscribePaymentApprovals(cb, c));
     expect(doc['appr-key-3'].finalStatus).toBe('rejected');
   });
+
+  it('intended approver names set at stage 1 are preserved across a stage-2 call with empty intended', async () => {
+    const c = await getViettoursClient();
+    await sbSetApprovalStage(
+      'key-X', 1, 'approved', 'tester', 'QA Bot', 'ok',
+      { intendedApprover1Name: 'Alice', intendedApprover2Name: 'Bob' }, c,
+    );
+    await sbSetApprovalStage(
+      'key-X', 2, 'approved', 'tester', 'QA Bot', 'ok2',
+      {}, c,
+    );
+    const doc = await once<PaymentApprovalDoc>((cb) => sbSubscribePaymentApprovals(cb, c));
+    const entry = doc['key-X'];
+    expect(entry.intendedApprover1Name).toBe('Alice');
+    expect(entry.intendedApprover2Name).toBe('Bob');
+    expect(entry.finalStatus).toBe('approved');
+    expect(entry.stage1).toBeDefined();
+    expect(entry.stage2).toBeDefined();
+  });
 });
