@@ -28,6 +28,29 @@ export async function loadAttachments(
   }));
 }
 
+/** Batch-load attachments for many parents of one type. Returns parentId → FileAttachment[]. */
+export async function loadAttachmentsForParents(
+  client: SupabaseClient, parentType: string, parentIds: string[],
+): Promise<Map<string, FileAttachment[]>> {
+  const map = new Map<string, FileAttachment[]>();
+  if (!parentIds.length) return map;
+  const { data, error } = await client.from('attachments')
+    .select('parent_id, r2_key, name, uploaded_by_name, uploaded_at')
+    .eq('parent_type', parentType).in('parent_id', parentIds)
+    .order('uploaded_at', { ascending: true });
+  if (error) throw new Error('loadAttachmentsForParents: ' + error.message);
+  for (const r of data ?? []) {
+    const arr = map.get(r.parent_id as string) ?? [];
+    arr.push({
+      key: r.r2_key as string, name: r.name as string,
+      uploadedBy: (r.uploaded_by_name as string) ?? undefined,
+      uploadedAt: r.uploaded_at ? new Date(r.uploaded_at as string).toISOString() : undefined,
+    });
+    map.set(r.parent_id as string, arr);
+  }
+  return map;
+}
+
 export async function saveAttachments(
   client: SupabaseClient, parentType: string, parentId: string, atts: FileAttachment[],
 ): Promise<void> {
@@ -370,15 +393,14 @@ export function sbSubscribeNccProducts(
       arr.push(rowToNccPrice(pr));
       pricesByProduct.set(pr.product_id as string, arr);
     }
-    return Promise.all(
-      (rows ?? []).map(async (r) => {
-        const legacyId = r.legacy_id as string;
-        const files = await loadAttachments(cl, 'ncc_product', legacyId);
-        const supplierRow = r.suppliers as { legacy_id: string } | null;
-        const nccIdLegacy: string | null = supplierRow?.legacy_id ?? null;
-        return rowToNccProduct(r, pricesByProduct.get(r.id as string) ?? [], files, nccIdLegacy);
-      }),
-    );
+    const legacyIds = (rows ?? []).map((r) => r.legacy_id as string);
+    const filesByProduct = await loadAttachmentsForParents(cl, 'ncc_product', legacyIds);
+    return (rows ?? []).map((r) => {
+      const legacyId = r.legacy_id as string;
+      const supplierRow = r.suppliers as { legacy_id: string } | null;
+      const nccIdLegacy: string | null = supplierRow?.legacy_id ?? null;
+      return rowToNccProduct(r, pricesByProduct.get(r.id as string) ?? [], filesByProduct.get(legacyId) ?? [], nccIdLegacy);
+    });
   }, cb);
 }
 
