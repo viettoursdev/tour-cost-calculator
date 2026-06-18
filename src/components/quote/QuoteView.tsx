@@ -1,33 +1,42 @@
-import { useState } from 'react';
-import { Box } from '@mui/material';
+import { Suspense, lazy, useState } from 'react';
+import { Box, CircularProgress } from '@mui/material';
 import { TemplateSelectorModal } from './TemplateSelectorModal';
 import { QuoteToolbar } from './QuoteToolbar';
 import { HomeView } from './HomeView';
 import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
-import { DashboardView } from './DashboardView';
-import { PaymentView } from './PaymentView';
-import { ItineraryApp } from '@/components/itinerary/ItineraryApp';
-import { MenuApp } from '@/components/menu/MenuApp';
-import { VisaApp } from '@/components/visa/VisaApp';
-import { DocTranslateApp } from '@/components/doctranslate/DocTranslateApp';
-import { QuoteHistoryView } from './QuoteHistoryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
-import { ContractView } from '@/components/contract/ContractView';
-import { CustomerView } from '@/components/customer/CustomerView';
-import { NCCView } from '@/components/ncc/NCCView';
-import { NccProductView } from '@/components/ncc/NccProductView';
-import { FlightView } from './FlightView';
-import { WorkflowView } from './WorkflowView';
-import { PassengerView } from './PassengerView';
-import { WorkflowBoard } from './WorkflowBoard';
-import { DepartureCalendar } from './DepartureCalendar';
-import { PaymentBoard } from './PaymentBoard';
-import { SalesPipeline } from './SalesPipeline';
-import { SalesAnalytics } from './SalesAnalytics';
-import { AuditView } from '@/components/admin/AuditView';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { LEGACY } from '@/theme';
+
+// Tách bundle: các view phụ + app mẫu (itinerary/menu/visa/doctranslate) chỉ tải
+// khi thực sự mở → giảm mạnh bundle khởi động (giữ nguyên Home/Cost/Summary eager).
+const DashboardView = lazy(() => import('./DashboardView').then((m) => ({ default: m.DashboardView })));
+const PaymentView = lazy(() => import('./PaymentView').then((m) => ({ default: m.PaymentView })));
+const QuoteHistoryView = lazy(() => import('./QuoteHistoryView').then((m) => ({ default: m.QuoteHistoryView })));
+const FlightView = lazy(() => import('./FlightView').then((m) => ({ default: m.FlightView })));
+const WorkflowView = lazy(() => import('./WorkflowView').then((m) => ({ default: m.WorkflowView })));
+const PassengerView = lazy(() => import('./PassengerView').then((m) => ({ default: m.PassengerView })));
+const WorkflowBoard = lazy(() => import('./WorkflowBoard').then((m) => ({ default: m.WorkflowBoard })));
+const DepartureCalendar = lazy(() => import('./DepartureCalendar').then((m) => ({ default: m.DepartureCalendar })));
+const PaymentBoard = lazy(() => import('./PaymentBoard').then((m) => ({ default: m.PaymentBoard })));
+const SalesPipeline = lazy(() => import('./SalesPipeline').then((m) => ({ default: m.SalesPipeline })));
+const SalesAnalytics = lazy(() => import('./SalesAnalytics').then((m) => ({ default: m.SalesAnalytics })));
+const AuditView = lazy(() => import('@/components/admin/AuditView').then((m) => ({ default: m.AuditView })));
+const ContractView = lazy(() => import('@/components/contract/ContractView').then((m) => ({ default: m.ContractView })));
+const CustomerView = lazy(() => import('@/components/customer/CustomerView').then((m) => ({ default: m.CustomerView })));
+const NCCView = lazy(() => import('@/components/ncc/NCCView').then((m) => ({ default: m.NCCView })));
+const NccProductView = lazy(() => import('@/components/ncc/NccProductView').then((m) => ({ default: m.NccProductView })));
+const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').then((m) => ({ default: m.ItineraryApp })));
+const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
+const VisaApp = lazy(() => import('@/components/visa/VisaApp').then((m) => ({ default: m.VisaApp })));
+const DocTranslateApp = lazy(() => import('@/components/doctranslate/DocTranslateApp').then((m) => ({ default: m.DocTranslateApp })));
+
+const ViewFallback = () => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
+    <CircularProgress size={28} sx={{ color: '#14a08c' }} />
+  </Box>
+);
 
 export function QuoteView() {
   const template = useQuoteStore((s) => s.draft.template);
@@ -47,24 +56,15 @@ export function QuoteView() {
   const gateOpen = hydrated && (template === null || selectorOpen);
   const gateDismissable = template !== null;
 
-  if (template === 'itinerary') {
+  if (template === 'itinerary' || template === 'menu' || template === 'visa' || template === 'doctranslate') {
+    const exit = () => useQuoteStore.getState().abandon();
     return (
-      <ItineraryApp onExit={() => useQuoteStore.getState().abandon()} />
-    );
-  }
-  if (template === 'menu') {
-    return (
-      <MenuApp onExit={() => useQuoteStore.getState().abandon()} />
-    );
-  }
-  if (template === 'visa') {
-    return (
-      <VisaApp onExit={() => useQuoteStore.getState().abandon()} />
-    );
-  }
-  if (template === 'doctranslate') {
-    return (
-      <DocTranslateApp onExit={() => useQuoteStore.getState().abandon()} />
+      <Suspense fallback={<ViewFallback />}>
+        {template === 'itinerary' && <ItineraryApp onExit={exit} />}
+        {template === 'menu' && <MenuApp onExit={exit} />}
+        {template === 'visa' && <VisaApp onExit={exit} />}
+        {template === 'doctranslate' && <DocTranslateApp onExit={exit} />}
+      </Suspense>
     );
   }
 
@@ -84,6 +84,7 @@ export function QuoteView() {
           />
 
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
+           <Suspense fallback={<ViewFallback />}>
             {view === 'home' && <HomeView />}
             {view === 'cost' && <CostView />}
             {view === 'summary' && <SummaryView />}
@@ -103,6 +104,7 @@ export function QuoteView() {
             {view === 'customer' && <CustomerView />}
             {view === 'ncc' && <NCCView />}
             {view === 'nccProducts' && <NccProductView />}
+           </Suspense>
           </Box>
 
           <SaveCloudQuoteModal
