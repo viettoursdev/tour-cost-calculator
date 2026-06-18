@@ -289,6 +289,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         ] },
         { group: '🗂️ Vận hành', items: [
           item('workflow', '🗂️ Quy trình vận hành'),
+          item('passengers', '👥 Khách đoàn'),
           item('opsboard', '🧭 Điều phối'),
           item('departures', '📅 Lịch khởi hành'),
           item('payboard', '💰 Công nợ tổng'),

@@ -134,6 +134,23 @@ export type LegacyQuoteFlight = {
   note?: string;
 };
 
+/** Một khách trong đoàn (manifest + rooming list của báo giá). */
+export type Passenger = {
+  id: string;
+  name: string;
+  gender?: 'M' | 'F' | '';
+  dob?: string;          // ngày sinh (DD/MM/YYYY)
+  idType?: 'passport' | 'cccd' | '';
+  idNo?: string;         // số hộ chiếu / CCCD
+  nationality?: string;
+  roomType?: 'single' | 'double' | 'twin' | 'triple' | '';
+  roomNo?: string;       // nhãn/số phòng để ghép khách ở chung
+  dietary?: string;      // ăn kiêng / dị ứng
+  phone?: string;
+  emergency?: string;    // liên hệ khẩn cấp (tên + sđt)
+  note?: string;
+};
+
 /** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */
 export type WorkflowStatus = 'todo' | 'doing' | 'done' | 'blocked';
 
@@ -179,6 +196,7 @@ export type QuoteDraft = {
   lossReason?: string;     // Lý do thua (khi status = not_selected/cancelled)
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
+  passengers?: Passenger[]; // Danh sách khách đoàn (manifest + rooming)
   // Customer-facing terms (optional — absent until edited).
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm

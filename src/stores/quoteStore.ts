@@ -20,7 +20,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
-  QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, User, WorkflowStep,
+  Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, User, WorkflowStep,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -49,7 +49,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'home' | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics';
 
 type QuoteState = {
   draft: QuoteDraft;
@@ -95,6 +95,7 @@ type QuoteState = {
   setInclusions: (v: string[]) => void;
   setFlights: (v: QuoteFlight[]) => void;
   setWorkflow: (v: WorkflowStep[]) => void;
+  setPassengers: (v: Passenger[]) => void;
   setExclusions: (v: string[]) => void;
   setPayments: (v: QuotePayment[]) => void;
   setPricingOptions: (v: QuotePricingOptions) => void;
@@ -402,6 +403,7 @@ export const useQuoteStore = create<QuoteState>()(
         setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
         setFlights: (v) => set((s) => ({ draft: { ...s.draft, flights: v } })),
         setWorkflow: (v) => set((s) => ({ draft: { ...s.draft, workflow: v } })),
+        setPassengers: (v) => set((s) => ({ draft: { ...s.draft, passengers: v } })),
         setExclusions: (v) => set((s) => ({ draft: { ...s.draft, exclusions: v } })),
         setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
         setPricingOptions: (v) => set((s) => ({ draft: { ...s.draft, pricingOptions: v } })),
@@ -566,6 +568,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.payments ? { payments: data.payments } : {}),
                 ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
                 ...(data.flights ? { flights: data.flights } : {}),
+                ...(data.passengers ? { passengers: data.passengers } : {}),
                 ...(data.workflow ? { workflow: data.workflow } : {}),
                 ...(data.groups ? { groups: data.groups } : {}),
                 ...(data.activeGroupId ? { activeGroupId: data.activeGroupId } : {}),
@@ -599,6 +602,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.payments ? { payments: data.payments } : {}),
               ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
               ...(data.flights ? { flights: data.flights } : {}),
+                ...(data.passengers ? { passengers: data.passengers } : {}),
               ...(data.workflow ? { workflow: data.workflow } : {}),
               currentQuoteId: null, // imported file starts a new quote
             },

@@ -19,6 +19,7 @@ import { NCCView } from '@/components/ncc/NCCView';
 import { NccProductView } from '@/components/ncc/NccProductView';
 import { FlightView } from './FlightView';
 import { WorkflowView } from './WorkflowView';
+import { PassengerView } from './PassengerView';
 import { WorkflowBoard } from './WorkflowBoard';
 import { DepartureCalendar } from './DepartureCalendar';
 import { PaymentBoard } from './PaymentBoard';
@@ -90,6 +91,7 @@ export function QuoteView() {
             {view === 'payment' && <PaymentView />}
             {view === 'flights' && <FlightView />}
             {view === 'workflow' && <WorkflowView />}
+            {view === 'passengers' && <PassengerView />}
             {view === 'opsboard' && <WorkflowBoard />}
             {view === 'departures' && <DepartureCalendar />}
             {view === 'payboard' && <PaymentBoard />}
