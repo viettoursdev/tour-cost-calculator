@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
@@ -6,6 +6,7 @@ import { calcVND, fmtVND, qtyOf } from './calc';
 import { navFrom, type NavCol } from './cellNav';
 import { parseAmountVN } from '@/lib/numParse';
 import { docTienVN } from '@/lib/numToWords';
+import { recordItem, suggestItems, type ItemSuggestion } from '@/lib/itemSuggest';
 import { fmtOutput } from '@/lib/currency';
 import { LEGACY } from '@/theme';
 import type { Item, OutputCurrency, QtyMode } from '@/types';
@@ -111,35 +112,69 @@ function EditNum({
 
 /** Inline-edit text (legacy `ET`). */
 function EditText({
-  value, onChange, placeholder = '', bold = false, italic = false, color, navCol, fillFrom,
+  value, onChange, placeholder = '', bold = false, italic = false, color, navCol, fillFrom, suggest = false, onPick,
 }: {
   value: string; onChange: (v: string) => void; placeholder?: string;
   bold?: boolean; italic?: boolean; color?: string; navCol?: NavCol; fillFrom?: string;
+  suggest?: boolean; onPick?: (s: ItemSuggestion) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [hideSug, setHideSug] = useState(false);
+  const [hi, setHi] = useState(-1);
   const commit = () => { onChange(draft); setEditing(false); };
+  const matches = suggest && !hideSug && editing ? suggestItems(draft) : [];
+  const pick = (s: ItemSuggestion) => { setDraft(s.name); onPick?.(s); setEditing(false); };
   if (editing) {
     return (
-      <Box
-        component="input" autoFocus value={draft} data-nav={navCol}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === 'Escape') { setEditing(false); return; }
-          if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
-            e.preventDefault(); if (fillFrom !== undefined) { setDraft(fillFrom); onChange(fillFrom); } return;
-          }
-          if (!navCol) { if (e.key === 'Enter') commit(); return; }
-          if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
-          else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
-        }}
-        sx={{
-          width: '100%', background: '#fff', border: '1.5px solid #14a08c',
-          borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
-          fontFamily: 'inherit', fontSize: bold ? 13 : 12, fontWeight: bold ? 600 : 400,
-        }}
-      />
+      <Box sx={{ position: 'relative', width: '100%' }}>
+        <Box
+          component="input" autoFocus value={draft} data-nav={navCol}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => { setDraft(e.target.value); setHideSug(false); setHi(-1); }}
+          onBlur={commit}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Escape') { if (matches.length) { e.preventDefault(); setHideSug(true); } else setEditing(false); return; }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+              e.preventDefault(); if (fillFrom !== undefined) { setDraft(fillFrom); onChange(fillFrom); } return;
+            }
+            if (matches.length && e.key === 'ArrowDown') { e.preventDefault(); setHi((h) => Math.min(matches.length - 1, h + 1)); return; }
+            if (matches.length && e.key === 'ArrowUp') { e.preventDefault(); setHi((h) => Math.max(-1, h - 1)); return; }
+            if (e.key === 'Enter' && hi >= 0 && matches[hi]) { e.preventDefault(); pick(matches[hi]); return; }
+            if (!navCol) { if (e.key === 'Enter') commit(); return; }
+            if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
+            else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
+          }}
+          sx={{
+            width: '100%', background: '#fff', border: '1.5px solid #14a08c',
+            borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
+            fontFamily: 'inherit', fontSize: bold ? 13 : 12, fontWeight: bold ? 600 : 400,
+          }}
+        />
+        {matches.length > 0 && (
+          <Box sx={{
+            position: 'absolute', top: '100%', left: 0, mt: 0.5, zIndex: 40, minWidth: 220, maxWidth: 340,
+            background: '#fff', border: '1px solid rgba(20,150,140,0.3)', borderRadius: '8px',
+            boxShadow: '0 8px 24px rgba(15,58,74,0.18)', overflow: 'hidden',
+          }}>
+            {matches.map((s, i) => (
+              <Box key={s.name}
+                onMouseDown={(e: ReactMouseEvent) => { e.preventDefault(); pick(s); }}
+                onMouseEnter={() => setHi(i)}
+                sx={{
+                  display: 'flex', justifyContent: 'space-between', gap: 1, alignItems: 'baseline',
+                  px: 1, py: 0.6, cursor: 'pointer', fontSize: 12,
+                  background: i === hi ? 'rgba(20,150,140,0.12)' : 'transparent',
+                }}
+              >
+                <Box component="span" sx={{ fontWeight: 600, color: LEGACY.navy, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</Box>
+                <Box component="span" sx={{ flexShrink: 0, color: 'rgba(15,58,74,0.55)', fontSize: 11 }}>
+                  {s.price.toLocaleString('vi-VN')} {s.cur} {s.unit}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
     );
   }
   return (
@@ -228,7 +263,13 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
   const warns = warnings ?? [];
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
-  const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
+  const u = (patch: Partial<Item>) => {
+    const next = { ...item, ...patch };
+    onUpd(next);
+    // Tự học hạng mục cho gợi ý lần sau (chỉ khi đã có tên + đơn giá).
+    if (next.name.trim() && next.price > 0)
+      recordItem({ name: next.name, price: next.price, unit: next.unit, cur: next.cur });
+  };
   // Line total in the chosen display currency (DMC) or VND.
   const fmtMoney = (n: number) =>
     displayCurrency && displayCurrency !== 'VND' ? fmtOutput(n, displayCurrency, rates) : fmtVND(n);
@@ -285,7 +326,8 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
                 sx={{ flexShrink: 0, fontSize: 13, color: '#d18a13', cursor: 'help', lineHeight: 1 }}>⚠</Box>
             </Tooltip>
           )}
-          <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" fillFrom={prevItem?.name} />
+          <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" fillFrom={prevItem?.name}
+            suggest onPick={(s) => u({ name: s.name, price: s.price, unit: s.unit, cur: s.cur })} />
         </Stack>
       </TableCell>
 
