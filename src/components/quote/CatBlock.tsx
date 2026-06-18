@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Sortable from 'sortablejs';
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent,
@@ -9,22 +9,10 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import { LineRow } from './LineRow';
 import { catTotal, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
-import { parseAmountVN } from '@/lib/numParse';
 import { lineWarnings, duplicateNames, nameKey } from './lineValidation';
+import { parsePasteGrid, FIELD_LABEL, type ParseField } from './parsePaste';
 import type { CategoryDef } from './constants';
 import type { Item, OutputCurrency } from '@/types';
-
-/** Phân tích dữ liệu dán từ Excel: mỗi dòng = Tên ⭾ Đơn giá ⭾ Đơn vị ⭾ Số lần ⭾ Ghi chú. */
-function parsePasted(text: string): Partial<Item>[] {
-  return text.split(/\r?\n/).map((line) => line.split('\t')).filter((c) => (c[0] ?? '').trim()).map((c) => {
-    const o: Partial<Item> = { name: c[0].trim() };
-    if ((c[1] ?? '').trim()) o.price = parseAmountVN(c[1]);
-    if ((c[2] ?? '').trim()) o.unit = c[2].trim();
-    if ((c[3] ?? '').trim()) o.times = Math.max(1, Math.round(parseAmountVN(c[3])) || 1);
-    if ((c[4] ?? '').trim()) o.note = c[4].trim();
-    return o;
-  });
-}
 
 type Props = {
   cat: CategoryDef;
@@ -74,8 +62,9 @@ export function CatBlock({
     });
     return () => sortable.destroy();
   }, []);
+  const parsed = useMemo(() => parsePasteGrid(pasteText), [pasteText]);
   const doPaste = () => {
-    const rows = parsePasted(pasteText);
+    const rows = parsed.rows.filter((r) => r.ok).map((r) => r.item);
     if (rows.length) onAddMany(rows);
     setPasteText(''); setPasteOpen(false);
   };
@@ -235,20 +224,61 @@ export function CatBlock({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={pasteOpen} onClose={() => setPasteOpen(false)} fullWidth maxWidth="sm">
+      <Dialog open={pasteOpen} onClose={() => setPasteOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Dán nhiều dòng từ Excel — {cat.label}</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Copy khối ở Excel rồi dán vào đây. Mỗi dòng 1 hạng mục, các cột cách nhau bằng <b>Tab</b> theo thứ tự:
-            <b> Tên · Đơn giá · Đơn vị · Số lần · Ghi chú</b> (chỉ Tên là bắt buộc). Giá hiểu cả <code>1.500.000</code>, <code>1500k</code>, <code>1tr5</code>.
+            Copy khối ở Excel rồi dán vào đây. Các cột cách nhau bằng <b>Tab</b> theo thứ tự
+            <b> Tên · Đơn giá · Đơn vị · Số lần · Ghi chú</b> (chỉ Tên bắt buộc). Nếu khối có <b>dòng tiêu đề</b>, hệ thống tự nhận & bỏ. Giá hiểu cả <code>1.500.000</code>, <code>1500k</code>, <code>1tr5</code>.
           </Typography>
-          <TextField fullWidth multiline minRows={6} value={pasteText} onChange={(e) => setPasteText(e.target.value)}
-            placeholder={'Xe 45 chỗ\t5500000\t/xe/ngày\t2\tMáy lạnh\nHDV\t1200000\t/ngày\t3'} sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 13 } }} />
+          <TextField fullWidth multiline minRows={5} value={pasteText} onChange={(e) => setPasteText(e.target.value)}
+            placeholder={'Tên\tĐơn giá\tĐơn vị\tSố lần\tGhi chú\nXe 45 chỗ\t5500000\t/xe/ngày\t2\tMáy lạnh'} sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 13 } }} />
+
+          {parsed.rows.length > 0 && (
+            <Box sx={{ mt: 1.75 }}>
+              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 0.75 }} flexWrap="wrap" useFlexGap>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#0d7a6a' }}>
+                  Xem trước: sẽ thêm {parsed.validCount} dòng
+                  {parsed.rows.length - parsed.validCount > 0 ? ` · bỏ ${parsed.rows.length - parsed.validCount} dòng lỗi` : ''}
+                </Typography>
+                {parsed.headerDetected && <Typography variant="caption" sx={{ color: '#b9770f' }}>✓ Đã tự bỏ dòng tiêu đề</Typography>}
+              </Stack>
+              <TableContainer sx={{ maxHeight: 280, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+                <Table size="small" stickyHeader>
+                  <TableHead>
+                    <TableRow sx={{ '& th': { bgcolor: '#f3faf8', fontWeight: 700, fontSize: 12 } }}>
+                      <TableCell sx={{ width: 28 }} />
+                      {parsed.map.map((f, i) => (
+                        <TableCell key={i}>{f === 'skip' ? '—' : FIELD_LABEL[f as Exclude<ParseField, 'skip'>]}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {parsed.rows.slice(0, 100).map((r, ri) => (
+                      <TableRow key={ri} sx={{ background: r.ok ? 'transparent' : 'rgba(220,50,80,0.08)' }}>
+                        <TableCell sx={{ textAlign: 'center', color: r.ok ? '#27ae60' : '#dc3250' }} title={r.reason}>
+                          {r.ok ? '✓' : '⚠'}
+                        </TableCell>
+                        {parsed.map.map((f, ci) => (
+                          <TableCell key={ci} sx={{ fontSize: 12, whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {f === 'price' ? (r.cells[ci] ?? '').trim() && (r.item.price ?? 0).toLocaleString('vi-VN') : (r.cells[ci] ?? '').trim()}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {parsed.rows.length > 100 && (
+                <Typography variant="caption" color="text.secondary">…và {parsed.rows.length - 100} dòng nữa (xem trước tối đa 100).</Typography>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPasteOpen(false)} color="inherit">Huỷ</Button>
-          <Button variant="contained" disabled={!pasteText.trim()} onClick={doPaste} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
-            Thêm {parsePasted(pasteText).length || ''} dòng
+          <Button variant="contained" disabled={parsed.validCount === 0} onClick={doPaste} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+            Thêm {parsed.validCount || ''} dòng
           </Button>
         </DialogActions>
       </Dialog>
