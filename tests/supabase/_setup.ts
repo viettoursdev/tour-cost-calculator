@@ -31,11 +31,22 @@ export async function getViettoursClient(): Promise<SupabaseClient> {
   return c;
 }
 
+const PK_COL: Record<string, string> = {
+  fx_rates: 'currency',
+  rate_card_hotels: 'city',
+  rate_card_other: 'rkey',
+  rate_card_visa: 'one_row',
+  rate_card_meta: 'one_row',
+  visa_products_meta: 'one_row',
+  notification_thread_members: 'thread_id',
+};
+
 /** Delete all rows from the given tables (service role bypasses RLS). Children first. */
 export async function truncate(tables: string[]): Promise<void> {
   const admin = getServiceClient();
   for (const t of tables) {
-    const { error } = await admin.from(t).delete().not('id', 'is', null);
+    const col = PK_COL[t] ?? 'id';
+    const { error } = await admin.from(t).delete().not(col, 'is', null);
     if (error && !/no rows/i.test(error.message)) throw new Error(`truncate ${t}: ${error.message}`);
   }
 }
