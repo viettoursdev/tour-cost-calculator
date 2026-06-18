@@ -27,6 +27,7 @@ import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 import { FilePreviewDialog } from '@/components/common/FilePreviewDialog';
+import { contractIssues } from './contractValidation';
 
 export function ContractView() {
   const contracts = useContractStore((s) => s.contracts);
@@ -62,8 +63,14 @@ export function ContractView() {
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
 
   const closeExport = () => setExportAnchor(null);
-  const doExportPDF = (c: Contract) => { closeExport(); void import('@/lib/exports/exportContractPDF').then((m) => m.exportContractPDF(c)); };
-  const doExportWord = (c: Contract) => { closeExport(); void import('@/lib/exports/exportContractDocx').then((m) => m.exportContractDocx(c)); };
+  // Bản chính thức (PDF/Word) → cảnh báo nếu hồ sơ còn thiếu; Xem trước thì bỏ qua.
+  const confirmIssues = (c: Contract): boolean => {
+    const issues = contractIssues(c);
+    if (!issues.length) return true;
+    return window.confirm(`⚠ Hợp đồng còn ${issues.length} điểm cần xem lại:\n\n${issues.map((i) => '• ' + i).join('\n')}\n\nVẫn xuất bản này?`);
+  };
+  const doExportPDF = (c: Contract) => { closeExport(); if (!confirmIssues(c)) return; void import('@/lib/exports/exportContractPDF').then((m) => m.exportContractPDF(c)); };
+  const doExportWord = (c: Contract) => { closeExport(); if (!confirmIssues(c)) return; void import('@/lib/exports/exportContractDocx').then((m) => m.exportContractDocx(c)); };
   const doPreview = (c: Contract) => {
     closeExport();
     void import('@/lib/exports/exportContractPDF').then((m) => {
@@ -283,6 +290,16 @@ export function ContractView() {
       </Dialog>
 
       <Menu anchorEl={exportAnchor?.el} open={!!exportAnchor} onClose={closeExport}>
+        {exportAnchor && contractIssues(exportAnchor.c).length > 0 && (
+          <Box sx={{ px: 2, py: 1, maxWidth: 280, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, color: '#b9770f', display: 'block' }}>
+              ⚠ Còn {contractIssues(exportAnchor.c).length} điểm cần xem lại:
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'normal' }}>
+              {contractIssues(exportAnchor.c).join(' · ')}
+            </Typography>
+          </Box>
+        )}
         <MenuItem onClick={() => exportAnchor && doPreview(exportAnchor.c)}><VisibilityIcon fontSize="small" sx={{ mr: 1 }} />Xem trước (PDF)</MenuItem>
         <MenuItem onClick={() => exportAnchor && doExportPDF(exportAnchor.c)}><PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />Tải PDF</MenuItem>
         <MenuItem onClick={() => exportAnchor && doExportWord(exportAnchor.c)}><ArticleIcon fontSize="small" sx={{ mr: 1 }} />Tải Word (.docx)</MenuItem>
