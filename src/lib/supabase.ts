@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment } from '@/types';
+import type { FileAttachment, User, Role } from '@/types';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -42,4 +42,63 @@ export async function saveAttachments(
     const ins = await client.from('attachments').insert(rows);
     if (ins.error) throw new Error('saveAttachments insert: ' + ins.error.message);
   }
+}
+
+// ── Users / profiles gateway ──────────────────────────────────────────────────
+
+const profileToUser = (r: Record<string, unknown>): User => ({
+  u: (r.username as string) ?? '',
+  email: (r.email as string) ?? undefined,
+  phone: (r.phone as string) ?? undefined,
+  role: r.role as Role,
+  name: (r.name as string) ?? '',
+  color: (r.color as string) ?? '#888888',
+});
+
+export async function sbPullUsers(client: SupabaseClient = sb): Promise<User[]> {
+  const { data, error } = await client.from('profiles')
+    .select('username, email, phone, role, name, color');
+  if (error) throw new Error('sbPullUsers: ' + error.message);
+  return (data ?? []).map(profileToUser);
+}
+
+/**
+ * Upserts editable profile fields (username/email/phone/role/name/color) for
+ * users whose email already has an auth.users + profile row. Does NOT create
+ * auth users (admin API; Phase 3). Users with no matching profile row are
+ * skipped and a warning is logged.
+ */
+export async function sbPushUsers(users: User[], client: SupabaseClient = sb): Promise<void> {
+  const emails = users.map((u) => u.email).filter(Boolean) as string[];
+  const { data: existing, error } = await client.from('profiles')
+    .select('id, email').in('email', emails);
+  if (error) throw new Error('sbPushUsers: ' + error.message);
+  const idByEmail = new Map((existing ?? []).map((r) => [r.email as string, r.id as string]));
+  const updates = users
+    .filter((u) => u.email && idByEmail.has(u.email))
+    .map((u) => ({
+      id: idByEmail.get(u.email as string)!,
+      username: u.u,
+      email: u.email,
+      phone: u.phone ?? null,
+      role: u.role,
+      name: u.name,
+      color: u.color,
+      updated_at: new Date().toISOString(),
+    }));
+  const skipped = users.filter((u) => !u.email || !idByEmail.has(u.email));
+  if (skipped.length) {
+    console.warn(
+      `sbPushUsers: skipped ${skipped.length} user(s) with no auth account (create via admin in Phase 3).`,
+    );
+  }
+  if (updates.length) {
+    const { error: upErr } = await client.from('profiles').upsert(updates, { onConflict: 'id' });
+    if (upErr) throw new Error('sbPushUsers upsert: ' + upErr.message);
+  }
+}
+
+/** No-op in Supabase (no plaintext password column exists). Kept for signature parity with Firebase gateway. */
+export async function sbPurgeLegacyPasswords(_client: SupabaseClient = sb): Promise<number> {
+  return 0;
 }
