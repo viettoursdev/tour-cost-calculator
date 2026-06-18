@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select has_table('public','notifications','notifications exist');
+select has_table('public','notification_threads','threads exist');
+select has_table('public','notification_thread_members','members exist');
+select has_table('public','notification_comments','comments exist');
+select fk_ok('public','notifications','user_id','public','profiles','id');
+select fk_ok('public','notification_comments','thread_id','public','notification_threads','id');
+select * from finish();
+rollback;
