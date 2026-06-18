@@ -56,6 +56,16 @@ describe('notifications gateway', () => {
     expect(list[0].title).toBe('Broadcast');
   });
 
+  it('sendNotificationMany skips unmapped users, valid targets still receive (I1)', async () => {
+    const c = await getViettoursClient();
+    await sbSendNotificationMany(['tester', 'no-such-user'], {
+      type: 'announcement', title: 'Resilient', message: 'Should arrive', createdBy: 'admin',
+    }, c);
+    const list = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list).toHaveLength(1);
+    expect(list[0].title).toBe('Resilient');
+  });
+
   it('ensure thread + add comment → subscribe yields comment', async () => {
     const c = await getViettoursClient();
     const thread: NotifThread = {
@@ -75,6 +85,50 @@ describe('notifications gateway', () => {
     expect(t!.comments[0].text).toBe('LGTM');
   });
 
+  it('subscribe thread fires again when a comment is added (I3 realtime)', async () => {
+    const c = await getViettoursClient();
+    const thread: NotifThread = {
+      id: 'thread-rt', title: 'Realtime Thread', members: ['tester'],
+      comments: [], createdAt: new Date().toISOString(), createdBy: 'tester',
+    };
+    await sbEnsureNotifThread(thread, c);
+
+    const emissions: Array<NotifThread | null> = [];
+    let resolveSecond: ((t: NotifThread | null) => void) | null = null;
+    const secondEmission = new Promise<NotifThread | null>((res) => { resolveSecond = res; });
+
+    const unsub = sbSubscribeNotifThread('thread-rt', (t) => {
+      emissions.push(t);
+      if (emissions.length === 2 && resolveSecond) {
+        resolveSecond(t);
+        resolveSecond = null;
+      }
+    }, c);
+
+    // Wait for initial emission
+    await new Promise<void>((res) => {
+      const check = setInterval(() => {
+        if (emissions.length >= 1) { clearInterval(check); res(); }
+      }, 50);
+    });
+
+    // Add a comment — should trigger a second emission
+    await sbAddThreadComment('thread-rt', {
+      id: 'cmt-rt', by: 'tester', byName: 'QA Bot', text: 'New comment', at: new Date().toISOString(),
+    }, c);
+
+    const second = await Promise.race([
+      secondEmission,
+      new Promise<null>((_, rej) => setTimeout(() => rej(new Error('timeout: no second emission after comment insert')), 10000)),
+    ]);
+
+    unsub();
+
+    expect(second).not.toBeNull();
+    expect(second!.comments.length).toBeGreaterThan(0);
+    expect(second!.comments.some((cm) => cm.text === 'New comment')).toBe(true);
+  }, 30000);
+
   it('ensure thread is idempotent and merges new members', async () => {
     const c = await getViettoursClient();
     const base: NotifThread = {
@@ -88,6 +142,21 @@ describe('notifications gateway', () => {
     expect(t!.members).toContain('tester');
     expect(t!.members).toContain('admin');
     expect(t!.title).toBe('Original'); // title must not be overwritten on re-ensure
+  });
+
+  it('ensure thread preserves existing link when re-ensured without one (I2)', async () => {
+    const c = await getViettoursClient();
+    const base: NotifThread = {
+      id: 'thread-link', title: 'Link Test', members: ['tester'],
+      comments: [], createdAt: new Date().toISOString(), createdBy: 'tester',
+      link: { type: 'contract', id: 'c-1', label: 'My Contract' },
+    };
+    await sbEnsureNotifThread(base, c);
+    // re-ensure without a link — existing link must be preserved
+    await sbEnsureNotifThread({ ...base, link: undefined }, c);
+    const t = await once<NotifThread | null>((cb) => sbSubscribeNotifThread('thread-link', cb, c));
+    expect(t!.link).toBeDefined();
+    expect(t!.link?.id).toBe('c-1');
   });
 
   it('setThreadStatus updates status field', async () => {

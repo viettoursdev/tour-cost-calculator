@@ -1844,16 +1844,14 @@ import type { Unsubscribe } from './supabase/helpers';
 
 // ── helpers ──
 
-/** Resolve username → user_id; throws if not found (send requires a real target). */
-async function resolveUserId(client: SupabaseClient, username: string): Promise<string> {
+/** Resolve username → user_id; returns null if not found. */
+async function resolveUserId(client: SupabaseClient, username: string): Promise<string | null> {
   const map = await usernamesToIds(client, [username]);
-  const id = map.get(username);
-  if (!id) throw new Error(`sbNotifications: no profile for username "${username}"`);
-  return id;
+  return map.get(username) ?? null;
 }
 
 const rowToNotif = (r: Record<string, unknown>): Notification => ({
-  id: (r.legacy_id as string) || (r.id as string),
+  id: (r.legacy_id as string) ?? (r.id as string),
   type: r.type as Notification['type'],
   title: r.title as string,
   message: r.message as string,
@@ -1878,6 +1876,10 @@ export async function sbSendNotification(
   client: SupabaseClient = sb,
 ): Promise<void> {
   const userId = await resolveUserId(client, targetUsername);
+  if (!userId) {
+    console.warn(`sbSendNotification: no profile for "${targetUsername}", skipped`);
+    return;
+  }
   const legacyId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
   const { error } = await client.from('notifications').insert({
     legacy_id: legacyId,
@@ -1915,7 +1917,7 @@ export function sbSubscribeNotifications(
   return subscribeTable(client, 'notifications', async (cl) => {
     const map = await usernamesToIds(cl, [username]);
     const userId = map.get(username);
-    if (!userId) { cb([]); return []; }
+    if (!userId) return [];
     const { data, error } = await cl.from('notifications')
       .select('*')
       .eq('user_id', userId)
@@ -1935,6 +1937,7 @@ export async function sbPushNotifications(
   client: SupabaseClient = sb,
 ): Promise<void> {
   const userId = await resolveUserId(client, username);
+  if (!userId) throw new Error(`sbPushNotifications: no profile for "${username}"`);
   // delete all existing
   const del = await client.from('notifications').delete().eq('user_id', userId);
   if (del.error) throw new Error('sbPushNotifications delete: ' + del.error.message);
@@ -1980,18 +1983,19 @@ export async function sbEnsureNotifThread(
 ): Promise<void> {
   // upsert the thread row (text PK — on conflict, keep existing title/created_at)
   const { data: existing } = await client.from('notification_threads')
-    .select('id, title')
+    .select('id, title, link')
     .eq('id', thread.id)
     .maybeSingle();
 
   if (existing) {
-    // merge: update link (if provided) but don't overwrite title
-    await client.from('notification_threads')
-      .update({
-        link: thread.link ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', thread.id);
+    // merge: preserve existing link when caller doesn't supply one; never overwrite title
+    const newLink = thread.link ?? (existing.link as string | null | undefined) ?? null;
+    const linkChanged = newLink !== (existing.link ?? null);
+    if (linkChanged) {
+      await client.from('notification_threads')
+        .update({ link: newLink })
+        .eq('id', thread.id);
+    }
   } else {
     const creatorMap = await usernamesToIds(client, [thread.createdBy]);
     const { error } = await client.from('notification_threads').insert({
@@ -2055,6 +2059,7 @@ const assembleThread = async (cl: SupabaseClient, id: string): Promise<NotifThre
 
 /**
  * Subscribe to a shared thread (members + comments reassembled).
+ * Listens to ALL THREE tables so a new comment fires the subscriber.
  * Mirrors fbSubscribeNotifThread (firebase.ts:732-734).
  */
 export function sbSubscribeNotifThread(
@@ -2062,7 +2067,23 @@ export function sbSubscribeNotifThread(
   cb: (t: NotifThread | null) => void,
   client: SupabaseClient = sb,
 ): Unsubscribe {
-  return subscribeTable(client, 'notification_threads', (cl) => assembleThread(cl, id), cb);
+  let active = true;
+  const reload = () =>
+    assembleThread(client, id)
+      .then((v) => { if (active) cb(v); })
+      .catch((e) => { console.warn('sbSubscribeNotifThread load error:', (e as Error).message); });
+
+  reload();
+
+  const channelId = `notif_thread:${id}:${Math.random().toString(36).slice(2)}`;
+  const channel = client
+    .channel(channelId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_threads', filter: `id=eq.${id}` }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_comments', filter: `thread_id=eq.${id}` }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_thread_members', filter: `thread_id=eq.${id}` }, () => reload())
+    .subscribe();
+
+  return () => { active = false; client.removeChannel(channel); };
 }
 
 /**
