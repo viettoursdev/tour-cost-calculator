@@ -1527,3 +1527,312 @@ export async function sbDeleteItinerary(
   const { error } = await client.from('itineraries').delete().eq('legacy_id', id);
   if (error) throw new Error('sbDeleteItinerary: ' + error.message);
 }
+
+// ─── Restaurants + Menus ─────────────────────────────────────────────────────
+
+import type { Restaurant, RestaurantMenu, Menu, MenuDay, MenuIndexEntry } from '@/types/menu';
+
+// ── row assemblers ──
+
+const rowToRestaurantMenu = (r: Record<string, unknown>): RestaurantMenu => ({
+  id: (r.legacy_menu_id as string) ?? (r.id as string),
+  name: (r.name as string) ?? '',
+  dishes: (r.dishes as string) ?? '',
+  price: (r.price as number) ?? 0,
+  cur: (r.cur as string) ?? 'VND',
+  rating: (r.rating as number) ?? 0,
+  review: (r.review as string) ?? '',
+});
+
+const rowToMenuIndex = (r: Record<string, unknown>): MenuIndexEntry => ({
+  id: (r.legacy_id as string) ?? (r.id as string),
+  code: (r.code as string) ?? '',
+  title: (r.title as string) ?? '',
+  destination: (r.destination as string) ?? '',
+  days: r.days as number,
+  linkedItineraryId: (r.linked_itinerary_id as string) ?? null,
+  linkedItineraryName: (r.linked_itinerary_name as string) ?? '',
+  linkedQuoteId: (r.linked_quote_id as string) ?? null,
+  linkedQuoteName: (r.linked_quote_name as string) ?? '',
+  createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
+  createdBy: (r.created_by_name as string) ?? undefined,
+  updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : '',
+  updatedBy: (r.updated_by_name as string) ?? '',
+});
+
+const rowToMenuDay = (r: Record<string, unknown>): MenuDay => ({
+  id: (r.id as string),
+  dayNum: r.day_num as number,
+  date: (r.date as string) ?? '',
+  city: (r.city as string) ?? '',
+  meals: r.meals as MenuDay['meals'],
+});
+
+// ── restaurants ──
+
+/**
+ * Subscribe to the shared restaurant library (parent + restaurant_menus children).
+ * Mirrors fbSubscribeRestaurants (firebase.ts:976-979).
+ */
+export function sbSubscribeRestaurants(
+  cb: (list: Restaurant[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(
+    client,
+    'restaurants',
+    async (cl) => {
+      const { data: rows, error } = await cl
+        .from('restaurants')
+        .select('*')
+        .order('name', { ascending: true });
+      if (error) throw error;
+
+      const ids = (rows ?? []).map((r) => r.id as string);
+      const { data: rmRows, error: rmErr } = ids.length
+        ? await cl
+            .from('restaurant_menus')
+            .select('*')
+            .in('restaurant_id', ids)
+            .order('sort_order', { ascending: true })
+        : { data: [] as Record<string, unknown>[], error: null };
+      if (rmErr) throw rmErr;
+
+      const byParent = new Map<string, RestaurantMenu[]>();
+      for (const rm of rmRows ?? []) {
+        const arr = byParent.get(rm.restaurant_id as string) ?? [];
+        arr.push(rowToRestaurantMenu(rm as Record<string, unknown>));
+        byParent.set(rm.restaurant_id as string, arr);
+      }
+
+      return (rows ?? []).map((r) => ({
+        id: (r.legacy_id as string) ?? (r.id as string),
+        name: (r.name as string) ?? '',
+        continent: (r.continent as string) ?? '',
+        country: (r.country as string) ?? '',
+        city: (r.city as string) ?? '',
+        website: (r.website as string) ?? undefined,
+        menuLink: (r.menu_link as string) ?? undefined,
+        contact: (r.contact as string) ?? undefined,
+        note: (r.note as string) ?? undefined,
+        rating: (r.rating as number) ?? 0,
+        review: (r.review as string) ?? '',
+        menus: byParent.get(r.id as string) ?? [],
+      })) as Restaurant[];
+    },
+    cb,
+  );
+}
+
+/**
+ * Full-overwrite push of the restaurant library.
+ * Mirrors fbSaveRestaurants (firebase.ts:986-992).
+ */
+export async function sbSaveRestaurants(
+  list: Restaurant[],
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  // Safe full-overwrite delete: fetch existing legacy_ids, then delete those not in new list
+  const keepIds = list.map((r) => r.id);
+  const { data: existing, error: fetchErr } = await client
+    .from('restaurants')
+    .select('id, legacy_id');
+  if (fetchErr) throw new Error('sbSaveRestaurants fetch: ' + fetchErr.message);
+
+  const toDelete = (existing ?? [])
+    .filter((row) => !keepIds.includes(row.legacy_id as string))
+    .map((row) => row.id as string);
+
+  if (toDelete.length > 0) {
+    const { error: delErr } = await client
+      .from('restaurants')
+      .delete()
+      .in('id', toDelete);
+    if (delErr) throw new Error('sbSaveRestaurants delete: ' + delErr.message);
+  }
+
+  for (const rest of list) {
+    const { data: up, error: upErr } = await client
+      .from('restaurants')
+      .upsert(
+        {
+          legacy_id: rest.id,
+          name: rest.name,
+          continent: rest.continent ?? null,
+          country: rest.country ?? null,
+          city: rest.city ?? null,
+          website: rest.website ?? null,
+          menu_link: rest.menuLink ?? null,
+          contact: rest.contact ?? null,
+          note: rest.note ?? null,
+          rating: rest.rating ?? 0,
+          review: rest.review ?? '',
+        },
+        { onConflict: 'legacy_id' },
+      )
+      .select('id')
+      .single();
+    if (upErr) throw new Error('sbSaveRestaurants upsert: ' + upErr.message);
+
+    await replaceChildren(
+      client,
+      'restaurant_menus',
+      'restaurant_id',
+      up!.id as string,
+      rest.menus.map((m, i) => ({
+        restaurant_id: up!.id,
+        legacy_menu_id: m.id,
+        name: m.name,
+        dishes: m.dishes ?? null,
+        price: m.price ?? 0,
+        cur: m.cur ?? 'VND',
+        rating: m.rating ?? 0,
+        review: m.review ?? null,
+        sort_order: i,
+      })),
+    );
+  }
+
+  void savedBy; // unused but kept for API symmetry
+}
+
+// ── menus ──
+
+/**
+ * Subscribe to the menu metadata index (lightweight list).
+ * Mirrors fbSubscribeMenus (firebase.ts:1046-1049).
+ */
+export function sbSubscribeMenus(
+  cb: (list: MenuIndexEntry[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(
+    client,
+    'menus',
+    async (cl) => {
+      const { data, error } = await cl
+        .from('menus')
+        .select(
+          'id, legacy_id, code, title, destination, days, linked_itinerary_id, linked_itinerary_name, linked_quote_id, linked_quote_name, created_at, created_by_name, updated_at, updated_by_name',
+        )
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(rowToMenuIndex);
+    },
+    cb,
+  );
+}
+
+/**
+ * One-time fetch of a full menu, reassembling schedule from menu_days.
+ * Mirrors fbGetMenu (firebase.ts:1028-1030).
+ */
+export async function sbGetMenu(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<Menu | null> {
+  const { data: row, error } = await client
+    .from('menus')
+    .select('*')
+    .eq('legacy_id', id)
+    .maybeSingle();
+  if (error) throw new Error('sbGetMenu: ' + error.message);
+  if (!row) return null;
+
+  const { data: days, error: dErr } = await client
+    .from('menu_days')
+    .select('*')
+    .eq('menu_id', row.id as string)
+    .order('sort_order', { ascending: true });
+  if (dErr) throw new Error('sbGetMenu days: ' + dErr.message);
+
+  return {
+    id: (row.legacy_id as string) ?? (row.id as string),
+    code: (row.code as string) ?? undefined,
+    type: row.type as Menu['type'],
+    continent: (row.continent as string) ?? '',
+    country: (row.country as string) ?? '',
+    seq: (row.seq as number) ?? 0,
+    title: (row.title as string) ?? '',
+    destination: (row.destination as string) ?? '',
+    days: row.days as number,
+    linkedItineraryId: (row.linked_itinerary_id as string) ?? null,
+    linkedItineraryName: (row.linked_itinerary_name as string) ?? '',
+    linkedQuoteId: (row.linked_quote_id as string) ?? null,
+    linkedQuoteName: (row.linked_quote_name as string) ?? '',
+    schedule: (days ?? []).map(rowToMenuDay),
+    createdAt: row.created_at ? new Date(row.created_at as string).toISOString() : undefined,
+    createdBy: (row.created_by_name as string) ?? undefined,
+    updatedAt: row.updated_at ? new Date(row.updated_at as string).toISOString() : undefined,
+    updatedBy: (row.updated_by_name as string) ?? undefined,
+  };
+}
+
+/**
+ * Save menu: upsert parent by legacy_id, replace menu_days children.
+ * Preserves createdAt on re-save. Mirrors fbSaveMenu (firebase.ts:1003-1025).
+ */
+export async function sbSaveMenu(
+  m: Menu,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: up, error: upErr } = await client
+    .from('menus')
+    .upsert(
+      {
+        legacy_id: m.id,
+        code: m.code ?? null,
+        type: m.type,
+        continent: m.continent,
+        country: m.country,
+        seq: m.seq ?? 0,
+        title: m.title,
+        destination: m.destination ?? null,
+        days: m.days,
+        linked_itinerary_id: m.linkedItineraryId ?? null,
+        linked_itinerary_name: m.linkedItineraryName ?? '',
+        linked_quote_id: m.linkedQuoteId ?? null,
+        linked_quote_name: m.linkedQuoteName ?? '',
+        created_at: m.createdAt ?? now,
+        created_by_name: m.createdBy ?? savedBy,
+        updated_at: now,
+        updated_by_name: savedBy,
+      },
+      { onConflict: 'legacy_id' },
+    )
+    .select('id')
+    .single();
+  if (upErr) throw new Error('sbSaveMenu upsert: ' + upErr.message);
+
+  const parentUuid = up!.id as string;
+
+  await replaceChildren(
+    client,
+    'menu_days',
+    'menu_id',
+    parentUuid,
+    m.schedule.map((day, i) => ({
+      menu_id: parentUuid,
+      day_num: day.dayNum,
+      date: day.date ?? null,
+      city: day.city ?? null,
+      meals: day.meals,
+      sort_order: i,
+    })),
+  );
+}
+
+/**
+ * Delete menu by legacy_id. Cascade drops menu_days automatically.
+ * Mirrors fbDeleteMenu (firebase.ts:1033-1043).
+ */
+export async function sbDeleteMenu(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('menus').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteMenu: ' + error.message);
+}
