@@ -26,6 +26,8 @@ const REACTIONS = ['👍', '❤️', '😄', '🎉', '✅', '😮'];
 const uid = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const fmtTime = (iso: string) => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
+const isImage = (f: { name: string; mime?: string }) =>
+  (f.mime?.startsWith('image/') ?? false) || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name);
 
 export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const me = useAuthStore((s) => s.currentUser);
@@ -206,14 +208,27 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                             </Box>
                           )}
                           {m.text && <Typography fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</Typography>}
-                          {m.file && (
-                            <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer"
-                              sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: m.text ? 0.5 : 0, color: mine ? '#fff' : LEGACY.teal, textDecoration: 'none', fontSize: 13 }}>
-                              <InsertDriveFileOutlinedIcon fontSize="small" />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file.name}</span>
-                              <span style={{ opacity: 0.7, whiteSpace: 'nowrap' }}>· {fmtSize(m.file.size)}</span>
+                          {m.file && (isImage(m.file) ? (
+                            <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer" sx={{ display: 'block', mt: m.text ? 0.5 : 0 }}>
+                              <Box component="img" src={workerFileUrl(m.file.key)} alt={m.file.name} loading="lazy"
+                                sx={{ display: 'block', maxWidth: 230, maxHeight: 240, width: 'auto', borderRadius: 1.5, objectFit: 'cover' }} />
+                              <Typography sx={{ fontSize: 10.5, opacity: 0.75, mt: 0.25 }}>{m.file.name} · {fmtSize(m.file.size)}</Typography>
                             </Box>
-                          )}
+                          ) : (
+                            <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer" download
+                              sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: m.text ? 0.5 : 0, p: 0.75, borderRadius: 1.5,
+                                bgcolor: mine ? 'rgba(255,255,255,0.15)' : 'rgba(20,150,140,0.08)', color: mine ? '#fff' : LEGACY.navy,
+                                textDecoration: 'none', minWidth: 180 }}>
+                              <Box sx={{ flexShrink: 0, width: 32, height: 32, borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                bgcolor: mine ? 'rgba(255,255,255,0.2)' : 'rgba(20,150,140,0.15)' }}>
+                                <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: mine ? '#fff' : LEGACY.teal }} />
+                              </Box>
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Typography sx={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file.name}</Typography>
+                                <Typography sx={{ fontSize: 10.5, opacity: 0.7 }}>{fmtSize(m.file.size)} · Tải về</Typography>
+                              </Box>
+                            </Box>
+                          ))}
                         </>
                       )}
                     </Box>
