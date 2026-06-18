@@ -312,6 +312,158 @@ export async function sbPushCustomers(
   }
 }
 
+// ── NCC Products ──────────────────────────────────────────────────────────────
+
+import type { NccProduct, NccPrice } from '@/types/ncc';
+
+const rowToNccPrice = (r: Record<string, unknown>): NccPrice => ({
+  id: r.id as string,
+  label: r.label as string,
+  amount: r.amount as number,
+  cur: r.cur as string,
+  unit: r.unit as string,
+  note: (r.note as string) ?? undefined,
+});
+
+const rowToNccProduct = (
+  r: Record<string, unknown>,
+  prices: NccPrice[],
+  files: FileAttachment[],
+  nccIdLegacy: string | null,
+): NccProduct => ({
+  id: r.legacy_id as string,
+  nccId: nccIdLegacy,
+  nccName: (r.ncc_name as string) ?? '',
+  category: r.category as NccProduct['category'],
+  name: r.name as string,
+  description: (r.description as string) ?? undefined,
+  prices,
+  files,
+  note: (r.note as string) ?? undefined,
+  createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : (r.created_at as string),
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeNccProducts(
+  cb: (list: NccProduct[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'ncc_products', async (cl) => {
+    const { data: rows, error } = await cl
+      .from('ncc_products')
+      .select('*, suppliers!ncc_products_supplier_id_fkey(legacy_id)')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    const productUuids = (rows ?? []).map((r) => r.id as string);
+    const { data: priceRows } = productUuids.length
+      ? await cl
+          .from('ncc_product_prices')
+          .select('*')
+          .in('product_id', productUuids)
+          .order('sort_order')
+      : { data: [] as Record<string, unknown>[] };
+    const pricesByProduct = new Map<string, NccPrice[]>();
+    for (const pr of priceRows ?? []) {
+      const arr = pricesByProduct.get(pr.product_id as string) ?? [];
+      arr.push(rowToNccPrice(pr));
+      pricesByProduct.set(pr.product_id as string, arr);
+    }
+    return Promise.all(
+      (rows ?? []).map(async (r) => {
+        const legacyId = r.legacy_id as string;
+        const files = await loadAttachments(cl, 'ncc_product', legacyId);
+        const supplierRow = r.suppliers as { legacy_id: string } | null;
+        const nccIdLegacy: string | null = supplierRow?.legacy_id ?? null;
+        return rowToNccProduct(r, pricesByProduct.get(r.id as string) ?? [], files, nccIdLegacy);
+      }),
+    );
+  }, cb);
+}
+
+export async function sbPushNccProducts(
+  list: NccProduct[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = {
+    updated_at: new Date().toISOString(),
+    updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
+  };
+
+  // Resolve nccId (app legacy_id on suppliers) → supplier uuid for FK
+  const nccLegacyIds = Array.from(
+    new Set(list.map((p) => p.nccId).filter(Boolean) as string[]),
+  );
+  let supplierIdMap = new Map<string, string>();
+  if (nccLegacyIds.length) {
+    const { data: sups, error: supErr } = await client
+      .from('suppliers')
+      .select('id, legacy_id')
+      .in('legacy_id', nccLegacyIds);
+    if (supErr) throw new Error('sbPushNccProducts resolve suppliers: ' + supErr.message);
+    supplierIdMap = new Map((sups ?? []).map((s) => [s.legacy_id as string, s.id as string]));
+  }
+
+  for (const prod of list) {
+    const { data: up, error: upErr } = await client
+      .from('ncc_products')
+      .upsert(
+        {
+          legacy_id: prod.id,
+          supplier_id: prod.nccId ? (supplierIdMap.get(prod.nccId) ?? null) : null,
+          ncc_name: prod.nccName,
+          category: prod.category,
+          name: prod.name,
+          description: prod.description ?? null,
+          note: prod.note ?? null,
+          created_by_name: prod.createdBy,
+          created_at: prod.createdAt,
+          ...stamp,
+        },
+        { onConflict: 'legacy_id' },
+      )
+      .select('id')
+      .single();
+    if (upErr) throw new Error('sbPushNccProducts upsert: ' + upErr.message);
+    await replaceChildren(
+      client,
+      'ncc_product_prices',
+      'product_id',
+      up!.id,
+      prod.prices.map((pr, i) => ({
+        product_id: up!.id,
+        label: pr.label,
+        amount: pr.amount,
+        cur: pr.cur,
+        unit: pr.unit,
+        note: pr.note ?? null,
+        sort_order: i,
+      })),
+    );
+    await saveAttachments(client, 'ncc_product', prod.id, prod.files);
+  }
+
+  // Full-overwrite: delete products removed from the list using safe fetch-then-delete pattern.
+  const keepIds = list.map((p) => p.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('ncc_products').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushNccProducts fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('ncc_products').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushNccProducts delete: ' + del.error.message);
+    }
+  } else {
+    // Empty push = wipe all.
+    const del = await client.from('ncc_products').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushNccProducts delete all: ' + del.error.message);
+  }
+}
+
 // ── Suppliers (NCC) ───────────────────────────────────────────────────────────
 
 const rowToNcc = (r: Record<string, unknown>, contacts: Ncc['contacts']): Ncc => ({
