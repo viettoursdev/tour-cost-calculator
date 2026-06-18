@@ -65,6 +65,14 @@ export function CostView() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hideOff, setHideOff] = useState(false);
   const [jumpAnchor, setJumpAnchor] = useState<HTMLElement | null>(null);
+  const [density, setDensity] = useState<'comfortable' | 'compact'>(
+    () => (typeof localStorage !== 'undefined' && localStorage.getItem('vte_density') === 'compact' ? 'compact' : 'comfortable'),
+  );
+  const toggleDensity = () => setDensity((d) => {
+    const nd = d === 'compact' ? 'comfortable' : 'compact';
+    try { localStorage.setItem('vte_density', nd); } catch { /* quota */ }
+    return nd;
+  });
   const setAllExpanded = (v: boolean) => setExpanded(Object.fromEntries(cats.map((c) => [c.id, v])));
   const jumpTo = (id: string) => {
     setExpanded((m) => ({ ...m, [id]: true }));
@@ -75,7 +83,14 @@ export function CostView() {
 
   return (
     <Box sx={{ display: 'flex', gap: 2, p: 2 }}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{
+        flex: 1, minWidth: 0,
+        '& tbody td': { fontVariantNumeric: 'tabular-nums' },
+        ...(density === 'compact' ? {
+          '& .MuiTableCell-root': { paddingTop: '1px', paddingBottom: '1px' },
+          '& tbody input, & tbody textarea': { paddingTop: '1px', paddingBottom: '1px' },
+        } : null),
+      }}>
         {isDMC && (
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.75} flexWrap="wrap" gap={1.25}>
             <Typography fontSize={14} fontWeight={700} color="rgba(15,58,74,0.6)">
@@ -95,6 +110,9 @@ export function CostView() {
             {hideOff ? '☑' : '☐'} Ẩn hạng mục đã tắt
           </Button>
           <Button size="small" variant="outlined" onClick={(e) => setJumpAnchor(e.currentTarget)} sx={{ textTransform: 'none', py: 0.25 }}>↧ Nhảy tới…</Button>
+          <Button size="small" variant={density === 'compact' ? 'contained' : 'outlined'} onClick={toggleDensity} sx={{ textTransform: 'none', py: 0.25 }} title="Đổi mật độ hiển thị (lưu theo máy)">
+            {density === 'compact' ? '▤ Gọn' : '▥ Thoáng'}
+          </Button>
           <Menu anchorEl={jumpAnchor} open={!!jumpAnchor} onClose={() => setJumpAnchor(null)}>
             {cats.map((c) => (
               <MenuItem key={c.id} onClick={() => jumpTo(c.id)} sx={{ fontSize: 13, gap: 1 }}>
