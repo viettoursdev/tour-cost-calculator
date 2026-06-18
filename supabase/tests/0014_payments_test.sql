@@ -1,0 +1,10 @@
+begin;
+select plan(6);
+select has_table('public','tour_payments','tour_payments exist');
+select has_table('public','payment_records','payment_records exist');
+select has_table('public','payment_approvals','approvals exist');
+select has_table('public','payment_approval_stages','stages exist');
+select col_type_is('public','payment_records','installments','jsonb','installments jsonb');
+select fk_ok('public','payment_approval_stages','approval_id','public','payment_approvals','id');
+select * from finish();
+rollback;
