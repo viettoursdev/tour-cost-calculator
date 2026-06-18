@@ -90,18 +90,40 @@ export interface AIWorkerResponse {
 
 export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate' | '/chat';
 
-/** Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }. */
-export async function uploadFileToWorker(file: File): Promise<{ key: string; name: string }> {
+/**
+ * Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }.
+ * `onProgress(pct)` (0–100) báo tiến trình tải lên (dùng XHR để có upload progress).
+ */
+export async function uploadFileToWorker(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<{ key: string; name: string }> {
   const base = getAIWorker();
   if (!base) throw new Error('Chưa cấu hình AI Worker URL (bấm ⚙️ AI để nhập)');
   const url =
     base.replace(/\/+$/, '') +
     `/upload?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`;
-  const r = await fetch(url, { method: 'POST', body: file, headers: await authHeaders() });
-  const d = (await r.json().catch(() => ({}))) as { key?: string; name?: string; error?: string };
-  if (!r.ok || d.error) throw new Error(d.error || 'Upload lỗi ' + r.status);
-  if (!d.key) throw new Error('Worker không trả về key');
-  return { key: d.key, name: d.name || file.name };
+  const headers = await authHeaders();
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    if (onProgress) {
+      onProgress(0);
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    }
+    xhr.onload = () => {
+      let d: { key?: string; name?: string; error?: string } = {};
+      try { d = JSON.parse(xhr.responseText || '{}'); } catch { /* ignore */ }
+      if (xhr.status < 200 || xhr.status >= 300 || d.error) { reject(new Error(d.error || 'Upload lỗi ' + xhr.status)); return; }
+      if (!d.key) { reject(new Error('Worker không trả về key')); return; }
+      resolve({ key: d.key, name: d.name || file.name });
+    };
+    xhr.onerror = () => reject(new Error('Lỗi mạng khi tải file'));
+    xhr.ontimeout = () => reject(new Error('Hết thời gian tải file'));
+    xhr.send(file);
+  });
 }
 
 /** Public URL to view/download a file stored on R2 via the worker `/file/<key>`. */

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
-  Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, List, ListItemButton,
+  Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, LinearProgress, List, ListItemButton,
   Menu, MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -18,6 +18,7 @@ import { useChatStore, chatUnread } from '@/stores/chatStore';
 import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage, fbToggleChatReaction } from '@/lib/firebase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
+import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
 import { LEGACY } from '@/theme';
 import type { Chat, ChatMessage } from '@/types';
 
@@ -41,6 +42,8 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [groupTitle, setGroupTitle] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [editTarget, setEditTarget] = useState<ChatMessage | null>(null);
   const [menuFor, setMenuFor] = useState<{ m: ChatMessage; el: HTMLElement } | null>(null);
@@ -110,12 +113,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     const f = e.target.files?.[0]; e.target.value = '';
     if (!f || !active) return;
     if (f.size > MAX_FILE) { toast('File vượt quá 20MB.', 'warning'); return; }
-    setBusy(true);
+    setBusy(true); setUploadPct(0);
     try {
-      const up = await uploadFileToWorker(f);
+      const up = await uploadFileToWorker(f, setUploadPct);
       await send({ key: up.key, name: up.name, size: f.size, mime: f.type });
     } catch (e2) { toast('Tải file lỗi: ' + (e2 as Error).message, 'error'); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setUploadPct(0); }
   };
 
   const others = users.filter((u) => u.u !== me?.u);
@@ -208,27 +211,30 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                             </Box>
                           )}
                           {m.text && <Typography fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</Typography>}
-                          {m.file && (isImage(m.file) ? (
-                            <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer" sx={{ display: 'block', mt: m.text ? 0.5 : 0 }}>
-                              <Box component="img" src={workerFileUrl(m.file.key)} alt={m.file.name} loading="lazy"
-                                sx={{ display: 'block', maxWidth: 230, maxHeight: 240, width: 'auto', borderRadius: 1.5, objectFit: 'cover' }} />
-                              <Typography sx={{ fontSize: 10.5, opacity: 0.75, mt: 0.25 }}>{m.file.name} · {fmtSize(m.file.size)}</Typography>
-                            </Box>
-                          ) : (
-                            <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer" download
-                              sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: m.text ? 0.5 : 0, p: 0.75, borderRadius: 1.5,
-                                bgcolor: mine ? 'rgba(255,255,255,0.15)' : 'rgba(20,150,140,0.08)', color: mine ? '#fff' : LEGACY.navy,
-                                textDecoration: 'none', minWidth: 180 }}>
-                              <Box sx={{ flexShrink: 0, width: 32, height: 32, borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                bgcolor: mine ? 'rgba(255,255,255,0.2)' : 'rgba(20,150,140,0.15)' }}>
-                                <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: mine ? '#fff' : LEGACY.teal }} />
+                          {m.file && (() => {
+                            const mf = m.file;
+                            const openPreview = () => setPreview({ key: mf.key, name: mf.name, mime: mf.mime });
+                            return isImage(mf) ? (
+                              <Box onClick={openPreview} sx={{ display: 'block', mt: m.text ? 0.5 : 0, cursor: 'pointer' }}>
+                                <Box component="img" src={workerFileUrl(mf.key)} alt={mf.name} loading="lazy"
+                                  sx={{ display: 'block', maxWidth: 230, maxHeight: 240, width: 'auto', borderRadius: 1.5, objectFit: 'cover' }} />
+                                <Typography sx={{ fontSize: 10.5, opacity: 0.75, mt: 0.25 }}>{mf.name} · {fmtSize(mf.size)}</Typography>
                               </Box>
-                              <Box sx={{ minWidth: 0, flex: 1 }}>
-                                <Typography sx={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file.name}</Typography>
-                                <Typography sx={{ fontSize: 10.5, opacity: 0.7 }}>{fmtSize(m.file.size)} · Tải về</Typography>
+                            ) : (
+                              <Box onClick={openPreview}
+                                sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: m.text ? 0.5 : 0, p: 0.75, borderRadius: 1.5, cursor: 'pointer',
+                                  bgcolor: mine ? 'rgba(255,255,255,0.15)' : 'rgba(20,150,140,0.08)', color: mine ? '#fff' : LEGACY.navy, minWidth: 180 }}>
+                                <Box sx={{ flexShrink: 0, width: 32, height: 32, borderRadius: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  bgcolor: mine ? 'rgba(255,255,255,0.2)' : 'rgba(20,150,140,0.15)' }}>
+                                  <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: mine ? '#fff' : LEGACY.teal }} />
+                                </Box>
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                  <Typography sx={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mf.name}</Typography>
+                                  <Typography sx={{ fontSize: 10.5, opacity: 0.7 }}>{fmtSize(mf.size)} · Xem trước</Typography>
+                                </Box>
                               </Box>
-                            </Box>
-                          ))}
+                            );
+                          })()}
                         </>
                       )}
                     </Box>
@@ -269,6 +275,14 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
               );
             })}
           </Box>
+          {busy && (
+            <Box sx={{ px: 1.5, py: 0.5, borderTop: '1px solid rgba(15,58,74,0.08)' }}>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Đang tải… {uploadPct}%</Typography>
+                <LinearProgress variant={uploadPct > 0 && uploadPct < 100 ? 'determinate' : 'indeterminate'} value={uploadPct} sx={{ flex: 1, borderRadius: 2 }} />
+              </Stack>
+            </Box>
+          )}
           {(replyTarget || editTarget) && (
             <Box sx={{ px: 1.5, py: 0.75, borderTop: '1px solid rgba(15,58,74,0.08)', bgcolor: 'rgba(20,150,140,0.06)', display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 3, alignSelf: 'stretch', borderRadius: 2, bgcolor: LEGACY.teal }} />
@@ -307,6 +321,8 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           <MenuItem onClick={() => menuFor && void doDelete(menuFor.m)} sx={{ color: '#dc3250' }}><DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />Thu hồi</MenuItem>
         )}
       </Menu>
+
+      <FilePreviewDialog open={!!preview} onClose={() => setPreview(null)} file={preview} />
     </Drawer>
   );
 }
