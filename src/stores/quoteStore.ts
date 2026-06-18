@@ -56,6 +56,8 @@ type QuoteState = {
   view: QuoteViewKey;
   snapshots: Snapshot[];
   currentUsername: string | null;
+  /** Có thay đổi chưa lưu lên cloud kể từ lần lưu/tải gần nhất. */
+  cloudDirty: boolean;
   /** Tỷ giá đồng bộ TOÀN CỤC (chỉ seed báo giá mới; tách khỏi draft.rates). */
   syncedRates: Record<string, number>;
   fxSyncedAt: string | null;
@@ -212,6 +214,7 @@ export const useQuoteStore = create<QuoteState>()(
         view: 'cost',
         snapshots: [],
         currentUsername: null,
+        cloudDirty: false,
         syncedRates: { ...RATES_INIT },
         fxSyncedAt: null,
         fxSyncedBy: null,
@@ -275,13 +278,13 @@ export const useQuoteStore = create<QuoteState>()(
             syncedRates: { ...RATES_INIT, ...(fxLS ?? {}), VND: 1 },
             snapshots: readUserSnapshots(user.u),
             currentUsername: user.u,
-            view: storedView,
+            view: storedView, cloudDirty: false,
             ...CLEAR_HIST,
           }));
         },
 
         reset: () => {
-          muted(() => set({ draft: EMPTY_DRAFT, snapshots: [], currentUsername: null, view: 'cost', ...CLEAR_HIST }));
+          muted(() => set({ draft: EMPTY_DRAFT, snapshots: [], currentUsername: null, view: 'cost', cloudDirty: false, ...CLEAR_HIST }));
         },
 
         newDraft: (template) => {
@@ -290,7 +293,7 @@ export const useQuoteStore = create<QuoteState>()(
           if (tpl.kind === 'alt' || !tpl.init) {
             muted(() => set((s) => ({
               draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: seedNewRates(s.syncedRates) },
-              view: 'cost',
+              view: 'cost', cloudDirty: false,
               ...CLEAR_HIST,
             })));
             return;
@@ -313,13 +316,13 @@ export const useQuoteStore = create<QuoteState>()(
               rates: seedNewRates(s.syncedRates),
               ...(template === 'dmc' ? dmcDefaults() : {}),
             },
-            view: 'cost',
+            view: 'cost', cloudDirty: false,
             ...CLEAR_HIST,
           })));
         },
 
         abandon: () => {
-          muted(() => set((s) => ({ draft: { ...EMPTY_DRAFT, rates: seedNewRates(s.syncedRates) }, view: 'cost', ...CLEAR_HIST })));
+          muted(() => set((s) => ({ draft: { ...EMPTY_DRAFT, rates: seedNewRates(s.syncedRates) }, view: 'cost', cloudDirty: false, ...CLEAR_HIST })));
         },
 
         setView: (v) =>
@@ -541,6 +544,7 @@ export const useQuoteStore = create<QuoteState>()(
             // Accept any subset of fields present; missing fields keep current values.
             muted(() => set((s) => ({
               ...CLEAR_HIST,
+              cloudDirty: false,
               draft: {
                 ...s.draft,
                 ...(data.template !== undefined ? { template: data.template } : {}),
@@ -598,7 +602,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.workflow ? { workflow: data.workflow } : {}),
               currentQuoteId: null, // imported file starts a new quote
             },
-            view: 'cost',
+            view: 'cost', cloudDirty: false,
           })));
         },
 
@@ -695,6 +699,7 @@ export const useQuoteStore = create<QuoteState>()(
           );
           await _saveS(cloudId, draft, note, { name: u.name, role: u.role });
           set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId } }));
+          set({ cloudDirty: false }); // vừa lưu cloud → sạch
           logAudit(isNew ? 'create' : 'update', isDmc ? 'Breakdown DMC' : 'Báo giá', entry.name, entry.quoteCode);
 
           // "Lưu cả hai cùng lúc": khi lưu DMC breakdown có gắn báo giá nước
@@ -763,7 +768,7 @@ export const useQuoteStore = create<QuoteState>()(
           const status = idxList.find((q) => q.cloudId === cloudId)?.status ?? project.currentState.status ?? 'in_progress';
           muted(() => set(() => ({
             draft: { ...project.currentState, currentQuoteId: cloudId, rates, status },
-            view: 'cost',
+            view: 'cost', cloudDirty: false,
             ...CLEAR_HIST,
           })));
           return { ok: true };
@@ -811,6 +816,8 @@ useQuoteStore.subscribe(
   (s) => s.draft,
   (_draft, prevDraft) => {
     if (histMuted) return;
+    // Thay đổi do người dùng → đánh dấu chưa lưu cloud.
+    if (!useQuoteStore.getState().cloudDirty) useQuoteStore.setState({ cloudDirty: true });
     const now = Date.now();
     const past = useQuoteStore.getState().draftPast;
     const coalesce = past.length > 0 && now - histTs < HIST_COALESCE;

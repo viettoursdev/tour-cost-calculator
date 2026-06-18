@@ -23,6 +23,7 @@ import { usePoiStore } from '@/stores/poiStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers } from '@/lib/notifications';
 import { AppShell } from './AppShell';
 import { ToastHost } from '@/components/common/ToastHost';
+import { UnsavedGuard } from '@/components/common/UnsavedGuard';
 import { LoginScreen } from './LoginScreen';
 
 export function MainApp() {
@@ -115,5 +116,5 @@ export function MainApp() {
   }, [currentUser]);
 
   if (!currentUser) return <LoginScreen />;
-  return <><AppShell /><ToastHost /></>;
+  return <><AppShell /><ToastHost /><UnsavedGuard /></>;
 }

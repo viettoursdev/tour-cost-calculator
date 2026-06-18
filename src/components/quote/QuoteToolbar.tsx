@@ -146,6 +146,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const totals = computeTotals(draft);
   const totalCost = totals.totalCost;
 
+  const cloudDirty = useQuoteStore((s) => s.cloudDirty);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
@@ -616,6 +617,13 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           ))}
         </Menu>
         <UndoRedoButtons undo={undoDraft} redo={redoDraft} canUndo={canUndo} canRedo={canRedo} />
+        <Tooltip title={cloudDirty ? 'Có thay đổi chưa lưu lên cloud' : 'Đã đồng bộ cloud'}>
+          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontSize: 12, fontWeight: 700,
+            color: cloudDirty ? '#b8761e' : 'rgba(15,58,74,0.45)', whiteSpace: 'nowrap' }}>
+            <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: cloudDirty ? '#f5a623' : '#27ae60' }} />
+            {cloudDirty ? 'Chưa lưu' : 'Đã lưu'}
+          </Box>
+        </Tooltip>
         <Button
           size="small" variant="contained" startIcon={<CloudUploadIcon />}
           // Blur first so the trigger isn't a focused descendant of #root when the
