@@ -256,6 +256,15 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                   <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>
                     {fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
                   </Typography>
+                  {mine && m.id === active.messages[active.messages.length - 1]?.id && (() => {
+                    const seers = active.members.filter((u) => u !== me?.u && (active.reads?.[u] ?? '') >= m.at);
+                    if (!seers.length) return null;
+                    return (
+                      <Typography variant="caption" sx={{ color: LEGACY.teal, fontWeight: 600, display: 'block', textAlign: 'right', mx: 1 }}>
+                        ✓✓ {active.isGroup ? `Đã xem ${seers.length}/${active.members.length - 1}` : `Đã xem · ${fmtTime(active.reads![seers[0]])}`}
+                      </Typography>
+                    );
+                  })()}
                 </Box>
               );
             })}
