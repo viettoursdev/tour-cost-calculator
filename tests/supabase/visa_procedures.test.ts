@@ -55,6 +55,7 @@ describe('visa_procedures gateway', () => {
     expect(entry.code).toBe('JP-001');
     expect(entry.country).toBe('Japan');
     expect(entry.collaborators).toContain('tester');
+    expect(entry.createdByUsername).toBe('tester');
     expect(entry).not.toHaveProperty('sections'); // metadata only
 
     // Get returns full doc with sections + attachments
@@ -65,6 +66,8 @@ describe('visa_procedures gateway', () => {
     expect(full!.attachments).toHaveLength(1);
     expect(full!.attachments![0].key).toBe('r2-proc-file');
     expect(full!.collaborators).toContain('tester');
+    expect(full!.createdByUsername).toBe('tester');
+    expect(full!.createdByName).toBe('QA Bot');
 
     // Delete removes the row
     await sbDeleteVisaProc('proc-1', c);
