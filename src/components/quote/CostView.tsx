@@ -4,6 +4,7 @@ import {
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
 import { QuoteWarningsBanner } from './QuoteWarningsBanner';
+import { StickyTotalsBar } from './StickyTotalsBar';
 import { GroupSizeTabs } from './GroupSizeTabs';
 import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
@@ -248,6 +249,8 @@ export function CostView() {
             </Box>
           </Paper>
         )}
+
+        {!isDMC && <StickyTotalsBar totals={totals} pax={pax} />}
 
         {!isDMC && <HistPanel />}
       </Box>
