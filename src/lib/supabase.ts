@@ -486,6 +486,224 @@ export async function sbPushNccProducts(
   }
 }
 
+// ── Contracts ─────────────────────────────────────────────────────────────────
+
+import type { Contract, ContractPayment, ContractCancel } from '@/types/contract';
+
+function rowToPayment(r: Record<string, unknown>): ContractPayment {
+  return {
+    id: (r.legacy_id as string) ?? (r.id as string),
+    label: (r.label as string) ?? '',
+    mode: (r.mode as ContractPayment['mode']) ?? 'percent',
+    percent: (r.percent as number) ?? undefined,
+    amount: (r.amount as number) ?? 0,
+    dueDate: (r.due_date as string) ?? '',
+    note: (r.note as string) ?? '',
+    status: (r.status as ContractPayment['status']) ?? 'pending',
+    paidDate: (r.paid_date as string) ?? undefined,
+    receivedAmount: (r.received_amount as number) ?? undefined,
+    approvalRequested: (r.approval_requested as boolean) ?? undefined,
+  };
+}
+
+function rowToCancel(r: Record<string, unknown>): ContractCancel {
+  return {
+    when: (r.when_text as string) ?? '',
+    penalty: (r.penalty as number) ?? 0,
+  };
+}
+
+function rowToContract(
+  r: Record<string, unknown>,
+  payments: ContractPayment[],
+  cancels: ContractCancel[],
+): Contract {
+  return {
+    id: (r.legacy_id as string) ?? (r.id as string),
+    contractNo: (r.contract_no as string) ?? '',
+    contractDate: (r.contract_date as string) ?? '',
+    contractStatus: (r.contract_status as Contract['contractStatus']) ?? 'draft',
+    tourName: (r.tour_name as string) ?? '',
+    tourDest: (r.tour_dest as string) ?? '',
+    tourDays: (r.tour_days as number) ?? 0,
+    tourNights: (r.tour_nights as number) ?? 0,
+    tourStartDate: (r.tour_start_date as string) ?? undefined,
+    departure: (r.departure as string) ?? '',
+    contractPax: (r.contract_pax as number) ?? 0,
+    pricePerPax: (r.price_per_pax as number) ?? 0,
+    partyB: (r.party_b as Contract['partyB']) ?? { name: '', address: '', tel: '', rep: '', title: '', taxCode: '', email: '' },
+    includes: (r.includes as string[]) ?? [],
+    excludes: (r.excludes as string[]) ?? [],
+    payments,
+    cancels,
+    bondPercent: (r.bond_percent as number) ?? 0,
+    hasAcceptance: (r.has_acceptance as boolean) ?? false,
+    acceptanceDate: (r.acceptance_date as string) ?? undefined,
+    acceptanceNote: (r.acceptance_note as string) ?? undefined,
+    createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : '',
+    createdBy: (r.created_by_name as string) ?? '',
+    updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+    updatedBy: (r.updated_by_name as string) ?? undefined,
+    _tourKey: (r.tour_key as string) ?? undefined,
+    linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
+    linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
+  };
+}
+
+async function assembleContracts(client: SupabaseClient): Promise<Contract[]> {
+  const { data: rows, error } = await client
+    .from('contracts')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error('assembleContracts: ' + error.message);
+  if (!rows || rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id as string);
+  const [{ data: payments, error: pErr }, { data: cancels, error: cErr }] = await Promise.all([
+    client.from('contract_payments').select('*').in('contract_id', ids).order('sort_order'),
+    client.from('contract_cancels').select('*').in('contract_id', ids).order('sort_order'),
+  ]);
+  if (pErr) throw new Error('assembleContracts payments: ' + pErr.message);
+  if (cErr) throw new Error('assembleContracts cancels: ' + cErr.message);
+
+  const paysByContract = new Map<string, ContractPayment[]>();
+  for (const p of payments ?? []) {
+    const arr = paysByContract.get(p.contract_id as string) ?? [];
+    arr.push(rowToPayment(p as Record<string, unknown>));
+    paysByContract.set(p.contract_id as string, arr);
+  }
+  const cancelsByContract = new Map<string, ContractCancel[]>();
+  for (const cc of cancels ?? []) {
+    const arr = cancelsByContract.get(cc.contract_id as string) ?? [];
+    arr.push(rowToCancel(cc as Record<string, unknown>));
+    cancelsByContract.set(cc.contract_id as string, arr);
+  }
+
+  return rows.map((r) =>
+    rowToContract(
+      r as Record<string, unknown>,
+      paysByContract.get(r.id as string) ?? [],
+      cancelsByContract.get(r.id as string) ?? [],
+    ),
+  );
+}
+
+/** Subscribe to the contract list. Mirrors fbSubscribeContracts (firebase.ts:562). */
+export function sbSubscribeContracts(
+  cb: (list: Contract[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'contracts', assembleContracts, cb);
+}
+
+/** One-time pull. Mirrors fbGetContracts (firebase.ts:572). */
+export async function sbGetContracts(client: SupabaseClient = sb): Promise<Contract[]> {
+  return assembleContracts(client);
+}
+
+/** Full-overwrite push. Mirrors fbPushContracts (firebase.ts:581). */
+export async function sbPushContracts(
+  list: Contract[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = {
+    updated_at: new Date().toISOString(),
+    updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
+  };
+
+  for (const contract of list) {
+    const { data: up, error: upErr } = await client
+      .from('contracts')
+      .upsert(
+        {
+          legacy_id: contract.id,
+          contract_no: contract.contractNo,
+          contract_date: contract.contractDate,
+          contract_status: contract.contractStatus,
+          tour_name: contract.tourName,
+          tour_dest: contract.tourDest ?? null,
+          tour_days: contract.tourDays,
+          tour_nights: contract.tourNights,
+          tour_start_date: contract.tourStartDate ?? null,
+          departure: contract.departure ?? null,
+          contract_pax: contract.contractPax,
+          price_per_pax: contract.pricePerPax,
+          party_b: contract.partyB,
+          includes: contract.includes,
+          excludes: contract.excludes,
+          bond_percent: contract.bondPercent,
+          has_acceptance: contract.hasAcceptance,
+          acceptance_date: contract.acceptanceDate ?? null,
+          acceptance_note: contract.acceptanceNote ?? null,
+          tour_key: contract._tourKey ?? null,
+          linked_quote_id: contract.linkedQuoteId ?? null,
+          linked_quote_name: contract.linkedQuoteName ?? null,
+          created_by_name: contract.createdBy,
+          created_at: contract.createdAt,
+          ...stamp,
+        },
+        { onConflict: 'legacy_id' },
+      )
+      .select('id')
+      .single();
+    if (upErr) throw new Error('sbPushContracts upsert: ' + upErr.message);
+
+    const parentId = up!.id as string;
+
+    await replaceChildren(
+      client,
+      'contract_payments',
+      'contract_id',
+      parentId,
+      contract.payments.map((p, i) => ({
+        contract_id: parentId,
+        label: p.label,
+        mode: p.mode ?? 'percent',
+        percent: p.percent ?? null,
+        amount: p.amount,
+        due_date: p.dueDate,
+        note: p.note,
+        status: p.status,
+        paid_date: p.paidDate ?? null,
+        received_amount: p.receivedAmount ?? null,
+        approval_requested: p.approvalRequested ?? false,
+        sort_order: i,
+      })),
+    );
+
+    await replaceChildren(
+      client,
+      'contract_cancels',
+      'contract_id',
+      parentId,
+      contract.cancels.map((cc, i) => ({
+        contract_id: parentId,
+        when_text: cc.when,
+        penalty: cc.penalty,
+        sort_order: i,
+      })),
+    );
+  }
+
+  // Full-overwrite: delete contracts no longer in the list using safe fetch-then-delete.
+  const keepIds = list.map((c) => c.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('contracts').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushContracts fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('contracts').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushContracts delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('contracts').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushContracts delete all: ' + del.error.message);
+  }
+}
+
 // ── Suppliers (NCC) ───────────────────────────────────────────────────────────
 
 const rowToNcc = (r: Record<string, unknown>, contacts: Ncc['contacts']): Ncc => ({
