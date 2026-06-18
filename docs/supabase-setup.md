@@ -184,3 +184,51 @@ A future hardening pass should consider:
 - Column-level write restrictions on `final_status` and approver identity fields.
 - A `created_by` ownership column on `payment_records`.
 - Server-set `updated_at` / `updated_by` triggers on `tour_payments` to prevent client-side timestamp tampering.
+
+---
+
+## Phase 1 gateway: done; Phase 2: quotes
+
+**Status (2026-06-18):** All 51 Phase-1 `sb*` gateway functions are implemented in `src/lib/supabase.ts` and verified by `tests/supabase/parity.test.ts`. Stores are **NOT** yet wired to Supabase — that is Phase 4.
+
+### Migrations to push to prod cloud project
+
+Migrations `0017` through `0020` have been added during Phase 1 and must be pushed to the production cloud project before cutover:
+
+```bash
+npx supabase db push --linked
+```
+
+### Phase-2 deferred: quote machinery
+
+The following functions are deferred to Phase 2. They cover the quote save/load/subscribe lifecycle, DMC variants, and supporting indices:
+
+**Regular quotes:**
+- `sbSaveQuote` — save quote metadata + state (replaces `fbSaveQuote`)
+- `sbSaveQuoteState` — upsert a versioned quote state document
+- `sbGetQuoteProject` — fetch a single quote project by id
+- `sbSubscribeQuoteHistory` — realtime quote history index subscription
+- `sbDeleteQuote` — delete quote + all versions
+- `sbUpdateCollaborators` — update the collaborator list on a quote
+- `sbSetQuoteEntryLink` — set/clear a quote's entry link
+- `sbSetLinkedDMCLink` — link a regular quote to a DMC quote
+- `sbSetQuoteStatus` — update quote status field
+- `sbBackfillWorkflowIndex` — one-time backfill for workflow index column
+- `sbSetQuotePaymentSummary` — write payment summary onto quote metadata
+- `sbBackfillPaymentIndex` — one-time backfill for payment index column
+- `generateQuoteCode` — generate a deterministic quote code
+
+**DMC quotes:**
+- `sbSaveDMCQuote` — save DMC quote metadata + state
+- `sbSaveDMCQuoteState` — upsert a versioned DMC quote state document
+- `sbGetDMCQuoteProject` — fetch a single DMC quote project by id
+- `sbSubscribeDMCQuoteHistory` — realtime DMC quote history subscription
+- `sbDeleteDMCQuote` — delete DMC quote + all versions
+- `sbUpdateDMCCollaborators` — update collaborator list on a DMC quote
+- `sbSetDMCQuoteEntryLink` — set/clear a DMC quote's entry link
+- `sbSetLinkedRegularLink` — link a DMC quote back to a regular quote
+- `sbSetDMCQuoteStatus` — update DMC quote status field
+
+### Phase 4: store wiring
+
+No Zustand store has been modified. Each store currently imports from `src/lib/firebase.ts`. Phase 4 will update import lines to use the `sb*` equivalents from `src/lib/supabase.ts`, one store at a time, with feature-flag gating.
