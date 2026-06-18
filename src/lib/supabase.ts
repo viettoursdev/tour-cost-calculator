@@ -2131,3 +2131,224 @@ export async function sbSetThreadStatus(
     .eq('id', id);
   if (error) throw new Error('sbSetThreadStatus: ' + error.message);
 }
+
+// ── Tour Payments ─────────────────────────────────────────────────────────────
+
+import type {
+  PaymentRecord, CustomCostItem, TourPayments,
+  PaymentApprovalStage, PaymentApprovalEntry, PaymentApprovalDoc,
+} from '@/types';
+
+const assembleTourPayments = async (
+  cl: SupabaseClient,
+  tourKey: string,
+): Promise<TourPayments | null> => {
+  const { data: parent } = await cl.from('tour_payments')
+    .select('id').eq('tour_key', tourKey).maybeSingle();
+  if (!parent) return null;
+  const parentId = parent.id as string;
+
+  const { data: recRows, error: recErr } = await cl.from('payment_records')
+    .select('*').eq('tour_payment_id', parentId);
+  if (recErr) throw recErr;
+
+  const { data: ciRows, error: ciErr } = await cl.from('custom_cost_items')
+    .select('*').eq('tour_payment_id', parentId).order('sort_order', { ascending: true });
+  if (ciErr) throw ciErr;
+
+  const payments: Record<string, PaymentRecord> = {};
+  for (const r of recRows ?? []) {
+    payments[r.record_key as string] = {
+      supplier: (r.supplier as string) ?? undefined,
+      tracked: (r.tracked as boolean) ?? undefined,
+      customAmount: (r.custom_amount as number) ?? undefined,
+      installments: (r.installments as PaymentRecord['installments']) ?? undefined,
+      note: (r.note as string) ?? undefined,
+    };
+  }
+
+  const customItems: CustomCostItem[] = (ciRows ?? []).map((r) => ({
+    key: r.item_key as string,
+    catId: r.cat_id as CustomCostItem['catId'],
+    catLabel: (r.cat_label as string) ?? '',
+    catIcon: (r.cat_icon as string) ?? '',
+    catColor: (r.cat_color as string) ?? '',
+    name: r.name as string,
+    amount: r.amount as number,
+  }));
+
+  return { payments, customItems };
+};
+
+/**
+ * Full-overwrite push of a tour's payments + customItems.
+ * Mirrors fbSaveTourPayments (firebase.ts:794-806).
+ */
+export async function sbSaveTourPayments(
+  tourKey: string,
+  payments: Record<string, PaymentRecord>,
+  customItems: CustomCostItem[],
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: parent, error: upErr } = await client.from('tour_payments')
+    .upsert({ tour_key: tourKey, updated_at: now, updated_by: savedBy || 'unknown' }, { onConflict: 'tour_key' })
+    .select('id').single();
+  if (upErr) throw new Error('sbSaveTourPayments upsert parent: ' + upErr.message);
+  const parentId = parent!.id as string;
+
+  await replaceChildren(client, 'payment_records', 'tour_payment_id', parentId,
+    Object.entries(payments).map(([key, rec]) => ({
+      tour_payment_id: parentId,
+      record_key: key,
+      supplier: rec.supplier ?? null,
+      tracked: rec.tracked ?? null,
+      custom_amount: rec.customAmount ?? null,
+      installments: rec.installments ?? [],
+      note: rec.note ?? null,
+    })),
+  );
+
+  await replaceChildren(client, 'custom_cost_items', 'tour_payment_id', parentId,
+    customItems.map((ci, i) => ({
+      tour_payment_id: parentId,
+      item_key: ci.key,
+      cat_id: ci.catId,
+      cat_label: ci.catLabel,
+      cat_icon: ci.catIcon,
+      cat_color: ci.catColor,
+      name: ci.name,
+      amount: ci.amount,
+      sort_order: i,
+    })),
+  );
+}
+
+/**
+ * One-time fetch of a tour's payment doc.
+ * Mirrors fbGetTourPayments (firebase.ts:809-817).
+ */
+export async function sbGetTourPayments(
+  tourKey: string,
+  client: SupabaseClient = sb,
+): Promise<TourPayments | null> {
+  return assembleTourPayments(client, tourKey);
+}
+
+/**
+ * Subscribe to a tour's payment doc.
+ * Mirrors fbSubscribeTourPayments (firebase.ts:823-835).
+ */
+export function sbSubscribeTourPayments(
+  tourKey: string,
+  cb: (data: TourPayments | null) => void,
+  client: SupabaseClient = sb,
+): Unsubscribe {
+  return subscribeTable(client, 'tour_payments', (cl) => assembleTourPayments(cl, tourKey), cb);
+}
+
+// ── Payment Approvals ─────────────────────────────────────────────────────────
+
+const assembleApprovals = async (cl: SupabaseClient): Promise<PaymentApprovalDoc> => {
+  const { data: approvals, error } = await cl.from('payment_approvals').select('*');
+  if (error) throw error;
+  if (!approvals?.length) return {};
+
+  const ids = approvals.map((a) => a.id as string);
+  const { data: stageRows, error: stErr } = await cl.from('payment_approval_stages')
+    .select('*').in('approval_id', ids);
+  if (stErr) throw stErr;
+
+  const stagesByApproval = new Map<string, typeof stageRows>();
+  for (const s of stageRows ?? []) {
+    const arr = stagesByApproval.get(s.approval_id as string) ?? [];
+    arr.push(s);
+    stagesByApproval.set(s.approval_id as string, arr);
+  }
+
+  const doc: PaymentApprovalDoc = {};
+  for (const a of approvals) {
+    const stages = stagesByApproval.get(a.id as string) ?? [];
+    const entry: PaymentApprovalEntry = {
+      currentStage: (a.current_stage as 1 | 2) ?? undefined,
+      finalStatus: (a.final_status as PaymentApprovalEntry['finalStatus']) ?? undefined,
+      intendedApprover1Name: (a.intended_approver1_name as string) ?? undefined,
+      intendedApprover2Name: (a.intended_approver2_name as string) ?? undefined,
+    };
+    for (const s of stages) {
+      const stageKey = `stage${s.stage as number}` as 'stage1' | 'stage2';
+      entry[stageKey] = {
+        status: s.status as PaymentApprovalStage['status'],
+        approverUsername: (s.approver_username as string) ?? '',
+        approverName: (s.approver_name as string) ?? '',
+        note: (s.note as string) ?? '',
+        updatedAt: s.updated_at as string,
+      };
+    }
+    doc[a.approval_key as string] = entry;
+  }
+  return doc;
+};
+
+/**
+ * Write a single stage of an approval (1 or 2).
+ * Final status rules (firebase.ts:869-870):
+ *   rejected at any stage  → 'rejected'
+ *   approved at stage 2    → 'approved'
+ *   approved at stage 1    → 'pending_stage2'
+ * Mirrors fbSetApprovalStage (firebase.ts:850-882).
+ */
+export async function sbSetApprovalStage(
+  key: string,
+  stage: 1 | 2,
+  status: 'approved' | 'rejected',
+  approverUsername: string,
+  approverName: string,
+  note: string,
+  intended: { intendedApprover1Name?: string; intendedApprover2Name?: string } = {},
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const finalStatus: PaymentApprovalEntry['finalStatus'] =
+    status === 'rejected' ? 'rejected' : stage === 2 ? 'approved' : 'pending_stage2';
+
+  const { data: approval, error: upErr } = await client.from('payment_approvals')
+    .upsert({
+      approval_key: key,
+      current_stage: stage,
+      final_status: finalStatus,
+      ...(intended.intendedApprover1Name
+        ? { intended_approver1_name: intended.intendedApprover1Name } : {}),
+      ...(intended.intendedApprover2Name
+        ? { intended_approver2_name: intended.intendedApprover2Name } : {}),
+    }, { onConflict: 'approval_key' })
+    .select('id').single();
+  if (upErr) throw new Error('sbSetApprovalStage upsert approval: ' + upErr.message);
+  const approvalId = approval!.id as string;
+
+  const approverMap = await usernamesToIds(client, [approverUsername]);
+
+  const { error: stErr } = await client.from('payment_approval_stages')
+    .upsert({
+      approval_id: approvalId,
+      stage,
+      status,
+      approver_user_id: approverMap.get(approverUsername) ?? null,
+      approver_username: approverUsername || '',
+      approver_name: approverName || '',
+      note: note || '',
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'approval_id,stage' });
+  if (stErr) throw new Error('sbSetApprovalStage upsert stage: ' + stErr.message);
+}
+
+/**
+ * Subscribe to the full payment-approvals document (key → entry map).
+ * Mirrors fbSubscribePaymentApprovals (firebase.ts:888-894).
+ */
+export function sbSubscribePaymentApprovals(
+  cb: (doc: PaymentApprovalDoc) => void,
+  client: SupabaseClient = sb,
+): Unsubscribe {
+  return subscribeTable(client, 'payment_approvals', (cl) => assembleApprovals(cl), cb);
+}
