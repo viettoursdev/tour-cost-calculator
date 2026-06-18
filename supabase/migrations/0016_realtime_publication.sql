@@ -1,0 +1,25 @@
+-- Realtime only for the list/index tables that today use onSnapshot.
+-- (Child tables of quotes/itineraries/menus/visa are reassembled on open, not streamed.)
+alter publication supabase_realtime add table
+  public.profiles,
+  public.fx_rates,
+  public.audit_log,
+  public.pois,
+  public.suppliers,
+  public.customers,
+  public.contracts,
+  public.rate_card_hotels,
+  public.rate_card_other,
+  public.rate_card_visa,
+  public.restaurants,
+  public.ncc_products,
+  public.quotes,
+  public.itineraries,
+  public.menus,
+  public.visa_products,
+  public.visa_procedures,
+  public.visa_projects,
+  public.notifications,
+  public.notification_threads,
+  public.tour_payments,
+  public.payment_approvals;
