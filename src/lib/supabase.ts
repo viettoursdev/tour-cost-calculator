@@ -286,7 +286,7 @@ export async function sbPushCustomers(
     const { data: up, error: upErr } = await client.from('customers').upsert({
       legacy_id: cust.id, name: cust.name, type: cust.type,
       address: cust.address ?? null, tax_code: cust.taxCode ?? null, note: cust.note ?? '',
-      created_by_name: cust.createdBy, ...stamp,
+      created_by_name: cust.createdBy, created_at: cust.createdAt, ...stamp,
     }, { onConflict: 'legacy_id' }).select('id').single();
     if (upErr) throw new Error('sbPushCustomers upsert: ' + upErr.message);
     await replaceChildren(client, 'customer_contacts', 'customer_id', up!.id, cust.contacts.map((ct, i) => ({
@@ -306,6 +306,7 @@ export async function sbPushCustomers(
       if (del.error) throw new Error('sbPushCustomers delete: ' + del.error.message);
     }
   } else {
+    // Empty push = wipe all (full-overwrite parity with fbPushCustomers).
     const del = await client.from('customers').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushCustomers delete all: ' + del.error.message);
   }
