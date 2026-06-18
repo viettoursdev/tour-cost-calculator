@@ -50,6 +50,7 @@ export function CatBlock({
 }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
@@ -186,6 +187,9 @@ export function CatBlock({
                     onDel={() => onDel(item.id)}
                     onDup={() => onDup(item)}
                     warnings={warnByItem[i]}
+                    prevItem={items[i - 1]}
+                    onMove={(dir) => onReorder(i, dir === 'up' ? i - 1 : i + 1)}
+                    onAddRow={onAdd}
                     displayCurrency={displayCurrency}
                   />
                 ))}
@@ -195,9 +199,38 @@ export function CatBlock({
           <Stack direction="row" sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
             <Button fullWidth onClick={onAdd}>＋ Thêm dòng</Button>
             <Button onClick={() => setPasteOpen(true)} startIcon={<ContentPasteIcon />} sx={{ whiteSpace: 'nowrap', color: 'text.secondary' }}>Dán từ Excel</Button>
+            <Tooltip title="Phím tắt nhập liệu">
+              <Button onClick={() => setHelpOpen(true)} sx={{ minWidth: 44, color: 'text.secondary' }}>⌨</Button>
+            </Tooltip>
           </Stack>
         </AccordionDetails>
       )}
+
+      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>⌨ Phím tắt nhập liệu</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1}>
+            {[
+              ['Enter', 'Lưu ô & xuống ô cùng cột dòng dưới'],
+              ['Tab / ⇧Tab', 'Sang ô kế / ô trước'],
+              ['Ctrl/⌘ + D', 'Chép giá trị ô ngay phía trên xuống'],
+              ['Alt + ↑ / ↓', 'Di chuyển dòng đang sửa lên / xuống'],
+              ['Alt + N', 'Thêm dòng mới'],
+              ['Esc', 'Huỷ sửa ô (không lưu)'],
+              ['Ctrl/⌘ + Enter', 'Lưu ô ghi chú nhiều dòng'],
+            ].map(([k, d]) => (
+              <Stack key={k} direction="row" spacing={1.5} alignItems="center">
+                <Box sx={{ flexShrink: 0, minWidth: 96, fontFamily: 'monospace', fontSize: 12, fontWeight: 700,
+                  background: 'rgba(20,150,140,0.1)', border: '1px solid rgba(20,150,140,0.25)', borderRadius: '6px', px: 0.9, py: 0.4, textAlign: 'center' }}>{k}</Box>
+                <Typography variant="body2">{d}</Typography>
+              </Stack>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHelpOpen(false)}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={pasteOpen} onClose={() => setPasteOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Dán nhiều dòng từ Excel — {cat.label}</DialogTitle>

@@ -21,6 +21,12 @@ type Props = {
   index?: number;
   /** Cảnh báo nhập liệu của dòng này (nơi gọi tính qua lineWarnings). */
   warnings?: string[];
+  /** Dòng ngay phía trên — phục vụ fill-down (Ctrl+D). */
+  prevItem?: Item;
+  /** Di chuyển dòng lên/xuống (Alt+↑/↓). */
+  onMove?: (dir: 'up' | 'down') => void;
+  /** Thêm dòng mới vào hạng mục (Alt+N). */
+  onAddRow?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), line totals show in this currency. */
   displayCurrency?: OutputCurrency;
 };
@@ -40,10 +46,11 @@ const Sel = styled('select')({
 
 /** Inline-edit number (legacy `EN`): formatted text → number input on click. */
 function EditNum({
-  value, onChange, min = 0, width = 80, align = 'right', bold = false, navCol, showWords = false,
+  value, onChange, min = 0, width = 80, align = 'right', bold = false, navCol, showWords = false, fillFrom,
 }: {
   value: number; onChange: (v: number) => void; min?: number;
-  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean; navCol?: NavCol; showWords?: boolean;
+  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean; navCol?: NavCol;
+  showWords?: boolean; fillFrom?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -62,6 +69,9 @@ function EditNum({
           onBlur={commit}
           onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Escape') { setEditing(false); return; }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+              e.preventDefault(); if (fillFrom !== undefined) { setDraft(String(fillFrom)); onChange(fillFrom); } return;
+            }
             if (!navCol) { if (e.key === 'Enter') commit(); return; }
             if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
             else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
@@ -101,10 +111,10 @@ function EditNum({
 
 /** Inline-edit text (legacy `ET`). */
 function EditText({
-  value, onChange, placeholder = '', bold = false, italic = false, color, navCol,
+  value, onChange, placeholder = '', bold = false, italic = false, color, navCol, fillFrom,
 }: {
   value: string; onChange: (v: string) => void; placeholder?: string;
-  bold?: boolean; italic?: boolean; color?: string; navCol?: NavCol;
+  bold?: boolean; italic?: boolean; color?: string; navCol?: NavCol; fillFrom?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -117,6 +127,9 @@ function EditText({
         onBlur={commit}
         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
           if (e.key === 'Escape') { setEditing(false); return; }
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+            e.preventDefault(); if (fillFrom !== undefined) { setDraft(fillFrom); onChange(fillFrom); } return;
+          }
           if (!navCol) { if (e.key === 'Enter') commit(); return; }
           if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
           else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
@@ -163,9 +176,9 @@ function renderNote(text: string) {
  * - `**chữ**` hiển thị in đậm; nội dung dài tự xuống dòng, hiện đầy đủ.
  */
 function EditNote({
-  value, onChange, placeholder = '',
+  value, onChange, placeholder = '', fillFrom,
 }: {
-  value: string; onChange: (v: string) => void; placeholder?: string;
+  value: string; onChange: (v: string) => void; placeholder?: string; fillFrom?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -178,6 +191,9 @@ function EditNote({
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+            e.preventDefault(); if (fillFrom !== undefined) { setDraft(fillFrom); onChange(fillFrom); } return;
+          }
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
           else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
           else if (e.key === 'Escape') setEditing(false);
@@ -208,7 +224,7 @@ function EditNote({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, warnings, displayCurrency }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, warnings, prevItem, onMove, onAddRow, displayCurrency }: Props) {
   const warns = warnings ?? [];
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
@@ -229,7 +245,16 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
   };
 
   return (
-    <TableRow data-index={index} sx={{ opacity: off ? 0.4 : 1, ...(warns.length ? { background: 'rgba(245,166,35,0.07)' } : null) }}>
+    <TableRow
+      data-index={index}
+      onKeyDown={(e: KeyboardEvent<HTMLTableRowElement>) => {
+        if (!e.altKey) return;
+        if (e.key === 'ArrowUp') { e.preventDefault(); onMove?.('up'); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); onMove?.('down'); }
+        else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); onAddRow?.(); }
+      }}
+      sx={{ opacity: off ? 0.4 : 1, ...(warns.length ? { background: 'rgba(245,166,35,0.07)' } : null) }}
+    >
       {/* Tay kéo sắp xếp */}
       <TableCell padding="checkbox" className="row-drag" sx={{ textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.3)', userSelect: 'none', '&:hover': { color: '#0d7a6a' } }} title="Kéo để đổi thứ tự">⋮⋮</TableCell>
       {/* Enable toggle (legacy pill) */}
@@ -260,7 +285,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
                 sx={{ flexShrink: 0, fontSize: 13, color: '#d18a13', cursor: 'help', lineHeight: 1 }}>⚠</Box>
             </Tooltip>
           )}
-          <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" />
+          <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" fillFrom={prevItem?.name} />
         </Stack>
       </TableCell>
 
@@ -269,6 +294,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
         <EditNote
           value={item.note}
           onChange={(v) => u({ note: v })}
+          fillFrom={prevItem?.note}
           placeholder="Chi tiết / ghi chú… (Enter để xuống dòng · **chữ** = in đậm · Ctrl/⌘+Enter để lưu)"
         />
       </TableCell>
@@ -279,7 +305,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
           <Sel value={item.cur} onChange={(e) => u({ cur: e.target.value })}>
             {Object.keys(rates).map((c) => <option key={c} value={c}>{c}</option>)}
           </Sel>
-          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold navCol="price" showWords />
+          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold navCol="price" showWords fillFrom={prevItem?.price} />
         </Stack>
       </TableCell>
 
@@ -294,7 +320,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
 
       {/* Times */}
       <TableCell align="center">
-        <EditNum value={item.times} onChange={(v) => u({ times: Math.max(1, v) })} min={1} width={48} align="center" navCol="times" />
+        <EditNum value={item.times} onChange={(v) => u({ times: Math.max(1, v) })} min={1} width={48} align="center" navCol="times" fillFrom={prevItem?.times} />
       </TableCell>
 
       {/* Quantity */}
