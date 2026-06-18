@@ -3,6 +3,7 @@ import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/mater
 import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
 import { calcVND, fmtVND, qtyOf } from './calc';
+import { parseAmountVN } from '@/lib/numParse';
 import { fmtOutput } from '@/lib/currency';
 import { LEGACY } from '@/theme';
 import type { Item, OutputCurrency, QtyMode } from '@/types';
@@ -34,22 +35,22 @@ const Sel = styled('select')({
 
 /** Inline-edit number (legacy `EN`): formatted text → number input on click. */
 function EditNum({
-  value, onChange, min = 0, step = 1, width = 80, align = 'right', bold = false,
+  value, onChange, min = 0, width = 80, align = 'right', bold = false,
 }: {
-  value: number; onChange: (v: number) => void; min?: number; step?: number;
+  value: number; onChange: (v: number) => void; min?: number;
   width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const commit = () => {
-    const n = parseFloat(draft);
-    if (!isNaN(n) && n >= min) onChange(n);
+    const n = parseAmountVN(draft); // hiểu 1500k / 1tr5 / 1.500.000
+    if (n >= min) onChange(n);
     setEditing(false);
   };
   if (editing) {
     return (
       <Box
-        component="input" autoFocus type="number" value={draft} step={step}
+        component="input" autoFocus inputMode="decimal" value={draft}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e: KeyboardEvent) => {
@@ -244,7 +245,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, displ
           <Sel value={item.cur} onChange={(e) => u({ cur: e.target.value })}>
             {Object.keys(rates).map((c) => <option key={c} value={c}>{c}</option>)}
           </Sel>
-          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} step={0.01} width={86} bold />
+          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold />
         </Stack>
       </TableCell>
 

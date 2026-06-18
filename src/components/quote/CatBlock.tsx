@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent,
-  DialogTitle, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  DialogTitle, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
@@ -121,10 +121,10 @@ export function CatBlock({
 
       {enabled && (
         <AccordionDetails sx={{ p: 0 }}>
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small" sx={{ minWidth: 1000 }}>
+          <TableContainer sx={{ maxHeight: '72vh' }}>
+            <Table size="small" stickyHeader sx={{ minWidth: 1000 }}>
               <TableHead>
-                <TableRow>
+                <TableRow sx={{ '& th': { bgcolor: '#f3faf8', fontWeight: 700 } }}>
                   <TableCell padding="checkbox">✓</TableCell>
                   <TableCell>Hạng mục</TableCell>
                   <TableCell>Chi tiết / Ghi chú</TableCell>
@@ -152,7 +152,7 @@ export function CatBlock({
                 ))}
               </TableBody>
             </Table>
-          </Box>
+          </TableContainer>
           <Stack direction="row" sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
             <Button fullWidth onClick={onAdd}>＋ Thêm dòng</Button>
             <Button onClick={() => setPasteOpen(true)} startIcon={<ContentPasteIcon />} sx={{ whiteSpace: 'nowrap', color: 'text.secondary' }}>Dán từ Excel</Button>
