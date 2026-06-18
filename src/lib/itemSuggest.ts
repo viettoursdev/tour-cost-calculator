@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/authStore';
+import { rateCardSuggestions } from './rateCardSuggest';
 
 /**
  * Từ điển hạng mục tự học (per-user, localStorage `vte_item_dict_{username}`).
@@ -51,13 +52,21 @@ export function recordItem(it: { name: string; price: number; unit: string; cur:
   persist(d);
 }
 
-/** Gợi ý các hạng mục khớp `query` (đã dùng nhiều / gần đây xếp trước). */
+/**
+ * Gợi ý hạng mục khớp `query`. Ưu tiên từ điển tự học (dùng nhiều/gần đây),
+ * sau đó bổ sung từ rate card chung (để có gợi ý ngay cả khi chưa "học").
+ */
 export function suggestItems(query: string, limit = 6): ItemSuggestion[] {
   const q = norm(query);
   if (!q) return [];
-  return Object.values(load())
+  const learned = Object.values(load())
     .filter((r) => { const n = norm(r.name); return n !== q && n.includes(q); })
     .sort((a, b) => b.n - a.n || b.t - a.t)
-    .slice(0, limit)
     .map(({ name, price, unit, cur }) => ({ name, price, unit, cur }));
+
+  const have = new Set(learned.map((s) => norm(s.name)));
+  const fromRC = rateCardSuggestions()
+    .filter((s) => { const n = norm(s.name); return n !== q && n.includes(q) && !have.has(n); });
+
+  return [...learned, ...fromRC].slice(0, limit);
 }
