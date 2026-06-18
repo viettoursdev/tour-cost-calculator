@@ -12,7 +12,9 @@ import { QuoteView } from '@/components/quote/QuoteView';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { AssistantPanel } from '@/components/assistant/AssistantPanel';
 import { ChatPanel } from '@/components/chat/ChatPanel';
+import { OnboardingDialog } from '@/components/shell/OnboardingDialog';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { NotificationToaster } from '@/components/notifications/NotificationToaster';
@@ -40,6 +42,14 @@ export function AppShell() {
   const [chatOpen, setChatOpen] = useState(false);
   const chats = useChatStore((s) => s.chats);
   const chatUnreadCount = currentUser ? chats.filter((c) => chatUnread(c, currentUser.u)).length : 0;
+
+  const onboardKey = currentUser ? `vte_onboarded_${currentUser.u}` : '';
+  const [onboardOpen, setOnboardOpen] = useState(false);
+  useEffect(() => {
+    if (!currentUser) return;
+    try { if (!localStorage.getItem(`vte_onboarded_${currentUser.u}`)) setOnboardOpen(true); } catch { /* ignore */ }
+  }, [currentUser?.u]); // eslint-disable-line react-hooks/exhaustive-deps
+  const closeOnboard = () => { try { localStorage.setItem(onboardKey, '1'); } catch { /* ignore */ } setOnboardOpen(false); };
 
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
@@ -105,6 +115,11 @@ export function AppShell() {
                   Trợ lý
                 </Button>
               </Tooltip>
+              <Tooltip title="Hướng dẫn nhanh">
+                <IconButton onClick={() => setOnboardOpen(true)} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <HelpOutlineIcon />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Tin nhắn nội bộ">
                 <IconButton onClick={() => setChatOpen(true)} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
                   <Badge badgeContent={chatUnreadCount} color="error"><ChatBubbleOutlineIcon /></Badge>
@@ -151,6 +166,7 @@ export function AppShell() {
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+      <OnboardingDialog open={onboardOpen} onClose={closeOnboard} />
     </Box>
   );
 }
