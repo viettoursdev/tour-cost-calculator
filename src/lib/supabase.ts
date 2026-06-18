@@ -704,6 +704,174 @@ export async function sbPushContracts(
   }
 }
 
+// ── Rate Card ─────────────────────────────────────────────────────────────────
+
+import type { RateCard, RateCardDoc, RateCardMeta } from '@/types/rates';
+
+// Strip the vte_visa_rates mirror that sbPushMasterRC writes into rate_card_other.
+// The canonical source for visa rates is the top-level visaRates field; the mirror
+// is for legacy _applyRC() compatibility only and must not leak into the store.
+// Mirrors stripVisaMirror (firebase.ts:146-153).
+function stripVisaMirror(doc: RateCardDoc): RateCardDoc {
+  if (!doc.otherRates || !('vte_visa_rates' in doc.otherRates)) return doc;
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(doc.otherRates)) {
+    if (k !== 'vte_visa_rates') cleaned[k] = v;
+  }
+  return { ...doc, otherRates: cleaned as RateCardDoc['otherRates'] };
+}
+
+async function assembleRC(client: SupabaseClient): Promise<RateCardDoc | null> {
+  const [
+    { data: hotelRows, error: hErr },
+    { data: otherRows, error: oErr },
+    { data: visaRow, error: vErr },
+    { data: metaRow, error: mErr },
+  ] = await Promise.all([
+    client.from('rate_card_hotels').select('city, entries'),
+    client.from('rate_card_other').select('rkey, entry'),
+    client.from('rate_card_visa').select('data').eq('one_row', true).maybeSingle(),
+    client.from('rate_card_meta').select('*').eq('one_row', true).maybeSingle(),
+  ]);
+  if (hErr) throw new Error('assembleRC hotels: ' + hErr.message);
+  if (oErr) throw new Error('assembleRC other: ' + oErr.message);
+  if (vErr) throw new Error('assembleRC visa: ' + vErr.message);
+  if (mErr) throw new Error('assembleRC meta: ' + mErr.message);
+
+  // If all tables are empty, return null (mirrors fbPullMasterRC returning null when doc doesn't exist).
+  if (!hotelRows?.length && !otherRows?.length && !visaRow && !metaRow) return null;
+
+  const hotels: RateCard['hotels'] = {};
+  for (const r of hotelRows ?? []) {
+    hotels[r.city as string] = r.entries as RateCardDoc['hotels'][string];
+  }
+  const otherRates: RateCard['otherRates'] = {};
+  for (const r of otherRows ?? []) {
+    otherRates[r.rkey as string] = r.entry as RateCardDoc['otherRates'][string];
+  }
+  const visaRates: RateCard['visaRates'] = (visaRow?.data as RateCard['visaRates']) ?? {};
+
+  let _meta: RateCardMeta | undefined;
+  if (metaRow) {
+    _meta = {
+      version: (metaRow.version as string) ?? '2.0',
+      type: (metaRow.type as string) ?? 'viettours_ratecard_master',
+      pushedAt: metaRow.pushed_at ? new Date(metaRow.pushed_at as string).toISOString() : '',
+      pushedBy: (metaRow.pushed_by as string) ?? '',
+      app: (metaRow.app as string) ?? 'Viettours Tour Cost Calculator',
+      autoSync: (metaRow.auto_sync as boolean) ?? true,
+    };
+  }
+
+  return stripVisaMirror({ hotels, visaRates, otherRates, _meta });
+}
+
+/** One-time pull. Mirrors fbPullMasterRC (firebase.ts:155). */
+export async function sbPullMasterRC(client: SupabaseClient = sb): Promise<RateCardDoc | null> {
+  return assembleRC(client);
+}
+
+/** Full-overwrite push. Mirrors fbPushMasterRC (firebase.ts:161). Returns pushedAt ISO string. */
+export async function sbPushMasterRC(
+  rc: RateCard,
+  pushedBy: string,
+  client: SupabaseClient = sb,
+): Promise<string> {
+  const pushedAt = new Date().toISOString();
+
+  // Mirror vte_visa_rates into otherRates for legacy _applyRC() compatibility,
+  // exactly as fbPushMasterRC does (firebase.ts:168-171).
+  const otherRatesWithVisaMirror: RateCard['otherRates'] = {
+    ...rc.otherRates,
+    vte_visa_rates: rc.visaRates as unknown as RateCardDoc['otherRates'][string],
+  };
+
+  // ── Hotels: full overwrite (fetch existing cities, delete absent ones, upsert present ones) ──
+  const newCities = Object.keys(rc.hotels);
+  if (newCities.length === 0) {
+    const del = await client.from('rate_card_hotels').delete().not('city', 'is', null);
+    if (del.error) throw new Error('sbPushMasterRC hotels delete-all: ' + del.error.message);
+  } else {
+    const { data: existingH, error: fetchHErr } = await client.from('rate_card_hotels').select('city');
+    if (fetchHErr) throw new Error('sbPushMasterRC hotels fetch: ' + fetchHErr.message);
+    const toDeleteCities = (existingH ?? [])
+      .map((r) => r.city as string)
+      .filter((city) => !newCities.includes(city));
+    if (toDeleteCities.length > 0) {
+      const del = await client.from('rate_card_hotels').delete().in('city', toDeleteCities);
+      if (del.error) throw new Error('sbPushMasterRC hotels delete: ' + del.error.message);
+    }
+  }
+  if (newCities.length > 0) {
+    const hotelRows = newCities.map((city) => ({ city, entries: rc.hotels[city] }));
+    const upH = await client.from('rate_card_hotels').upsert(hotelRows, { onConflict: 'city' });
+    if (upH.error) throw new Error('sbPushMasterRC hotels upsert: ' + upH.error.message);
+  }
+
+  // ── OtherRates (including visa mirror): full overwrite ──
+  const newRkeys = Object.keys(otherRatesWithVisaMirror);
+  if (newRkeys.length === 0) {
+    const del = await client.from('rate_card_other').delete().not('rkey', 'is', null);
+    if (del.error) throw new Error('sbPushMasterRC other delete-all: ' + del.error.message);
+  } else {
+    const { data: existingO, error: fetchOErr } = await client.from('rate_card_other').select('rkey');
+    if (fetchOErr) throw new Error('sbPushMasterRC other fetch: ' + fetchOErr.message);
+    const toDeleteRkeys = (existingO ?? [])
+      .map((r) => r.rkey as string)
+      .filter((rkey) => !newRkeys.includes(rkey));
+    if (toDeleteRkeys.length > 0) {
+      const del = await client.from('rate_card_other').delete().in('rkey', toDeleteRkeys);
+      if (del.error) throw new Error('sbPushMasterRC other delete: ' + del.error.message);
+    }
+  }
+  if (newRkeys.length > 0) {
+    const otherRows = newRkeys.map((rkey) => ({ rkey, entry: otherRatesWithVisaMirror[rkey] }));
+    const upO = await client.from('rate_card_other').upsert(otherRows, { onConflict: 'rkey' });
+    if (upO.error) throw new Error('sbPushMasterRC other upsert: ' + upO.error.message);
+  }
+
+  // ── Visa singleton ──
+  const upV = await client
+    .from('rate_card_visa')
+    .upsert({ one_row: true, data: rc.visaRates }, { onConflict: 'one_row' });
+  if (upV.error) throw new Error('sbPushMasterRC visa upsert: ' + upV.error.message);
+
+  // ── Meta singleton ──
+  const upM = await client.from('rate_card_meta').upsert(
+    {
+      one_row: true,
+      version: '2.0',
+      type: 'viettours_ratecard_master',
+      pushed_at: pushedAt,
+      pushed_by: pushedBy,
+      app: 'Viettours Tour Cost Calculator',
+      auto_sync: true,
+    },
+    { onConflict: 'one_row' },
+  );
+  if (upM.error) throw new Error('sbPushMasterRC meta upsert: ' + upM.error.message);
+
+  return pushedAt;
+}
+
+/** Realtime subscribe. Mirrors fbSubscribeMasterRC (firebase.ts:191). */
+export function sbSubscribeMasterRC(
+  cb: (rc: RateCardDoc) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  // Subscribe on rate_card_hotels as the trigger table; assembleRC reads all four tables.
+  return subscribeTable(
+    client,
+    'rate_card_hotels',
+    async (cl) => {
+      const doc = await assembleRC(cl);
+      // If tables are empty after a truncate (rare in prod), emit an empty doc rather than null.
+      return doc ?? { hotels: {}, visaRates: {}, otherRates: {} };
+    },
+    cb as (v: RateCardDoc) => void,
+  );
+}
+
 // ── Suppliers (NCC) ───────────────────────────────────────────────────────────
 
 const rowToNcc = (r: Record<string, unknown>, contacts: Ncc['contacts']): Ncc => ({
