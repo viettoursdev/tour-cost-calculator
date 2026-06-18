@@ -157,7 +157,7 @@ export async function sbPushFxRates(
 // ── POIs ──────────────────────────────────────────────────────────────────────
 
 const rowToPoi = (r: Record<string, unknown>): PoiEntry => ({
-  id: r.id as string,
+  id: r.legacy_id as string,
   place: r.place as string,
   destination: (r.destination as string) ?? undefined,
   commentary: (r.commentary as string) ?? '',
@@ -180,19 +180,26 @@ export async function sbPushPois(
   pushedBy: { name: string; role: string },
   client: SupabaseClient = sb,
 ): Promise<void> {
-  const ids = list.map((p) => p.id);
-  // Full-overwrite: delete IDs absent from the new list, then upsert.
-  if (ids.length > 0) {
-    const del = await client.from('pois').delete().not('id', 'in', `(${ids.join(',')})`);
-    if (del.error) throw new Error('sbPushPois delete: ' + del.error.message);
+  const legacyIds = list.map((p) => p.id);
+  // Full-overwrite: fetch existing legacy_ids, delete the set-difference, then upsert.
+  if (legacyIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('pois').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushPois fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !legacyIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('pois').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushPois delete: ' + del.error.message);
+    }
   } else {
-    const del = await client.from('pois').delete().not('id', 'is', null);
+    const del = await client.from('pois').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushPois delete all: ' + del.error.message);
   }
   if (list.length > 0) {
     const now = new Date().toISOString();
     const rows = list.map((p) => ({
-      id: p.id,
+      legacy_id: p.id,
       place: p.place,
       destination: p.destination ?? null,
       commentary: p.commentary ?? '',
@@ -200,7 +207,7 @@ export async function sbPushPois(
       updated_at: now,
       updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
     }));
-    const up = await client.from('pois').upsert(rows, { onConflict: 'id' });
+    const up = await client.from('pois').upsert(rows, { onConflict: 'legacy_id' });
     if (up.error) throw new Error('sbPushPois upsert: ' + up.error.message);
   }
 }

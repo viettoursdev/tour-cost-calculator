@@ -21,11 +21,12 @@ describe('fx_rates / pois / audit_log', () => {
 
   it('pois round-trip', async () => {
     const c = await getViettoursClient();
-    // pois.id is UUID in the Supabase schema
-    const poi: PoiEntry = { id: '00000000-0000-0000-0000-000000000001', place: 'Hạ Long', commentary: 'Vịnh đẹp' };
+    // Use a realistic app-generated (non-UUID) id to prove the legacy_id mapping works.
+    const poi: PoiEntry = { id: 'poiabc123', place: 'Hạ Long', commentary: 'Vịnh đẹp' };
     await sbPushPois([poi], { name: 'Tony', role: 'CEO' }, c);
     const list = await once<PoiEntry[]>((cb) => sbSubscribePois(cb, c));
     expect(list.map((p) => p.place)).toContain('Hạ Long');
+    expect(list.find((p) => p.place === 'Hạ Long')?.id).toBe('poiabc123');
   });
 
   it('audit appends + reads newest-first', async () => {
