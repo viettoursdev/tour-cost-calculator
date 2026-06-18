@@ -3,6 +3,7 @@ import { Box, Stack, TableCell, TableRow, Tooltip, Typography } from '@mui/mater
 import { styled } from '@mui/material/styles';
 import { UNITS } from './constants';
 import { calcVND, fmtVND, qtyOf } from './calc';
+import { navFrom, type NavCol } from './cellNav';
 import { parseAmountVN } from '@/lib/numParse';
 import { fmtOutput } from '@/lib/currency';
 import { LEGACY } from '@/theme';
@@ -36,10 +37,10 @@ const Sel = styled('select')({
 
 /** Inline-edit number (legacy `EN`): formatted text → number input on click. */
 function EditNum({
-  value, onChange, min = 0, width = 80, align = 'right', bold = false,
+  value, onChange, min = 0, width = 80, align = 'right', bold = false, navCol,
 }: {
   value: number; onChange: (v: number) => void; min?: number;
-  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean;
+  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean; navCol?: NavCol;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -51,12 +52,14 @@ function EditNum({
   if (editing) {
     return (
       <Box
-        component="input" autoFocus inputMode="decimal" value={draft}
+        component="input" autoFocus inputMode="decimal" value={draft} data-nav={navCol}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
         onBlur={commit}
-        onKeyDown={(e: KeyboardEvent) => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') setEditing(false);
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Escape') { setEditing(false); return; }
+          if (!navCol) { if (e.key === 'Enter') commit(); return; }
+          if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
+          else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
         }}
         sx={{
           width, textAlign: align, background: '#fff', border: '1.5px solid #14a08c',
@@ -68,7 +71,7 @@ function EditNum({
   }
   return (
     <Box
-      component="span"
+      component="span" data-nav={navCol}
       onClick={() => { setDraft(String(value)); setEditing(true); }}
       sx={{
         cursor: 'pointer', borderRadius: '4px', px: 0.5, display: 'inline-block',
@@ -83,10 +86,10 @@ function EditNum({
 
 /** Inline-edit text (legacy `ET`). */
 function EditText({
-  value, onChange, placeholder = '', bold = false, italic = false, color,
+  value, onChange, placeholder = '', bold = false, italic = false, color, navCol,
 }: {
   value: string; onChange: (v: string) => void; placeholder?: string;
-  bold?: boolean; italic?: boolean; color?: string;
+  bold?: boolean; italic?: boolean; color?: string; navCol?: NavCol;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -94,12 +97,14 @@ function EditText({
   if (editing) {
     return (
       <Box
-        component="input" autoFocus value={draft}
+        component="input" autoFocus value={draft} data-nav={navCol}
         onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
         onBlur={commit}
-        onKeyDown={(e: KeyboardEvent) => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') setEditing(false);
+        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === 'Escape') { setEditing(false); return; }
+          if (!navCol) { if (e.key === 'Enter') commit(); return; }
+          if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
+          else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
         }}
         sx={{
           width: '100%', background: '#fff', border: '1.5px solid #14a08c',
@@ -111,7 +116,7 @@ function EditText({
   }
   return (
     <Box
-      component="span"
+      component="span" data-nav={navCol}
       onClick={() => { setDraft(value); setEditing(true); }}
       sx={{
         cursor: 'pointer', borderRadius: '4px', px: 0.5, py: 0.25, display: 'inline-block',
@@ -153,13 +158,14 @@ function EditNote({
   if (editing) {
     return (
       <Box
-        component="textarea" autoFocus value={draft}
+        component="textarea" autoFocus value={draft} data-nav="note"
         rows={Math.min(12, Math.max(3, draft.split('\n').length + 1))}
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft(e.target.value)}
         onBlur={commit}
-        onKeyDown={(e: KeyboardEvent) => {
-          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); }
-          if (e.key === 'Escape') setEditing(false);
+        onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
+          else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
+          else if (e.key === 'Escape') setEditing(false);
         }}
         sx={{
           width: '100%', minHeight: 64, resize: 'vertical', background: '#fff',
@@ -172,6 +178,7 @@ function EditNote({
   }
   return (
     <Box
+      data-nav="note"
       onClick={() => { setDraft(value); setEditing(true); }}
       sx={{
         cursor: 'text', borderRadius: '4px', px: 0.5, py: 0.4, minHeight: '1.4em',
@@ -230,7 +237,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
 
       {/* Name */}
       <TableCell sx={{ minWidth: 140 }}>
-        <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold />
+        <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" />
       </TableCell>
 
       {/* Note (chi tiết / ghi chú — đa dòng, in đậm, hiện đầy đủ) */}
@@ -248,7 +255,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
           <Sel value={item.cur} onChange={(e) => u({ cur: e.target.value })}>
             {Object.keys(rates).map((c) => <option key={c} value={c}>{c}</option>)}
           </Sel>
-          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold />
+          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold navCol="price" />
         </Stack>
       </TableCell>
 
@@ -263,7 +270,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
 
       {/* Times */}
       <TableCell align="center">
-        <EditNum value={item.times} onChange={(v) => u({ times: Math.max(1, v) })} min={1} width={48} align="center" />
+        <EditNum value={item.times} onChange={(v) => u({ times: Math.max(1, v) })} min={1} width={48} align="center" navCol="times" />
       </TableCell>
 
       {/* Quantity */}
