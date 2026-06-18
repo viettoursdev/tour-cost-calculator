@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, List, ListItemButton,
-  Stack, TextField, Tooltip, Typography,
+  Menu, MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -9,9 +9,13 @@ import SendIcon from '@mui/icons-material/Send';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import AddCommentIcon from '@mui/icons-material/AddComment';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ReplyIcon from '@mui/icons-material/Reply';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
-import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead } from '@/lib/firebase';
+import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage } from '@/lib/firebase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
@@ -34,7 +38,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [groupTitle, setGroupTitle] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
+  const [editTarget, setEditTarget] = useState<ChatMessage | null>(null);
+  const [menuFor, setMenuFor] = useState<{ m: ChatMessage; el: HTMLElement } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const previewOf = (m: ChatMessage) => (m.deleted ? 'Tin đã thu hồi' : m.text || (m.file ? `📎 ${m.file.name}` : ''));
 
   const active = useMemo(() => chats.find((c) => c.id === activeId) ?? null, [chats, activeId]);
   const titleOf = (c: Chat) => (c.isGroup ? (c.title || 'Nhóm') : nameOf(c.members.find((m) => m !== me?.u) ?? ''));
@@ -62,11 +71,32 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const send = async (file?: ChatMessage['file']) => {
     if (!me || !active) return;
     const body = text.trim();
+    // Đang sửa tin (chỉ với text, không kèm file).
+    if (editTarget && !file) {
+      if (!body) return;
+      const t = editTarget; setText(''); setEditTarget(null);
+      try { await fbEditChatMessage(active.id, t.id, body); }
+      catch (e) { toast('Sửa lỗi: ' + (e as Error).message, 'error'); }
+      return;
+    }
     if (!body && !file) return;
-    const msg: ChatMessage = { id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(), ...(body ? { text: body } : {}), ...(file ? { file } : {}) };
-    setText('');
+    const msg: ChatMessage = {
+      id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(),
+      ...(body ? { text: body } : {}), ...(file ? { file } : {}),
+      ...(replyTarget ? { replyTo: { id: replyTarget.id, byName: replyTarget.byName, text: previewOf(replyTarget) } } : {}),
+    };
+    setText(''); setReplyTarget(null);
     try { await fbSendChatMessage(active.id, msg); }
     catch (e) { toast('Gửi lỗi: ' + (e as Error).message, 'error'); }
+  };
+
+  const startReply = (m: ChatMessage) => { setReplyTarget(m); setEditTarget(null); setMenuFor(null); };
+  const startEdit = (m: ChatMessage) => { setEditTarget(m); setReplyTarget(null); setText(m.text ?? ''); setMenuFor(null); };
+  const doDelete = async (m: ChatMessage) => {
+    setMenuFor(null);
+    if (!active || !window.confirm('Thu hồi tin nhắn này?')) return;
+    try { await fbDeleteChatMessage(active.id, m.id); }
+    catch (e) { toast('Thu hồi lỗi: ' + (e as Error).message, 'error'); }
   };
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';
@@ -155,24 +185,60 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
             {active.messages.map((m) => {
               const mine = m.by === me?.u;
               return (
-                <Box key={m.id} sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%' }}>
+                <Box key={m.id} sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', '&:hover .msg-act': { opacity: 1 } }}>
                   {active.isGroup && !mine && <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 700 }}>{m.byName}</Typography>}
-                  <Box sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: mine ? LEGACY.teal : '#fff', color: mine ? '#fff' : 'inherit', boxShadow: 1 }}>
-                    {m.text && <Typography fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</Typography>}
-                    {m.file && (
-                      <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer"
-                        sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: m.text ? 0.5 : 0, color: mine ? '#fff' : LEGACY.teal, textDecoration: 'none', fontSize: 13 }}>
-                        <InsertDriveFileOutlinedIcon fontSize="small" />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file.name}</span>
-                        <span style={{ opacity: 0.7, whiteSpace: 'nowrap' }}>· {fmtSize(m.file.size)}</span>
-                      </Box>
+                  <Stack direction={mine ? 'row-reverse' : 'row'} alignItems="center" spacing={0.25}>
+                    <Box sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: mine ? LEGACY.teal : '#fff', color: mine ? '#fff' : 'inherit', boxShadow: 1, minWidth: 0 }}>
+                      {m.deleted ? (
+                        <Typography fontSize={13} sx={{ fontStyle: 'italic', opacity: 0.75 }}>🚫 Tin đã thu hồi</Typography>
+                      ) : (
+                        <>
+                          {m.replyTo && (
+                            <Box sx={{ borderLeft: '3px solid', borderColor: mine ? 'rgba(255,255,255,0.65)' : LEGACY.teal, pl: 1, mb: 0.5, opacity: 0.9 }}>
+                              <Typography fontSize={11} fontWeight={700} noWrap>{m.replyTo.byName}</Typography>
+                              <Typography fontSize={12} noWrap sx={{ maxWidth: 220 }}>{m.replyTo.text}</Typography>
+                            </Box>
+                          )}
+                          {m.text && <Typography fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</Typography>}
+                          {m.file && (
+                            <Box component="a" href={workerFileUrl(m.file.key)} target="_blank" rel="noreferrer"
+                              sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: m.text ? 0.5 : 0, color: mine ? '#fff' : LEGACY.teal, textDecoration: 'none', fontSize: 13 }}>
+                              <InsertDriveFileOutlinedIcon fontSize="small" />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file.name}</span>
+                              <span style={{ opacity: 0.7, whiteSpace: 'nowrap' }}>· {fmtSize(m.file.size)}</span>
+                            </Box>
+                          )}
+                        </>
+                      )}
+                    </Box>
+                    {!m.deleted && (
+                      <IconButton className="msg-act" size="small" onClick={(e) => setMenuFor({ m, el: e.currentTarget })}
+                        sx={{ opacity: 0, transition: 'opacity .15s', color: 'text.disabled', width: 26, height: 26 }}>
+                        <MoreVertIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
                     )}
-                  </Box>
-                  <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>{fmtTime(m.at)}</Typography>
+                  </Stack>
+                  <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>
+                    {fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
+                  </Typography>
                 </Box>
               );
             })}
           </Box>
+          {(replyTarget || editTarget) && (
+            <Box sx={{ px: 1.5, py: 0.75, borderTop: '1px solid rgba(15,58,74,0.08)', bgcolor: 'rgba(20,150,140,0.06)', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 3, alignSelf: 'stretch', borderRadius: 2, bgcolor: LEGACY.teal }} />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography fontSize={11} fontWeight={800} color={LEGACY.teal}>
+                  {editTarget ? 'Đang sửa tin nhắn' : `Trả lời ${replyTarget?.byName}`}
+                </Typography>
+                <Typography fontSize={12} noWrap color="text.secondary">
+                  {editTarget ? (editTarget.text ?? '') : previewOf(replyTarget!)}
+                </Typography>
+              </Box>
+              <IconButton size="small" onClick={() => { setReplyTarget(null); setEditTarget(null); if (editTarget) setText(''); }}><CloseIcon sx={{ fontSize: 16 }} /></IconButton>
+            </Box>
+          )}
           <Box sx={{ p: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Tooltip title="Gửi file (≤20MB)"><IconButton component="label" disabled={busy}><AttachFileIcon /><input type="file" hidden onChange={onPickFile} /></IconButton></Tooltip>
             <InputBase value={text} onChange={(e) => setText(e.target.value)} placeholder={busy ? 'Đang tải file…' : 'Nhập tin nhắn…'} multiline maxRows={4}
@@ -182,6 +248,16 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           </Box>
         </>
       )}
+
+      <Menu anchorEl={menuFor?.el} open={!!menuFor} onClose={() => setMenuFor(null)}>
+        <MenuItem onClick={() => menuFor && startReply(menuFor.m)}><ReplyIcon fontSize="small" sx={{ mr: 1 }} />Trả lời</MenuItem>
+        {menuFor?.m.by === me?.u && !!menuFor?.m.text && (
+          <MenuItem onClick={() => menuFor && startEdit(menuFor.m)}><EditIcon fontSize="small" sx={{ mr: 1 }} />Sửa</MenuItem>
+        )}
+        {menuFor?.m.by === me?.u && (
+          <MenuItem onClick={() => menuFor && void doDelete(menuFor.m)} sx={{ color: '#dc3250' }}><DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />Thu hồi</MenuItem>
+        )}
+      </Menu>
     </Drawer>
   );
 }

@@ -705,6 +705,45 @@ export async function fbSendChatMessage(id: string, msg: ChatMessage): Promise<v
   });
 }
 
+const chatPreview = (m: ChatMessage): string =>
+  m.deleted ? '🚫 Tin đã thu hồi' : m.text || (m.file ? `📎 ${m.file.name}` : '');
+
+/** Sửa nội dung 1 tin (chỉ chủ tin). Cập nhật preview nếu là tin cuối. */
+export async function fbEditChatMessage(id: string, msgId: string, text: string): Promise<void> {
+  const snap = await getDoc(chatDoc(id));
+  if (!snap.exists()) return;
+  const c = snap.data() as Chat;
+  const messages = (c.messages ?? []).map((m) => (m.id === msgId ? { ...m, text, editedAt: new Date().toISOString() } : m));
+  const last = messages[messages.length - 1];
+  await setDoc(chatDoc(id), { ...c, messages, ...(last?.id === msgId ? { lastText: chatPreview(last) } : {}) });
+}
+
+/** Thu hồi 1 tin: xoá nội dung/file, đánh dấu deleted (chỉ chủ tin). */
+export async function fbDeleteChatMessage(id: string, msgId: string): Promise<void> {
+  const snap = await getDoc(chatDoc(id));
+  if (!snap.exists()) return;
+  const c = snap.data() as Chat;
+  const messages = (c.messages ?? []).map((m) => (m.id === msgId ? { id: m.id, by: m.by, byName: m.byName, at: m.at, deleted: true } : m));
+  const last = messages[messages.length - 1];
+  await setDoc(chatDoc(id), { ...c, messages, ...(last?.id === msgId ? { lastText: chatPreview(last) } : {}) });
+}
+
+/** Bật/tắt cảm xúc của user trên 1 tin. */
+export async function fbToggleChatReaction(id: string, msgId: string, emoji: string, username: string): Promise<void> {
+  const snap = await getDoc(chatDoc(id));
+  if (!snap.exists()) return;
+  const c = snap.data() as Chat;
+  const messages = (c.messages ?? []).map((m) => {
+    if (m.id !== msgId) return m;
+    const reactions = { ...(m.reactions ?? {}) };
+    const arr = reactions[emoji] ?? [];
+    const next = arr.includes(username) ? arr.filter((u) => u !== username) : [...arr, username];
+    if (next.length) reactions[emoji] = next; else delete reactions[emoji];
+    return { ...m, reactions };
+  });
+  await setDoc(chatDoc(id), { ...c, messages });
+}
+
 /** Đánh dấu user đã đọc cuộc trò chuyện tới thời điểm hiện tại. */
 export async function fbMarkChatRead(id: string, username: string): Promise<void> {
   const snap = await getDoc(chatDoc(id));
