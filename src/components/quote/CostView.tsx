@@ -3,6 +3,7 @@ import {
   Box, Button, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
+import { QuoteWarningsBanner } from './QuoteWarningsBanner';
 import { GroupSizeTabs } from './GroupSizeTabs';
 import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
@@ -74,6 +75,8 @@ export function CostView() {
           </Stack>
         )}
 
+        <QuoteWarningsBanner cats={cats} items={items} catEnabled={catEnabled} />
+
         <GroupSizeTabs />
 
         {cats.map((cat) => {
@@ -91,6 +94,7 @@ export function CostView() {
             <CatBlock
               key={cat.id}
               cat={cat}
+              domId={`cat-${cat.id}`}
               items={items[catId] ?? []}
               enabled={catEnabled[catId]}
               pax={pax}

@@ -1,4 +1,4 @@
-import type { Item } from '@/types';
+import type { CategoryId, Item } from '@/types';
 
 /**
  * Kiểm tra nhanh 1 dòng chi phí → danh sách cảnh báo (rỗng = sạch).
@@ -43,4 +43,20 @@ export function duplicateNames(items: Item[]): Set<string> {
 /** Khoá chuẩn hoá tên dùng để so với tập trùng. */
 export function nameKey(name: string): string {
   return name.trim().toLowerCase();
+}
+
+/**
+ * Lỗi NGHIÊM TRỌNG cần hỏi xác nhận trước khi xuất/lưu: dòng đang BẬT, có cộng
+ * vào tổng (không FOC/đã gồm) nhưng đơn giá = 0 → gần như chắc chắn quên nhập giá.
+ * Trả về tên các dòng (hoặc '(chưa đặt tên)').
+ */
+export function blockingIssues(items: Partial<Record<CategoryId, Item[]>>): string[] {
+  const out: string[] = [];
+  for (const arr of Object.values(items)) {
+    for (const it of arr ?? []) {
+      if (it.enabled && !it.foc && !it.included && it.price <= 0)
+        out.push(it.name.trim() || '(chưa đặt tên)');
+    }
+  }
+  return out;
 }

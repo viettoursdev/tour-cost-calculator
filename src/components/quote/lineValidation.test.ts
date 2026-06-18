@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lineWarnings, duplicateNames, nameKey } from './lineValidation';
+import { lineWarnings, duplicateNames, nameKey, blockingIssues } from './lineValidation';
 import type { Item } from '@/types';
 
 const base: Item = {
@@ -29,6 +29,22 @@ describe('lineWarnings', () => {
   });
   it('cờ trùng tên', () => {
     expect(lineWarnings(base, true)).toContain('Trùng tên với dòng khác cùng hạng mục');
+  });
+});
+
+describe('blockingIssues', () => {
+  it('chỉ bắt dòng BẬT, có cộng tổng, đơn giá = 0', () => {
+    const items = {
+      hotel: [
+        { ...base, id: 1, name: 'KS A', price: 0 },              // bật, giá 0 → chặn
+        { ...base, id: 2, name: 'KS B', price: 0, foc: true },   // FOC → bỏ qua
+        { ...base, id: 3, name: 'KS C', price: 0, enabled: false }, // tắt → bỏ qua
+        { ...base, id: 4, name: 'KS D', price: 1000000 },        // có giá → bỏ qua
+        { ...base, id: 5, name: '', price: 0 },                  // bật, giá 0, không tên
+      ],
+    } as Parameters<typeof blockingIssues>[0];
+    const issues = blockingIssues(items);
+    expect(issues).toEqual(['KS A', '(chưa đặt tên)']);
   });
 });
 

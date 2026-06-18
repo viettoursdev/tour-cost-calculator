@@ -34,6 +34,7 @@ import { fmtOutput } from '@/lib/currency';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { computeTotals, fmtVND } from './calc';
+import { blockingIssues } from './lineValidation';
 import { InvoiceModal } from './InvoiceModal';
 import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
@@ -172,6 +173,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     else if (key === 'visa') setRateModal({ kind: 'visa' });
     else setRateModal({ kind: 'other', type: key, label });
     setRateAnchor(null);
+  };
+
+  // Hỏi xác nhận nếu báo giá còn dòng BẬT mà đơn giá = 0 (trước khi xuất/lưu cho khách).
+  const confirmIfBlocking = (action: () => void) => {
+    const issues = blockingIssues(useQuoteStore.getState().draft.items);
+    if (issues.length) {
+      const list = issues.slice(0, 8).map((n) => `• ${n}`).join('\n');
+      const more = issues.length > 8 ? `\n…và ${issues.length - 8} dòng khác` : '';
+      if (!window.confirm(`⚠ Báo giá còn ${issues.length} dòng đang BẬT nhưng đơn giá = 0:\n\n${list}${more}\n\nVẫn tiếp tục?`)) return;
+    }
+    action();
   };
 
   const handleExport = () => {
@@ -523,32 +535,32 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           {/* PDF outputs */}
           {isDMC ? (
             <MenuItem onClick={() => {
-              if (currentUser) void import('@/lib/exports/exportDMCPDF').then((m) => m.exportDMCPDF({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } }));
               setExportAnchor(null);
+              confirmIfBlocking(() => { if (currentUser) void import('@/lib/exports/exportDMCPDF').then((m) => m.exportDMCPDF({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } })); });
             }}>
               <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
               <ListItemText>PDF breakdown DMC</ListItemText>
             </MenuItem>
           ) : (
             <>
-              <MenuItem onClick={() => { void handleExportPDFImage(); setExportAnchor(null); }}>
+              <MenuItem onClick={() => { setExportAnchor(null); confirmIfBlocking(() => void handleExportPDFImage()); }}>
                 <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
                 <ListItemText>PDF Ảnh</ListItemText>
               </MenuItem>
-              <MenuItem onClick={() => { void handleExportPDFImagePkg(); setExportAnchor(null); }}>
+              <MenuItem onClick={() => { setExportAnchor(null); confirmIfBlocking(() => void handleExportPDFImagePkg()); }}>
                 <ListItemIcon><PhotoLibraryIcon fontSize="small" /></ListItemIcon>
                 <ListItemText>PDF Ảnh (Tour trọn gói)</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => {
-                if (canExport && currentUser) void import('@/lib/exports/exportPDF').then((m) => m.exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } }));
                 setExportAnchor(null);
+                confirmIfBlocking(() => { if (canExport && currentUser) void import('@/lib/exports/exportPDF').then((m) => m.exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone } })); });
               }}>
                 <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
                 <ListItemText>PDF Báo Giá</ListItemText>
               </MenuItem>
               <MenuItem onClick={() => {
-                if (canExport && currentUser) void import('@/lib/exports/exportPDF').then((m) => m.exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' }));
                 setExportAnchor(null);
+                confirmIfBlocking(() => { if (canExport && currentUser) void import('@/lib/exports/exportPDF').then((m) => m.exportPDFQuote({ draft, savedBy: { name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }, mode: 'package' })); });
               }}>
                 <ListItemIcon><Inventory2Icon fontSize="small" /></ListItemIcon>
                 <ListItemText>PDF Báo giá trọn gói</ListItemText>
@@ -629,7 +641,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           size="small" variant="contained" startIcon={<CloudUploadIcon />}
           // Blur first so the trigger isn't a focused descendant of #root when the
           // dialog applies aria-hidden (avoids the a11y "aria-hidden on focused" warning).
-          onClick={(e) => { e.currentTarget.blur(); onOpenSaveCloud(); }}
+          onClick={(e) => { e.currentTarget.blur(); confirmIfBlocking(onOpenSaveCloud); }}
           sx={{ fontWeight: 800, background: LEGACY.headerGradient }}
         >
           Lưu
