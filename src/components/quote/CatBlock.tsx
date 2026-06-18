@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Sortable from 'sortablejs';
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent,
-  DialogTitle, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
+  DialogTitle, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
@@ -10,6 +10,7 @@ import { LineRow } from './LineRow';
 import { catTotal, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { parseAmountVN } from '@/lib/numParse';
+import { lineWarnings, duplicateNames, nameKey } from './lineValidation';
 import type { CategoryDef } from './constants';
 import type { Item, OutputCurrency } from '@/types';
 
@@ -75,6 +76,10 @@ export function CatBlock({
     if (rows.length) onAddMany(rows);
     setPasteText(''); setPasteOpen(false);
   };
+  // Cảnh báo nhập liệu: tính 1 lần cho cả hạng mục (kèm phát hiện trùng tên).
+  const dupSet = duplicateNames(items);
+  const warnByItem = items.map((it) => lineWarnings(it, !!it.name.trim() && dupSet.has(nameKey(it.name))));
+  const warnCount = warnByItem.reduce((s, w) => s + (w.length ? 1 : 0), 0);
   const sub = enabled ? catTotal(items, rates, pax) : 0;
   const fmtMoney = (n: number) =>
     displayCurrency && displayCurrency !== 'VND' ? fmtOutput(n, displayCurrency, rates) : fmtVND(n);
@@ -135,6 +140,14 @@ export function CatBlock({
               📋 Rate card
             </Box>
           )}
+          {warnCount > 0 && (
+            <Tooltip title={`${warnCount} dòng có cảnh báo nhập liệu`}>
+              <Box sx={{
+                background: 'rgba(245,166,35,0.18)', border: '1px solid rgba(245,166,35,0.5)',
+                borderRadius: '8px', px: 0.9, py: 0.25, fontSize: 11, color: '#b9770f', fontWeight: 800, whiteSpace: 'nowrap',
+              }}>⚠ {warnCount}</Box>
+            </Tooltip>
+          )}
           <Typography variant="caption" color="text.secondary">{items.length} dòng</Typography>
           {enabled
             ? <Typography fontWeight={800} sx={{ color: cat.color, mr: 1 }}>{fmtMoney(sub)}</Typography>
@@ -172,6 +185,7 @@ export function CatBlock({
                     onUpd={onUpd}
                     onDel={() => onDel(item.id)}
                     onDup={() => onDup(item)}
+                    warnings={warnByItem[i]}
                     displayCurrency={displayCurrency}
                   />
                 ))}

@@ -18,6 +18,8 @@ type Props = {
   onDel: () => void;
   onDup?: () => void;
   index?: number;
+  /** Cảnh báo nhập liệu của dòng này (nơi gọi tính qua lineWarnings). */
+  warnings?: string[];
   /** When set (DMC: "hiển thị tổng theo"), line totals show in this currency. */
   displayCurrency?: OutputCurrency;
 };
@@ -193,7 +195,8 @@ function EditNote({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, displayCurrency }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, warnings, displayCurrency }: Props) {
+  const warns = warnings ?? [];
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
   const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
@@ -213,7 +216,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
   };
 
   return (
-    <TableRow data-index={index} sx={{ opacity: off ? 0.4 : 1 }}>
+    <TableRow data-index={index} sx={{ opacity: off ? 0.4 : 1, ...(warns.length ? { background: 'rgba(245,166,35,0.07)' } : null) }}>
       {/* Tay kéo sắp xếp */}
       <TableCell padding="checkbox" className="row-drag" sx={{ textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.3)', userSelect: 'none', '&:hover': { color: '#0d7a6a' } }} title="Kéo để đổi thứ tự">⋮⋮</TableCell>
       {/* Enable toggle (legacy pill) */}
@@ -237,7 +240,15 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
 
       {/* Name */}
       <TableCell sx={{ minWidth: 140 }}>
-        <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" />
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          {warns.length > 0 && (
+            <Tooltip title={<Box sx={{ whiteSpace: 'pre-line' }}>{warns.map((w) => `• ${w}`).join('\n')}</Box>}>
+              <Box component="span" aria-label={`${warns.length} cảnh báo`}
+                sx={{ flexShrink: 0, fontSize: 13, color: '#d18a13', cursor: 'help', lineHeight: 1 }}>⚠</Box>
+            </Tooltip>
+          )}
+          <EditText value={item.name} onChange={(v) => u({ name: v })} placeholder="Mô tả..." bold navCol="name" />
+        </Stack>
       </TableCell>
 
       {/* Note (chi tiết / ghi chú — đa dòng, in đậm, hiện đầy đủ) */}
