@@ -3,7 +3,8 @@ import {
   Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent,
   DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
-import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -266,11 +267,12 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                     <Box
-                      component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
+                      component="button" type="button" onClick={() => openFilePreview({ key: att.key, name: att.name })}
                       title={att.name}
                       sx={{
-                        display: 'block', fontSize: 13, fontWeight: 600, color: LEGACY.teal,
-                        textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0,
+                        fontSize: 13, fontWeight: 600, color: LEGACY.teal, fontFamily: 'inherit',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         '&:hover': { textDecoration: 'underline' },
                       }}
                     >

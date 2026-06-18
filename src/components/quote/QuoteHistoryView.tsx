@@ -10,7 +10,7 @@ import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META } from './constants';
-import { workerFileUrl } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, WorkflowStep } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
@@ -42,7 +42,7 @@ function AttachmentsCell({ row }: { row: CloudQuoteEntry }) {
   if (files.length === 1) {
     return (
       <Tooltip title={`Mở: ${files[0].name}`}>
-        <IconButton size="small" component="a" href={workerFileUrl(files[0].key)} target="_blank" rel="noreferrer">
+        <IconButton size="small" onClick={() => openFilePreview({ key: files[0].key, name: files[0].name })}>
           <AttachFile fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -68,11 +68,7 @@ function AttachmentsCell({ row }: { row: CloudQuoteEntry }) {
           {files.map((f) => (
             <MenuItem
               key={f.key}
-              component="a"
-              href={workerFileUrl(f.key)}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setAnchorEl(null)}
+              onClick={() => { setAnchorEl(null); openFilePreview({ key: f.key, name: f.name }); }}
               sx={{ gap: 1, alignItems: 'flex-start' }}
             >
               <AttachFile fontSize="small" color="action" sx={{ mt: 0.4 }} />

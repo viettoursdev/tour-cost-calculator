@@ -14,7 +14,8 @@ import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -311,8 +312,9 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
               {(doc.attachments ?? []).map((att, i) => (
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Box component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer" title={att.name}
-                      sx={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                    <Box component="button" type="button" onClick={() => openFilePreview({ key: att.key, name: att.name })} title={att.name}
+                      sx={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0, fontFamily: 'inherit',
+                        fontSize: 13, fontWeight: 600, color: '#0d7a6a',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
                       📎 {att.name}
                     </Box>

@@ -10,7 +10,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/firebase';
-import { workerFileUrl } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
 
@@ -370,13 +370,12 @@ function NotificationItem({
           {attachments.map((a) => (
             <Box key={a.key}>
               <Box
-                component="a"
-                href={workerFileUrl(a.key)}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                component="button"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openFilePreview({ key: a.key, name: a.name }); }}
                 sx={{
-                  display: 'block', fontSize: 12, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                  display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0, fontFamily: 'inherit',
+                  fontSize: 12, fontWeight: 600, color: '#0d7a6a',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   '&:hover': { textDecoration: 'underline' },
                 }}

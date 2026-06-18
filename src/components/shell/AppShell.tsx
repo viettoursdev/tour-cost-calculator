@@ -12,6 +12,7 @@ import { QuoteView } from '@/components/quote/QuoteView';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { AssistantPanel } from '@/components/assistant/AssistantPanel';
 import { ChatPanel } from '@/components/chat/ChatPanel';
+import { FilePreviewHost } from '@/components/common/FilePreviewHost';
 import { OnboardingDialog } from '@/components/shell/OnboardingDialog';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -167,6 +168,7 @@ export function AppShell() {
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
       <OnboardingDialog open={onboardOpen} onClose={closeOnboard} />
+      <FilePreviewHost />
     </Box>
   );
 }

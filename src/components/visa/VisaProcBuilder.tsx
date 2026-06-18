@@ -20,7 +20,8 @@ import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { PROC_KIND_ICON, VISAP_TYPES, newProcField, newProcRow, newProcSection } from './constants';
 // Trình xuất visa nạp động khi bấm.
-import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import { VisaProcCollabModal } from './VisaProcCollabModal';
 import type { User, VisaProcDoc, VisaProcSection } from '@/types';
@@ -290,8 +291,9 @@ export function VisaProcBuilder({ initial, user, onBack }: Props) {
               {(doc.attachments ?? []).map((att, i) => (
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Box component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer" title={att.name}
-                      sx={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0d7a6a', textDecoration: 'none',
+                    <Box component="button" type="button" onClick={() => openFilePreview({ key: att.key, name: att.name })} title={att.name}
+                      sx={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0, fontFamily: 'inherit',
+                        fontSize: 13, fontWeight: 600, color: '#0d7a6a',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
                       📎 {att.name}
                     </Box>

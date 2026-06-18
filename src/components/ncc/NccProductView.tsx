@@ -18,7 +18,7 @@ import { usePaymentStore } from '@/stores/paymentStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewAll } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
-import { workerFileUrl } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { CATS } from '@/components/quote/constants';
 import { slugifyTourKey } from '@/components/quote/paymentUtils';
 import { NccProductEditor } from './NccProductEditor';
@@ -192,7 +192,7 @@ export function NccProductView() {
                           {(p.files?.length ?? 0) > 0 && (
                             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                               {p.files.map((f) => (
-                                <Link key={f.key} href={workerFileUrl(f.key)} target="_blank" rel="noreferrer" variant="caption"
+                                <Link key={f.key} component="button" type="button" onClick={() => openFilePreview({ key: f.key, name: f.name })} variant="caption"
                                   sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
                                   📎 {f.name}
                                 </Link>
@@ -236,7 +236,7 @@ export function NccProductView() {
             <Stack spacing={1}>
               {fileHistory.map((f) => (
                 <Box key={f.key} sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)', pb: 0.75 }}>
-                  <Link href={workerFileUrl(f.key)} target="_blank" rel="noreferrer" fontWeight={700} sx={{ wordBreak: 'break-all' }}>📎 {f.name}</Link>
+                  <Link component="button" type="button" onClick={() => openFilePreview({ key: f.key, name: f.name })} fontWeight={700} sx={{ textAlign: 'left', wordBreak: 'break-all' }}>📎 {f.name}</Link>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                     {f.product} · {f.ncc || '—'} · {fmtDt(f.uploadedAt)}{f.uploadedBy ? ` · ${f.uploadedBy}` : ''}
                   </Typography>

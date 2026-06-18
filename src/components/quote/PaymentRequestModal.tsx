@@ -8,7 +8,8 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { fbSendNotification, fbSendNotificationMany, fbEnsureNotifThread } from '@/lib/firebase';
-import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import { slugifyTourKey } from './paymentUtils';
 import { fmtVND } from './calc';
@@ -330,11 +331,12 @@ export function PaymentRequestModal({
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1}>
                   <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                     <Box
-                      component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
+                      component="button" type="button" onClick={() => openFilePreview({ key: att.key, name: att.name })}
                       title={att.name}
                       sx={{
-                        display: 'block', fontSize: 13, fontWeight: 600, color: '#0d7a6a',
-                        textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        display: 'block', width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0,
+                        fontSize: 13, fontWeight: 600, color: '#0d7a6a', fontFamily: 'inherit',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                         '&:hover': { textDecoration: 'underline' },
                       }}
                     >

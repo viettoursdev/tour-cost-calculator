@@ -9,7 +9,8 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useNccProductsStore } from '@/stores/nccProductsStore';
-import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { CATS } from '@/components/quote/constants';
 import { MENU_CUR } from '@/components/menu/constants';
 import type { CategoryId, FileAttachment, NccPrice, NccProduct } from '@/types';
@@ -137,7 +138,7 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
             <Stack spacing={0.5} sx={{ mt: 0.75 }}>
               {files.map((f, i) => (
                 <Stack key={f.key} direction="row" alignItems="center" spacing={1}>
-                  <Link href={workerFileUrl(f.key)} target="_blank" rel="noreferrer" sx={{ flex: 1, wordBreak: 'break-all' }}>📎 {f.name}</Link>
+                  <Link component="button" type="button" onClick={() => openFilePreview({ key: f.key, name: f.name })} sx={{ flex: 1, textAlign: 'left', wordBreak: 'break-all' }}>📎 {f.name}</Link>
                   <Button size="small" color="error" onClick={() => setFiles((prev) => prev.filter((_, k) => k !== i))}>Gỡ</Button>
                 </Stack>
               ))}

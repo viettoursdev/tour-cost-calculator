@@ -10,7 +10,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs } from './workflowConstants';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
-import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
 type Props = {
@@ -107,8 +108,8 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               {(s.attachments ?? []).map((att, i) => (
                 <Stack key={att.key} direction="row" alignItems="center" spacing={1} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 1, py: 0.5 }}>
                   <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                  <Box component="a" href={workerFileUrl(att.key)} target="_blank" rel="noreferrer"
-                    sx={{ flex: 1, fontSize: 13, color: '#0d7a6a', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <Box component="button" type="button" onClick={() => openFilePreview({ key: att.key, name: att.name })}
+                    sx={{ flex: 1, textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0, fontFamily: 'inherit', fontSize: 13, color: '#0d7a6a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {att.name}{att.uploadedBy ? <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.disabled' }}>· {att.uploadedBy}</Typography> : null}
                   </Box>
                   <IconButton size="small" color="error" onClick={() => removeAtt(i)}><DeleteOutlineIcon fontSize="small" /></IconButton>
