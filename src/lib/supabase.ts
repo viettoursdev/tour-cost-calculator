@@ -1,6 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FileAttachment } from '@/types';
-import { replaceChildren } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -29,12 +28,18 @@ export async function loadAttachments(
 export async function saveAttachments(
   client: SupabaseClient, parentType: string, parentId: string, atts: FileAttachment[],
 ): Promise<void> {
-  await replaceChildren(client, 'attachments', 'parent_id', parentId,
-    atts.map((a) => ({
-      parent_type: parentType, parent_id: parentId,
-      r2_key: a.key, name: a.name,
-      uploaded_by_name: a.uploadedBy ?? null,
-      uploaded_at: a.uploadedAt ?? null,
-    })),
-  );
+  // Delete scoped by (parent_type, parent_id) to avoid cross-type collisions on shared IDs.
+  const del = await client.from('attachments').delete()
+    .eq('parent_type', parentType).eq('parent_id', parentId);
+  if (del.error) throw new Error('saveAttachments delete: ' + del.error.message);
+  const rows = atts.map((a) => ({
+    parent_type: parentType, parent_id: parentId,
+    r2_key: a.key, name: a.name,
+    uploaded_by_name: a.uploadedBy ?? null,
+    uploaded_at: a.uploadedAt ?? null,
+  }));
+  if (rows.length) {
+    const ins = await client.from('attachments').insert(rows);
+    if (ins.error) throw new Error('saveAttachments insert: ' + ins.error.message);
+  }
 }
