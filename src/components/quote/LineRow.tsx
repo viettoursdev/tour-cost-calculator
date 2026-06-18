@@ -308,8 +308,10 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
       }}
       sx={{ opacity: off ? 0.4 : 1, ...(warns.length ? { background: 'rgba(245,166,35,0.07)' } : null) }}
     >
-      {/* Tay kéo sắp xếp */}
-      <TableCell padding="checkbox" className="row-drag" sx={{ textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.3)', userSelect: 'none', '&:hover': { color: '#0d7a6a' } }} title="Kéo để đổi thứ tự">⋮⋮</TableCell>
+      {/* STT + tay kéo sắp xếp */}
+      <TableCell padding="checkbox" className="row-drag" sx={{ textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.4)', userSelect: 'none', fontSize: 11, fontVariantNumeric: 'tabular-nums', '&:hover': { color: '#0d7a6a' } }} title="Kéo để đổi thứ tự">
+        {typeof index === 'number' ? index + 1 : '⋮⋮'}
+      </TableCell>
       {/* Enable toggle (legacy pill) */}
       <TableCell padding="checkbox" sx={{ textAlign: 'center' }}>
         <Box

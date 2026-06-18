@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import Sortable from 'sortablejs';
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent,
@@ -9,8 +9,10 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import { LineRow } from './LineRow';
 import { catTotal, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
+import { LEGACY } from '@/theme';
 import { lineWarnings, duplicateNames, nameKey } from './lineValidation';
 import { parsePasteGrid, FIELD_LABEL, type ParseField } from './parsePaste';
+import { guessItemMeta } from './guessMeta';
 import type { CategoryDef } from './constants';
 import type { Item, OutputCurrency } from '@/types';
 
@@ -41,6 +43,12 @@ export function CatBlock({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
+  const [quickAdd, setQuickAdd] = useState('');
+  const commitQuick = () => {
+    const v = quickAdd.trim();
+    if (v) onAddMany([{ name: v, ...(guessItemMeta(v) ?? {}) }]);
+    setQuickAdd('');
+  };
   const bodyRef = useRef<HTMLTableSectionElement>(null);
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
@@ -151,10 +159,14 @@ export function CatBlock({
       {enabled && (
         <AccordionDetails sx={{ p: 0 }}>
           <TableContainer sx={{ maxHeight: '72vh' }}>
-            <Table size="small" stickyHeader sx={{ minWidth: 1000 }}>
+            <Table size="small" stickyHeader sx={{
+              minWidth: 1000,
+              '& tbody tr:nth-of-type(even)': { background: 'rgba(15,58,74,0.022)' },
+              '& tbody tr:focus-within': { background: 'rgba(20,150,140,0.07)' },
+            }}>
               <TableHead>
                 <TableRow sx={{ '& th': { bgcolor: '#f3faf8', fontWeight: 700 } }}>
-                  <TableCell padding="checkbox" />
+                  <TableCell padding="checkbox" sx={{ textAlign: 'center', color: 'rgba(15,58,74,0.5)' }}>#</TableCell>
                   <TableCell padding="checkbox">✓</TableCell>
                   <TableCell>Hạng mục</TableCell>
                   <TableCell>Chi tiết / Ghi chú</TableCell>
@@ -185,6 +197,29 @@ export function CatBlock({
                     displayCurrency={displayCurrency}
                   />
                 ))}
+                {/* Hàng thêm nhanh: gõ tên là tạo dòng, không cần bấm nút */}
+                <TableRow>
+                  <TableCell padding="checkbox" />
+                  <TableCell padding="checkbox" sx={{ textAlign: 'center', color: 'rgba(15,58,74,0.3)' }}>＋</TableCell>
+                  <TableCell colSpan={8}>
+                    <Box
+                      component="input"
+                      value={quickAdd}
+                      placeholder="Gõ tên hạng mục rồi Enter để thêm dòng…"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setQuickAdd(e.target.value)}
+                      onBlur={commitQuick}
+                      onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                        if (e.key === 'Enter') { e.preventDefault(); commitQuick(); }
+                        else if (e.key === 'Escape') setQuickAdd('');
+                      }}
+                      sx={{
+                        width: '100%', maxWidth: 420, background: 'transparent', border: 'none', outline: 'none',
+                        fontFamily: 'inherit', fontSize: 13, color: LEGACY.navy, padding: '4px 2px',
+                        '&::placeholder': { color: 'rgba(15,58,74,0.4)', fontStyle: 'italic' },
+                      }}
+                    />
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </TableContainer>
