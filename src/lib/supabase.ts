@@ -1,8 +1,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role } from '@/types';
+import type { FileAttachment, User, Role, Customer } from '@/types';
 import type { PoiEntry } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
-import { subscribeTable, usernamesToIds } from './supabase/helpers';
+import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -246,4 +246,67 @@ export function sbSubscribeAuditLog(cb: (entries: AuditEntry[]) => void, client:
       note: (r.note as string) ?? undefined,
     }));
   }, cb);
+}
+
+// ── Customers ─────────────────────────────────────────────────────────────────
+
+const rowToCustomer = (r: Record<string, unknown>, contacts: Customer['contacts']): Customer => ({
+  id: r.legacy_id as string, name: r.name as string, type: r.type as Customer['type'],
+  address: (r.address as string) ?? undefined, taxCode: (r.tax_code as string) ?? undefined,
+  contacts, note: (r.note as string) ?? '',
+  createdAt: r.created_at as string, createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined, updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeCustomers(cb: (list: Customer[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'customers', async (cl) => {
+    const { data: rows, error } = await cl.from('customers').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    const ids = (rows ?? []).map((r) => r.id as string);
+    const { data: contacts } = ids.length
+      ? await cl.from('customer_contacts').select('*').in('customer_id', ids).order('sort_order')
+      : { data: [] as Record<string, unknown>[] };
+    const byParent = new Map<string, Customer['contacts']>();
+    for (const ct of contacts ?? []) {
+      const arr = byParent.get(ct.customer_id as string) ?? [];
+      arr.push({ name: ct.name as string, phone: ct.phone as string, email: ct.email as string, position: ct.position as string });
+      byParent.set(ct.customer_id as string, arr);
+    }
+    return (rows ?? []).map((r) => rowToCustomer(r, byParent.get(r.id as string) ?? []));
+  }, cb);
+}
+
+export async function sbPushCustomers(
+  list: Customer[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const cust of list) {
+    const { data: up, error: upErr } = await client.from('customers').upsert({
+      legacy_id: cust.id, name: cust.name, type: cust.type,
+      address: cust.address ?? null, tax_code: cust.taxCode ?? null, note: cust.note ?? '',
+      created_by_name: cust.createdBy, ...stamp,
+    }, { onConflict: 'legacy_id' }).select('id').single();
+    if (upErr) throw new Error('sbPushCustomers upsert: ' + upErr.message);
+    await replaceChildren(client, 'customer_contacts', 'customer_id', up!.id, cust.contacts.map((ct, i) => ({
+      customer_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, sort_order: i,
+    })));
+  }
+  // Full-overwrite: delete customers removed from the list using safe fetch-then-delete pattern.
+  const keepIds = list.map((c) => c.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('customers').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushCustomers fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('customers').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushCustomers delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('customers').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushCustomers delete all: ' + del.error.message);
+  }
 }
