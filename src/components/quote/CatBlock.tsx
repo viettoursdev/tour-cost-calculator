@@ -31,6 +31,9 @@ type Props = {
   onReorder: (from: number, to: number) => void;
   /** DOM id để banner tổng kiểm tra cuộn tới hạng mục này. */
   domId?: string;
+  /** Điều khiển mở/đóng từ ngoài (Thu gọn/Mở tất cả). Bỏ trống = tự quản lý. */
+  expanded?: boolean;
+  onExpandedChange?: (v: boolean) => void;
   /** Opens the rate-card picker for this category (legacy "📋 Rate card"). */
   onOpenRate?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), totals show in this currency. */
@@ -38,7 +41,7 @@ type Props = {
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onReorder, domId, onOpenRate, displayCurrency,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onReorder, domId, expanded, onExpandedChange, onOpenRate, displayCurrency,
 }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -87,7 +90,9 @@ export function CatBlock({
   return (
     <Accordion
       id={domId}
-      defaultExpanded={enabled}
+      {...(expanded !== undefined
+        ? { expanded, onChange: (_e: unknown, v: boolean) => onExpandedChange?.(v) }
+        : { defaultExpanded: enabled })}
       disableGutters
       elevation={0}
       sx={{

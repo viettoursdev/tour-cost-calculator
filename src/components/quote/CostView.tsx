@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box, Button, Paper, Stack, TextField, Typography,
+  Box, Button, Menu, MenuItem, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { CatBlock } from './CatBlock';
 import { QuoteWarningsBanner } from './QuoteWarningsBanner';
@@ -61,6 +61,18 @@ export function CostView() {
 
   const cats = getCATS(template);
 
+  // Gọn hạng mục: điều khiển mở/đóng + ẩn hạng mục đã tắt + nhảy nhanh.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [hideOff, setHideOff] = useState(false);
+  const [jumpAnchor, setJumpAnchor] = useState<HTMLElement | null>(null);
+  const setAllExpanded = (v: boolean) => setExpanded(Object.fromEntries(cats.map((c) => [c.id, v])));
+  const jumpTo = (id: string) => {
+    setExpanded((m) => ({ ...m, [id]: true }));
+    setJumpAnchor(null);
+    requestAnimationFrame(() => document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+  const shownCats = hideOff ? cats.filter((c) => catEnabled[c.id as CategoryId]) : cats;
+
   return (
     <Box sx={{ display: 'flex', gap: 2, p: 2 }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -76,11 +88,30 @@ export function CostView() {
           </Stack>
         )}
 
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.25 }}>
+          <Button size="small" variant="outlined" onClick={() => setAllExpanded(true)} sx={{ textTransform: 'none', py: 0.25 }}>⊞ Mở tất cả</Button>
+          <Button size="small" variant="outlined" onClick={() => setAllExpanded(false)} sx={{ textTransform: 'none', py: 0.25 }}>⊟ Thu gọn</Button>
+          <Button size="small" variant={hideOff ? 'contained' : 'outlined'} onClick={() => setHideOff((v) => !v)} sx={{ textTransform: 'none', py: 0.25 }}>
+            {hideOff ? '☑' : '☐'} Ẩn hạng mục đã tắt
+          </Button>
+          <Button size="small" variant="outlined" onClick={(e) => setJumpAnchor(e.currentTarget)} sx={{ textTransform: 'none', py: 0.25 }}>↧ Nhảy tới…</Button>
+          <Menu anchorEl={jumpAnchor} open={!!jumpAnchor} onClose={() => setJumpAnchor(null)}>
+            {cats.map((c) => (
+              <MenuItem key={c.id} onClick={() => jumpTo(c.id)} sx={{ fontSize: 13, gap: 1 }}>
+                <span>{c.icon}</span> {c.label}
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 'auto', pl: 2 }}>
+                  {(items[c.id as CategoryId]?.length ?? 0)} dòng
+                </Typography>
+              </MenuItem>
+            ))}
+          </Menu>
+        </Stack>
+
         <QuoteWarningsBanner cats={cats} items={items} catEnabled={catEnabled} />
 
         <GroupSizeTabs />
 
-        {cats.map((cat) => {
+        {shownCats.map((cat) => {
           const catId = cat.id as CategoryId;
           let onOpenRate: (() => void) | undefined;
           if (cat.id === 'visa') onOpenRate = () => setVisaPickerOpen(true);
@@ -96,6 +127,8 @@ export function CostView() {
               key={cat.id}
               cat={cat}
               domId={`cat-${cat.id}`}
+              expanded={expanded[cat.id] ?? !!catEnabled[catId]}
+              onExpandedChange={(v) => setExpanded((m) => ({ ...m, [cat.id]: v }))}
               items={items[catId] ?? []}
               enabled={catEnabled[catId]}
               pax={pax}
