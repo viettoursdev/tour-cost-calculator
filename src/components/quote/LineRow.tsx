@@ -5,6 +5,7 @@ import { UNITS } from './constants';
 import { calcVND, fmtVND, qtyOf } from './calc';
 import { navFrom, type NavCol } from './cellNav';
 import { parseAmountVN } from '@/lib/numParse';
+import { docTienVN } from '@/lib/numToWords';
 import { fmtOutput } from '@/lib/currency';
 import { LEGACY } from '@/theme';
 import type { Item, OutputCurrency, QtyMode } from '@/types';
@@ -39,10 +40,10 @@ const Sel = styled('select')({
 
 /** Inline-edit number (legacy `EN`): formatted text → number input on click. */
 function EditNum({
-  value, onChange, min = 0, width = 80, align = 'right', bold = false, navCol,
+  value, onChange, min = 0, width = 80, align = 'right', bold = false, navCol, showWords = false,
 }: {
   value: number; onChange: (v: number) => void; min?: number;
-  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean; navCol?: NavCol;
+  width?: number; align?: 'right' | 'center' | 'left'; bold?: boolean; navCol?: NavCol; showWords?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -52,23 +53,35 @@ function EditNum({
     setEditing(false);
   };
   if (editing) {
+    const parsed = showWords ? parseAmountVN(draft) : 0;
     return (
-      <Box
-        component="input" autoFocus inputMode="decimal" value={draft} data-nav={navCol}
-        onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-          if (e.key === 'Escape') { setEditing(false); return; }
-          if (!navCol) { if (e.key === 'Enter') commit(); return; }
-          if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
-          else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
-        }}
-        sx={{
-          width, textAlign: align, background: '#fff', border: '1.5px solid #14a08c',
-          borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
-          fontFamily: 'inherit', fontSize: 14, fontWeight: bold ? 700 : 400,
-        }}
-      />
+      <Box sx={{ position: 'relative', display: 'inline-block' }}>
+        <Box
+          component="input" autoFocus inputMode="decimal" value={draft} data-nav={navCol}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Escape') { setEditing(false); return; }
+            if (!navCol) { if (e.key === 'Enter') commit(); return; }
+            if (e.key === 'Enter') { e.preventDefault(); commit(); navFrom(e.currentTarget, 'down'); }
+            else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
+          }}
+          sx={{
+            width, textAlign: align, background: '#fff', border: '1.5px solid #14a08c',
+            borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
+            fontFamily: 'inherit', fontSize: 14, fontWeight: bold ? 700 : 400,
+          }}
+        />
+        {showWords && parsed >= 1000 && (
+          <Box sx={{
+            position: 'absolute', top: '100%', right: 0, mt: 0.5, zIndex: 30, pointerEvents: 'none',
+            background: '#0f3a4a', color: '#fff', px: 1, py: 0.5, borderRadius: '6px',
+            fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap', boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+          }}>
+            {docTienVN(parsed)}
+          </Box>
+        )}
+      </Box>
     );
   }
   return (
@@ -266,7 +279,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
           <Sel value={item.cur} onChange={(e) => u({ cur: e.target.value })}>
             {Object.keys(rates).map((c) => <option key={c} value={c}>{c}</option>)}
           </Sel>
-          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold navCol="price" />
+          <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold navCol="price" showWords />
         </Stack>
       </TableCell>
 
