@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
-import type { VisaProduct, VisaProductsDoc, VisaProductVersion } from '@/types/visa';
+import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry } from '@/types/visa';
 import type { PoiEntry } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
@@ -1077,4 +1077,113 @@ export async function sbSaveVisaProducts(
     updated_by: savedBy || '',
   }, { onConflict: 'one_row' });
   if (metaErr) throw new Error('sbSaveVisaProducts meta upsert: ' + metaErr.message);
+}
+
+// ── visa_procedures ──────────────────────────────────────────────────────────
+
+export function sbSubscribeVisaProcs(
+  cb: (list: VisaProcIndexEntry[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'visa_procedures', async (cl) => {
+    const { data, error } = await cl
+      .from('visa_procedures')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false });
+    if (error) throw new Error('sbSubscribeVisaProcs: ' + error.message);
+    return (data ?? []).map((r): VisaProcIndexEntry => ({
+      id: (r.legacy_id as string) ?? '',
+      code: (r.code as string) ?? '',
+      title: (r.title as string) ?? '',
+      country: (r.country as string) ?? '',
+      visaType: (r.visa_type as string) ?? undefined,
+      isTemplate: (r.is_template as boolean) ?? false,
+      linkedQuoteName: (r.linked_quote_name as string) ?? '',
+      collaborators: (r.collaborator_usernames as string[]) ?? [],
+      createdByUsername: '',
+      createdByName: (r.created_by_name as string) ?? '',
+      createdAt: (r.created_at as string) ?? undefined,
+      updatedAt: (r.updated_at as string) ?? '',
+      updatedBy: (r.updated_by_name as string) ?? '',
+    }));
+  }, cb);
+}
+
+export async function sbGetVisaProc(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<VisaProcDoc | null> {
+  const { data, error } = await client
+    .from('visa_procedures')
+    .select('*')
+    .eq('legacy_id', id)
+    .maybeSingle();
+  if (error) throw new Error('sbGetVisaProc: ' + error.message);
+  if (!data) return null;
+  const attachments = await loadAttachments(client, 'visa_proc', id);
+  return {
+    id: (data.legacy_id as string) ?? id,
+    code: (data.code as string) ?? '',
+    title: (data.title as string) ?? '',
+    country: (data.country as string) ?? '',
+    visaType: (data.visa_type as string) ?? undefined,
+    isTemplate: (data.is_template as boolean) ?? false,
+    linkedQuoteId: (data.linked_quote_id as string) ?? null,
+    linkedQuoteName: (data.linked_quote_name as string) ?? '',
+    createdByUsername: (data.created_by_name as string) ?? '',
+    createdByName: (data.created_by_name as string) ?? '',
+    collaborators: (data.collaborator_usernames as string[]) ?? [],
+    sections: (data.sections as VisaProcDoc['sections']) ?? [],
+    versions: (data.versions as VisaProcDoc['versions']) ?? [],
+    attachments,
+    createdAt: (data.created_at as string) ?? undefined,
+    updatedAt: (data.updated_at as string) ?? undefined,
+    updatedBy: (data.updated_by_name as string) ?? undefined,
+  };
+}
+
+export async function sbSaveVisaProc(
+  d: VisaProcDoc,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const idMap = await usernamesToIds(client, d.collaborators ?? []);
+  const collaboratorIds = (d.collaborators ?? []).map((u) => idMap.get(u)).filter(Boolean) as string[];
+
+  const { error } = await client.from('visa_procedures').upsert({
+    legacy_id: d.id,
+    code: d.code ?? '',
+    title: d.title ?? '',
+    country: d.country ?? '',
+    visa_type: d.visaType ?? null,
+    is_template: d.isTemplate ?? false,
+    sections: d.sections ?? [],
+    versions: d.versions ?? [],
+    collaborators: collaboratorIds,
+    collaborator_usernames: d.collaborators ?? [],
+    linked_quote_id: d.linkedQuoteId ?? null,
+    linked_quote_name: d.linkedQuoteName ?? '',
+    created_by_name: d.createdByName ?? '',
+    created_at: d.createdAt,
+    updated_at: now,
+    updated_by_name: savedBy || '',
+  }, { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbSaveVisaProc: ' + error.message);
+
+  await saveAttachments(client, 'visa_proc', d.id, d.attachments ?? []);
+}
+
+export async function sbDeleteVisaProc(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error: attErr } = await client
+    .from('attachments')
+    .delete()
+    .eq('parent_type', 'visa_proc')
+    .eq('parent_id', id);
+  if (attErr) throw new Error('sbDeleteVisaProc attachments: ' + attErr.message);
+  const { error } = await client.from('visa_procedures').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteVisaProc: ' + error.message);
 }
