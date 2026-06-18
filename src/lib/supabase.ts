@@ -1836,3 +1836,277 @@ export async function sbDeleteMenu(
   const { error } = await client.from('menus').delete().eq('legacy_id', id);
   if (error) throw new Error('sbDeleteMenu: ' + error.message);
 }
+
+// ── Notifications + Threads ───────────────────────────────────────────────────
+
+import type { Notification, NotifThread, NotifComment, ActivityStatus } from '@/types';
+import type { Unsubscribe } from './supabase/helpers';
+
+// ── helpers ──
+
+/** Resolve username → user_id; throws if not found (send requires a real target). */
+async function resolveUserId(client: SupabaseClient, username: string): Promise<string> {
+  const map = await usernamesToIds(client, [username]);
+  const id = map.get(username);
+  if (!id) throw new Error(`sbNotifications: no profile for username "${username}"`);
+  return id;
+}
+
+const rowToNotif = (r: Record<string, unknown>): Notification => ({
+  id: (r.legacy_id as string) || (r.id as string),
+  type: r.type as Notification['type'],
+  title: r.title as string,
+  message: r.message as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  createdAt: r.created_at as string,
+  read: (r.read as boolean) ?? false,
+  link: (r.link as Notification['link']) ?? undefined,
+  threadId: (r.thread_id as string) ?? undefined,
+  data: (r.data as Record<string, unknown>) ?? undefined,
+});
+
+// ── Notifications ──
+
+/**
+ * Send a notification to a target user. Resolves username → user_id; inserts
+ * one row; caps the user's notification list at 100 by deleting oldest excess.
+ * Mirrors fbSendNotification (firebase.ts:598-615).
+ */
+export async function sbSendNotification(
+  targetUsername: string,
+  notif: Omit<Notification, 'id' | 'read' | 'createdAt'>,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const userId = await resolveUserId(client, targetUsername);
+  const legacyId = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const { error } = await client.from('notifications').insert({
+    legacy_id: legacyId,
+    user_id: userId,
+    type: notif.type,
+    title: notif.title,
+    message: notif.message,
+    created_by_name: notif.createdBy,
+    read: false,
+    link: notif.link ?? null,
+    thread_id: notif.threadId ?? null,
+    data: notif.data ?? null,
+  });
+  if (error) throw new Error('sbSendNotification: ' + error.message);
+  // cap at 100: delete oldest beyond limit
+  const { data: all } = await client.from('notifications')
+    .select('id, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  const excess = (all ?? []).slice(100);
+  if (excess.length) {
+    await client.from('notifications').delete().in('id', excess.map((r) => r.id as string));
+  }
+}
+
+/**
+ * Subscribe to a user's notifications (newest-first).
+ * Mirrors fbSubscribeNotifications (firebase.ts:621-628).
+ */
+export function sbSubscribeNotifications(
+  username: string,
+  cb: (list: Notification[]) => void,
+  client: SupabaseClient = sb,
+): Unsubscribe {
+  return subscribeTable(client, 'notifications', async (cl) => {
+    const map = await usernamesToIds(cl, [username]);
+    const userId = map.get(username);
+    if (!userId) { cb([]); return []; }
+    const { data, error } = await cl.from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(rowToNotif);
+  }, cb);
+}
+
+/**
+ * Full-overwrite push of a user's notification list (used for mark-read).
+ * Mirrors fbPushNotifications (firebase.ts:633-638).
+ */
+export async function sbPushNotifications(
+  username: string,
+  notifications: Notification[],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const userId = await resolveUserId(client, username);
+  // delete all existing
+  const del = await client.from('notifications').delete().eq('user_id', userId);
+  if (del.error) throw new Error('sbPushNotifications delete: ' + del.error.message);
+  if (!notifications.length) return;
+  const rows = notifications.map((n) => ({
+    legacy_id: n.id,
+    user_id: userId,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    created_by_name: n.createdBy,
+    created_at: n.createdAt,
+    read: n.read,
+    link: n.link ?? null,
+    thread_id: n.threadId ?? null,
+    data: n.data ?? null,
+  }));
+  const ins = await client.from('notifications').insert(rows);
+  if (ins.error) throw new Error('sbPushNotifications insert: ' + ins.error.message);
+}
+
+/**
+ * Send the same notification to multiple recipients (deduplicated).
+ * Mirrors fbSendNotificationMany (firebase.ts:763-768).
+ */
+export async function sbSendNotificationMany(
+  targets: string[],
+  notif: Omit<Notification, 'id' | 'read' | 'createdAt'>,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  await Promise.all(Array.from(new Set(targets)).map((u) => sbSendNotification(u, notif, client)));
+}
+
+// ── Notification threads ──
+
+/**
+ * Create the thread if missing; else merge in newly-added members and update link/title.
+ * Mirrors fbEnsureNotifThread (firebase.ts:719-730).
+ */
+export async function sbEnsureNotifThread(
+  thread: NotifThread,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  // upsert the thread row (text PK — on conflict, keep existing title/created_at)
+  const { data: existing } = await client.from('notification_threads')
+    .select('id, title')
+    .eq('id', thread.id)
+    .maybeSingle();
+
+  if (existing) {
+    // merge: update link (if provided) but don't overwrite title
+    await client.from('notification_threads')
+      .update({
+        link: thread.link ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', thread.id);
+  } else {
+    const creatorMap = await usernamesToIds(client, [thread.createdBy]);
+    const { error } = await client.from('notification_threads').insert({
+      id: thread.id,
+      title: thread.title,
+      link: thread.link ?? null,
+      act_type: thread.actType ?? null,
+      status: thread.status ?? null,
+      created_by: creatorMap.get(thread.createdBy) ?? null,
+      created_by_name: thread.createdBy,
+      created_at: thread.createdAt,
+      data: thread.data ?? null,
+    });
+    if (error) throw new Error('sbEnsureNotifThread insert: ' + error.message);
+  }
+  // merge members (upsert by PK (thread_id, username))
+  if (thread.members.length) {
+    const memberMap = await usernamesToIds(client, thread.members);
+    const memberRows = thread.members.map((uname) => ({
+      thread_id: thread.id,
+      user_id: memberMap.get(uname) ?? null,
+      username: uname,
+    }));
+    const up = await client.from('notification_thread_members')
+      .upsert(memberRows, { onConflict: 'thread_id,username' });
+    if (up.error) throw new Error('sbEnsureNotifThread members: ' + up.error.message);
+  }
+}
+
+const assembleThread = async (cl: SupabaseClient, id: string): Promise<NotifThread | null> => {
+  const { data: row } = await cl.from('notification_threads')
+    .select('*').eq('id', id).maybeSingle();
+  if (!row) return null;
+  const { data: memberRows } = await cl.from('notification_thread_members')
+    .select('username').eq('thread_id', id);
+  const { data: commentRows } = await cl.from('notification_comments')
+    .select('*').eq('thread_id', id).order('sort_order', { ascending: true });
+  const members = (memberRows ?? []).map((r) => r.username as string).filter(Boolean);
+  const comments: NotifComment[] = (commentRows ?? []).map((r) => ({
+    id: (r.legacy_id as string) || (r.id as string),
+    by: (r.by_username as string) ?? '',
+    byName: r.by_name as string,
+    text: r.text as string,
+    at: r.at as string,
+  }));
+  return {
+    id: row.id as string,
+    title: row.title as string,
+    members,
+    link: (row.link as NotifThread['link']) ?? undefined,
+    comments,
+    createdAt: row.created_at as string,
+    createdBy: (row.created_by_name as string) ?? '',
+    actType: (row.act_type as NotifThread['actType']) ?? undefined,
+    status: (row.status as NotifThread['status']) ?? undefined,
+    updatedAt: (row.updated_at as string) ?? undefined,
+    updatedByName: (row.updated_by_name as string) ?? undefined,
+    data: (row.data as Record<string, unknown>) ?? undefined,
+  };
+};
+
+/**
+ * Subscribe to a shared thread (members + comments reassembled).
+ * Mirrors fbSubscribeNotifThread (firebase.ts:732-734).
+ */
+export function sbSubscribeNotifThread(
+  id: string,
+  cb: (t: NotifThread | null) => void,
+  client: SupabaseClient = sb,
+): Unsubscribe {
+  return subscribeTable(client, 'notification_threads', (cl) => assembleThread(cl, id), cb);
+}
+
+/**
+ * Append a comment to a thread. sort_order = current max + 1.
+ * Mirrors fbAddThreadComment (firebase.ts:737-742).
+ */
+export async function sbAddThreadComment(
+  id: string,
+  comment: NotifComment,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { data: maxRow } = await client.from('notification_comments')
+    .select('sort_order')
+    .eq('thread_id', id)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sortOrder = maxRow ? ((maxRow.sort_order as number) + 1) : 0;
+  const byMap = await usernamesToIds(client, [comment.by]);
+  const { error } = await client.from('notification_comments').insert({
+    thread_id: id,
+    legacy_id: comment.id,
+    by_user_id: byMap.get(comment.by) ?? null,
+    by_username: comment.by,
+    by_name: comment.byName,
+    text: comment.text,
+    at: comment.at,
+    sort_order: sortOrder,
+  });
+  if (error) throw new Error('sbAddThreadComment: ' + error.message);
+}
+
+/**
+ * Update the live status of a shared thread.
+ * Mirrors fbSetThreadStatus (firebase.ts:749-760).
+ */
+export async function sbSetThreadStatus(
+  id: string,
+  status: ActivityStatus,
+  updatedByName: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('notification_threads')
+    .update({ status, updated_at: new Date().toISOString(), updated_by_name: updatedByName })
+    .eq('id', id);
+  if (error) throw new Error('sbSetThreadStatus: ' + error.message);
+}
