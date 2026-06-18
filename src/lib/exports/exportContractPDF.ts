@@ -9,7 +9,7 @@ import { loadVNFont } from './vnFont';
 import { VTE_LOGO } from './vteLogo';
 import type { Contract } from '@/types';
 
-export function exportContractPDF(contract: Contract): void {
+function buildContractPDF(contract: Contract): { pdf: jsPDF; filename: string } {
   const form = contract;
   const totalAmount = Math.round((+form.pricePerPax || 0) * (+form.contractPax || 0));
   const startD = form.tourStartDate ? new Date(form.tourStartDate) : new Date();
@@ -258,5 +258,17 @@ export function exportContractPDF(contract: Contract): void {
   }
 
   const safeName = (form.partyB.name || form.tourName || 'HD').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40);
-  pdf.save(`HopDong_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  return { pdf, filename: `HopDong_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf` };
+}
+
+/** Tải hợp đồng PDF về máy. */
+export function exportContractPDF(contract: Contract): void {
+  const { pdf, filename } = buildContractPDF(contract);
+  pdf.save(filename);
+}
+
+/** Tạo PDF hợp đồng dưới dạng blob URL (để xem trước trong app). Nhớ revoke khi đóng. */
+export function contractPDFObjectURL(contract: Contract): { url: string; filename: string } {
+  const { pdf, filename } = buildContractPDF(contract);
+  return { url: URL.createObjectURL(pdf.output('blob')), filename };
 }

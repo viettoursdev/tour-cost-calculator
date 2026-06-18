@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip,
   Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress,
-  MenuItem, Select, Stack, TextField, Tooltip, Typography,
+  Menu, MenuItem, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ArticleIcon from '@mui/icons-material/Article';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 // Trình xuất nạp động khi bấm (giảm bundle khởi động).
 import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -24,6 +26,7 @@ import type { Contract, CloudQuoteEntry } from '@/types';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { FilePreviewDialog } from '@/components/common/FilePreviewDialog';
 
 export function ContractView() {
   const contracts = useContractStore((s) => s.contracts);
@@ -55,6 +58,20 @@ export function ContractView() {
   const [modal, setModal] = useState<Contract | null>(null);
   const [acceptanceTarget, setAcceptanceTarget] = useState<Contract | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null);
+  const [exportAnchor, setExportAnchor] = useState<{ el: HTMLElement; c: Contract } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+
+  const closeExport = () => setExportAnchor(null);
+  const doExportPDF = (c: Contract) => { closeExport(); void import('@/lib/exports/exportContractPDF').then((m) => m.exportContractPDF(c)); };
+  const doExportWord = (c: Contract) => { closeExport(); void import('@/lib/exports/exportContractDocx').then((m) => m.exportContractDocx(c)); };
+  const doPreview = (c: Contract) => {
+    closeExport();
+    void import('@/lib/exports/exportContractPDF').then((m) => {
+      const { url, filename } = m.contractPDFObjectURL(c);
+      setPreview({ url, name: filename });
+    });
+  };
+  const closePreview = () => setPreview((p) => { if (p) URL.revokeObjectURL(p.url); return null; });
 
   const owners = useMemo(
     () => [...new Set(ownContracts.map((c) => c.createdBy).filter(Boolean))].sort(),
@@ -206,21 +223,13 @@ export function ContractView() {
               <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
                 <Button
                   size="small"
-                  startIcon={<PictureAsPdfIcon />}
-                  color="error"
-                  variant="outlined"
-                  onClick={() => void import('@/lib/exports/exportContractPDF').then((m) => m.exportContractPDF(c))}
+                  startIcon={<FileDownloadIcon />}
+                  endIcon={<ExpandMoreIcon />}
+                  variant="contained"
+                  onClick={(e) => setExportAnchor({ el: e.currentTarget, c })}
+                  sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}
                 >
-                  PDF
-                </Button>
-                <Button
-                  size="small"
-                  startIcon={<ArticleIcon />}
-                  color="primary"
-                  variant="outlined"
-                  onClick={() => void import('@/lib/exports/exportContractDocx').then((m) => m.exportContractDocx(c))}
-                >
-                  Word (.docx)
+                  Xuất hợp đồng
                 </Button>
                 {(c.hasAcceptance || (c.contractStatus === 'completed' && canEdit)) && (
                   <Button size="small" variant="outlined"
@@ -272,6 +281,15 @@ export function ContractView() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Menu anchorEl={exportAnchor?.el} open={!!exportAnchor} onClose={closeExport}>
+        <MenuItem onClick={() => exportAnchor && doPreview(exportAnchor.c)}><VisibilityIcon fontSize="small" sx={{ mr: 1 }} />Xem trước (PDF)</MenuItem>
+        <MenuItem onClick={() => exportAnchor && doExportPDF(exportAnchor.c)}><PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />Tải PDF</MenuItem>
+        <MenuItem onClick={() => exportAnchor && doExportWord(exportAnchor.c)}><ArticleIcon fontSize="small" sx={{ mr: 1 }} />Tải Word (.docx)</MenuItem>
+      </Menu>
+
+      <FilePreviewDialog open={!!preview} onClose={closePreview}
+        file={preview ? { url: preview.url, name: preview.name, mime: 'application/pdf' } : null} />
     </Box>
   );
 }
