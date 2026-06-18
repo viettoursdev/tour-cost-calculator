@@ -15,13 +15,14 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
-import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage } from '@/lib/firebase';
+import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage, fbToggleChatReaction } from '@/lib/firebase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
 import type { Chat, ChatMessage } from '@/types';
 
 const MAX_FILE = 20 * 1024 * 1024;
+const REACTIONS = ['👍', '❤️', '😄', '🎉', '✅', '😮'];
 const uid = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const fmtTime = (iso: string) => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
@@ -97,6 +98,11 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     if (!active || !window.confirm('Thu hồi tin nhắn này?')) return;
     try { await fbDeleteChatMessage(active.id, m.id); }
     catch (e) { toast('Thu hồi lỗi: ' + (e as Error).message, 'error'); }
+  };
+  const react = (m: ChatMessage, emoji: string) => {
+    if (!active || !me) return;
+    setMenuFor(null);
+    void fbToggleChatReaction(active.id, m.id, emoji, me.u).catch((e) => toast('Lỗi: ' + (e as Error).message, 'error'));
   };
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';
@@ -218,6 +224,20 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                       </IconButton>
                     )}
                   </Stack>
+                  {m.reactions && Object.keys(m.reactions).length > 0 && (
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.4, flexWrap: 'wrap', justifyContent: mine ? 'flex-end' : 'flex-start' }} useFlexGap>
+                      {Object.entries(m.reactions).map(([emo, us]) => {
+                        const reacted = us.includes(me?.u ?? '');
+                        return (
+                          <Box key={emo} onClick={() => react(m, emo)} title={us.map(nameOf).join(', ')}
+                            sx={{ cursor: 'pointer', fontSize: 11, lineHeight: 1.6, px: 0.7, borderRadius: 3, border: '1px solid',
+                              borderColor: reacted ? LEGACY.teal : 'rgba(15,58,74,0.15)', bgcolor: reacted ? 'rgba(20,150,140,0.12)' : '#fff' }}>
+                            {emo} {us.length}
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  )}
                   <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>
                     {fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
                   </Typography>
@@ -250,6 +270,11 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       )}
 
       <Menu anchorEl={menuFor?.el} open={!!menuFor} onClose={() => setMenuFor(null)}>
+        <Stack direction="row" sx={{ px: 1, py: 0.25 }}>
+          {REACTIONS.map((e) => (
+            <IconButton key={e} size="small" onClick={() => menuFor && react(menuFor.m, e)} sx={{ fontSize: 18, width: 34, height: 34 }}>{e}</IconButton>
+          ))}
+        </Stack>
         <MenuItem onClick={() => menuFor && startReply(menuFor.m)}><ReplyIcon fontSize="small" sx={{ mr: 1 }} />Trả lời</MenuItem>
         {menuFor?.m.by === me?.u && !!menuFor?.m.text && (
           <MenuItem onClick={() => menuFor && startEdit(menuFor.m)}><EditIcon fontSize="small" sx={{ mr: 1 }} />Sửa</MenuItem>
