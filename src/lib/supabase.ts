@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer } from '@/types';
+import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
 import type { PoiEntry } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
@@ -309,5 +309,74 @@ export async function sbPushCustomers(
     // Empty push = wipe all (full-overwrite parity with fbPushCustomers).
     const del = await client.from('customers').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushCustomers delete all: ' + del.error.message);
+  }
+}
+
+// ── Suppliers (NCC) ───────────────────────────────────────────────────────────
+
+const rowToNcc = (r: Record<string, unknown>, contacts: Ncc['contacts']): Ncc => ({
+  id: r.legacy_id as string,
+  name: r.name as string,
+  sectors: (r.sectors as string[]) ?? [],
+  location: (r.location as string) ?? '',
+  contacts,
+  note: (r.note as string) ?? '',
+  createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : (r.created_at as string),
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeNcc(cb: (list: Ncc[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'suppliers', async (cl) => {
+    const { data: rows, error } = await cl.from('suppliers').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    const ids = (rows ?? []).map((r) => r.id as string);
+    const { data: contacts } = ids.length
+      ? await cl.from('supplier_contacts').select('*').in('supplier_id', ids).order('sort_order')
+      : { data: [] as Record<string, unknown>[] };
+    const byParent = new Map<string, Ncc['contacts']>();
+    for (const ct of contacts ?? []) {
+      const arr = byParent.get(ct.supplier_id as string) ?? [];
+      arr.push({ name: ct.name as string, phone: ct.phone as string, email: ct.email as string, position: ct.position as string });
+      byParent.set(ct.supplier_id as string, arr);
+    }
+    return (rows ?? []).map((r) => rowToNcc(r, byParent.get(r.id as string) ?? []));
+  }, cb);
+}
+
+export async function sbPushNcc(
+  list: Ncc[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const ncc of list) {
+    const { data: up, error: upErr } = await client.from('suppliers').upsert({
+      legacy_id: ncc.id, name: ncc.name, sectors: ncc.sectors,
+      location: ncc.location, note: ncc.note ?? '',
+      created_by_name: ncc.createdBy, created_at: ncc.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' }).select('id').single();
+    if (upErr) throw new Error('sbPushNcc upsert: ' + upErr.message);
+    await replaceChildren(client, 'supplier_contacts', 'supplier_id', up!.id, ncc.contacts.map((ct, i) => ({
+      supplier_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, sort_order: i,
+    })));
+  }
+  // Full-overwrite: delete suppliers removed from the list using safe fetch-then-delete pattern.
+  const keepIds = list.map((n) => n.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('suppliers').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushNcc fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('suppliers').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushNcc delete: ' + del.error.message);
+    }
+  } else {
+    // Empty push = wipe all (full-overwrite parity with fbPushNcc).
+    const del = await client.from('suppliers').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushNcc delete all: ' + del.error.message);
   }
 }
