@@ -109,6 +109,7 @@ type QuoteState = {
 
   toggleCat: (cid: CategoryId) => void;
   addItem: (cid: CategoryId, override?: Partial<Item>) => void;
+  addItems: (cid: CategoryId, overrides: Partial<Item>[]) => void;
   updItem: (cid: CategoryId, item: Item) => void;
   delItem: (cid: CategoryId, id: number) => void;
 
@@ -497,6 +498,15 @@ export const useQuoteStore = create<QuoteState>()(
                 items: { ...s.draft.items, [cid]: [...(s.draft.items[cid] ?? []), mkItem(ov)] },
               },
             };
+          });
+        },
+
+        addItems: (cid, overrides) => {
+          if (!overrides.length) return;
+          set((s) => {
+            const base = s.draft.rateBase;
+            const made = overrides.map((o) => mkItem(base && o.cur == null ? { ...o, cur: base } : o));
+            return { draft: { ...s.draft, items: { ...s.draft.items, [cid]: [...(s.draft.items[cid] ?? []), ...made] } } };
           });
         },
 

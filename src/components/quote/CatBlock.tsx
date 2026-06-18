@@ -1,13 +1,28 @@
+import { useState } from 'react';
 import {
-  Accordion, AccordionDetails, AccordionSummary, Box, Button, Stack, Table,
-  TableBody, TableCell, TableHead, TableRow, Typography,
+  Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent,
+  DialogTitle, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import { LineRow } from './LineRow';
 import { catTotal, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
+import { parseAmountVN } from '@/lib/numParse';
 import type { CategoryDef } from './constants';
 import type { Item, OutputCurrency } from '@/types';
+
+/** Phân tích dữ liệu dán từ Excel: mỗi dòng = Tên ⭾ Đơn giá ⭾ Đơn vị ⭾ Số lần ⭾ Ghi chú. */
+function parsePasted(text: string): Partial<Item>[] {
+  return text.split(/\r?\n/).map((line) => line.split('\t')).filter((c) => (c[0] ?? '').trim()).map((c) => {
+    const o: Partial<Item> = { name: c[0].trim() };
+    if ((c[1] ?? '').trim()) o.price = parseAmountVN(c[1]);
+    if ((c[2] ?? '').trim()) o.unit = c[2].trim();
+    if ((c[3] ?? '').trim()) o.times = Math.max(1, Math.round(parseAmountVN(c[3])) || 1);
+    if ((c[4] ?? '').trim()) o.note = c[4].trim();
+    return o;
+  });
+}
 
 type Props = {
   cat: CategoryDef;
@@ -19,6 +34,8 @@ type Props = {
   onUpd: (item: Item) => void;
   onAdd: () => void;
   onDel: (id: number) => void;
+  onDup: (item: Item) => void;
+  onAddMany: (items: Partial<Item>[]) => void;
   /** Opens the rate-card picker for this category (legacy "📋 Rate card"). */
   onOpenRate?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), totals show in this currency. */
@@ -26,8 +43,15 @@ type Props = {
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onOpenRate, displayCurrency,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onOpenRate, displayCurrency,
 }: Props) {
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const doPaste = () => {
+    const rows = parsePasted(pasteText);
+    if (rows.length) onAddMany(rows);
+    setPasteText(''); setPasteOpen(false);
+  };
   const sub = enabled ? catTotal(items, rates, pax) : 0;
   const fmtMoney = (n: number) =>
     displayCurrency && displayCurrency !== 'VND' ? fmtOutput(n, displayCurrency, rates) : fmtVND(n);
@@ -122,17 +146,37 @@ export function CatBlock({
                     catColor={cat.color}
                     onUpd={onUpd}
                     onDel={() => onDel(item.id)}
+                    onDup={() => onDup(item)}
                     displayCurrency={displayCurrency}
                   />
                 ))}
               </TableBody>
             </Table>
           </Box>
-          <Box sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
+          <Stack direction="row" sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
             <Button fullWidth onClick={onAdd}>＋ Thêm dòng</Button>
-          </Box>
+            <Button onClick={() => setPasteOpen(true)} startIcon={<ContentPasteIcon />} sx={{ whiteSpace: 'nowrap', color: 'text.secondary' }}>Dán từ Excel</Button>
+          </Stack>
         </AccordionDetails>
       )}
+
+      <Dialog open={pasteOpen} onClose={() => setPasteOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Dán nhiều dòng từ Excel — {cat.label}</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            Copy khối ở Excel rồi dán vào đây. Mỗi dòng 1 hạng mục, các cột cách nhau bằng <b>Tab</b> theo thứ tự:
+            <b> Tên · Đơn giá · Đơn vị · Số lần · Ghi chú</b> (chỉ Tên là bắt buộc). Giá hiểu cả <code>1.500.000</code>, <code>1500k</code>, <code>1tr5</code>.
+          </Typography>
+          <TextField fullWidth multiline minRows={6} value={pasteText} onChange={(e) => setPasteText(e.target.value)}
+            placeholder={'Xe 45 chỗ\t5500000\t/xe/ngày\t2\tMáy lạnh\nHDV\t1200000\t/ngày\t3'} sx={{ '& textarea': { fontFamily: 'monospace', fontSize: 13 } }} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPasteOpen(false)} color="inherit">Huỷ</Button>
+          <Button variant="contained" disabled={!pasteText.trim()} onClick={doPaste} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+            Thêm {parsePasted(pasteText).length || ''} dòng
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Accordion>
   );
 }

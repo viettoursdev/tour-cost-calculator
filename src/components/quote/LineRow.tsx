@@ -14,6 +14,7 @@ type Props = {
   catColor: string;
   onUpd: (item: Item) => void;
   onDel: () => void;
+  onDup?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), line totals show in this currency. */
   displayCurrency?: OutputCurrency;
 };
@@ -183,7 +184,7 @@ function EditNote({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurrency }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, displayCurrency }: Props) {
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
   const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
@@ -354,18 +355,22 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, displayCurre
         </Stack>
       </TableCell>
 
-      {/* Delete */}
-      <TableCell padding="checkbox" sx={{ textAlign: 'center' }}>
-        <Box
-          component="button" onClick={onDel} aria-label="Xoá dòng"
-          sx={{
-            background: 'none', border: 'none', color: 'rgba(220,50,80,0.45)',
-            cursor: 'pointer', fontSize: 14, px: 0.75, fontFamily: 'inherit',
-            '&:hover': { color: '#dc3250' },
-          }}
-        >
-          ✕
-        </Box>
+      {/* Nhân bản + Xoá */}
+      <TableCell padding="checkbox" sx={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+        {onDup && (
+          <Tooltip title="Nhân bản dòng">
+            <Box component="button" onClick={onDup} aria-label="Nhân bản dòng"
+              sx={{ background: 'none', border: 'none', color: 'rgba(15,58,74,0.4)', cursor: 'pointer', fontSize: 13, px: 0.5, fontFamily: 'inherit', '&:hover': { color: '#0d7a6a' } }}>
+              ⧉
+            </Box>
+          </Tooltip>
+        )}
+        <Tooltip title="Xoá dòng">
+          <Box component="button" onClick={onDel} aria-label="Xoá dòng"
+            sx={{ background: 'none', border: 'none', color: 'rgba(220,50,80,0.45)', cursor: 'pointer', fontSize: 14, px: 0.5, fontFamily: 'inherit', '&:hover': { color: '#dc3250' } }}>
+            ✕
+          </Box>
+        </Tooltip>
       </TableCell>
     </TableRow>
   );

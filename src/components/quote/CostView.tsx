@@ -29,6 +29,7 @@ export function CostView() {
 
   const toggleCat = useQuoteStore((s) => s.toggleCat);
   const addItem = useQuoteStore((s) => s.addItem);
+  const addItems = useQuoteStore((s) => s.addItems);
   const updItem = useQuoteStore((s) => s.updItem);
   const delItem = useQuoteStore((s) => s.delItem);
 
@@ -97,6 +98,8 @@ export function CostView() {
               onUpd={(it) => updItem(catId, it)}
               onAdd={() => addItem(catId)}
               onDel={(id) => delItem(catId, id)}
+              onDup={(it) => { const { id, ...rest } = it; void id; addItem(catId, rest); }}
+              onAddMany={(rows) => addItems(catId, rows)}
               onOpenRate={onOpenRate}
               displayCurrency={isDMC ? outputCurrency : undefined}
             />
