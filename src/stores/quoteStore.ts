@@ -110,6 +110,7 @@ type QuoteState = {
   toggleCat: (cid: CategoryId) => void;
   addItem: (cid: CategoryId, override?: Partial<Item>) => void;
   addItems: (cid: CategoryId, overrides: Partial<Item>[]) => void;
+  reorderItems: (cid: CategoryId, from: number, to: number) => void;
   updItem: (cid: CategoryId, item: Item) => void;
   delItem: (cid: CategoryId, id: number) => void;
 
@@ -509,6 +510,15 @@ export const useQuoteStore = create<QuoteState>()(
             return { draft: { ...s.draft, items: { ...s.draft.items, [cid]: [...(s.draft.items[cid] ?? []), ...made] } } };
           });
         },
+
+        reorderItems: (cid, from, to) =>
+          set((s) => {
+            const arr = [...(s.draft.items[cid] ?? [])];
+            if (from < 0 || from >= arr.length || to < 0 || to >= arr.length || from === to) return {};
+            const [m] = arr.splice(from, 1);
+            arr.splice(to, 0, m);
+            return { draft: { ...s.draft, items: { ...s.draft.items, [cid]: arr } } };
+          }),
 
         updItem: (cid, item) =>
           set((s) => ({

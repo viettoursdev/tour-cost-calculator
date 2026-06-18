@@ -16,6 +16,7 @@ type Props = {
   onUpd: (item: Item) => void;
   onDel: () => void;
   onDup?: () => void;
+  index?: number;
   /** When set (DMC: "hiển thị tổng theo"), line totals show in this currency. */
   displayCurrency?: OutputCurrency;
 };
@@ -185,7 +186,7 @@ function EditNote({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, displayCurrency }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, displayCurrency }: Props) {
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
   const u = (patch: Partial<Item>) => onUpd({ ...item, ...patch });
@@ -205,7 +206,9 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, displ
   };
 
   return (
-    <TableRow sx={{ opacity: off ? 0.4 : 1 }}>
+    <TableRow data-index={index} sx={{ opacity: off ? 0.4 : 1 }}>
+      {/* Tay kéo sắp xếp */}
+      <TableCell padding="checkbox" className="row-drag" sx={{ textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.3)', userSelect: 'none', '&:hover': { color: '#0d7a6a' } }} title="Kéo để đổi thứ tự">⋮⋮</TableCell>
       {/* Enable toggle (legacy pill) */}
       <TableCell padding="checkbox" sx={{ textAlign: 'center' }}>
         <Box

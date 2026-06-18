@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Sortable from 'sortablejs';
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Button, Dialog, DialogActions, DialogContent,
   DialogTitle, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
@@ -36,6 +37,7 @@ type Props = {
   onDel: (id: number) => void;
   onDup: (item: Item) => void;
   onAddMany: (items: Partial<Item>[]) => void;
+  onReorder: (from: number, to: number) => void;
   /** Opens the rate-card picker for this category (legacy "📋 Rate card"). */
   onOpenRate?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), totals show in this currency. */
@@ -43,10 +45,31 @@ type Props = {
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onOpenRate, displayCurrency,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onReorder, onOpenRate, displayCurrency,
 }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
+  const bodyRef = useRef<HTMLTableSectionElement>(null);
+  const onReorderRef = useRef(onReorder);
+  onReorderRef.current = onReorder;
+  useEffect(() => {
+    if (!bodyRef.current) return;
+    const sortable = Sortable.create(bodyRef.current, {
+      handle: '.row-drag',
+      animation: 150,
+      onEnd: (e) => {
+        const from = e.oldIndex, to = e.newIndex;
+        if (from === undefined || to === undefined || from === to) return;
+        // Hoàn nguyên DOM rồi để React render lại theo state mới (tránh lệch).
+        if (e.item.parentNode) {
+          const ref = e.item.parentNode.children[from > to ? from + 1 : from];
+          e.item.parentNode.insertBefore(e.item, ref ?? null);
+        }
+        onReorderRef.current(from, to);
+      },
+    });
+    return () => sortable.destroy();
+  }, []);
   const doPaste = () => {
     const rows = parsePasted(pasteText);
     if (rows.length) onAddMany(rows);
@@ -125,6 +148,7 @@ export function CatBlock({
             <Table size="small" stickyHeader sx={{ minWidth: 1000 }}>
               <TableHead>
                 <TableRow sx={{ '& th': { bgcolor: '#f3faf8', fontWeight: 700 } }}>
+                  <TableCell padding="checkbox" />
                   <TableCell padding="checkbox">✓</TableCell>
                   <TableCell>Hạng mục</TableCell>
                   <TableCell>Chi tiết / Ghi chú</TableCell>
@@ -136,11 +160,12 @@ export function CatBlock({
                   <TableCell padding="checkbox" />
                 </TableRow>
               </TableHead>
-              <TableBody>
-                {items.map((item) => (
+              <TableBody ref={bodyRef}>
+                {items.map((item, i) => (
                   <LineRow
                     key={item.id}
                     item={item}
+                    index={i}
                     pax={pax}
                     rates={rates}
                     catColor={cat.color}
