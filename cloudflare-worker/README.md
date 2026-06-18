@@ -89,5 +89,7 @@ trong bundle). App tự đính kèm token (header `Authorization: Bearer …`) c
   `claude-sonnet-4-6` (cân bằng) hoặc `claude-opus-4-8` (chất lượng cao nhất), rồi Deploy lại.
 - **Chi phí** do tài khoản Anthropic của bạn chịu (theo token). OCR ảnh tốn nhiều token hơn dịch text.
 - Worker này dùng chung URL cho cả **Dịch hồ sơ** và **Chương trình tour**.
-- `/distance` (Google Maps) chưa có ở đây — nếu cần tính quãng đường trong Chương trình tour,
-  báo mình bổ sung (cần thêm `GOOGLE_MAPS_API_KEY`).
+- **`/distance` (Google Maps)** — tính khoảng cách & thời gian di chuyển giữa 2 điểm (Trợ lý
+  dùng tool `travel_distance` khi dựng lịch trình). Cần thêm biến **`GOOGLE_MAPS_API_KEY`**
+  (Settings → Variables) — bật **Distance Matrix API** trong Google Cloud cho key đó. Chưa đặt
+  biến thì endpoint trả lỗi rõ ràng, các tính năng khác không ảnh hưởng.

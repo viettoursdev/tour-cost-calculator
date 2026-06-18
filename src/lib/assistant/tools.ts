@@ -3,6 +3,7 @@
  * liệu ĐÃ LỌC QUYỀN (xem `data.ts`). Tất cả chỉ ĐỌC.
  */
 import { filterRank, normalizeVN } from '@/lib/search';
+import { callAIWorker } from '@/lib/aiWorker';
 import { computeTotals, fmtVND } from '@/components/quote/calc';
 import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -131,6 +132,19 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
         scope: { type: 'string', enum: ['owing', 'overdue'], description: 'Phạm vi (mặc định owing)' },
         limit: { type: 'number', description: 'Số tour tối đa (mặc định 20)' },
       },
+    },
+  },
+  {
+    name: 'travel_distance',
+    description: 'Tính KHOẢNG CÁCH & THỜI GIAN di chuyển giữa 2 địa điểm (Google Maps) — dùng khi dựng/tư vấn lịch trình. origin/destination là tên địa điểm (vd "Sân bay Nội Bài", "Vịnh Hạ Long"). mode: driving (mặc định)/walking/bicycling/transit.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        origin: { type: 'string', description: 'Điểm đi' },
+        destination: { type: 'string', description: 'Điểm đến' },
+        mode: { type: 'string', enum: ['driving', 'walking', 'bicycling', 'transit'], description: 'Phương tiện (mặc định driving)' },
+      },
+      required: ['origin', 'destination'],
     },
   },
   {
@@ -375,6 +389,20 @@ async function toolPricingStats(input: Record<string, unknown>): Promise<unknown
   };
 }
 
+async function toolTravelDistance(input: Record<string, unknown>): Promise<unknown> {
+  const origin = str(input, 'origin');
+  const destination = str(input, 'destination');
+  if (!origin || !destination) return { error: 'Thiếu điểm đi/điểm đến.' };
+  const mode = str(input, 'mode') || 'driving';
+  try {
+    const res = await callAIWorker('/distance', { origin, destination, mode: mode as 'driving' });
+    if (res.error) return { error: res.error };
+    return { origin, destination, mode, distance: res.distance ?? null, duration: res.duration ?? null };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
 async function toolListItineraries(input: Record<string, unknown>): Promise<unknown> {
   const dest = normalizeVN(str(input, 'destination'));
   let list = permittedData().itineraries;
@@ -513,6 +541,7 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
       case 'upcoming_departures': result = await toolUpcomingDepartures(input); break;
       case 'workflow_status': result = await toolWorkflowStatus(input); break;
       case 'payment_dues': result = await toolPaymentDues(input); break;
+      case 'travel_distance': result = await toolTravelDistance(input); break;
       case 'list_itineraries': result = await toolListItineraries(input); break;
       case 'get_itinerary': result = await toolGetItinerary(input); break;
       case 'search_pois': result = await toolSearchPois(input); break;

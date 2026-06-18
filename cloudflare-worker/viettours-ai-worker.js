@@ -309,6 +309,26 @@ export default {
         return json({ text });
       }
 
+      // ── POST /distance — khoảng cách & thời gian di chuyển (Google Distance Matrix) ──
+      if (path.endsWith('/distance')) {
+        if (!env.GOOGLE_MAPS_API_KEY) return json({ error: 'Worker chưa cấu hình GOOGLE_MAPS_API_KEY (Settings → Variables).' }, 500);
+        if (!body.origin || !body.destination) return json({ error: "Thiếu 'origin' hoặc 'destination'" }, 400);
+        const mode = ['driving', 'walking', 'bicycling', 'transit'].includes(body.mode) ? body.mode : 'driving';
+        const u = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
+        u.searchParams.set('origins', body.origin);
+        u.searchParams.set('destinations', body.destination);
+        u.searchParams.set('mode', mode);
+        u.searchParams.set('language', 'vi');
+        u.searchParams.set('key', env.GOOGLE_MAPS_API_KEY);
+        const r = await fetch(u);
+        const d = await r.json();
+        const el = d?.rows?.[0]?.elements?.[0];
+        if (d.status !== 'OK' || !el || el.status !== 'OK') {
+          return json({ error: 'Không tính được tuyến: ' + (el?.status || d.status || 'lỗi') }, 400);
+        }
+        return json({ distance: el.distance?.text || null, duration: el.duration?.text || null, mode });
+      }
+
       // Trợ lý ảo: vòng lặp tool-use chạy phía client. Trả NGUYÊN message của Claude
       // (content blocks gồm tool_use, stop_reason, usage) để client thực thi tool cục bộ.
       if (path.endsWith('/chat')) {
