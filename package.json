@@ -15,7 +15,8 @@
     "lint": "eslint . --ext ts,tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +28,7 @@
     "@mui/material": "^6.5.0",
     "@mui/x-data-grid": "^7.29.13",
     "@mui/x-date-pickers": "^7.29.4",
+    "@supabase/supabase-js": "^2.108.2",
     "@types/sortablejs": "1.15.9",
     "docx": "^9.7.1",
     "exceljs": "^4.4.0",
