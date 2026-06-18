@@ -1,0 +1,16 @@
+name: supabase-schema
+on:
+  push:
+    paths: ['supabase/**']
+  pull_request:
+    paths: ['supabase/**']
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+      - run: supabase test db
