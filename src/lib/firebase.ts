@@ -5,11 +5,11 @@ import {
   type Auth, type User as FbUser, type Unsubscribe as AuthUnsubscribe,
 } from 'firebase/auth';
 import {
-  deleteDoc, doc, getDoc, initializeFirestore, onSnapshot, setDoc,
+  collection, deleteDoc, doc, getDoc, initializeFirestore, onSnapshot, query, setDoc, where,
   type DocumentReference, type DocumentSnapshot, type DocumentData, type Unsubscribe,
 } from 'firebase/firestore';
 import type {
-  AuditEntry,
+  AuditEntry, Chat, ChatMessage,
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
@@ -657,6 +657,61 @@ export async function fbPushFxRates(rates: Record<string, number>, pushedBy: str
 }
 
 // ── Notification Center: shared comment threads + multi-send ──
+
+// ── Chat nội bộ (1-1 & nhóm) ──
+const CHAT_MSG_CAP = 500;
+const chatDoc = (id: string) => doc(db, 'chats', id);
+/** ID hội thoại 1-1 cố định theo cặp username (sắp xếp) để không tạo trùng. */
+export const dmChatId = (a: string, b: string) => 'dm_' + [a, b].sort().join('__');
+
+/** Theo dõi mọi cuộc trò chuyện user là thành viên (realtime). */
+export function fbSubscribeChats(username: string, cb: (chats: Chat[]) => void): Unsubscribe {
+  const qy = query(collection(db, 'chats'), where('members', 'array-contains', username));
+  return onSnapshot(qy, (snap) => {
+    const list = snap.docs.map((d) => d.data() as Chat)
+      .sort((a, b) => (b.lastAt ?? b.createdAt).localeCompare(a.lastAt ?? a.createdAt));
+    cb(list);
+  }, (e) => console.warn('fbSubscribeChats:', e.message));
+}
+
+export function fbSubscribeChat(id: string, cb: (c: Chat | null) => void): Unsubscribe {
+  return subDoc(chatDoc(id), (snap) => cb(snap.exists() ? (snap.data() as Chat) : null));
+}
+
+/** Tạo cuộc trò chuyện nếu chưa có (1-1 dedup theo dmChatId; nhóm tạo mới). */
+export async function fbEnsureChat(chat: Chat): Promise<void> {
+  const snap = await getDoc(chatDoc(chat.id));
+  if (snap.exists()) {
+    if (chat.isGroup) {
+      const ex = snap.data() as Chat;
+      const members = Array.from(new Set([...(ex.members ?? []), ...chat.members]));
+      await setDoc(chatDoc(chat.id), { ...ex, members, title: chat.title || ex.title });
+    }
+    return;
+  }
+  await setDoc(chatDoc(chat.id), chat);
+}
+
+/** Gửi 1 tin nhắn (read-modify-write; giữ tối đa CHAT_MSG_CAP tin gần nhất). */
+export async function fbSendChatMessage(id: string, msg: ChatMessage): Promise<void> {
+  const snap = await getDoc(chatDoc(id));
+  if (!snap.exists()) return;
+  const c = snap.data() as Chat;
+  const messages = [...(c.messages ?? []), msg].slice(-CHAT_MSG_CAP);
+  await setDoc(chatDoc(id), {
+    ...c, messages, lastAt: msg.at,
+    lastText: msg.text || (msg.file ? `📎 ${msg.file.name}` : ''), lastByName: msg.byName,
+    reads: { ...(c.reads ?? {}), [msg.by]: msg.at },
+  });
+}
+
+/** Đánh dấu user đã đọc cuộc trò chuyện tới thời điểm hiện tại. */
+export async function fbMarkChatRead(id: string, username: string): Promise<void> {
+  const snap = await getDoc(chatDoc(id));
+  if (!snap.exists()) return;
+  const c = snap.data() as Chat;
+  await setDoc(chatDoc(id), { ...c, reads: { ...(c.reads ?? {}), [username]: new Date().toISOString() } });
+}
 
 const notifThreadDoc = (id: string) => doc(db, 'notification_threads', id);
 

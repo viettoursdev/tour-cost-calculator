@@ -11,6 +11,7 @@ import { useNccStore } from '@/stores/nccStore';
 import { useNccProductsStore } from '@/stores/nccProductsStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useChatStore } from '@/stores/chatStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
@@ -72,6 +73,7 @@ export function MainApp() {
     };
     window.addEventListener('storage', onFxStorage);
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
+    const chatUnsub = useChatStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
     const vpUnsub = useVisaProductsStore.getState().init();
@@ -104,6 +106,7 @@ export function MainApp() {
       nccProdUnsub?.();
       contractUnsub?.();
       notifUnsub?.();
+      chatUnsub?.();
       paUnsub?.();
       itinUnsub?.();
       menuUnsub?.();

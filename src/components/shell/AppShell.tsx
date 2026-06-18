@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  AppBar, Avatar, Box, Button, IconButton, Stack,
+  AppBar, Avatar, Badge, Box, Button, IconButton, Stack,
   Toolbar, Tooltip, Typography,
 } from '@mui/material';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
@@ -10,6 +11,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { AssistantPanel } from '@/components/assistant/AssistantPanel';
+import { ChatPanel } from '@/components/chat/ChatPanel';
+import { useChatStore, chatUnread } from '@/stores/chatStore';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { NotificationToaster } from '@/components/notifications/NotificationToaster';
@@ -34,6 +37,9 @@ export function AppShell() {
   const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
   const [searchOpen, setSearchOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const chats = useChatStore((s) => s.chats);
+  const chatUnreadCount = currentUser ? chats.filter((c) => chatUnread(c, currentUser.u)).length : 0;
 
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
@@ -99,6 +105,11 @@ export function AppShell() {
                   Trợ lý
                 </Button>
               </Tooltip>
+              <Tooltip title="Tin nhắn nội bộ">
+                <IconButton onClick={() => setChatOpen(true)} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <Badge badgeContent={chatUnreadCount} color="error"><ChatBubbleOutlineIcon /></Badge>
+                </IconButton>
+              </Tooltip>
               <NotificationBell />
               <Tooltip title="Đăng xuất">
                 <IconButton
@@ -139,6 +150,7 @@ export function AppShell() {
       <NotificationCenter open={centerOpen} onClose={() => setCenterOpen(false)} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
+      <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
     </Box>
   );
 }
