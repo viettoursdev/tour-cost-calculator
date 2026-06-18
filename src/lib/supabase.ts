@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
+import type { VisaProduct, VisaProductsDoc, VisaProductVersion } from '@/types/visa';
 import type { PoiEntry } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
@@ -939,4 +940,141 @@ export async function sbPushNcc(
     const del = await client.from('suppliers').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushNcc delete all: ' + del.error.message);
   }
+}
+
+// ── visa_products ──
+
+async function assembleVisaProducts(client: SupabaseClient): Promise<VisaProductsDoc | null> {
+  const { data: products, error: pe } = await client
+    .from('visa_products')
+    .select('id, legacy_id, country, visa_type, validity, location, markup_type, markup_value, markup_cur, note, active')
+    .order('country');
+  if (pe) throw new Error('assembleVisaProducts products: ' + pe.message);
+
+  if (!products || products.length === 0) {
+    const { data: meta } = await client.from('visa_products_meta').select('rates, versions, updated_at, updated_by').maybeSingle();
+    if (!meta) return null;
+    return {
+      products: [],
+      rates: (meta.rates as Record<string, number>) ?? {},
+      versions: (meta.versions as VisaProductVersion[]) ?? [],
+      updatedAt: meta.updated_at ? new Date(meta.updated_at as string).toISOString() : undefined,
+      updatedBy: (meta.updated_by as string) ?? undefined,
+    };
+  }
+
+  const ids = products.map((r) => r.id as string);
+  const { data: fees, error: fe } = await client
+    .from('visa_product_fees')
+    .select('product_id, legacy_fee_id, name, amount, cur, per_pax, sort_order')
+    .in('product_id', ids)
+    .order('sort_order');
+  if (fe) throw new Error('assembleVisaProducts fees: ' + fe.message);
+
+  const feesByProduct = new Map<string, typeof fees>();
+  for (const f of fees ?? []) {
+    const arr = feesByProduct.get(f.product_id as string) ?? [];
+    arr.push(f);
+    feesByProduct.set(f.product_id as string, arr);
+  }
+
+  const { data: meta } = await client.from('visa_products_meta').select('rates, versions, updated_at, updated_by').maybeSingle();
+
+  const assembled: VisaProduct[] = products.map((r) => ({
+    id: (r.legacy_id as string) ?? (r.id as string),
+    country: r.country as string,
+    visaType: r.visa_type as string,
+    validity: (r.validity as string) ?? '',
+    location: (r.location as string) ?? '',
+    markupType: r.markup_type as VisaProduct['markupType'],
+    markupValue: r.markup_value as number,
+    markupCur: r.markup_cur as string,
+    note: (r.note as string) ?? '',
+    active: r.active as boolean,
+    fees: (feesByProduct.get(r.id as string) ?? []).map((f) => ({
+      // visa_product_fees has no legacy_id for fees — id regenerates on each save (accepted)
+      id: (f.legacy_fee_id as string) ?? '',
+      name: f.name as string,
+      amount: f.amount as number,
+      cur: f.cur as string,
+      perPax: f.per_pax as boolean,
+    })),
+  }));
+
+  return {
+    products: assembled,
+    rates: (meta?.rates as Record<string, number>) ?? {},
+    versions: (meta?.versions as VisaProductVersion[]) ?? [],
+    updatedAt: meta?.updated_at ? new Date(meta.updated_at as string).toISOString() : undefined,
+    updatedBy: (meta?.updated_by as string) ?? undefined,
+  };
+}
+
+export function sbSubscribeVisaProducts(
+  cb: (doc: VisaProductsDoc | null) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'visa_products', assembleVisaProducts, cb);
+}
+
+export async function sbSaveVisaProducts(
+  data: { products: VisaProduct[]; rates: Record<string, number> },
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  // Read current meta to build next version snapshot (mirrors firebase.ts:1078-1085)
+  const { data: prevMeta } = await client.from('visa_products_meta').select('versions').maybeSingle();
+  const prevVersions: VisaProductVersion[] = (prevMeta?.versions as VisaProductVersion[]) ?? [];
+  const versionNo = (prevVersions[0]?.versionNo ?? 0) + 1;
+  const versions: VisaProductVersion[] = [
+    { versionNo, savedAt: now, savedBy: savedBy || '', products: data.products },
+    ...prevVersions,
+  ].slice(0, 20);
+
+  // Full-overwrite: delete all existing products (fees cascade-delete), then insert new set
+  const { error: delErr } = await client.from('visa_products').delete().not('id', 'is', null);
+  if (delErr) throw new Error('sbSaveVisaProducts delete: ' + delErr.message);
+
+  for (const p of data.products) {
+    const { data: row, error: insErr } = await client
+      .from('visa_products')
+      .insert({
+        legacy_id: p.id,
+        country: p.country,
+        visa_type: p.visaType,
+        validity: p.validity ?? null,
+        location: p.location ?? null,
+        markup_type: p.markupType,
+        markup_value: p.markupValue,
+        markup_cur: p.markupCur,
+        note: p.note ?? '',
+        active: p.active,
+      })
+      .select('id')
+      .single();
+    if (insErr) throw new Error('sbSaveVisaProducts insert product: ' + insErr.message);
+    if (p.fees.length) {
+      await replaceChildren(client, 'visa_product_fees', 'product_id', row!.id, p.fees.map((f, i) => ({
+        product_id: row!.id,
+        legacy_fee_id: f.id,
+        name: f.name,
+        amount: f.amount,
+        cur: f.cur,
+        per_pax: f.perPax,
+        sort_order: i,
+      })));
+    }
+  }
+
+  // Upsert visa_products_meta singleton
+  const { error: metaErr } = await client.from('visa_products_meta').upsert({
+    one_row: true,
+    rates: data.rates,
+    versions,
+    updated_at: now,
+    updated_by: savedBy || '',
+  }, { onConflict: 'one_row' });
+  if (metaErr) throw new Error('sbSaveVisaProducts meta upsert: ' + metaErr.message);
 }
