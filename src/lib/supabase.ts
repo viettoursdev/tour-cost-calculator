@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
-import type { PoiEntry } from '@/types/itinerary';
+import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
 
@@ -1309,4 +1309,221 @@ export async function sbPushVisaProjects(
     const del = await client.from('visa_projects').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushVisaProjects delete all: ' + del.error.message);
   }
+}
+
+// ── Itineraries ───────────────────────────────────────────────────────────────
+
+const rowToDay = (r: Record<string, unknown>): Day => ({
+  id: r.id as string,
+  dayNum: r.day_num as number,
+  date: (r.date as string) ?? '',
+  title: (r.title as string) ?? '',
+  meals: r.meals as Day['meals'],
+  mealNote: (r.meal_note as string) ?? '',
+  segments: r.segments as Day['segments'],
+});
+
+const rowToFlight = (r: Record<string, unknown>): Flight => ({
+  id: (r.legacy_flight_id as string) ?? (r.id as string),
+  group: (r.group_text as string) ?? '',
+  leg: (r.leg as string) ?? '',
+  flightNo: (r.flight_no as string) ?? '',
+  dep: (r.dep as string) ?? '',
+  arr: (r.arr as string) ?? '',
+  depAirport: (r.dep_airport as string) ?? undefined,
+  depTime: (r.dep_time as string) ?? undefined,
+  arrAirport: (r.arr_airport as string) ?? undefined,
+  arrTime: (r.arr_time as string) ?? undefined,
+  depDayOffset: (r.dep_day_offset as number) ?? undefined,
+  arrDayOffset: (r.arr_day_offset as number) ?? undefined,
+});
+
+const rowToItineraryIndex = (r: Record<string, unknown>): ItineraryIndexEntry => ({
+  id: (r.legacy_id as string) ?? (r.id as string),
+  code: (r.code as string) ?? '',
+  title: (r.title as string) ?? '',
+  destination: (r.destination as string) ?? '',
+  days: r.days as number,
+  nights: r.nights as number,
+  linkedQuoteId: (r.linked_quote_id as string) ?? null,
+  linkedQuoteName: (r.linked_quote_name as string) ?? '',
+  createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
+  createdBy: (r.created_by_name as string) ?? undefined,
+  updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : '',
+  updatedBy: (r.updated_by_name as string) ?? '',
+});
+
+/**
+ * Subscribe to the itinerary metadata index (lightweight list).
+ * Mirrors fbSubscribeItineraries (firebase.ts:960-965).
+ */
+export function sbSubscribeItineraries(
+  cb: (list: ItineraryIndexEntry[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(
+    client,
+    'itineraries',
+    async (cl) => {
+      const { data, error } = await cl
+        .from('itineraries')
+        .select('id, legacy_id, code, title, destination, days, nights, linked_quote_id, linked_quote_name, created_at, created_by_name, updated_at, updated_by_name')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(rowToItineraryIndex);
+    },
+    cb,
+  );
+}
+
+/**
+ * One-time fetch of a full itinerary, reassembling schedule + flights from child tables.
+ * Mirrors fbGetItinerary (firebase.ts:933-935).
+ */
+export async function sbGetItinerary(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<Itinerary | null> {
+  const { data: row, error } = await client
+    .from('itineraries')
+    .select('*')
+    .eq('legacy_id', id)
+    .maybeSingle();
+  if (error) throw new Error('sbGetItinerary: ' + error.message);
+  if (!row) return null;
+
+  const { data: days, error: dErr } = await client
+    .from('itinerary_days')
+    .select('*')
+    .eq('itinerary_id', row.id as string)
+    .order('sort_order', { ascending: true });
+  if (dErr) throw new Error('sbGetItinerary days: ' + dErr.message);
+
+  const { data: flights, error: fErr } = await client
+    .from('itinerary_flights')
+    .select('*')
+    .eq('itinerary_id', row.id as string)
+    .order('sort_order', { ascending: true });
+  if (fErr) throw new Error('sbGetItinerary flights: ' + fErr.message);
+
+  return {
+    id: (row.legacy_id as string) ?? (row.id as string),
+    code: (row.code as string) ?? undefined,
+    type: row.type as Itinerary['type'],
+    continent: (row.continent as string) ?? '',
+    country: (row.country as string) ?? '',
+    seq: (row.seq as number) ?? 0,
+    title: (row.title as string) ?? '',
+    destination: (row.destination as string) ?? '',
+    days: row.days as number,
+    nights: row.nights as number,
+    intro: (row.intro as string) ?? '',
+    includes: (row.includes as string[]) ?? [],
+    excludes: (row.excludes as string[]) ?? [],
+    exec: (row.exec as Itinerary['exec']) ?? undefined,
+    linkedQuoteId: (row.linked_quote_id as string) ?? null,
+    linkedQuoteName: (row.linked_quote_name as string) ?? '',
+    schedule: (days ?? []).map(rowToDay),
+    flights: (flights ?? []).map(rowToFlight),
+    createdAt: row.created_at ? new Date(row.created_at as string).toISOString() : undefined,
+    createdBy: (row.created_by_name as string) ?? undefined,
+    updatedAt: row.updated_at ? new Date(row.updated_at as string).toISOString() : undefined,
+    updatedBy: (row.updated_by_name as string) ?? undefined,
+  };
+}
+
+/**
+ * Save itinerary: upsert parent by legacy_id, replace days and flights children.
+ * Mirrors fbSaveItinerary (firebase.ts:905-926).
+ */
+export async function sbSaveItinerary(
+  itin: Itinerary,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: up, error: upErr } = await client
+    .from('itineraries')
+    .upsert(
+      {
+        legacy_id: itin.id,
+        code: itin.code ?? null,
+        type: itin.type,
+        continent: itin.continent,
+        country: itin.country,
+        seq: itin.seq ?? 0,
+        title: itin.title,
+        destination: itin.destination ?? null,
+        days: itin.days,
+        nights: itin.nights,
+        intro: itin.intro ?? '',
+        includes: itin.includes ?? [],
+        excludes: itin.excludes ?? [],
+        exec: itin.exec ?? null,
+        linked_quote_id: itin.linkedQuoteId ?? null,
+        linked_quote_name: itin.linkedQuoteName ?? '',
+        created_by_name: itin.createdBy ?? savedBy,
+        created_at: itin.createdAt,
+        updated_at: now,
+        updated_by_name: savedBy,
+      },
+      { onConflict: 'legacy_id' },
+    )
+    .select('id')
+    .single();
+  if (upErr) throw new Error('sbSaveItinerary upsert: ' + upErr.message);
+
+  const parentUuid = up!.id as string;
+
+  await replaceChildren(
+    client,
+    'itinerary_days',
+    'itinerary_id',
+    parentUuid,
+    itin.schedule.map((day, i) => ({
+      itinerary_id: parentUuid,
+      day_num: day.dayNum,
+      date: day.date ?? null,
+      title: day.title ?? '',
+      meals: day.meals,
+      meal_note: day.mealNote ?? '',
+      segments: day.segments,
+      sort_order: i,
+    })),
+  );
+
+  await replaceChildren(
+    client,
+    'itinerary_flights',
+    'itinerary_id',
+    parentUuid,
+    itin.flights.map((f, i) => ({
+      itinerary_id: parentUuid,
+      legacy_flight_id: f.id,
+      group_text: f.group ?? '',
+      leg: f.leg ?? '',
+      flight_no: f.flightNo ?? '',
+      dep: f.dep ?? '',
+      arr: f.arr ?? '',
+      dep_airport: f.depAirport ?? null,
+      dep_time: f.depTime ?? null,
+      arr_airport: f.arrAirport ?? null,
+      arr_time: f.arrTime ?? null,
+      dep_day_offset: f.depDayOffset ?? null,
+      arr_day_offset: f.arrDayOffset ?? null,
+      sort_order: i,
+    })),
+  );
+}
+
+/**
+ * Delete itinerary by legacy_id. Cascade rules drop days + flights automatically.
+ * Mirrors fbDeleteItinerary (firebase.ts:943-953).
+ */
+export async function sbDeleteItinerary(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('itineraries').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteItinerary: ' + error.message);
 }
