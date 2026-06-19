@@ -96,6 +96,7 @@ type QuoteState = {
   setFlights: (v: QuoteFlight[]) => void;
   setWorkflow: (v: WorkflowStep[]) => void;
   setPassengers: (v: Passenger[]) => void;
+  setCatOrder: (ids: CategoryId[]) => void;
   setExclusions: (v: string[]) => void;
   setPayments: (v: QuotePayment[]) => void;
   setPricingOptions: (v: QuotePricingOptions) => void;
@@ -406,6 +407,7 @@ export const useQuoteStore = create<QuoteState>()(
         setFlights: (v) => set((s) => ({ draft: { ...s.draft, flights: v } })),
         setWorkflow: (v) => set((s) => ({ draft: { ...s.draft, workflow: v } })),
         setPassengers: (v) => set((s) => ({ draft: { ...s.draft, passengers: v } })),
+        setCatOrder: (ids) => set((s) => ({ draft: { ...s.draft, catOrder: ids } })),
         setExclusions: (v) => set((s) => ({ draft: { ...s.draft, exclusions: v } })),
         setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
         setPricingOptions: (v) => set((s) => ({ draft: { ...s.draft, pricingOptions: v } })),
@@ -589,6 +591,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
                 ...(data.flights ? { flights: data.flights } : {}),
                 ...(data.passengers ? { passengers: data.passengers } : {}),
+                ...(data.catOrder ? { catOrder: data.catOrder } : {}),
                 ...(data.workflow ? { workflow: data.workflow } : {}),
                 ...(data.groups ? { groups: data.groups } : {}),
                 ...(data.activeGroupId ? { activeGroupId: data.activeGroupId } : {}),
@@ -623,6 +626,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
               ...(data.flights ? { flights: data.flights } : {}),
                 ...(data.passengers ? { passengers: data.passengers } : {}),
+                ...(data.catOrder ? { catOrder: data.catOrder } : {}),
               ...(data.workflow ? { workflow: data.workflow } : {}),
               currentQuoteId: null, // imported file starts a new quote
             },

@@ -197,6 +197,8 @@ export type QuoteDraft = {
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
   passengers?: Passenger[]; // Danh sách khách đoàn (manifest + rooming)
+  catOrder?: CategoryId[];  // Thứ tự hiển thị hạng mục (kéo-thả); thiếu = thứ tự mặc định
+
   // Customer-facing terms (optional — absent until edited).
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Sortable from 'sortablejs';
 import {
   Box, Button, Menu, MenuItem, Paper, Stack, TextField, Typography,
 } from '@mui/material';
@@ -15,6 +16,7 @@ import { RateCardModal } from '@/components/rates/RateCardModal';
 import { computeTotals, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
+import { orderCats, reorderWithinShown } from './catOrder';
 import { useQuoteStore } from '@/stores/quoteStore';
 import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
@@ -33,6 +35,8 @@ export function CostView() {
   const addItem = useQuoteStore((s) => s.addItem);
   const addItems = useQuoteStore((s) => s.addItems);
   const reorderItems = useQuoteStore((s) => s.reorderItems);
+  const catOrder = useQuoteStore((s) => s.draft.catOrder);
+  const setCatOrder = useQuoteStore((s) => s.setCatOrder);
   const updItem = useQuoteStore((s) => s.updItem);
   const delItem = useQuoteStore((s) => s.delItem);
 
@@ -59,7 +63,7 @@ export function CostView() {
   const draftSnapshot = { template, info: { name: '', dest: '', days: 1, nights: 0, startDate: null }, pax, rates, margin, vat, svcBasis, rounding, items, catEnabled, currentQuoteId: null };
   const totals = computeTotals(draftSnapshot);
 
-  const cats = getCATS(template);
+  const cats = orderCats(getCATS(template), catOrder);
 
   // Gọn hạng mục: điều khiển mở/đóng + ẩn hạng mục đã tắt + nhảy nhanh.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -80,6 +84,29 @@ export function CostView() {
     requestAnimationFrame(() => document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
   const shownCats = hideOff ? cats.filter((c) => catEnabled[c.id as CategoryId]) : cats;
+
+  // Kéo-thả đổi thứ tự HẠNG MỤC (handle '.cat-drag' trong header CatBlock).
+  const catWrapRef = useRef<HTMLDivElement>(null);
+  const catCtxRef = useRef({ cats, shownCats, setCatOrder });
+  catCtxRef.current = { cats, shownCats, setCatOrder };
+  useEffect(() => {
+    if (!catWrapRef.current) return;
+    const sortable = Sortable.create(catWrapRef.current, {
+      handle: '.cat-drag',
+      animation: 150,
+      onEnd: (e) => {
+        const from = e.oldIndex, to = e.newIndex;
+        if (from === undefined || to === undefined || from === to) return;
+        if (e.item.parentNode) {
+          const ref = e.item.parentNode.children[from > to ? from + 1 : from];
+          e.item.parentNode.insertBefore(e.item, ref ?? null);
+        }
+        const ctx = catCtxRef.current;
+        ctx.setCatOrder(reorderWithinShown(ctx.cats.map((c) => c.id), ctx.shownCats.map((c) => c.id), from, to) as CategoryId[]);
+      },
+    });
+    return () => sortable.destroy();
+  }, []);
 
   return (
     <Box sx={{ display: 'flex', gap: 2, p: 2 }}>
@@ -129,6 +156,7 @@ export function CostView() {
 
         <GroupSizeTabs />
 
+        <Box ref={catWrapRef}>
         {shownCats.map((cat) => {
           const catId = cat.id as CategoryId;
           let onOpenRate: (() => void) | undefined;
@@ -141,8 +169,8 @@ export function CostView() {
             onOpenRate = () => setPicker({ kind: 'rate', catId, type, label });
           }
           return (
+            <Box key={cat.id} className="cat-item">
             <CatBlock
-              key={cat.id}
               cat={cat}
               domId={`cat-${cat.id}`}
               expanded={expanded[cat.id] ?? !!catEnabled[catId]}
@@ -161,8 +189,10 @@ export function CostView() {
               onOpenRate={onOpenRate}
               displayCurrency={isDMC ? outputCurrency : undefined}
             />
+            </Box>
           );
         })}
+        </Box>
 
         <VisaPickerModal
           open={visaPickerOpen}

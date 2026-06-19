@@ -114,6 +114,13 @@ export function CatBlock({
       >
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
           <Box
+            component="span"
+            className="cat-drag"
+            title="Kéo để đổi thứ tự hạng mục"
+            onClick={(e) => e.stopPropagation()}
+            sx={{ flexShrink: 0, cursor: 'grab', color: 'rgba(15,58,74,0.3)', fontSize: 16, userSelect: 'none', '&:hover': { color: cat.color } }}
+          >⋮⋮</Box>
+          <Box
             role="switch"
             aria-checked={enabled}
             aria-label={`Bật/tắt ${cat.label}`}
