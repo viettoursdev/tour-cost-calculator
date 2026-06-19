@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
+  Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   MenuItem, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { useHistoryState } from '@/lib/useHistoryState';
@@ -43,14 +43,6 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
 
   const setF = <K extends keyof Ncc>(k: K, v: Ncc[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
-
-  const toggleSector = (s: string) =>
-    setF(
-      'sectors',
-      form.sectors.includes(s)
-        ? form.sectors.filter((x) => x !== s)
-        : [...form.sectors, s],
-    );
 
   const setContact = (i: number, k: keyof NccContact, v: string) =>
     setForm((p) => {
@@ -165,47 +157,27 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
             error={canEdit && !form.name.trim()}
           />
 
-          {/* Sectors */}
-          <Box>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              fontWeight={700}
-              sx={{ textTransform: 'uppercase', letterSpacing: 1, display: 'block', mb: 1 }}
-            >
-              Lĩnh vực dịch vụ *
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {NCC_SECTORS.map((s) => {
-                const active = form.sectors.includes(s);
+          {/* Sectors — chọn nhanh từ dropdown (gõ thêm được) */}
+          <Autocomplete
+            multiple
+            freeSolo
+            size="small"
+            disabled={!canEdit}
+            options={NCC_SECTORS}
+            value={form.sectors}
+            onChange={(_, v) => setF('sectors', v as string[])}
+            renderTags={(value, getTagProps) =>
+              value.map((s, i) => {
                 const color = SECTOR_COLOR[s] ?? '#7f8c8d';
-                return (
-                  <Box
-                    key={s}
-                    component="button"
-                    onClick={() => canEdit && toggleSector(s)}
-                    disabled={!canEdit}
-                    sx={{
-                      px: 1.5,
-                      py: 0.5,
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: canEdit ? 'pointer' : 'default',
-                      fontFamily: 'inherit',
-                      border: `1.5px solid ${color}`,
-                      background: active ? color : 'transparent',
-                      color: active ? '#fff' : color,
-                      transition: 'all 0.15s',
-                      '&:disabled': { opacity: 0.6, cursor: 'default' },
-                    }}
-                  >
-                    {s}
-                  </Box>
-                );
-              })}
-            </Box>
-          </Box>
+                return <Chip {...getTagProps({ index: i })} key={s} label={s} size="small" sx={{ bgcolor: color, color: '#fff', fontWeight: 600, '& .MuiChip-deleteIcon': { color: 'rgba(255,255,255,0.8)' } }} />;
+              })
+            }
+            renderInput={(params) => (
+              <TextField {...params} label="Lĩnh vực dịch vụ *" placeholder="Chọn hoặc gõ lĩnh vực…"
+                error={canEdit && form.sectors.length === 0}
+                helperText={canEdit && form.sectors.length === 0 ? 'Chọn ít nhất 1 lĩnh vực' : ''} />
+            )}
+          />
 
           {/* Châu lục + Quốc gia */}
           <Stack direction="row" spacing={1.5}>
