@@ -129,6 +129,9 @@ type QuoteState = {
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
   loadCloud: (cloudId: string, opts?: { dmc?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Khôi phục nội dung 1 phiên bản cũ vào draft, GIỮ nguyên báo giá (currentQuoteId)
+   *  — lưu lại sẽ tạo thành phiên bản mới. Đánh dấu cloudDirty để người dùng biết. */
+  restoreVersionState: (state: QuoteDraft) => void;
 };
 
 /**
@@ -809,6 +812,14 @@ export const useQuoteStore = create<QuoteState>()(
             ...CLEAR_HIST,
           })));
           return { ok: true };
+        },
+
+        restoreVersionState: (state) => {
+          muted(() => set((s) => ({
+            draft: { ...state, currentQuoteId: s.draft.currentQuoteId, rates: keepSavedRates(state.rates) },
+            view: 'cost', cloudDirty: true,
+            ...CLEAR_HIST,
+          })));
         },
       }),
       {

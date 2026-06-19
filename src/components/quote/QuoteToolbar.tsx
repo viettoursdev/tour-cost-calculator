@@ -25,6 +25,8 @@ import { emptyContract } from '@/components/contract/constants';
 import { QuotePrintable } from './QuotePrintable';
 import { FxRatesPanel } from './FxRatesPanel';
 import { QuoteLinksModal } from './QuoteLinksModal';
+import { VersionHistoryModal } from './VersionHistoryModal';
+import HistoryIcon from '@mui/icons-material/History';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -154,7 +156,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [statusAnchor, setStatusAnchor] = useState<HTMLElement | null>(null);
+  const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const undoDraft = useQuoteStore((s) => s.undoDraft);
   const redoDraft = useQuoteStore((s) => s.redoDraft);
   const canUndo = useQuoteStore((s) => s.draftPast.length > 0);
@@ -641,6 +645,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             {cloudDirty ? 'Lưu' : 'Đã lưu'}
           </Button>
         </Tooltip>
+        {currentQuoteId && (
+          <Tooltip title="Lịch sử phiên bản (các lần lưu trước)">
+            <IconButton size="small" onClick={(e) => { e.currentTarget.blur(); setVersionsOpen(true); }}
+              sx={{ border: '1px solid rgba(15,58,74,0.25)', borderRadius: 1.5, color: '#0f3a4a' }}>
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         <Tooltip title="Liên kết">
           <IconButton size="small" onClick={(e) => { e.currentTarget.blur(); setLinksOpen(true); }}
             sx={{ border: '1px solid rgba(15,58,74,0.25)', borderRadius: 1.5 }}>
@@ -650,6 +662,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       </Toolbar>
 
       <QuoteLinksModal open={linksOpen} onClose={() => setLinksOpen(false)} />
+      <VersionHistoryModal open={versionsOpen} onClose={() => setVersionsOpen(false)} />
 
       {(template === 'domestic' || template === 'intl' || template === 'dmc') && (
         <Box sx={{ mx: 2, mt: 0.75, mb: 1 }}>
