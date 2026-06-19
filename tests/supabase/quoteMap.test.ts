@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decomposeQuote } from '../../src/lib/supabase/quoteMap';
+import { decomposeQuote, assembleQuote } from '../../src/lib/supabase/quoteMap';
 import type { QuoteDraft } from '../../src/types/quote';
 
 const draft = (): QuoteDraft => ({
@@ -27,5 +27,28 @@ describe('decomposeQuote', () => {
   it('omits total_cost from quote object', () => {
     const p = decomposeQuote('q1', draft(), {});
     expect('total_cost' in (p.quote as Record<string, unknown>)).toBe(false);
+  });
+});
+
+describe('assembleQuote', () => {
+  it('assembleQuote reverses decomposeQuote', () => {
+    const d = draft();
+    const p = decomposeQuote('q1', d, {});
+    // simulate DB rows (assign synthetic ids; nest flatten)
+    const flights = (p.flights as Record<string, unknown>[]).map((f, i) => ({ id: `F${i}`, legacy_flight_id: f.legacy_flight_id, note: f.note, sort_order: f.sort_order }));
+    const segments = (p.flights as Record<string, unknown>[]).flatMap((f, i) => (f.segments as Record<string, unknown>[]).map((s) => ({ ...s, flight_id: `F${i}` })));
+    const fares = (p.flights as Record<string, unknown>[]).flatMap((f, i) => (f.fares as Record<string, unknown>[]).map((fa) => ({ ...fa, flight_id: `F${i}` })));
+    const asm = assembleQuote({
+      quote: p.quote as Record<string, unknown>,
+      lineItems: p.line_items as Record<string, unknown>[],
+      flights, segments, fares,
+      workflow: [], logs: [], groups: [], groupItems: [],
+      payments: p.payments as Record<string, unknown>[],
+    });
+    expect(asm.items.hotel?.[0]).toMatchObject({ id: 1, name: 'Hotel', price: 500 });
+    expect(asm.flights?.[0].segments[0].flightNo).toBe('QR1');
+    expect(asm.flights?.[0].fares[0].label).toBe('Y');
+    expect(asm.payments?.[0].label).toBe('Đợt 1');
+    expect(asm.template).toBe('domestic');
   });
 });
