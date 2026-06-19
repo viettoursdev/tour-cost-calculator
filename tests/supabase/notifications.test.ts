@@ -245,4 +245,30 @@ describe('notifications gateway', () => {
     expect(list2[0].reminder).toEqual({ every: '8h' });
     expect(list2[0].read).toBe(true);
   });
+
+  it('push preserves attachments that were sent with a notification (no stale-row regression)', async () => {
+    const c = await getViettoursClient();
+    const attachment: FileAttachment = {
+      key: 'r2/push-att-test.pdf', name: 'push-att.pdf',
+      uploadedBy: 'admin', uploadedAt: '2026-09-01T00:00:00.000Z',
+    };
+    // (a) send a notification WITH an attachment
+    await sbSendNotification('tester', {
+      type: 'announcement', title: 'With Att', message: 'Check att', createdBy: 'admin',
+      attachments: [attachment],
+    }, c);
+    let list = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list[0].attachments).toHaveLength(1);
+
+    // push the list back preserving the attachment — attachment must still be present
+    await sbPushNotifications('tester', list, c);
+    list = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list[0].attachments).toHaveLength(1);
+    expect(list[0].attachments![0].key).toBe('r2/push-att-test.pdf');
+
+    // (b) push again with attachments stripped → attachment must now be GONE
+    await sbPushNotifications('tester', [{ ...list[0], attachments: [] }], c);
+    list = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list[0].attachments ?? []).toHaveLength(0);
+  });
 });

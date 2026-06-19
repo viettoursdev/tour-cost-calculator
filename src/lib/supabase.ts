@@ -2021,11 +2021,11 @@ export async function sbPushNotifications(
   }));
   const ins = await client.from('notifications').insert(rows);
   if (ins.error) throw new Error('sbPushNotifications insert: ' + ins.error.message);
-  // Re-save attachments for each notification that carries them.
+  // Re-save attachments unconditionally so that notifications previously pushed
+  // WITH attachments but now pushed WITHOUT them correctly clear any orphaned rows
+  // (attachments live in a separate table with no FK cascade from the delete-reinsert above).
   await Promise.all(
-    notifications
-      .filter((n) => n.attachments?.length)
-      .map((n) => saveAttachments(client, 'notification', n.id, n.attachments!)),
+    notifications.map((n) => saveAttachments(client, 'notification', n.id, n.attachments ?? [])),
   );
 }
 
