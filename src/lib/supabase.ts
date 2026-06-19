@@ -2858,39 +2858,42 @@ async function saveQuoteStateImpl(
   if (error) throw new Error('sbSaveQuoteState: ' + error.message);
 
   // 7. After RPC: save step attachments and populate assignee_user_id (no new migration needed).
-  //    a) Fetch the quote uuid (needed to scope the workflow step rows)
+  const workflowSteps = state.workflow ?? [];
+
+  // a) Save per-step attachments — keyed by cloudId::stepId, so no quote uuid needed.
+  //    Run unconditionally: empty array clears stale rows.
+  await Promise.all(
+    workflowSteps.map((s) =>
+      saveAttachments(client, 'quote_workflow_step', `${cloudId}::${s.id}`, s.attachments ?? []),
+    ),
+  );
+
+  // b) Fetch the quote uuid to scope assignee_user_id UPDATE to the correct rows.
+  //    The RPC must have created/updated the row; null here is a real anomaly.
   const { data: freshRow } = await client
     .from('quotes')
     .select('id')
     .eq('cloud_id', cloudId)
     .maybeSingle();
   const quoteUuidForPost = freshRow?.id as string | undefined;
+  if (!quoteUuidForPost) {
+    throw new Error('saveQuoteStateImpl: quote row not found after RPC for ' + cloudId);
+  }
 
-  if (quoteUuidForPost) {
-    const workflowSteps = state.workflow ?? [];
-
-    // a) Save per-step attachments (unconditional — empty array clears stale rows)
+  // c) Populate assignee_user_id for steps that have a resolvable assignee
+  const stepsWithAssignee = workflowSteps.filter(
+    (s) => s.assignee && assigneeIdMap.has(s.assignee),
+  );
+  if (stepsWithAssignee.length) {
     await Promise.all(
-      workflowSteps.map((s) =>
-        saveAttachments(client, 'quote_workflow_step', `${cloudId}::${s.id}`, s.attachments ?? []),
+      stepsWithAssignee.map((s) =>
+        client
+          .from('quote_workflow_steps')
+          .update({ assignee_user_id: assigneeIdMap.get(s.assignee!) })
+          .eq('quote_id', quoteUuidForPost)
+          .eq('legacy_step_id', s.id),
       ),
     );
-
-    // b) Populate assignee_user_id for steps that have a resolvable assignee
-    const stepsWithAssignee = workflowSteps.filter(
-      (s) => s.assignee && assigneeIdMap.has(s.assignee),
-    );
-    if (stepsWithAssignee.length) {
-      await Promise.all(
-        stepsWithAssignee.map((s) =>
-          client
-            .from('quote_workflow_steps')
-            .update({ assignee_user_id: assigneeIdMap.get(s.assignee!) })
-            .eq('quote_id', quoteUuidForPost)
-            .eq('legacy_step_id', s.id),
-        ),
-      );
-    }
   }
 }
 
