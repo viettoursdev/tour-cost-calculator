@@ -1,14 +1,18 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useAuthStore } from '@/stores/authStore';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { MENU_CUR, newRestMenu, newRestaurant } from './constants';
 import { StarRating } from './StarRating';
+import type { ChangeEvent } from 'react';
 import type { Restaurant } from '@/types';
 
 type Props = { onBack: () => void };
@@ -61,6 +65,22 @@ export function RestaurantLibrary({ onBack }: Props) {
     if (!r) return;
     updR(rid, { menus: r.menus.filter((m) => m.id !== mid) });
   };
+
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const patchFresh = (rid: string, fn: (r: Restaurant) => Restaurant) =>
+    persist(useRestaurantStore.getState().list.map((r) => (r.id === rid ? fn(r) : r)));
+  const onPickFile = async (rid: string, e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    if (f.size > 20 * 1024 * 1024) { window.alert('File vượt quá 20MB.'); return; }
+    setUploadingId(rid);
+    try {
+      const up = await uploadFileToWorker(f);
+      patchFresh(rid, (r) => ({ ...r, files: [...(r.files ?? []), { key: up.key, name: up.name, uploadedBy: user?.name, uploadedAt: new Date().toISOString() }] }));
+    } catch (e2) { window.alert('Tải file lỗi: ' + (e2 as Error).message); }
+    finally { setUploadingId(null); }
+  };
+  const delFile = (rid: string, key: string) => patchFresh(rid, (r) => ({ ...r, files: (r.files ?? []).filter((f) => f.key !== key) }));
 
   const filtered = list.filter((r) => {
     if (filterCont && r.continent !== filterCont) return false;
@@ -225,6 +245,19 @@ export function RestaurantLibrary({ onBack }: Props) {
                 onChange={(e) => updR(r.id, { note: e.target.value })}
                 placeholder="📝 Thông tin / ghi chú (đặc sản, lưu ý đặt bàn, sức chứa…)"
                 sx={{ mb: 1.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+                <Button component="label" size="small" variant="outlined" startIcon={<AttachFileIcon fontSize="small" />} disabled={uploadingId === r.id}
+                  sx={{ fontSize: 12 }}>
+                  {uploadingId === r.id ? 'Đang tải…' : 'Thêm file'}
+                  <input type="file" hidden onChange={(e) => void onPickFile(r.id, e)} />
+                </Button>
+                {(r.files ?? []).map((f) => (
+                  <Chip key={f.key} size="small" icon={<AttachFileIcon />} label={f.name}
+                    onClick={() => openFilePreview({ key: f.key, name: f.name })}
+                    onDelete={() => delFile(r.id, f.key)} sx={{ maxWidth: 240 }} />
+                ))}
+              </Stack>
 
               <Typography variant="caption" fontWeight={700} color="text.secondary"
                 sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
