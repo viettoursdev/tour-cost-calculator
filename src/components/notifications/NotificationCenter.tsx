@@ -19,6 +19,7 @@ import {
 import { LEGACY } from '@/theme';
 import type { NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
 import { NOTIF_TEMPLATES } from './notifCompose';
+import { NOTIF_PRIORITY } from '@/types';
 
 const TYPE_META: Record<string, { label: string; color: string; icon: string }> = {
   announcement:     { label: 'Thông báo',     color: '#0d7a6a', icon: '📢' },
@@ -212,6 +213,10 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Stack direction="row" alignItems="center" spacing={0.75}>
                         {!n.read && <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#dc3250' }} />}
+                        {(n.priority === 'high' || n.priority === 'urgent') && (
+                          <Chip size="small" label={NOTIF_PRIORITY[n.priority].label}
+                            sx={{ height: 17, fontSize: 9.5, fontWeight: 800, bgcolor: NOTIF_PRIORITY[n.priority].color, color: '#fff' }} />
+                        )}
                         <Typography fontWeight={n.read ? 600 : 800} fontSize={15.5} noWrap sx={{ flex: 1 }}>
                           {n.title}
                         </Typography>
@@ -403,6 +408,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
 
   const [recipients, setRecipients] = useState<User[]>(collabUsers);
   const [type, setType] = useState<NotificationType>('announcement');
+  const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [attachQuote, setAttachQuote] = useState(!!currentQuote);
@@ -443,7 +449,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
       }
       await fbSendNotificationMany(members, {
         type, title: title.trim(), message: message.trim(), createdBy: currentUser.name,
-        ...(link ? { link } : {}), threadId,
+        ...(link ? { link } : {}), threadId, ...(priority !== 'normal' ? { priority } : {}),
       });
       onClose();
     } catch (e) {
@@ -479,11 +485,18 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
               <Chip key={r} size="small" label={r} variant="outlined" onClick={() => addRecipients(otherUsers.filter((u) => u.role === r))} />
             ))}
           </Stack>
-          <TextField select size="small" label="Loại" value={type} onChange={(e) => setType(e.target.value as NotificationType)}>
-            <MenuItem value="announcement">📢 Thông báo</MenuItem>
-            <MenuItem value="task">✅ Yêu cầu / nhiệm vụ</MenuItem>
-            <MenuItem value="collab_comment">💬 Mời cộng tác / thảo luận</MenuItem>
-          </TextField>
+          <Stack direction="row" spacing={1.5}>
+            <TextField select size="small" label="Loại" value={type} onChange={(e) => setType(e.target.value as NotificationType)} sx={{ flex: 1 }}>
+              <MenuItem value="announcement">📢 Thông báo</MenuItem>
+              <MenuItem value="task">✅ Yêu cầu / nhiệm vụ</MenuItem>
+              <MenuItem value="collab_comment">💬 Mời cộng tác / thảo luận</MenuItem>
+            </TextField>
+            <TextField select size="small" label="Ưu tiên" value={priority} onChange={(e) => setPriority(e.target.value as 'normal' | 'high' | 'urgent')} sx={{ width: 150 }}>
+              <MenuItem value="normal">Thường</MenuItem>
+              <MenuItem value="high">🟠 Quan trọng</MenuItem>
+              <MenuItem value="urgent">🔴 KHẨN</MenuItem>
+            </TextField>
+          </Stack>
           <TextField size="small" label="Tiêu đề" value={title} onChange={(e) => setTitle(e.target.value)} />
           <TextField size="small" label="Nội dung" value={message} onChange={(e) => setMessage(e.target.value)} multiline minRows={3} />
           {currentQuote && (

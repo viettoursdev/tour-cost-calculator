@@ -32,7 +32,15 @@ export type Notification = {
   read: boolean;
   link?: NotifLink;
   threadId?: string;   // shared comment thread (collaboration group)
+  /** Mức ưu tiên — 'high'/'urgent' hiển thị nổi bật ở chuông & Center. */
+  priority?: 'normal' | 'high' | 'urgent';
   data?: Record<string, unknown>;
+};
+
+/** Nhãn + màu cho mức ưu tiên (dùng chung cho composer & hiển thị). */
+export const NOTIF_PRIORITY: Record<'high' | 'urgent', { label: string; color: string }> = {
+  urgent: { label: 'KHẨN', color: '#dc3250' },
+  high: { label: 'Quan trọng', color: '#d18a13' },
 };
 
 /** A single comment in a shared notification thread. */

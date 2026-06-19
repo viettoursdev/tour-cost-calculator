@@ -13,6 +13,7 @@ import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeN
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
+import { NOTIF_PRIORITY } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
   payment_due:      '#f39c12',
@@ -344,6 +345,11 @@ function NotificationItem({
     >
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
         <Typography variant="body2" fontWeight={notif.read ? 400 : 700} sx={{ flex: 1, mr: 1 }}>
+          {(notif.priority === 'high' || notif.priority === 'urgent') && (
+            <Box component="span" sx={{ display: 'inline-block', mr: 0.6, px: 0.6, borderRadius: '4px', fontSize: 9.5, fontWeight: 800, color: '#fff', bgcolor: NOTIF_PRIORITY[notif.priority].color, verticalAlign: 'middle' }}>
+              {NOTIF_PRIORITY[notif.priority].label}
+            </Box>
+          )}
           {notif.title}
         </Typography>
         {!notif.read && <Chip label="Mới" size="small" color="primary" sx={{ fontSize: 10, height: 18 }} />}
