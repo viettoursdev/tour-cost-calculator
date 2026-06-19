@@ -29,7 +29,6 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
   const pushGlobalRates = useQuoteStore((s) => s.pushGlobalRates);
   const saveDraftRatesLocal = useQuoteStore((s) => s.saveDraftRatesLocal);
   const fxSyncedAt = useQuoteStore((s) => s.fxSyncedAt);
-  const fxSyncedBy = useQuoteStore((s) => s.fxSyncedBy);
   const isCEO = useAuthStore((s) => s.currentUser?.role === 'CEO');
 
   const isGlobal = scope === 'global';
@@ -43,6 +42,11 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
   const base = allowBase ? (rateBase || 'USD') : 'VND'; // báo giá nước ngoài/DMC mặc định USD
   const baseOptions = [...new Set(['VND', ...Object.keys(rates)])]
     .sort((a, b) => (a === 'VND' ? -1 : b === 'VND' ? 1 : fxRank(a) - fxRank(b)));
+
+  // Danh sách tỷ giá (bỏ VND) — dùng cho cả preview gọn (khi thu) lẫn ô sửa (khi mở).
+  const rateEntries = (Object.entries(rates)
+    .filter(([c, r]) => c !== 'VND' && typeof r === 'number') as [string, number][])
+    .sort((a, b) => fxRank(a[0]) - fxRank(b[0]));
 
   const [showRates, setShowRates] = useState(defaultOpen);
   const [syncing, setSyncing] = useState(false);
@@ -79,102 +83,112 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
   };
 
   return (
-    <Box sx={{ borderRadius: '12px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(20,150,140,0.18)' }}>
+    <Box sx={{ borderRadius: '10px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(20,150,140,0.18)' }}>
+      {/* Hàng tỷ giá — toolbar mảnh: nhãn · preview tỷ giá (khi thu) · điều khiển bên phải */}
       <Box
         onClick={() => setShowRates((v) => !v)}
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: 1.5, py: 0.6, cursor: 'pointer' }}
+        sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.5, cursor: 'pointer', minHeight: 36 }}
       >
-        <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={0.75} sx={{ flexShrink: 0 }}>
           <Box component="span" sx={{ fontSize: 13 }}>💱</Box>
-          <Typography sx={{ fontWeight: 800, fontSize: 12, color: LEGACY.navy, whiteSpace: 'nowrap' }}>
-            {isGlobal ? 'Tỷ giá đồng bộ (→ VND)' : 'Tỷ giá báo giá (→ VND)'}
+          <Typography sx={{ fontWeight: 800, fontSize: 11.5, color: LEGACY.navy, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>
+            {isGlobal ? 'TỶ GIÁ ĐỒNG BỘ' : 'TỶ GIÁ'} <Box component="span" sx={{ color: 'rgba(15,58,74,0.4)', fontWeight: 600 }}>→ VND</Box>
           </Typography>
+        </Stack>
+
+        {/* Preview gọn các tỷ giá ngay trên hàng (chỉ khi đang thu) */}
+        <Stack
+          direction="row" alignItems="center" spacing={0.5} useFlexGap flexWrap="wrap"
+          sx={{ flex: 1, minWidth: 0, overflow: 'hidden', maxHeight: 22 }}
+        >
+          {!showRates && (rateEntries.length
+            ? rateEntries.map(([c, r]) => (
+                <Box key={c} sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.4, background: 'rgba(20,150,140,0.08)', borderRadius: '6px', px: 0.7, py: 0.1, whiteSpace: 'nowrap' }}>
+                  <Box component="span" sx={{ fontSize: 10.5, fontWeight: 700, color: '#0d7a6a' }}>{fxLabel(c)}</Box>
+                  <Box component="span" sx={{ fontSize: 11.5, fontWeight: 800, color: '#c2410c' }}>{r.toLocaleString('vi-VN')}</Box>
+                </Box>
+              ))
+            : <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 11 }}>Chưa có tỷ giá ngoại tệ</Typography>)}
+        </Stack>
+
+        <Stack direction="row" alignItems="center" spacing={0.75} onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0 }}>
           {allowBase && (
             <Select
               size="small" variant="standard" value={base} disableUnderline
-              onClick={(e) => e.stopPropagation()}
               onChange={(e) => setRateBase(e.target.value)}
-              sx={{ fontSize: 12, fontWeight: 800, color: '#0d7a6a', '& .MuiSelect-select': { py: 0.1, pr: '18px !important', pl: 0.5 } }}
-              renderValue={(c) => `Mặc định: ${CURRENCY_FLAGS[c as OutputCurrency] ?? ''} ${fxLabel(c)}`}
+              sx={{ fontSize: 11.5, fontWeight: 800, color: '#0d7a6a', '& .MuiSelect-select': { py: 0.1, pr: '18px !important', pl: 0.5 } }}
+              renderValue={(c) => `${CURRENCY_FLAGS[c as OutputCurrency] ?? ''} ${fxLabel(c)}`}
             >
               {baseOptions.map((c) => (
                 <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{CURRENCY_FLAGS[c as OutputCurrency] ?? '🏳️'} {fxLabel(c)}</MenuItem>
               ))}
             </Select>
           )}
-          <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 11, whiteSpace: 'nowrap' }}>
-            · nhấp để {showRates ? 'ẩn' : 'xem'}
-          </Typography>
-        </Stack>
-        <Stack direction="row" alignItems="center" spacing={1} onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0 }}>
           {fxSyncedAt && (
-            <Typography sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 10.5, display: { xs: 'none', md: 'block' } }}>
+            <Typography sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 10.5, display: { xs: 'none', lg: 'block' } }}>
               ☁️ {new Date(fxSyncedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-              {fxSyncedBy ? ` · ${fxSyncedBy}` : ''}
             </Typography>
           )}
           {!isGlobal && (
             <Button
               size="small" variant="outlined"
               onClick={handleSaveLocal}
-              sx={{ minWidth: 0, px: 1.25, py: 0.2, fontSize: 11.5, fontWeight: 800, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}
+              sx={{ minWidth: 0, px: 1, py: 0.15, fontSize: 11, fontWeight: 800, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}
             >
-              {savedTick ? '✓ Đã lưu' : '💾 Lưu'}
+              {savedTick ? '✓' : '💾 Lưu'}
             </Button>
           )}
           {isCEO && (
             <Button
               size="small" variant="contained" disabled={syncing}
               onClick={handleSync}
-              sx={{ minWidth: 0, px: 1.25, py: 0.2, fontSize: 11.5, fontWeight: 800, background: LEGACY.headerGradient }}
+              sx={{ minWidth: 0, px: 1, py: 0.15, fontSize: 11, fontWeight: 800, background: LEGACY.headerGradient }}
             >
-              {syncing ? 'Đang đồng bộ…' : '🔄 Đồng bộ'}
+              {syncing ? '…' : '🔄 Đồng bộ'}
             </Button>
           )}
-          <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 12 }}>{showRates ? '▲' : '▼'}</Box>
+          <Box component="span" sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 11 }}>{showRates ? '▲' : '▼'}</Box>
         </Stack>
       </Box>
+
       {showRates && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, px: 2.25, pb: 2.25, pt: 0.5 }}>
-          {Object.entries(rates)
-            .filter(([c, r]) => c !== 'VND' && typeof r === 'number')
-            .sort((a, b) => fxRank(a[0]) - fxRank(b[0]))
-            .map(([c, r]) => (
-              <Box
-                key={c}
-                sx={{
-                  display: 'flex', alignItems: 'center', gap: 1,
-                  background: 'rgba(168,230,221,0.25)', border: '1px solid rgba(20,150,140,0.2)',
-                  borderRadius: '10px', px: 1.75, py: 1,
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, px: 1.5, pb: 1.25, pt: 0.25, borderTop: '1px dashed rgba(20,150,140,0.2)' }}>
+          {rateEntries.map(([c, r]) => (
+            <Box
+              key={c}
+              sx={{
+                display: 'flex', alignItems: 'center', gap: 0.6,
+                background: 'rgba(168,230,221,0.22)', border: '1px solid rgba(20,150,140,0.2)',
+                borderRadius: '8px', px: 1, py: 0.4,
+              }}
+            >
+              <Typography sx={{ color: '#0d7a6a', fontSize: 12, fontWeight: 700, minWidth: 30 }}>1 {fxLabel(c)}</Typography>
+              <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 11 }}>=</Typography>
+              <TextField
+                size="small" type="number" value={r} disabled={!editable}
+                onChange={(e) => editRate(c, Number(e.target.value) || 0)}
+                variant="standard"
+                slotProps={{
+                  input: {
+                    disableUnderline: true,
+                    endAdornment: <Box component="span" sx={{ color: '#f5a623', fontWeight: 700, fontSize: 12, ml: 0.25 }}>₫</Box>,
+                  },
+                  htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right', fontWeight: 700, fontSize: 13, color: '#f5a623', padding: 0, width: 64 } },
                 }}
-              >
-                <Typography sx={{ color: '#0d7a6a', fontSize: 13, fontWeight: 700, minWidth: 36 }}>1 {fxLabel(c)}</Typography>
-                <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>=</Typography>
-                <TextField
-                  size="small" type="number" value={r} disabled={!editable}
-                  onChange={(e) => editRate(c, Number(e.target.value) || 0)}
-                  variant="standard"
-                  slotProps={{
-                    input: {
-                      disableUnderline: true,
-                      endAdornment: <Box component="span" sx={{ color: '#f5a623', fontWeight: 700, fontSize: 13, ml: 0.25 }}>₫</Box>,
-                    },
-                    htmlInput: { min: 0, step: 0.01, style: { textAlign: 'right', fontWeight: 700, fontSize: 14, color: '#f5a623', padding: 0, width: 72 } },
-                  }}
-                />
-              </Box>
-            ))}
+              />
+            </Box>
+          ))}
           {editable && (
             <Box
               onClick={addCustomRate}
               sx={{
-                display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer',
                 background: 'rgba(20,150,140,0.06)', border: '1px dashed rgba(20,150,140,0.45)',
-                borderRadius: '10px', px: 1.75, py: 1, color: '#0d7a6a', fontSize: 13, fontWeight: 700,
+                borderRadius: '8px', px: 1, py: 0.4, color: '#0d7a6a', fontSize: 12, fontWeight: 700,
                 '&:hover': { background: 'rgba(20,150,140,0.14)' },
               }}
             >
-              ➕ Thêm tỷ giá
+              ➕ Thêm
             </Box>
           )}
         </Box>
