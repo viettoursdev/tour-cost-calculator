@@ -82,36 +82,34 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
     <Box sx={{ borderRadius: '12px', background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(20,150,140,0.18)' }}>
       <Box
         onClick={() => setShowRates((v) => !v)}
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2.25, py: 1.25, cursor: 'pointer' }}
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: 1.5, py: 0.6, cursor: 'pointer' }}
       >
-        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
-          <Box component="span" sx={{ fontSize: 15 }}>💱</Box>
-          <Typography sx={{ fontWeight: 700, fontSize: 14, color: LEGACY.navy, letterSpacing: 0.3, textTransform: 'uppercase' }}>
-            {isGlobal ? 'Tỷ giá đồng bộ toàn hệ thống (→ VND)' : 'Tỷ giá báo giá này (→ VND)'}
+        <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ minWidth: 0 }}>
+          <Box component="span" sx={{ fontSize: 13 }}>💱</Box>
+          <Typography sx={{ fontWeight: 800, fontSize: 12, color: LEGACY.navy, whiteSpace: 'nowrap' }}>
+            {isGlobal ? 'Tỷ giá đồng bộ (→ VND)' : 'Tỷ giá báo giá (→ VND)'}
           </Typography>
           {allowBase && (
             <Select
               size="small" variant="standard" value={base} disableUnderline
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => setRateBase(e.target.value)}
-              sx={{ fontSize: 12.5, fontWeight: 800, color: '#0d7a6a', '& .MuiSelect-select': { py: 0.25, pr: '20px !important', pl: 0.75 } }}
-              renderValue={(c) => `Đơn giá mặc định: ${CURRENCY_FLAGS[c as OutputCurrency] ?? ''} ${fxLabel(c)}`}
+              sx={{ fontSize: 12, fontWeight: 800, color: '#0d7a6a', '& .MuiSelect-select': { py: 0.1, pr: '18px !important', pl: 0.5 } }}
+              renderValue={(c) => `Mặc định: ${CURRENCY_FLAGS[c as OutputCurrency] ?? ''} ${fxLabel(c)}`}
             >
               {baseOptions.map((c) => (
                 <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{CURRENCY_FLAGS[c as OutputCurrency] ?? '🏳️'} {fxLabel(c)}</MenuItem>
               ))}
             </Select>
           )}
-          <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 12 }}>
-            {isGlobal
-              ? (editable ? 'Chỉ CEO sửa · áp cho báo giá mới' : 'Chỉ CEO chỉnh sửa')
-              : 'Riêng cho báo giá này'} · nhấp để {showRates ? 'ẩn' : 'xem'}
+          <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 11, whiteSpace: 'nowrap' }}>
+            · nhấp để {showRates ? 'ẩn' : 'xem'}
           </Typography>
         </Stack>
-        <Stack direction="row" alignItems="center" spacing={1.25} onClick={(e) => e.stopPropagation()}>
+        <Stack direction="row" alignItems="center" spacing={1} onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0 }}>
           {fxSyncedAt && (
-            <Typography sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 11 }}>
-              ☁️ Đồng bộ {new Date(fxSyncedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+            <Typography sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 10.5, display: { xs: 'none', md: 'block' } }}>
+              ☁️ {new Date(fxSyncedAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
               {fxSyncedBy ? ` · ${fxSyncedBy}` : ''}
             </Typography>
           )}
@@ -119,21 +117,21 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
             <Button
               size="small" variant="outlined"
               onClick={handleSaveLocal}
-              sx={{ minWidth: 0, px: 1.5, py: 0.3, fontSize: 12, fontWeight: 800, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}
+              sx={{ minWidth: 0, px: 1.25, py: 0.2, fontSize: 11.5, fontWeight: 800, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}
             >
-              {savedTick ? '✓ Đã lưu' : '💾 Lưu tỷ giá'}
+              {savedTick ? '✓ Đã lưu' : '💾 Lưu'}
             </Button>
           )}
           {isCEO && (
             <Button
               size="small" variant="contained" disabled={syncing}
               onClick={handleSync}
-              sx={{ minWidth: 0, px: 1.5, py: 0.3, fontSize: 12, fontWeight: 800, background: LEGACY.headerGradient }}
+              sx={{ minWidth: 0, px: 1.25, py: 0.2, fontSize: 11.5, fontWeight: 800, background: LEGACY.headerGradient }}
             >
-              {syncing ? 'Đang đồng bộ…' : '🔄 Đồng bộ tỷ giá'}
+              {syncing ? 'Đang đồng bộ…' : '🔄 Đồng bộ'}
             </Button>
           )}
-          <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 13 }}>{showRates ? '▲' : '▼'}</Box>
+          <Box component="span" sx={{ color: 'rgba(15,58,74,0.5)', fontSize: 12 }}>{showRates ? '▲' : '▼'}</Box>
         </Stack>
       </Box>
       {showRates && (

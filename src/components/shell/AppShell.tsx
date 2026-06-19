@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  AppBar, Avatar, Badge, Box, IconButton, Stack,
+  AppBar, Avatar, Badge, Box, IconButton, Menu, MenuItem, Stack,
   Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
@@ -43,6 +43,7 @@ export function AppShell() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [helpAnchor, setHelpAnchor] = useState<HTMLElement | null>(null);
   const chats = useChatStore((s) => s.chats);
   const chatUnreadCount = currentUser ? chats.filter((c) => chatUnread(c, currentUser.u)).length : 0;
 
@@ -104,22 +105,24 @@ export function AppShell() {
           </Typography>
           {currentUser && (
             <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
-              {/* Tài khoản */}
-              <Stack
-                direction="row" alignItems="center" spacing={1}
-                sx={{
-                  background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.28)',
-                  borderRadius: 5, pl: 0.5, pr: 1.25, py: 0.4,
-                }}
-              >
-                <Avatar sx={{ width: 26, height: 26, bgcolor: '#dc3250', fontSize: 12, fontWeight: 800 }}>
-                  {currentUser.name.charAt(0).toUpperCase()}
-                </Avatar>
-                <Box sx={{ lineHeight: 1.1, display: { xs: 'none', sm: 'block' } }}>
-                  <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: '#fff' }} noWrap>{currentUser.name}</Typography>
-                  <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }} noWrap>{currentUser.role}</Typography>
-                </Box>
-              </Stack>
+              {/* Tài khoản — gọn: avatar + tên · chức danh trên 1 dòng */}
+              <Tooltip title={`${currentUser.name} · ${currentUser.role}`}>
+                <Stack
+                  direction="row" alignItems="center" spacing={0.75}
+                  sx={{
+                    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.28)',
+                    borderRadius: 5, pl: 0.4, pr: 1, py: 0.3,
+                  }}
+                >
+                  <Avatar sx={{ width: 24, height: 24, bgcolor: '#dc3250', fontSize: 11, fontWeight: 800 }}>
+                    {currentUser.name.charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#fff', maxWidth: 150, display: { xs: 'none', sm: 'block' } }} noWrap>
+                    {currentUser.name}
+                    <Box component="span" sx={{ fontWeight: 500, color: 'rgba(255,255,255,0.65)' }}> · {currentUser.role}</Box>
+                  </Typography>
+                </Stack>
+              </Tooltip>
 
               {headDivider}
 
@@ -148,14 +151,17 @@ export function AppShell() {
                   <IconButton sx={headBtnSx} onClick={() => setUserMgrOpen(true)}><PeopleIcon fontSize="small" /></IconButton>
                 </Tooltip>
               )}
-              <Tooltip title="Có gì mới">
-                <IconButton sx={headBtnSx} onClick={openWhatsNew}>
-                  <Badge badgeContent={unseenNew} color="error"><span style={{ fontSize: 17, lineHeight: 1 }}>✨</span></Badge>
+              <Tooltip title="Trợ giúp · Có gì mới">
+                <IconButton sx={headBtnSx} onClick={(e) => setHelpAnchor(e.currentTarget)}>
+                  <Badge badgeContent={unseenNew} color="error"><HelpOutlineIcon fontSize="small" /></Badge>
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Hướng dẫn nhanh">
-                <IconButton sx={headBtnSx} onClick={() => setOnboardOpen(true)}><HelpOutlineIcon fontSize="small" /></IconButton>
-              </Tooltip>
+              <Menu anchorEl={helpAnchor} open={!!helpAnchor} onClose={() => setHelpAnchor(null)}>
+                <MenuItem onClick={() => { setOnboardOpen(true); setHelpAnchor(null); }}>📖 Hướng dẫn nhanh</MenuItem>
+                <MenuItem onClick={() => { openWhatsNew(); setHelpAnchor(null); }}>
+                  ✨ Có gì mới{unseenNew > 0 ? ` (${unseenNew})` : ''}
+                </MenuItem>
+              </Menu>
               <Tooltip title="Đăng xuất">
                 <IconButton
                   onClick={() => { void signOut(); }}

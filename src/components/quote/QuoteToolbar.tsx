@@ -4,7 +4,6 @@ import {
   Stack, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import { toast } from '@/stores/toastStore';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -100,10 +99,10 @@ function NavGroup({ label, items, view, onSelect }: { label: string; items: NavI
 function HeaderPill({ icon, children }: { icon: string; children: ReactNode }) {
   return (
     <Stack
-      direction="row" alignItems="center" spacing={0.75}
-      sx={{ background: 'rgba(255,255,255,0.12)', borderRadius: 1.25, px: 1.5, py: 0.6 }}
+      direction="row" alignItems="center" spacing={0.5}
+      sx={{ background: 'rgba(255,255,255,0.12)', borderRadius: 1, px: 1, py: 0.3 }}
     >
-      <Box component="span" sx={{ opacity: 0.8, fontSize: 13 }}>{icon}</Box>
+      <Box component="span" sx={{ opacity: 0.8, fontSize: 12 }}>{icon}</Box>
       {children}
     </Stack>
   );
@@ -117,7 +116,7 @@ function WhiteNum({ value, min, onChange }: { value: number; min: number; onChan
       onChange={(e) => onChange(Math.max(min, Number(e.target.value) || min))}
       slotProps={{
         input: { disableUnderline: true },
-        htmlInput: { min, style: { width: 34, color: '#fff', fontWeight: 800, fontSize: 15, textAlign: 'center', padding: 0 } },
+        htmlInput: { min, style: { width: 28, color: '#fff', fontWeight: 800, fontSize: 14, textAlign: 'center', padding: 0 } },
       }}
     />
   );
@@ -275,13 +274,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
   const tpl = template ? TEMPLATES[template] : null;
   // Pill button in the teal hero band (Trang chủ).
-  const heroBtnSx = {
-    color: '#fff', textTransform: 'none', fontSize: 12.5, fontWeight: 700,
-    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
-    borderRadius: 1.25, px: 1.5, py: 0.4, minWidth: 0,
-    '&:hover': { background: 'rgba(255,255,255,0.26)' },
-  } as const;
-
   // Unified nav tabs (legacy order + icons). DMC shows only Breakdown + history.
   const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
   const canCust = hasPerm(currentUser, 'manageCustomers');
@@ -297,8 +289,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
     : [
         item('home', '🏠 Hôm nay'),
         item('cost', '📊 Báo giá'),
-        item('summary', '💰 Tổng kết'),
-        { group: '🧲 Bán hàng', items: [
+        { group: '💼 Bán hàng', items: [
+          item('summary', '💰 Tổng kết'),
           item('pipeline', '🧲 Pipeline bán hàng'),
           item('salesanalytics', '📊 Phân tích bán hàng'),
           item('history', '🕐 Lịch sử báo giá'),
@@ -312,6 +304,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           item('payment', '🧾 Quản lý thanh toán'),
           item('flights', '✈️ Chuyến bay'),
           item('dashboard', '📈 Dashboard biên lợi'),
+          ...(isMgr ? [item('audit', '📋 Nhật ký')] : []),
         ] },
         { group: '📇 Danh mục', items: [
           ...(canContract ? [item('contract', '📜 Hợp đồng')] : []),
@@ -319,7 +312,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           ...(canNcc ? [item('ncc', '🏢 Nhà Cung Cấp')] : []),
           ...(canNcc ? [item('nccProducts', '📦 Sản phẩm NCC')] : []),
         ] },
-        ...(isMgr ? [item('audit', '📋 Nhật ký')] : []),
       ]
         .map((n) => (hidePrice && 'group' in n
           ? { ...n, items: n.items.filter((it) => !PRICE_ONLY_VIEWS.has(it.v)) }
@@ -341,9 +333,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       {/* ── Tour info header band (legacy style) ── */}
       <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 0.85 }}>
         <Stack direction="row" spacing={2.5} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
-          {/* COL1: logo + template badge (legacy hero) */}
+          {/* COL1: logo (bấm = về Trang chủ) + template badge (legacy hero) */}
           <Stack alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
-            <Box component="img" src={VTE_LOGO} alt="Viettours" sx={{ height: 42, width: 'auto', display: 'block', filter: 'brightness(0) invert(1)' }} />
+            <Tooltip title="Về Trang chủ">
+              <Box
+                component="img" src={VTE_LOGO} alt="Về Trang chủ" role="button" tabIndex={0}
+                onClick={onOpenSelector}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSelector(); } }}
+                sx={{ height: 42, width: 'auto', display: 'block', filter: 'brightness(0) invert(1)', cursor: 'pointer',
+                  transition: 'opacity .15s, transform .15s', '&:hover': { opacity: 0.82, transform: 'scale(1.03)' } }}
+              />
+            </Tooltip>
             {tpl && (
               <Box sx={{
                 background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
@@ -377,34 +377,29 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
             </Stack>
 
             {/* Meta pills + actions */}
-            <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
+            <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap rowGap={0.75}>
               <HeaderPill icon="🗓️">
                 <WhiteNum value={info.days} min={1} onChange={(v) => patchInfo({ days: v, nights: Math.max(0, v - 1) })} />
-                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>ngày</Typography>
+                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>ngày</Typography>
               </HeaderPill>
               <HeaderPill icon="🌙">
                 <WhiteNum value={info.nights} min={0} onChange={(v) => patchInfo({ nights: v })} />
-                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>đêm</Typography>
+                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>đêm</Typography>
               </HeaderPill>
               <HeaderPill icon="👥">
                 <WhiteNum value={pax} min={1} onChange={(v) => setPax(v)} />
-                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>khách</Typography>
+                <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>khách</Typography>
               </HeaderPill>
               <HeaderPill icon="✈️">
                 <Box
                   component="input" type="date" value={info.startDate ?? ''}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => patchInfo({ startDate: e.target.value || null })}
-                  sx={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 13, fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', fontWeight: 600 }}
+                  sx={{ background: 'transparent', border: 'none', color: '#fff', fontSize: 12, fontFamily: 'inherit', outline: 'none', colorScheme: 'dark', fontWeight: 600, width: 108 }}
                 />
               </HeaderPill>
               {info.startDate && (
-                <Typography sx={{ color: LEGACY.gold, fontSize: 13, fontWeight: 600 }}>→ {endDateStr}</Typography>
+                <Typography sx={{ color: LEGACY.gold, fontSize: 12, fontWeight: 600 }}>→ {endDateStr}</Typography>
               )}
-
-              {/* Action: Trang chủ */}
-              <Button onClick={onOpenSelector} startIcon={<ArrowBackIcon />} sx={heroBtnSx}>
-                Trang chủ
-              </Button>
             </Stack>
           </Stack>
 
@@ -657,7 +652,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       <QuoteLinksModal open={linksOpen} onClose={() => setLinksOpen(false)} />
 
       {(template === 'domestic' || template === 'intl' || template === 'dmc') && (
-        <Box sx={{ mx: 2, mb: 1.5 }}>
+        <Box sx={{ mx: 2, mt: 0.75, mb: 1 }}>
           <FxRatesPanel />
         </Box>
       )}
