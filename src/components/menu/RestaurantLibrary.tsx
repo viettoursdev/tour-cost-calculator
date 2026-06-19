@@ -137,6 +137,11 @@ export function RestaurantLibrary({ onBack }: Props) {
                 </IconButton>
               </Box>
 
+              <TextField fullWidth size="small" value={r.address ?? ''}
+                onChange={(e) => updR(r.id, { address: e.target.value })}
+                placeholder="📍 Địa chỉ"
+                sx={{ mb: 1.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
               <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1.5, flexWrap: 'wrap' }}>
                 <Typography variant="caption" fontWeight={700} color="text.secondary">
                   Đánh giá chất lượng:
@@ -174,6 +179,11 @@ export function RestaurantLibrary({ onBack }: Props) {
                   placeholder="Contact (SĐT / email / người LH)"
                   sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
               </Box>
+
+              <TextField fullWidth size="small" multiline minRows={2} value={r.note ?? ''}
+                onChange={(e) => updR(r.id, { note: e.target.value })}
+                placeholder="📝 Thông tin / ghi chú (đặc sản, lưu ý đặt bàn, sức chứa…)"
+                sx={{ mb: 1.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
               <Typography variant="caption" fontWeight={700} color="text.secondary"
                 sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>

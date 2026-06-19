@@ -1,4 +1,5 @@
 import type { ItineraryType } from './itinerary';
+import type { FileAttachment } from './quote';
 
 export interface RestaurantMenu {
   id: string;
@@ -16,10 +17,12 @@ export interface Restaurant {
   continent: string;
   country: string;
   city: string;
+  address?: string;       // địa chỉ cụ thể
   website?: string;
   menuLink?: string;
   contact?: string;
-  note?: string;
+  note?: string;          // thông tin / ghi chú
+  files?: FileAttachment[]; // file đính kèm (thực đơn, ảnh… trên R2)
   rating: number;
   review: string;
   menus: RestaurantMenu[];
