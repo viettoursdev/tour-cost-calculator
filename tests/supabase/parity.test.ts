@@ -16,8 +16,27 @@ const PHASE1 = [
   'sbSetApprovalStage','sbSubscribePaymentApprovals','sbSaveTourPayments','sbGetTourPayments','sbSubscribeTourPayments',
 ];
 
+const PHASE2 = [
+  'generateQuoteCode',
+  'sbSaveQuote','sbSaveDMCQuote',
+  'sbSubscribeQuoteHistory','sbSubscribeDMCQuoteHistory',
+  'sbSaveQuoteState','sbSaveDMCQuoteState',
+  'sbGetQuoteProject','sbGetDMCQuoteProject',
+  'sbDeleteQuote','sbDeleteDMCQuote',
+  'sbUpdateCollaborators','sbUpdateDMCCollaborators',
+  'sbSetRegularEntryLink','sbSetDMCEntryLink',
+  'sbSetQuoteStatus','sbSetDMCQuoteStatus',
+  'sbBackfillWorkflowIndex','sbSetQuotePaymentSummary','sbBackfillPaymentIndex',
+];
+
 describe('Phase-1 gateway surface', () => {
   it('exports every Phase-1 sb* function', () => {
     for (const name of PHASE1) expect(typeof (gw as Record<string, unknown>)[name], name).toBe('function');
+  });
+});
+
+describe('Phase-2 gateway surface (quotes)', () => {
+  it('exports every Phase-2 quote function', () => {
+    for (const name of PHASE2) expect(typeof (gw as Record<string, unknown>)[name], name).toBe('function');
   });
 });

@@ -232,3 +232,57 @@ The following functions are deferred to Phase 2. They cover the quote save/load/
 ### Phase 4: store wiring
 
 No Zustand store has been modified. Each store currently imports from `src/lib/firebase.ts`. Phase 4 will update import lines to use the `sb*` equivalents from `src/lib/supabase.ts`, one store at a time, with feature-flag gating.
+
+---
+
+## Phase 2 (quotes) — done; gateway surface COMPLETE
+
+**Status (2026-06-19):** All Phase-2 quote functions are implemented and the parity test is green. The gateway now covers every entity: users, fx-rates, POIs, audit-log, customers, NCC products, NCC master, contracts, rate-card, visa-products, visa-procs, visa-projects, itineraries, restaurants, menus, notifications, notif-threads, tour-payments, payment-approvals, **and quotes (regular + DMC)**.
+
+### Quote gateway surface (20 functions + 1 utility)
+
+| Function | Description |
+|---|---|
+| `generateQuoteCode` | Deterministic code generator (`NĐ/NN/DMC.seq.dd.mm.yy`) |
+| `sbSaveQuote` | Upsert regular quote metadata index row |
+| `sbSaveDMCQuote` | Upsert DMC quote metadata index row |
+| `sbSubscribeQuoteHistory` | Realtime subscription to regular quote index |
+| `sbSubscribeDMCQuoteHistory` | Realtime subscription to DMC quote index |
+| `sbSaveQuoteState` | Atomic upsert of a versioned regular-quote state via `save_quote_state` RPC |
+| `sbSaveDMCQuoteState` | Atomic upsert of a versioned DMC-quote state via `save_quote_state` RPC |
+| `sbGetQuoteProject` | Fetch one regular-quote project by cloud_id |
+| `sbGetDMCQuoteProject` | Fetch one DMC-quote project by cloud_id |
+| `sbDeleteQuote` | Delete regular quote + all its version rows |
+| `sbDeleteDMCQuote` | Delete DMC quote + all its version rows |
+| `sbUpdateCollaborators` | Update collaborator array on regular quote |
+| `sbUpdateDMCCollaborators` | Update collaborator array on DMC quote |
+| `sbSetRegularEntryLink` | Set/clear entry-link on regular quote (cross-links to DMC) |
+| `sbSetDMCEntryLink` | Set/clear entry-link on DMC quote (cross-links to regular) |
+| `sbSetQuoteStatus` | Update `status` column on regular quote |
+| `sbSetDMCQuoteStatus` | Update `status` column on DMC quote |
+| `sbBackfillWorkflowIndex` | One-time backfill: writes `workflow_last_updated` from stored state |
+| `sbSetQuotePaymentSummary` | Write `total_paid`/`total_cost`/`payment_status` onto quote metadata |
+| `sbBackfillPaymentIndex` | One-time backfill: propagates payment summary from stored state |
+
+### Key design notes
+
+- **Atomic save via RPC.** `sbSaveQuoteState` / `sbSaveDMCQuoteState` call the `save_quote_state` Postgres function (migration 0021) which upserts both the `quote_projects` row and updates the `quotes` index in one transaction. This eliminates the partial-write race that existed in the Firestore dual-write pattern.
+- **Version cap ≤ 20 retained.** The `save_quote_state` RPC enforces `MAX_VERSIONS = 20`, deleting the oldest excess versions automatically. The Firestore ≤ 500-history cap and ≤ 1 MB document limit are **not applicable** in Postgres — these constraints are dropped.
+- **Firestore caps dropped:** The Firestore ≤ 500 quote-history-entries limit and the 1 MB single-document cap do not apply to the Supabase schema. Row count and document size are unbounded within normal Postgres limits.
+
+### Prod-push migrations (Phase 2 complete set)
+
+| Migration | Description |
+|---|---|
+| 0017 | RLS grants for Phase-1 tables |
+| 0018 | `pois.legacy_id` column |
+| 0019 | `created_by_username` on visa-procs / visa-projects |
+| 0020 | Realtime notification tables |
+| 0021 | `save_quote_state` RPC + `loss_reason` / `workflow_due` columns |
+| 0022 | `created_by_username` on quote tables |
+
+To apply: `supabase db push` (or `psql -f supabase/migrations/00{17..22}_*.sql` against the production DB).
+
+### What is NOT yet wired (Phase 4)
+
+No Zustand store (`quoteHistoryStore`, `quoteStore`, etc.) has been modified to call the `sb*` functions. All stores still import from `src/lib/firebase.ts`. Phase 4 will swap the import lines one store at a time, behind a feature flag.
