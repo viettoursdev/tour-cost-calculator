@@ -1,12 +1,11 @@
 /**
  * Export a Contract as a PDF file.
  * Source: public/legacy.html:5943-6150.
- * Uses bundled DejaVu Sans for Vietnamese diacritics + VTE_LOGO.
+ * Uses bundled DejaVu Sans for Vietnamese diacritics.
  */
 import { jsPDF } from 'jspdf';
 import { numberToVietWords } from './vietWords';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
 import type { Contract } from '@/types';
 
 function buildContractPDF(contract: Contract): { pdf: jsPDF; filename: string } {
@@ -46,8 +45,7 @@ function buildContractPDF(contract: Contract): { pdf: jsPDF; filename: string } 
     y += lines.length * (size * 0.42) + spaceAfter;
   };
 
-  // ── Logo + State header ──
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 38, 22, undefined, 'FAST'); } catch { /* ignore */ }
+  // ── State header ──
   setFont('bold'); pdf.setFontSize(11); pdf.setTextColor(...dark);
   pdf.text('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', pageW / 2, y, { align: 'center' }); y += 5;
   pdf.text('Độc lập - Tự do - Hạnh phúc', pageW / 2, y, { align: 'center' }); y += 2;
