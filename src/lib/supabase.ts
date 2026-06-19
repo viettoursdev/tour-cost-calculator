@@ -2951,3 +2951,86 @@ export async function sbGetDMCQuoteProject(
 ): Promise<CloudQuoteProject | null> {
   return getQuoteProjectImpl(cloudId, client);
 }
+
+// ── Phase 2 Task 6 — Quote delete + collaborators ────────────────────────────
+// Functions: sbDeleteQuote/sbDeleteDMCQuote, sbUpdateCollaborators/sbUpdateDMCCollaborators
+// Parity: firebase.ts:364-397
+
+/**
+ * Delete a quote (regular or DMC) by cloud_id.
+ * Children (line_items, flights, workflow, groups, payments, versions,
+ * collaborators) cascade via ON DELETE CASCADE.
+ * `_id` (numeric legacy id) is accepted for signature parity with fbDeleteQuote
+ * (firebase.ts:364) but is not used — delete is by cloud_id.
+ */
+export async function sbDeleteQuote(
+  _id: number,
+  cloudId: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('quotes').delete().eq('cloud_id', cloudId);
+  if (error) throw new Error('sbDeleteQuote: ' + error.message);
+}
+
+/** Thin DMC variant — same logic; template discriminator is irrelevant for
+ *  delete (cloud_id is globally unique in the quotes table). Mirrors
+ *  fbDeleteDMCQuote (firebase.ts:494 via _dmc factory). */
+export async function sbDeleteDMCQuote(
+  id: number,
+  cloudId: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return sbDeleteQuote(id, cloudId, client);
+}
+
+/**
+ * Replace the collaborator set for a quote.
+ * 1. Resolve the quotes UUID from cloud_id (required as FK parent for quote_collaborators).
+ * 2. Map Collaborator.u (username) → profile UUID via usernamesToIds (unmapped
+ *    users get user_id = null, but username + name are still stored).
+ * 3. replaceChildren clears old rows then re-inserts the new set atomically.
+ *
+ * Mirrors fbUpdateCollaborators (firebase.ts:379-397): that fn writes to both
+ * the project doc and the history entry. Here both live in the same quotes row /
+ * quote_collaborators child table, so one replaceChildren suffices.
+ */
+export async function sbUpdateCollaborators(
+  _id: number,
+  cloudId: string,
+  collaborators: Collaborator[],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  // Resolve the quotes UUID.
+  const { data: qRow, error: qErr } = await client
+    .from('quotes')
+    .select('id')
+    .eq('cloud_id', cloudId)
+    .single();
+  if (qErr || !qRow) throw new Error('sbUpdateCollaborators: quote not found for cloud_id ' + cloudId);
+  const quoteUuid = qRow.id as string;
+
+  // Resolve usernames → profile UUIDs (best-effort; unmapped → null).
+  const usernames = collaborators.map((c) => c.u).filter(Boolean);
+  const idMap = await usernamesToIds(client, usernames);
+
+  const rows = collaborators.map((col) => ({
+    quote_id: quoteUuid,
+    user_id: idMap.get(col.u) ?? null,
+    username: col.u,
+    name: col.name,
+  }));
+
+  await replaceChildren(client, 'quote_collaborators', 'quote_id', quoteUuid, rows);
+}
+
+/** Thin DMC variant — same logic (template discriminator not needed; cloud_id
+ *  is unique across both regular and DMC quotes). Mirrors fbUpdateDMCCollaborators
+ *  (firebase.ts:495 via _dmc factory). */
+export async function sbUpdateDMCCollaborators(
+  id: number,
+  cloudId: string,
+  collaborators: Collaborator[],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return sbUpdateCollaborators(id, cloudId, collaborators, client);
+}

@@ -10,8 +10,12 @@ import {
   sbSaveDMCQuoteState,
   sbGetQuoteProject,
   sbGetDMCQuoteProject,
+  sbDeleteQuote,
+  sbDeleteDMCQuote,
+  sbUpdateCollaborators,
+  sbUpdateDMCCollaborators,
 } from '../../src/lib/supabase';
-import type { CloudQuoteEntry, QuoteDraft } from '../../src/types/quote';
+import type { CloudQuoteEntry, QuoteDraft, Collaborator } from '../../src/types/quote';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void): Promise<T> =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
@@ -525,5 +529,126 @@ describe('Task 5 — sbSaveQuoteState / sbGetQuoteProject', () => {
     const c = await getViettoursClient();
     const result = await sbGetQuoteProject('nonexistent-cloud-id', c);
     expect(result).toBeNull();
+  });
+});
+
+describe('Task 6 — delete + collaborators (regular + DMC)', () => {
+  beforeEach(async () => {
+    await truncate([
+      'quote_collaborators', 'quote_versions',
+      'quote_payments', 'quote_workflow_logs', 'quote_workflow_steps',
+      'quote_group_items', 'quote_groups', 'quote_flight_fares',
+      'quote_flight_segments', 'quote_flights', 'quote_line_items',
+      'quotes',
+    ]);
+  });
+
+  // ── sbUpdateCollaborators ──────────────────────────────────────────────────
+
+  it('sbUpdateCollaborators: replaces collaborators on the quote row', async () => {
+    const c = await getViettoursClient();
+    // Save a regular quote first (provides the quotes row we need).
+    const entry = await sbSaveQuote(
+      {
+        id: 1, cloudId: 'q-collab-1', quoteCode: 'DT001', name: 'Collab Test',
+        template: 'domestic', pax: 10, totalCost: 5000000,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const collabs: Collaborator[] = [
+      { u: 'tester', name: 'QA Bot' },
+    ];
+    await sbUpdateCollaborators(entry.id, entry.cloudId, collabs, c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const found = list.find((e) => e.cloudId === 'q-collab-1')!;
+    expect(found).toBeDefined();
+    expect(found.collaborators).toHaveLength(1);
+    expect(found.collaborators[0].u).toBe('tester');
+    expect(found.collaborators[0].name).toBe('QA Bot');
+  });
+
+  it('sbUpdateCollaborators: handles empty collaborators list (clears existing)', async () => {
+    const c = await getViettoursClient();
+    const entry = await sbSaveQuote(
+      {
+        id: 2, cloudId: 'q-collab-2', quoteCode: 'DT002', name: 'Collab Clear',
+        template: 'domestic', pax: 5, totalCost: 0,
+        collaborators: [{ u: 'tester', name: 'QA Bot' }],
+        createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+    // Clear collaborators.
+    await sbUpdateCollaborators(entry.id, entry.cloudId, [], c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const found = list.find((e) => e.cloudId === 'q-collab-2')!;
+    expect(found.collaborators).toHaveLength(0);
+  });
+
+  // ── sbDeleteQuote ──────────────────────────────────────────────────────────
+
+  it('sbDeleteQuote: removes the quote and cascades to children', async () => {
+    const c = await getViettoursClient();
+    const entry = await sbSaveQuote(
+      {
+        id: 3, cloudId: 'q-del-1', quoteCode: 'DT003', name: 'To Delete',
+        template: 'domestic', pax: 2, totalCost: 1000,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+    // Confirm it's visible before deletion.
+    const before = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    expect(before.some((e) => e.cloudId === 'q-del-1')).toBe(true);
+
+    await sbDeleteQuote(entry.id, entry.cloudId, c);
+
+    const after = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    expect(after.some((e) => e.cloudId === 'q-del-1')).toBe(false);
+
+    // Verify cascade: no orphaned collaborator rows.
+    const admin = getServiceClient();
+    const { data } = await admin.from('quote_collaborators').select('id').eq('quote_id',
+      (await admin.from('quotes').select('id').eq('cloud_id', 'q-del-1').maybeSingle()).data?.id ?? '00000000-0000-0000-0000-000000000000',
+    );
+    expect((data ?? []).length).toBe(0);
+  });
+
+  // ── DMC variants ──────────────────────────────────────────────────────────
+
+  it('sbDeleteDMCQuote + sbUpdateDMCCollaborators work on template=dmc rows', async () => {
+    const c = await getViettoursClient();
+    const entry = await sbSaveDMCQuote(
+      {
+        id: 4, cloudId: 'q-dmc-del-1', quoteCode: 'DMC001', name: 'DMC Del',
+        template: 'dmc', pax: 8, totalCost: 20000,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbUpdateDMCCollaborators(
+      entry.id, entry.cloudId,
+      [{ u: 'tester', name: 'QA Bot' }],
+      c,
+    );
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
+    expect(list.find((e) => e.cloudId === 'q-dmc-del-1')!.collaborators[0].u).toBe('tester');
+
+    await sbDeleteDMCQuote(entry.id, entry.cloudId, c);
+    const after = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
+    expect(after.some((e) => e.cloudId === 'q-dmc-del-1')).toBe(false);
   });
 });
