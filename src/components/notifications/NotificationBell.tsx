@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Badge, Box, Button, Chip, Divider, IconButton, Popover, Stack, Tooltip, Typography,
 } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { isApprover } from '@/auth/ROLES';
@@ -35,7 +36,7 @@ const TYPE_SHORT: Record<string, string> = {
 };
 const SOUND_KEY = 'vte_notif_sound';
 
-export function NotificationBell() {
+export function NotificationBell({ sx }: { sx?: SxProps<Theme> } = {}) {
   const notifications = useNotificationStore((s) => s.notifications);
   const unreadCount   = useNotificationStore((s) => s.unreadCount);
   const markAllRead   = useNotificationStore((s) => s.markAllRead);
@@ -68,9 +69,9 @@ export function NotificationBell() {
   return (
     <>
       <Tooltip title="Thông báo">
-        <IconButton color="inherit" onClick={(e) => setAnchor(e.currentTarget)}>
+        <IconButton color="inherit" onClick={(e) => setAnchor(e.currentTarget)} sx={sx}>
           <Badge badgeContent={unreadCount} color="error" max={99}>
-            <NotificationsIcon />
+            <NotificationsIcon fontSize="small" />
           </Badge>
         </IconButton>
       </Tooltip>

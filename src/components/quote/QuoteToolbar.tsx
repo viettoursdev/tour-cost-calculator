@@ -64,7 +64,7 @@ type NavNode = NavItem | { group: string; items: NavItem[] };
 function NavTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <Button onClick={onClick} disableRipple
-      sx={{ textTransform: 'none', fontSize: 14, fontWeight: active ? 800 : 600, minHeight: 48, px: 1.75, borderRadius: 0,
+      sx={{ textTransform: 'none', fontSize: 13.5, fontWeight: active ? 800 : 600, minHeight: 44, px: 1.5, borderRadius: 0,
         color: active ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: active ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
         whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
       {label}
@@ -79,7 +79,7 @@ function NavGroup({ label, items, view, onSelect }: { label: string; items: NavI
   return (
     <>
       <Button onClick={(e) => setAnchor(e.currentTarget)} disableRipple endIcon={<ArrowDropDownIcon />}
-        sx={{ textTransform: 'none', fontSize: 14, fontWeight: activeItem ? 800 : 600, minHeight: 48, px: 1.75, borderRadius: 0,
+        sx={{ textTransform: 'none', fontSize: 13.5, fontWeight: activeItem ? 800 : 600, minHeight: 44, px: 1.5, borderRadius: 0,
           color: activeItem ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: activeItem ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
           whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
         {activeItem ? activeItem.label : label}
@@ -632,22 +632,20 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           ))}
         </Menu>
         <UndoRedoButtons undo={undoDraft} redo={redoDraft} canUndo={canUndo} canRedo={canRedo} />
+        {/* Trạng thái đồng bộ cloud được gộp thẳng vào nút Lưu (chấm màu): cam = chưa
+            lưu, xanh = đã đồng bộ — bỏ dòng chữ "Chưa lưu/Đã lưu" rời rạc cho gọn. */}
         <Tooltip title={cloudDirty ? 'Có thay đổi chưa lưu lên cloud' : 'Đã đồng bộ cloud'}>
-          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontSize: 12, fontWeight: 700,
-            color: cloudDirty ? '#b8761e' : 'rgba(15,58,74,0.45)', whiteSpace: 'nowrap' }}>
-            <Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: cloudDirty ? '#f5a623' : '#27ae60' }} />
-            {cloudDirty ? 'Chưa lưu' : 'Đã lưu'}
-          </Box>
+          <Button
+            size="small" variant="contained" startIcon={<CloudUploadIcon />}
+            // Blur first so the trigger isn't a focused descendant of #root when the
+            // dialog applies aria-hidden (avoids the a11y "aria-hidden on focused" warning).
+            onClick={(e) => { e.currentTarget.blur(); confirmIfBlocking(onOpenSaveCloud); }}
+            endIcon={<Box component="span" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: cloudDirty ? '#f5a623' : '#27ae60', boxShadow: '0 0 0 2px rgba(255,255,255,0.35)' }} />}
+            sx={{ fontWeight: 800, background: LEGACY.headerGradient }}
+          >
+            {cloudDirty ? 'Lưu' : 'Đã lưu'}
+          </Button>
         </Tooltip>
-        <Button
-          size="small" variant="contained" startIcon={<CloudUploadIcon />}
-          // Blur first so the trigger isn't a focused descendant of #root when the
-          // dialog applies aria-hidden (avoids the a11y "aria-hidden on focused" warning).
-          onClick={(e) => { e.currentTarget.blur(); confirmIfBlocking(onOpenSaveCloud); }}
-          sx={{ fontWeight: 800, background: LEGACY.headerGradient }}
-        >
-          Lưu
-        </Button>
         <Tooltip title="Liên kết">
           <IconButton size="small" onClick={(e) => { e.currentTarget.blur(); setLinksOpen(true); }}
             sx={{ border: '1px solid rgba(15,58,74,0.25)', borderRadius: 1.5 }}>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  AppBar, Avatar, Badge, Box, Button, IconButton, Stack,
+  AppBar, Avatar, Badge, Box, IconButton, Stack,
   Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
@@ -85,13 +85,15 @@ export function AppShell() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Legacy-style translucent pill button on the teal header bar.
-  const pillSx = {
-    color: '#fff', textTransform: 'none', fontWeight: 700, fontSize: 13,
-    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
-    borderRadius: 2, px: 1.5, minWidth: 0,
+  // Nút icon đồng bộ trên thanh header teal — gọn, đều, có tooltip tên đầy đủ.
+  const headBtnSx = {
+    color: '#fff', width: 36, height: 36, borderRadius: 2,
+    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.28)',
     '&:hover': { background: 'rgba(255,255,255,0.26)' },
   } as const;
+  const headDivider = (
+    <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.75, background: 'rgba(255,255,255,0.25)' }} />
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -101,68 +103,65 @@ export function AppShell() {
             Phần mềm quản lý - Viettours
           </Typography>
           {currentUser && (
-            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
               {/* Tài khoản */}
               <Stack
                 direction="row" alignItems="center" spacing={1}
                 sx={{
-                  background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)',
-                  borderRadius: 5, pl: 0.5, pr: 1.5, py: 0.5,
+                  background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.28)',
+                  borderRadius: 5, pl: 0.5, pr: 1.25, py: 0.4,
                 }}
               >
-                <Avatar sx={{ width: 28, height: 28, bgcolor: '#dc3250', fontSize: 13, fontWeight: 800 }}>
+                <Avatar sx={{ width: 26, height: 26, bgcolor: '#dc3250', fontSize: 12, fontWeight: 800 }}>
                   {currentUser.name.charAt(0).toUpperCase()}
                 </Avatar>
-                <Box sx={{ lineHeight: 1.1 }}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{currentUser.name}</Typography>
-                  <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{currentUser.role}</Typography>
+                <Box sx={{ lineHeight: 1.1, display: { xs: 'none', sm: 'block' } }}>
+                  <Typography sx={{ fontSize: 12.5, fontWeight: 800, color: '#fff' }} noWrap>{currentUser.name}</Typography>
+                  <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }} noWrap>{currentUser.role}</Typography>
                 </Box>
               </Stack>
 
-              <Button startIcon={<CloudSyncIcon />} sx={pillSx} onClick={() => setRateSyncOpen(true)}>
-                Master RC
-              </Button>
-              {canManageUsers && (
-                <Button startIcon={<PeopleIcon />} sx={pillSx} onClick={() => setUserMgrOpen(true)}>
-                  TK
-                </Button>
-              )}
+              {headDivider}
+
               <Tooltip title="Tìm kiếm (Ctrl/⌘ + K)">
-                <Button startIcon={<SearchIcon />} sx={pillSx} onClick={() => setSearchOpen(true)}>
-                  Tìm
-                </Button>
+                <IconButton sx={headBtnSx} onClick={() => setSearchOpen(true)}><SearchIcon fontSize="small" /></IconButton>
               </Tooltip>
               <Tooltip title="Trợ lý ảo">
-                <Button startIcon={<span>🤖</span>} sx={pillSx} onClick={() => setAssistantOpen(true)}>
-                  Trợ lý
-                </Button>
-              </Tooltip>
-              <Tooltip title="Có gì mới">
-                <IconButton onClick={openWhatsNew} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
-                  <Badge badgeContent={unseenNew} color="error"><span style={{ fontSize: 18, lineHeight: 1 }}>✨</span></Badge>
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Hướng dẫn nhanh">
-                <IconButton onClick={() => setOnboardOpen(true)} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
-                  <HelpOutlineIcon />
+                <IconButton sx={headBtnSx} onClick={() => setAssistantOpen(true)}>
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>🤖</span>
                 </IconButton>
               </Tooltip>
               <Tooltip title="Tin nhắn nội bộ">
-                <IconButton onClick={() => setChatOpen(true)} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
-                  <Badge badgeContent={chatUnreadCount} color="error"><ChatBubbleOutlineIcon /></Badge>
+                <IconButton sx={headBtnSx} onClick={() => setChatOpen(true)}>
+                  <Badge badgeContent={chatUnreadCount} color="error"><ChatBubbleOutlineIcon fontSize="small" /></Badge>
                 </IconButton>
               </Tooltip>
-              <NotificationBell />
+              <NotificationBell sx={headBtnSx} />
+
+              {headDivider}
+
+              <Tooltip title="Master Rate Card">
+                <IconButton sx={headBtnSx} onClick={() => setRateSyncOpen(true)}><CloudSyncIcon fontSize="small" /></IconButton>
+              </Tooltip>
+              {canManageUsers && (
+                <Tooltip title="Quản lý tài khoản">
+                  <IconButton sx={headBtnSx} onClick={() => setUserMgrOpen(true)}><PeopleIcon fontSize="small" /></IconButton>
+                </Tooltip>
+              )}
+              <Tooltip title="Có gì mới">
+                <IconButton sx={headBtnSx} onClick={openWhatsNew}>
+                  <Badge badgeContent={unseenNew} color="error"><span style={{ fontSize: 17, lineHeight: 1 }}>✨</span></Badge>
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Hướng dẫn nhanh">
+                <IconButton sx={headBtnSx} onClick={() => setOnboardOpen(true)}><HelpOutlineIcon fontSize="small" /></IconButton>
+              </Tooltip>
               <Tooltip title="Đăng xuất">
                 <IconButton
                   onClick={() => { void signOut(); }}
-                  sx={{
-                    color: '#fff', background: 'rgba(255,255,255,0.14)',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    '&:hover': { background: 'rgba(220,50,80,0.5)' },
-                  }}
+                  sx={{ ...headBtnSx, '&:hover': { background: 'rgba(220,50,80,0.5)' } }}
                 >
-                  <PowerSettingsNewIcon />
+                  <PowerSettingsNewIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </Stack>
