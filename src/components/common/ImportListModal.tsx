@@ -3,8 +3,10 @@ import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
   Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { LEGACY } from '@/theme';
 import { toast } from '@/stores/toastStore';
+import { parseTableAI } from '@/lib/aiTableParse';
 
 export type ImportCol = { key: string; label: string; aliases?: string[] };
 
@@ -85,6 +87,7 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
 
   const reset = () => { setText(''); setRows([]); setError(null); };
 
@@ -92,9 +95,17 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
     setError(null);
     try {
       const mapped = mapRows(parseDelimited(text), columns);
-      if (!mapped.length) setError('Không đọc được dòng nào. Kiểm tra dòng tiêu đề (header) có khớp tên cột không.');
+      if (!mapped.length) setError('Không đọc được dòng nào — dòng tiêu đề (header) chưa khớp tên cột. Hãy bấm “🤖 AI quét” để AI tự nhận diện.');
       setRows(mapped);
     } catch (e) { setError('Lỗi đọc dữ liệu: ' + (e as Error).message); }
+  };
+
+  const aiScan = () => {
+    setError(null); setAiBusy(true);
+    parseTableAI(text, columns)
+      .then((mapped) => { if (!mapped.length) setError('AI không trích được dòng nào — kiểm tra lại nội dung dán.'); setRows(mapped); })
+      .catch((e) => setError('AI quét lỗi: ' + (e as Error).message))
+      .finally(() => setAiBusy(false));
   };
 
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,7 +144,8 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
       <DialogContent dividers>
         <Stack spacing={1.5}>
           <Typography variant="caption" color="text.secondary">
-            Dán dữ liệu từ Excel/Google Sheets (gồm dòng tiêu đề) hoặc tải file .csv/.xlsx.
+            Dán dữ liệu từ Excel/Google Sheets (gồm dòng tiêu đề) hoặc tải file .csv/.xlsx — bấm <strong>Xem trước (dán)</strong>.
+            Dữ liệu lộn xộn / không có tiêu đề chuẩn? Bấm <strong>🤖 AI quét</strong> để AI tự nhận diện.
             Cột nhận biết: <strong>{columns.map((c) => c.label).join(' · ')}</strong>.
             {note ? ` ${note}` : ''} Bỏ qua dòng trùng tên hoặc để trống.
           </Typography>
@@ -142,9 +154,13 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
             onChange={(e) => setText(e.target.value)}
             placeholder={columns.map((c) => c.label).join('\t')}
           />
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Button variant="outlined" onClick={previewFromText} disabled={!text.trim() || busy}>Xem trước (dán)</Button>
-            <Button component="label" variant="outlined" disabled={busy}>
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Button variant="outlined" onClick={previewFromText} disabled={!text.trim() || busy || aiBusy}>Xem trước (dán)</Button>
+            <Button variant="contained" startIcon={<AutoAwesomeIcon />} onClick={aiScan} disabled={!text.trim() || busy || aiBusy}
+              sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+              {aiBusy ? 'AI đang quét…' : '🤖 AI quét'}
+            </Button>
+            <Button component="label" variant="outlined" disabled={busy || aiBusy}>
               Tải file .csv/.xlsx
               <Box component="input" type="file" hidden accept=".csv,.xlsx" onChange={onPickFile} />
             </Button>
@@ -171,7 +187,7 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
         <Button onClick={onClose} disabled={busy}>Huỷ</Button>
-        <Button variant="contained" onClick={doImport} disabled={!rows.length || busy} sx={{ background: LEGACY.headerGradient, fontWeight: 700 }}>
+        <Button variant="contained" onClick={doImport} disabled={!rows.length || busy || aiBusy} sx={{ background: LEGACY.headerGradient, fontWeight: 700 }}>
           {busy ? 'Đang nhập…' : `Nhập ${rows.length} mục`}
         </Button>
       </DialogActions>
