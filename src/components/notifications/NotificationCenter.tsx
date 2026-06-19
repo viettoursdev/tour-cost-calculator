@@ -18,6 +18,7 @@ import {
 } from '@/lib/firebase';
 import { LEGACY } from '@/theme';
 import type { NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
+import { NOTIF_TEMPLATES } from './notifCompose';
 
 const TYPE_META: Record<string, { label: string; color: string; icon: string }> = {
   announcement:     { label: 'Thông báo',     color: '#0d7a6a', icon: '📢' },
@@ -408,6 +409,17 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
 
   const otherUsers = users.filter((u) => u.u !== currentUser.u);
+  // Nhóm chọn nhanh người nhận theo vai trò (chỉ các vai trò có người).
+  const rolesPresent = useMemo(() => Array.from(new Set(otherUsers.map((u) => u.role))).sort(), [otherUsers]);
+  const addRecipients = (list: User[]) => setRecipients((prev) => {
+    const seen = new Set(prev.map((u) => u.u));
+    return [...prev, ...list.filter((u) => !seen.has(u.u))];
+  });
+  const applyTemplate = (key: string) => {
+    const t = NOTIF_TEMPLATES.find((x) => x.key === key);
+    if (!t) return;
+    setType(t.type); setTitle(t.title); setMessage(t.message);
+  };
 
   const send = async () => {
     if (!title.trim()) { window.alert('Nhập tiêu đề'); return; }
@@ -448,6 +460,10 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
       </Box>
       <Box sx={{ p: 3 }}>
         <Stack spacing={2}>
+          <TextField select size="small" label="Mẫu tin (tuỳ chọn)" value="" onChange={(e) => applyTemplate(e.target.value)}>
+            <MenuItem value=""><em>— Soạn mới —</em></MenuItem>
+            {NOTIF_TEMPLATES.map((t) => <MenuItem key={t.key} value={t.key}>{t.label}</MenuItem>)}
+          </TextField>
           <Autocomplete
             multiple size="small" options={otherUsers} value={recipients}
             onChange={(_, v) => setRecipients(v)}
@@ -455,6 +471,14 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
             isOptionEqualToValue={(a, b) => a.u === b.u}
             renderInput={(params) => <TextField {...params} label="Người nhận / nhóm cộng tác" placeholder="Chọn người…" />}
           />
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: -1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>Chọn nhanh:</Typography>
+            <Chip size="small" label="Toàn công ty" onClick={() => addRecipients(otherUsers)} variant="outlined" />
+            {collabUsers.length > 0 && <Chip size="small" label={`Nhóm cộng tác (${collabUsers.length})`} onClick={() => addRecipients(collabUsers)} variant="outlined" color="primary" />}
+            {rolesPresent.map((r) => (
+              <Chip key={r} size="small" label={r} variant="outlined" onClick={() => addRecipients(otherUsers.filter((u) => u.role === r))} />
+            ))}
+          </Stack>
           <TextField select size="small" label="Loại" value={type} onChange={(e) => setType(e.target.value as NotificationType)}>
             <MenuItem value="announcement">📢 Thông báo</MenuItem>
             <MenuItem value="task">✅ Yêu cầu / nhiệm vụ</MenuItem>
