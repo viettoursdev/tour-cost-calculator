@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
@@ -18,19 +18,37 @@ export function AIPartyImportDialog({ open, kind, onClose, onApply }: {
   const [text, setText] = useState('');
   const [imageB64, setImageB64] = useState<string | null>(null);
   const [imgName, setImgName] = useState('');
+  const [imgPreview, setImgPreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ParsedNcc | ParsedCustomer | null>(null);
 
-  const reset = () => { setText(''); setImageB64(null); setImgName(''); setResult(null); setError(null); };
+  const clearImage = () => { setImageB64(null); setImgName(''); setImgPreview(null); };
+  const reset = () => { setText(''); clearImage(); setResult(null); setError(null); };
   const close = () => { reset(); onClose(); };
 
-  const onPickImage = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; e.target.value = '';
+  const loadImageFile = (f: File | null | undefined) => {
     if (!f) return;
+    if (!f.type.startsWith('image/')) { setError('Chỉ nhận tệp ảnh (PNG/JPG/…).'); return; }
+    setError(null);
     const reader = new FileReader();
-    reader.onload = () => { setImageB64(String(reader.result).split(',')[1] ?? null); setImgName(f.name); };
+    reader.onload = () => {
+      const url = String(reader.result);
+      setImgPreview(url);
+      setImageB64(url.split(',')[1] ?? null);
+      setImgName(f.name || 'ảnh dán');
+    };
     reader.readAsDataURL(f);
+  };
+  const onPickImage = (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; e.target.value = ''; loadImageFile(f); };
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); setDragOver(false);
+    loadImageFile(Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/')) ?? e.dataTransfer.files[0]);
+  };
+  const onPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+    const img = Array.from(e.clipboardData.items).find((it) => it.type.startsWith('image/'));
+    if (img) { const f = img.getAsFile(); if (f) { e.preventDefault(); loadImageFile(f); } }
   };
 
   const run = () => {
@@ -56,11 +74,38 @@ export function AIPartyImportDialog({ open, kind, onClose, onApply }: {
         <TextField fullWidth multiline minRows={4} value={text} onChange={(e) => setText(e.target.value)}
           placeholder={'VD: CÔNG TY DU LỊCH ABC\nĐịa chỉ: 12 Lê Lợi, Đà Nẵng · MST: 0401234567\nNguyễn Văn A — Trưởng phòng KD · 0905 123 456 · a@abc.vn'}
           sx={{ '& textarea': { fontSize: 13.5 } }} />
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+
+        {/* Vùng kéo-thả / dán / tải ảnh */}
+        <Box
+          onDrop={onDrop}
+          onPaste={onPaste}
+          onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          sx={{
+            mt: 1, p: 1.25, borderRadius: 2, border: '1.5px dashed',
+            borderColor: dragOver ? '#7c3aed' : 'rgba(124,58,237,0.35)',
+            bgcolor: dragOver ? 'rgba(124,58,237,0.08)' : 'transparent', transition: 'all .15s',
+            display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap',
+          }}
+        >
+          {imgPreview ? (
+            <Box component="img" src={imgPreview} alt={imgName} sx={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }} />
+          ) : (
+            <ImageIcon sx={{ color: '#7c3aed', flexShrink: 0 }} />
+          )}
+          <Box sx={{ flex: 1, minWidth: 120 }}>
+            <Typography variant="body2" fontWeight={700} sx={{ color: '#7c3aed' }}>
+              {imgName ? imgName : 'Kéo-thả ảnh vào đây · dán ảnh (Ctrl+V) · hoặc bấm Tải ảnh'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">Ảnh danh thiếp / hồ sơ chụp — PNG, JPG…</Typography>
+          </Box>
+          {imgName && <Chip size="small" label="Bỏ ảnh" onDelete={clearImage} onClick={clearImage} />}
           <Button component="label" size="small" variant="outlined" startIcon={<ImageIcon />}>
             Tải ảnh<input type="file" hidden accept="image/*" onChange={onPickImage} />
           </Button>
-          {imgName && <Chip size="small" label={imgName} onDelete={() => { setImageB64(null); setImgName(''); }} />}
+        </Box>
+
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.25 }}>
           <Box sx={{ flex: 1 }} />
           <Button onClick={run} disabled={busy || (!text.trim() && !imageB64)} variant="contained"
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
