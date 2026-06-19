@@ -14,7 +14,7 @@ export function lineWarnings(item: Item, isDup: boolean): string[] {
   if (counts && item.price <= 0) w.push('Đơn giá = 0');
   if (item.times < 1) w.push('Số lần < 1');
 
-  const editableQty = item.qtyMode === 'custom' || item.qtyMode === 'package';
+  const editableQty = item.qtyMode === 'custom' || item.qtyMode === 'package' || item.qtyMode === 'room';
   if (editableQty && item.customQty < 1) w.push('Số lượng < 1');
 
   // Lỗi rất hay gặp: gõ 1500 mà ý là 1.500.000 (thiếu '000').

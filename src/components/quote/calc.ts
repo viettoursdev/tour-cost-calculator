@@ -10,7 +10,7 @@ import { CATS } from './constants';
  * Effective quantity of an item at a given pax.
  * Room modes are derived from pax so they scale with group size:
  *   single_room = 1 room / guest = pax;  double_room = ⌈pax/2⌉ (½ pax, .5 → up).
- * per_pax = pax, per_group = 1, package/custom = the entered customQty.
+ * per_pax = pax, per_group = 1, package/custom/room = the entered customQty.
  */
 export function qtyOf(item: Item, pax: number): number {
   switch (item.qtyMode) {
@@ -18,7 +18,7 @@ export function qtyOf(item: Item, pax: number): number {
     case 'per_group': return 1;
     case 'single_room': return pax;
     case 'double_room': return Math.round(pax / 2);
-    default: return item.customQty; // 'package' | 'custom'
+    default: return item.customQty; // 'package' | 'custom' | 'room'
   }
 }
 

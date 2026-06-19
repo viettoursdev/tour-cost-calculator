@@ -125,7 +125,7 @@ type QuoteState = {
   renameSnapshot: (id: number, name: string) => void;
 
   // Cloud sync (PR-3.2)
-  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[], linkedForeign?: { id: string; name: string; template: Template } | null) => Promise<CloudQuoteEntry>;
+  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[], linkedForeign?: { id: string; name: string; template: Template } | null, overwrite?: { cloudId: string; id: number } | null) => Promise<CloudQuoteEntry>;
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
   loadCloud: (cloudId: string, opts?: { dmc?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -685,7 +685,7 @@ export const useQuoteStore = create<QuoteState>()(
           set({ snapshots: next });
         },
 
-        saveCloud: async (name, collaborators, note, customer, attachments, linkedForeign) => {
+        saveCloud: async (name, collaborators, note, customer, attachments, linkedForeign, overwrite) => {
           const { draft } = get();
           const u = useAuthStore.getState().currentUser;
           if (!u) throw new Error('saveCloud: no current user');
@@ -694,14 +694,22 @@ export const useQuoteStore = create<QuoteState>()(
           const _save  = isDmc ? fbSaveDMCQuote      : fbSaveQuote;
           const _saveS = isDmc ? fbSaveDMCQuoteState : fbSaveQuoteState;
           const totalCost = computeTotals(draft).totalCost;
-          const isNew = !draft.currentQuoteId;
-          const cloudId =
-            draft.currentQuoteId ??
-            Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-          const id = Date.now();
           const existing = isDmc
             ? useQuoteHistoryStore.getState().dmcQuotes
             : useQuoteHistoryStore.getState().quotes;
+          // Đích lưu: ưu tiên báo giá được chọn ghi đè (overwrite), rồi tới báo
+          // giá đang mở (currentQuoteId), cuối cùng mới tạo mã cloud mới.
+          const cloudId =
+            overwrite?.cloudId ??
+            draft.currentQuoteId ??
+            Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+          // "Mới" = không ghi đè & chưa gắn báo giá nào (giữ nguyên ngữ nghĩa cũ).
+          const isNew = !overwrite && !draft.currentQuoteId;
+          // Tra bản ghi index hiện có theo cloudId để TÁI DÙNG `id` → fbSaveQuote
+          // cập nhật đúng chỗ (không sinh dòng index trùng) & dồn snapshot vào
+          // cùng một project (giữ tối đa 20 phiên bản).
+          const existingEntry = existing.find((q) => q.cloudId === cloudId);
+          const id = overwrite?.id ?? existingEntry?.id ?? Date.now();
           const quoteCode = isNew ? generateQuoteCode(draft.template, existing) : undefined;
           const entry = await _save(
             {

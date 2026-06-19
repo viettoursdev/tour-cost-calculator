@@ -12,7 +12,7 @@ export type ParsedQuoteLine = {
   category: CategoryId; name: string; price: number; cur: string; unit: string; times: number; qtyMode: QtyMode; note: string;
 };
 
-const VALID_QTY: QtyMode[] = ['per_pax', 'per_group', 'single_room', 'double_room', 'package', 'custom'];
+const VALID_QTY: QtyMode[] = ['per_pax', 'per_group', 'single_room', 'double_room', 'room', 'package', 'custom'];
 
 const str = (v: unknown): string => (v == null ? '' : String(v)).trim();
 

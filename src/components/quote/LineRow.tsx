@@ -290,12 +290,12 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
 
   const qty = qtyOf(item, pax);
 
-  // Rooms scale with pax (formula) → read-only. Only package/custom take a typed number.
-  const editableQty = item.qtyMode === 'custom' || item.qtyMode === 'package';
+  // Rooms scale with pax (formula) → read-only. Package/custom/room take a typed number.
+  const editableQty = item.qtyMode === 'custom' || item.qtyMode === 'package' || item.qtyMode === 'room';
 
   const changeQtyMode = (m: QtyMode) => {
     const patch: Partial<Item> = { qtyMode: m };
-    if (m === 'package') patch.customQty = Math.max(1, item.customQty || 1);
+    if (m === 'package' || m === 'room') patch.customQty = Math.max(1, item.customQty || 1);
     u(patch);
   };
 
@@ -400,6 +400,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
             <option value="per_group">đoàn</option>
             <option value="single_room">phòng đơn</option>
             <option value="double_room">phòng đôi</option>
+            <option value="room">phòng (SL)</option>
             <option value="package">gói</option>
             <option value="custom">tuỳ</option>
           </Sel>

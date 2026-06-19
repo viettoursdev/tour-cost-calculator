@@ -24,7 +24,7 @@ export type DmcMargin = {
 
 export type DmcPrices = Record<number, number>;  // keys at runtime: 20, 25, 30, 35, 40
 
-export type QtyMode = 'per_pax' | 'per_group' | 'custom' | 'single_room' | 'double_room' | 'package';
+export type QtyMode = 'per_pax' | 'per_group' | 'custom' | 'single_room' | 'double_room' | 'package' | 'room';
 
 export type Item = {
   id: number;

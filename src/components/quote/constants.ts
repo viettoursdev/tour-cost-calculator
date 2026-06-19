@@ -73,6 +73,7 @@ export function getCATS(template: Template): CategoryDef[] {
 export const UNITS: string[] = [
   '/người', '/ngày', '/bữa', '/đêm',
   '/xe', '/xe/ngày', '/suất', '/chuyến', '/buổi', '/vé',
+  'vé/khách', 'phòng/đêm',
   'cả đoàn', 'cố định',
 ];
 

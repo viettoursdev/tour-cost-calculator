@@ -14,7 +14,7 @@ import { toast } from '@/stores/toastStore';
 import type { CategoryId, Item, QtyMode, Template } from '@/types';
 
 const QTY_LABEL: Record<QtyMode, string> = {
-  per_pax: '×khách', per_group: 'đoàn', single_room: 'phòng đơn', double_room: 'phòng đôi', package: 'gói', custom: 'tuỳ',
+  per_pax: '×khách', per_group: 'đoàn', single_room: 'phòng đơn', double_room: 'phòng đôi', room: 'phòng', package: 'gói', custom: 'tuỳ',
 };
 
 /** Upload file báo giá → AI phân tích → xem trước → thêm vào bảng giá. */

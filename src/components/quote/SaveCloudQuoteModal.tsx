@@ -69,6 +69,15 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
       : null),
   );
 
+  // Ghi đè lên báo giá có sẵn: chọn 1 báo giá đã lưu để lưu chồng lên (dồn thành
+  // phiên bản mới, tối đa 20 bản) thay vì tạo báo giá mới. Bỏ chính báo giá đang
+  // mở khỏi danh sách để tránh nhầm với nút "Cập nhật".
+  const overwriteOptions = useMemo(
+    () => sourceQuotes.filter((q) => q.cloudId !== currentQuoteId),
+    [sourceQuotes, currentQuoteId],
+  );
+  const [overwriteTarget, setOverwriteTarget] = useState<CloudQuoteEntry | null>(null);
+
   const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
@@ -94,11 +103,24 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   );
 
   const confirmSave = async () => {
-    // Cảnh báo trùng tên khi tạo báo giá MỚI (bản đã lưu thì cập nhật bình thường).
-    if (!currentQuoteId) {
+    // Đích ghi đè: ưu tiên báo giá người dùng chọn ở ô "Ghi đè".
+    let overwrite: { cloudId: string; id: number } | null = overwriteTarget
+      ? { cloudId: overwriteTarget.cloudId, id: overwriteTarget.id }
+      : null;
+    // Tự nhận trùng tên khi tạo báo giá MỚI: mặc định LƯU CHỒNG thành phiên bản
+    // mới của bản trùng (không tạo báo giá mới). Người dùng vẫn có thể chọn tạo
+    // mới riêng. Bản đã mở (currentQuoteId) thì cập nhật bình thường.
+    if (!currentQuoteId && !overwrite) {
       const norm = normalizeVN(name);
       const dup = sourceQuotes.find((q) => normalizeVN(q.name) === norm);
-      if (dup && !window.confirm(`⚠ Đã có báo giá trùng tên "${dup.name}"${dup.quoteCode ? ` (${dup.quoteCode})` : ''}. Vẫn tạo báo giá mới?`)) return;
+      if (dup) {
+        const merge = window.confirm(
+          `⚠ Đã có báo giá trùng tên "${dup.name}"${dup.quoteCode ? ` (${dup.quoteCode})` : ''}.\n\n` +
+          'OK = Lưu chồng thành phiên bản mới của báo giá này (không tạo báo giá mới, giữ tối đa 20 bản).\n' +
+          'Huỷ = Vẫn tạo báo giá mới riêng.',
+        );
+        if (merge) overwrite = { cloudId: dup.cloudId, id: dup.id };
+      }
     }
     setBusy(true);
     setError(null);
@@ -135,9 +157,13 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
         }
       }
 
-      await saveCloud(name, collaborators, note, custArg, attachments, linked);
+      await saveCloud(name, collaborators, note, custArg, attachments, linked, overwrite);
       onClose();
-      toast(`☁️ Đã lưu "${name.trim() || 'báo giá'}" lên cloud.`);
+      toast(
+        overwrite
+          ? `☁️ Đã lưu chồng "${name.trim() || 'báo giá'}" thành phiên bản mới.`
+          : `☁️ Đã lưu "${name.trim() || 'báo giá'}" lên cloud.`,
+      );
     } catch (e) {
       setError((e as Error).message || 'Lỗi không xác định');
     } finally {
@@ -218,6 +244,42 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
               <TextField {...params} label="Cộng tác viên" placeholder="Chọn người được xem báo giá này" />
             )}
           />
+
+          {/* Ghi đè lên báo giá có sẵn (optional) — chỉ khi đang tạo báo giá mới */}
+          {!currentQuoteId && overwriteOptions.length > 0 && (
+            <Autocomplete
+              options={overwriteOptions}
+              value={overwriteTarget}
+              onChange={(_, v) => setOverwriteTarget(v)}
+              getOptionLabel={(q) => `${q.quoteCode ? q.quoteCode + ' · ' : ''}${q.name}`}
+              isOptionEqualToValue={(a, b) => a.cloudId === b.cloudId}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="♻️ Ghi đè lên báo giá có sẵn (optional)"
+                  placeholder="Chọn báo giá để lưu chồng (không tạo báo giá mới)"
+                  helperText="Lưu chồng = thêm 1 phiên bản mới vào báo giá đã chọn (giữ tối đa 20 bản gần nhất)."
+                />
+              )}
+              renderOption={(props, q) => (
+                <li {...props} key={q.cloudId}>
+                  <Stack>
+                    <Typography variant="body2" fontWeight={600}>{q.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {q.quoteCode || '—'}{q.customerName ? ` · ${q.customerName}` : ''}
+                    </Typography>
+                  </Stack>
+                </li>
+              )}
+            />
+          )}
+
+          {overwriteTarget && (
+            <Alert severity="warning">
+              Sẽ lưu chồng lên <strong>{overwriteTarget.name}</strong>
+              {overwriteTarget.quoteCode ? ` (${overwriteTarget.quoteCode})` : ''} — tạo phiên bản mới, không tạo báo giá mới.
+            </Alert>
+          )}
 
           {/* DMC breakdown ↔ báo giá nước ngoài: lưu cả hai cùng lúc */}
           {template === 'dmc' && (
@@ -328,7 +390,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
           disabled={!name.trim() || busy || uploading}
           onClick={confirmSave}
         >
-          {busy ? 'Đang lưu…' : (currentQuoteId ? 'Cập nhật' : 'Lưu mới')}
+          {busy ? 'Đang lưu…' : overwriteTarget ? 'Ghi đè' : currentQuoteId ? 'Cập nhật' : 'Lưu mới'}
         </Button>
       </DialogActions>
     </Dialog>

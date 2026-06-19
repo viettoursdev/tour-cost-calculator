@@ -72,6 +72,10 @@ describe('calcVND', () => {
     expect(calcVND(item({ qtyMode: 'custom', customQty: 7, price: 100 }), {}, 99)).toBe(700);
   });
 
+  it('uses customQty (số phòng) for room mode', () => {
+    expect(calcVND(item({ qtyMode: 'room', customQty: 12, price: 100 }), {}, 99)).toBe(1200);
+  });
+
   it('uses 1 for per_group mode regardless of pax/customQty', () => {
     expect(calcVND(item({ qtyMode: 'per_group', customQty: 999, price: 100 }), {}, 99))
       .toBe(100);

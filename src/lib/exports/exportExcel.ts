@@ -24,6 +24,8 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   const FONT = 'Aptos';
   const NAVY = 'FF0F3A4A', TEAL = 'FF14A08C', INK = 'FF2B3640', MUTE = 'FF8A9099', WHITE = 'FFFFFFFF';
   const ZEBRA = 'FFF7F9FA', LINE = 'FFE4E8EB', SUBT = 'FFEEF2F4', HILITE = 'FFF4FAF8', YEL = 'FFFFFBE6';
+  // Highlight dòng Optional (đỏ nhạt) & FOC (xanh lá nhạt) ở cột đơn giá + thành tiền.
+  const OPT_HL = 'FFFCE4E6', FOC_HL = 'FFE6F4EA';
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Viettours Tour Cost Calculator';
@@ -41,6 +43,20 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
 
   const col = (n: number) => String.fromCharCode(64 + n);
   const LAST = col(ncol);
+  // SUM chỉ trên các dòng tính vào tổng (bỏ Optional/FOC): gom thành các dải liền
+  // nhau để công thức gọn & vẫn đúng khi dòng Optional/FOC xen kẽ.
+  const sumRanges = (colLetter: string, rowsArr: number[]): ExcelJS.CellFormulaValue => {
+    if (rowsArr.length === 0) return { formula: '0' };
+    const s = [...rowsArr].sort((a, b) => a - b);
+    const parts: string[] = [];
+    let start = s[0], prev = s[0];
+    for (let i = 1; i <= s.length; i++) {
+      if (i < s.length && s[i] === prev + 1) { prev = s[i]; continue; }
+      parts.push(start === prev ? `${colLetter}${start}` : `${colLetter}${start}:${colLetter}${prev}`);
+      if (i < s.length) { start = s[i]; prev = s[i]; }
+    }
+    return { formula: `SUM(${parts.join(',')})` };
+  };
   const fnt = (o: Partial<ExcelJS.Font> = {}): Partial<ExcelJS.Font> => ({ name: FONT, size: 10, color: { argb: INK }, ...o });
   const fill = (c: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
   const hair: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: LINE } };
@@ -71,7 +87,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
     const used: string[] = [];
     getCATS(template).forEach(cat => {
       (items[cat.id as keyof typeof items] ?? []).forEach((it: Item) => {
-        if (it.enabled !== false && !it.foc && it.cur !== 'VND' && !used.includes(it.cur)) used.push(it.cur);
+        if (it.enabled !== false && !it.included && it.cur !== 'VND' && !used.includes(it.cur)) used.push(it.cur);
       });
     });
     const j3 = ws.getCell('J3');
@@ -119,10 +135,15 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
 
   // ── Items ──
   const qtyForItem = (it: Item) => qtyOf(it, pax) || 1;
+  // Cột cần highlight theo cờ Optional/FOC: đơn giá + thành tiền.
+  const priceCols = foreign ? [6, 7] : [5];
+  const totalCol = ncol;
+  const summedRows: number[] = []; // chỉ dòng tính vào tổng (bỏ Optional/FOC)
   let r = H + 1; const first = r; let idx = 0;
   getCATS(template).forEach(cat => {
     if (catEnabled[cat.id as keyof typeof catEnabled] === false) return;
-    const rows = (items[cat.id as keyof typeof items] ?? []).filter((it: Item) => it.enabled !== false && !it.foc && !it.optional && !it.included);
+    // Hiển thị cả dòng Optional & FOC (đánh dấu màu), chỉ bỏ dòng đã tắt / "đã gồm".
+    const rows = (items[cat.id as keyof typeof items] ?? []).filter((it: Item) => it.enabled !== false && !it.included);
     if (rows.length === 0) return;
     rows.forEach((it: Item, j: number) => {
       const zebra = idx % 2 ? ZEBRA : WHITE;
@@ -160,11 +181,17 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
         else cc.alignment = cv;
         if (c === 2 && j === 0) cc.font = fnt({ size: 9.5, bold: true, color: { argb: TEAL } });
       }
+      // Highlight đơn giá + thành tiền theo cờ: FOC = xanh lá nhạt, Optional = đỏ nhạt.
+      const hl = it.foc ? FOC_HL : it.optional ? OPT_HL : null;
+      if (hl) {
+        [...priceCols, totalCol].forEach((c) => { ws.getCell(r, c).fill = fill(hl); });
+      } else {
+        summedRows.push(r); // chỉ dòng thường mới cộng vào tổng
+      }
       ws.getRow(r).height = String(it.name || '').includes('\n') ? 28 : 19;
       r++; idx++;
     });
   });
-  const last = r - 1;
   const KC = LAST;
 
   // ── Totals ──
@@ -190,7 +217,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
     return rw;
   };
 
-  const sumf: ExcelJS.CellFormulaValue = { formula: `SUM(${KC}${first}:${KC}${last})` };
+  const sumf: ExcelJS.CellFormulaValue = sumRanges(KC, summedRows);
   let grR: number;
   if (isDmc) {
     // DMC breakdown: service charge from the DMC margin (no VAT).
