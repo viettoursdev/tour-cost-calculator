@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { Customer } from '../../src/types';
+import type { Customer, CustomerInteraction } from '../../src/types/customer';
 import { getViettoursClient, truncate } from './_setup';
 import { sbPushCustomers, sbSubscribeCustomers } from '../../src/lib/supabase';
 
@@ -7,7 +7,7 @@ const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
 
 describe('customers gateway', () => {
-  beforeEach(async () => { await truncate(['customer_contacts', 'customers']); });
+  beforeEach(async () => { await truncate(['customer_interactions', 'customer_contacts', 'customers']); });
 
   it('round-trips a customer with contacts', async () => {
     const c = await getViettoursClient();
@@ -70,5 +70,39 @@ describe('customers gateway', () => {
     const list = await once<Customer[]>((cb) => sbSubscribeCustomers(cb, c));
     const cu = list.find((x) => x.id === 'cust-3')!;
     expect(cu.contacts).toEqual([]);
+  });
+
+  it('round-trips CRM fields: source, tags, interactions, nextFollowUp', async () => {
+    const c = await getViettoursClient();
+    const interactions: CustomerInteraction[] = [
+      { id: 'ia-1', at: '2026-01-10T09:00:00Z', byU: 'sales1', byName: 'Hoa', type: 'call', text: 'Gọi tư vấn tour' },
+      { id: 'ia-2', at: '2026-01-15T14:00:00Z', byU: 'sales2', byName: 'Minh', type: 'email', text: 'Gửi báo giá' },
+    ];
+    const cust: Customer = {
+      id: 'cust-crm', name: 'VIP Corp', type: 'company',
+      contacts: [], note: '',
+      source: 'Hội chợ Du lịch 2026',
+      tags: ['vip', 'intl'],
+      interactions,
+      nextFollowUp: { date: '2026-02-01', note: 'Xác nhận đặt cọc', byU: 'sales1', byName: 'Hoa' },
+      createdAt: '2026-01-01T00:00:00Z', createdBy: 'tester',
+    };
+
+    await sbPushCustomers([cust], { name: 'QA', role: 'Sales' }, c);
+    const list = await once<Customer[]>((cb) => sbSubscribeCustomers(cb, c));
+    const cu = list.find((x) => x.id === 'cust-crm')!;
+
+    expect(cu.source).toBe('Hội chợ Du lịch 2026');
+    expect(cu.tags).toEqual(['vip', 'intl']);
+    expect(cu.nextFollowUp).toEqual({ date: '2026-02-01', note: 'Xác nhận đặt cọc', byU: 'sales1', byName: 'Hoa' });
+    expect(cu.interactions).toHaveLength(2);
+    const ia1 = cu.interactions!.find((i) => i.id === 'ia-1')!;
+    expect(ia1.byU).toBe('sales1');
+    expect(ia1.byName).toBe('Hoa');
+    expect(ia1.type).toBe('call');
+    expect(ia1.text).toBe('Gọi tư vấn tour');
+    expect(new Date(ia1.at).getTime()).toBe(new Date('2026-01-10T09:00:00Z').getTime());
+    const ia2 = cu.interactions!.find((i) => i.id === 'ia-2')!;
+    expect(ia2.type).toBe('email');
   });
 });

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -287,10 +287,18 @@ export function sbSubscribeAuditLog(cb: (entries: AuditEntry[]) => void, client:
 
 // ── Customers ─────────────────────────────────────────────────────────────────
 
-const rowToCustomer = (r: Record<string, unknown>, contacts: Customer['contacts']): Customer => ({
+const rowToCustomer = (
+  r: Record<string, unknown>,
+  contacts: Customer['contacts'],
+  interactions: Customer['interactions'],
+): Customer => ({
   id: r.legacy_id as string, name: r.name as string, type: r.type as Customer['type'],
   address: (r.address as string) ?? undefined, taxCode: (r.tax_code as string) ?? undefined,
   contacts, note: (r.note as string) ?? '',
+  source: (r.source as string) ?? undefined,
+  tags: (r.tags as string[]) ?? [],
+  interactions: interactions?.length ? interactions : undefined,
+  nextFollowUp: (r.next_follow_up as Customer['nextFollowUp']) ?? undefined,
   createdAt: r.created_at as string, createdBy: (r.created_by_name as string) ?? '',
   updatedAt: (r.updated_at as string) ?? undefined, updatedBy: (r.updated_by_name as string) ?? undefined,
 });
@@ -303,13 +311,31 @@ export function sbSubscribeCustomers(cb: (list: Customer[]) => void, client: Sup
     const { data: contacts } = ids.length
       ? await cl.from('customer_contacts').select('*').in('customer_id', ids).order('sort_order')
       : { data: [] as Record<string, unknown>[] };
+    const { data: interactionRows } = ids.length
+      ? await cl.from('customer_interactions').select('*').in('customer_id', ids).order('sort_order')
+      : { data: [] as Record<string, unknown>[] };
     const byParent = new Map<string, Customer['contacts']>();
     for (const ct of contacts ?? []) {
       const arr = byParent.get(ct.customer_id as string) ?? [];
       arr.push({ name: ct.name as string, phone: ct.phone as string, email: ct.email as string, position: ct.position as string });
       byParent.set(ct.customer_id as string, arr);
     }
-    return (rows ?? []).map((r) => rowToCustomer(r, byParent.get(r.id as string) ?? []));
+    const interactionsByParent = new Map<string, CustomerInteraction[]>();
+    for (const ia of interactionRows ?? []) {
+      const arr = interactionsByParent.get(ia.customer_id as string) ?? [];
+      arr.push({
+        id: ia.legacy_id as string,
+        at: new Date(ia.at as string).toISOString(),
+        byU: (ia.by_username as string) ?? '',
+        byName: (ia.by_name as string) ?? '',
+        type: ia.type as CustomerInteraction['type'],
+        text: (ia.text as string) ?? '',
+      });
+      interactionsByParent.set(ia.customer_id as string, arr);
+    }
+    return (rows ?? []).map((r) =>
+      rowToCustomer(r, byParent.get(r.id as string) ?? [], interactionsByParent.get(r.id as string)),
+    );
   }, cb);
 }
 
@@ -323,11 +349,18 @@ export async function sbPushCustomers(
     const { data: up, error: upErr } = await client.from('customers').upsert({
       legacy_id: cust.id, name: cust.name, type: cust.type,
       address: cust.address ?? null, tax_code: cust.taxCode ?? null, note: cust.note ?? '',
+      source: cust.source ?? null,
+      tags: cust.tags ?? [],
+      next_follow_up: cust.nextFollowUp ?? null,
       created_by_name: cust.createdBy, created_at: cust.createdAt, ...stamp,
     }, { onConflict: 'legacy_id' }).select('id').single();
     if (upErr) throw new Error('sbPushCustomers upsert: ' + upErr.message);
     await replaceChildren(client, 'customer_contacts', 'customer_id', up!.id, cust.contacts.map((ct, i) => ({
       customer_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, sort_order: i,
+    })));
+    await replaceChildren(client, 'customer_interactions', 'customer_id', up!.id, (cust.interactions ?? []).map((ia, i) => ({
+      customer_id: up!.id, legacy_id: ia.id, at: ia.at,
+      by_username: ia.byU, by_name: ia.byName, type: ia.type, text: ia.text, sort_order: i,
     })));
   }
   // Full-overwrite: delete customers removed from the list using safe fetch-then-delete pattern.
