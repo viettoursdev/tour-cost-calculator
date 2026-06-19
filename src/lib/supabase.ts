@@ -2877,6 +2877,7 @@ async function getQuoteProjectImpl(
     { data: workflow, error: wfErr },
     { data: groups, error: grErr },
     { data: payments, error: pyErr },
+    { data: passengerRows, error: paxErr },
     { data: versions, error: vErr },
     { data: collabRows, error: cErr },
   ] = await Promise.all([
@@ -2885,11 +2886,12 @@ async function getQuoteProjectImpl(
     client.from('quote_workflow_steps').select('*').eq('quote_id', quoteId).order('sort_order'),
     client.from('quote_groups').select('*').eq('quote_id', quoteId).order('sort_order'),
     client.from('quote_payments').select('*').eq('quote_id', quoteId).order('sort_order'),
+    client.from('quote_passengers').select('*').eq('quote_id', quoteId).order('sort_order'),
     client.from('quote_versions').select('*').eq('quote_id', quoteId).order('version_no', { ascending: false }),
     client.from('quote_collaborators').select('*').eq('quote_id', quoteId),
   ]);
 
-  for (const e of [liErr, flErr, wfErr, grErr, pyErr, vErr, cErr]) {
+  for (const e of [liErr, flErr, wfErr, grErr, pyErr, paxErr, vErr, cErr]) {
     if (e) throw new Error('sbGetQuoteProject fetch: ' + e.message);
   }
 
@@ -2934,6 +2936,7 @@ async function getQuoteProjectImpl(
     groups: (groups ?? []) as unknown as Record<string, unknown>[],
     groupItems: (groupItems ?? []) as unknown as Record<string, unknown>[],
     payments: (payments ?? []) as unknown as Record<string, unknown>[],
+    passengers: (passengerRows ?? []) as unknown as Record<string, unknown>[],
   });
 
   // 5. Map quote_versions rows → QuoteVersion[] (already ordered newest-first by version_no desc)

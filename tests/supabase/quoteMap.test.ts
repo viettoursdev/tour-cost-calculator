@@ -121,6 +121,7 @@ describe('assembleQuote', () => {
       groups: groupsRaw,
       groupItems,
       payments: p.payments as Record<string, unknown>[],
+      passengers: p.passengers as Record<string, unknown>[],
     });
 
     // ── Scalars ──────────────────────────────────────────────────────────────
@@ -208,5 +209,91 @@ describe('assembleQuote', () => {
     // ── Payments ─────────────────────────────────────────────────────────────
     expect(asm.payments).toHaveLength(1);
     expect(asm.payments![0]).toEqual({ id: 'p1', label: 'Đợt 1', amount: 5000000, note: 'deposit' });
+
+    // ── Passengers (Task 4) ───────────────────────────────────────────────────
+    // The base draft() has no passengers; assembleQuote should omit the field.
+    expect(asm.passengers).toBeUndefined();
+  });
+
+  it('assembleQuote: passengers round-trip (Task 4)', () => {
+    const d = draft();
+    d.passengers = [
+      {
+        id: 'pax-1',
+        name: 'Nguyễn Thị Lan',
+        gender: 'F',
+        dob: '15/03/1990',
+        idType: 'passport',
+        idNo: 'B1234567',
+        nationality: 'VN',
+        roomType: 'double',
+        roomNo: '101',
+        dietary: 'vegetarian',
+        phone: '0901234567',
+        emergency: 'Anh Minh 0909',
+        note: 'Window seat',
+      },
+      {
+        id: 'pax-2',
+        name: 'Trần Văn Nam',
+        gender: 'M',
+      },
+    ];
+
+    const p = decomposeQuote('q1', d, {});
+    const passRows = p.passengers as Record<string, unknown>[];
+    expect(passRows).toHaveLength(2);
+    expect(passRows[0]).toMatchObject({
+      legacy_passenger_id: 'pax-1',
+      name: 'Nguyễn Thị Lan',
+      gender: 'F',
+      dob: '15/03/1990',
+      id_type: 'passport',
+      id_no: 'B1234567',
+      nationality: 'VN',
+      room_type: 'double',
+      room_no: '101',
+      dietary: 'vegetarian',
+      phone: '0901234567',
+      emergency: 'Anh Minh 0909',
+      note: 'Window seat',
+      sort_order: 0,
+    });
+    expect(passRows[1]).toMatchObject({ legacy_passenger_id: 'pax-2', name: 'Trần Văn Nam', gender: 'M', sort_order: 1 });
+
+    // Simulate DB rows (add synthetic UUIDs)
+    const passengerDbRows = passRows.map((r, i) => ({ ...r, id: `P${i}` }));
+
+    const asm = assembleQuote({
+      quote: p.quote as Record<string, unknown>,
+      lineItems: p.line_items as Record<string, unknown>[],
+      flights: [],
+      segments: [],
+      fares: [],
+      workflow: [],
+      logs: [],
+      groups: [],
+      groupItems: [],
+      payments: [],
+      passengers: passengerDbRows,
+    });
+
+    expect(asm.passengers).toHaveLength(2);
+    expect(asm.passengers![0]).toMatchObject({
+      id: 'pax-1',
+      name: 'Nguyễn Thị Lan',
+      gender: 'F',
+      dob: '15/03/1990',
+      idType: 'passport',
+      idNo: 'B1234567',
+      nationality: 'VN',
+      roomType: 'double',
+      roomNo: '101',
+      dietary: 'vegetarian',
+      phone: '0901234567',
+      emergency: 'Anh Minh 0909',
+      note: 'Window seat',
+    });
+    expect(asm.passengers![1]).toMatchObject({ id: 'pax-2', name: 'Trần Văn Nam', gender: 'M' });
   });
 });

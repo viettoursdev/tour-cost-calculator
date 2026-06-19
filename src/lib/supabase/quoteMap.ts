@@ -1,5 +1,5 @@
 import type {
-  QuoteDraft, Item, CategoryId, QuoteFlight, WorkflowStep, QuoteGroup, QuotePayment,
+  QuoteDraft, Item, CategoryId, QuoteFlight, WorkflowStep, QuoteGroup, QuotePayment, Passenger,
 } from '@/types/quote';
 
 const itemRow = (it: Item, category: string, i: number) => ({
@@ -49,6 +49,24 @@ const groupRows = (groups: QuoteGroup[] | undefined) =>
 const paymentRows = (payments: QuotePayment[] | undefined) =>
   (payments ?? []).map((p, i) => ({ legacy_payment_id: p.id, label: p.label, amount: p.amount, note: p.note, sort_order: i }));
 
+const passengerRows = (passengers: Passenger[] | undefined) =>
+  (passengers ?? []).map((p, i) => ({
+    legacy_passenger_id: p.id,
+    sort_order: i,
+    name: p.name,
+    gender: p.gender ?? null,
+    dob: p.dob ?? null,
+    id_type: p.idType ?? null,
+    id_no: p.idNo ?? null,
+    nationality: p.nationality ?? null,
+    room_type: p.roomType ?? null,
+    room_no: p.roomNo ?? null,
+    dietary: p.dietary ?? null,
+    phone: p.phone ?? null,
+    emergency: p.emergency ?? null,
+    note: p.note ?? null,
+  }));
+
 // ─── AssembleInput ────────────────────────────────────────────────────────────
 
 export type AssembleInput = {
@@ -62,6 +80,7 @@ export type AssembleInput = {
   groups: Record<string, unknown>[];
   groupItems: Record<string, unknown>[];
   payments: Record<string, unknown>[];
+  passengers: Record<string, unknown>[];
 };
 
 const str = (v: unknown): string => (v == null ? '' : String(v));
@@ -220,6 +239,25 @@ export function assembleQuote(rows: AssembleInput): QuoteDraft {
       note: str(p.note),
     }));
 
+  // ── passengers ──
+  const passengers: Passenger[] = [...rows.passengers]
+    .sort((a, b) => num(a.sort_order) - num(b.sort_order))
+    .map((p) => ({
+      id: str(p.legacy_passenger_id),
+      name: str(p.name),
+      ...(p.gender != null ? { gender: str(p.gender) as Passenger['gender'] } : {}),
+      ...(p.dob != null ? { dob: str(p.dob) } : {}),
+      ...(p.id_type != null ? { idType: str(p.id_type) as Passenger['idType'] } : {}),
+      ...(p.id_no != null ? { idNo: str(p.id_no) } : {}),
+      ...(p.nationality != null ? { nationality: str(p.nationality) } : {}),
+      ...(p.room_type != null ? { roomType: str(p.room_type) as Passenger['roomType'] } : {}),
+      ...(p.room_no != null ? { roomNo: str(p.room_no) } : {}),
+      ...(p.dietary != null ? { dietary: str(p.dietary) } : {}),
+      ...(p.phone != null ? { phone: str(p.phone) } : {}),
+      ...(p.emergency != null ? { emergency: str(p.emergency) } : {}),
+      ...(p.note != null ? { note: str(p.note) } : {}),
+    }));
+
   return {
     template: (q.template as QuoteDraft['template']) ?? null,
     info: (q.info ?? {}) as QuoteDraft['info'],
@@ -246,6 +284,7 @@ export function assembleQuote(rows: AssembleInput): QuoteDraft {
     ...(q.output_currency != null ? { outputCurrency: q.output_currency as QuoteDraft['outputCurrency'] } : {}),
     ...(q.dmc_prices != null ? { dmcPrices: q.dmc_prices as QuoteDraft['dmcPrices'] } : {}),
     ...(q.dmc_margin != null ? { dmcMargin: q.dmc_margin as QuoteDraft['dmcMargin'] } : {}),
+    ...(passengers.length > 0 ? { passengers } : {}),
   };
 }
 
@@ -277,5 +316,6 @@ export function decomposeQuote(
     workflow: workflowRows(d.workflow),
     groups: groupRows(d.groups),
     payments: paymentRows(d.payments),
+    passengers: passengerRows(d.passengers),
   };
 }

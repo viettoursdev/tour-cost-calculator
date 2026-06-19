@@ -63,6 +63,7 @@ begin
   delete from public.quote_workflow_steps where quote_id = v_quote_id; -- cascades logs
   delete from public.quote_groups where quote_id = v_quote_id;      -- cascades group_items
   delete from public.quote_payments where quote_id = v_quote_id;
+  delete from public.quote_passengers where quote_id = v_quote_id;
 
   -- line items
   for elem in select * from jsonb_array_elements(coalesce(p->'line_items','[]'::jsonb)) loop
@@ -142,6 +143,18 @@ begin
     values (v_quote_id, elem->>'legacy_payment_id', coalesce(elem->>'label',''),
         coalesce((elem->>'amount')::double precision,0), coalesce(elem->>'note',''),
         coalesce((elem->>'sort_order')::int,0));
+  end loop;
+
+  -- passengers (manifest / rooming list)
+  for elem in select * from jsonb_array_elements(coalesce(p->'passengers','[]'::jsonb)) loop
+    insert into public.quote_passengers (quote_id, legacy_passenger_id, sort_order,
+        name, gender, dob, id_type, id_no, nationality,
+        room_type, room_no, dietary, phone, emergency, note)
+    values (v_quote_id, elem->>'legacy_passenger_id', coalesce((elem->>'sort_order')::int,0),
+        coalesce(elem->>'name',''), elem->>'gender', elem->>'dob',
+        elem->>'id_type', elem->>'id_no', elem->>'nationality',
+        elem->>'room_type', elem->>'room_no', elem->>'dietary',
+        elem->>'phone', elem->>'emergency', elem->>'note');
   end loop;
 
   -- (c) append version snapshot, trim to newest 20

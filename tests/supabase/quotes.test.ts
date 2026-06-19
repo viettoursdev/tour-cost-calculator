@@ -538,6 +538,95 @@ describe('Task 5 — sbSaveQuoteState / sbGetQuoteProject', () => {
     expect(result).toBeNull();
   });
 
+  // ── Task 4: passengers (manifest/rooming) round-trip ──────────────────────
+
+  it('Task 4: passengers saved via sbSaveQuoteState are reassembled in currentState', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'Hạ Long Passengers', pax: 2,
+        totalCost: 0, status: 'in_progress',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: 'tester', createdByName: 'QA',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA',
+        id: 40, quoteCode: 'DL-040',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const draftWithPassengers = makeDraft({
+      passengers: [
+        {
+          id: 'pax-1',
+          name: 'Nguyễn Thị Lan',
+          gender: 'F',
+          dob: '15/03/1990',
+          idType: 'passport',
+          idNo: 'B1234567',
+          nationality: 'VN',
+          roomType: 'double',
+          roomNo: '101',
+          dietary: 'vegetarian',
+          phone: '0901234567',
+          emergency: 'Anh Minh 0909999999',
+          note: 'Window seat',
+        },
+        {
+          id: 'pax-2',
+          name: 'Trần Văn Nam',
+          gender: 'M',
+          dob: '20/07/1985',
+          idType: 'cccd',
+          idNo: '079085012345',
+          nationality: 'VN',
+          roomType: 'double',
+          roomNo: '101',
+          dietary: '',
+          phone: '0912345678',
+          emergency: '',
+          note: '',
+        },
+      ],
+    });
+
+    await sbSaveQuoteState(CLOUD_ID, draftWithPassengers, 'Test passengers', { name: 'QA', role: 'Sales' }, c);
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    expect(project).not.toBeNull();
+
+    const passengers = project!.currentState.passengers;
+    expect(passengers).toBeDefined();
+    expect(passengers).toHaveLength(2);
+
+    expect(passengers![0]).toMatchObject({
+      id: 'pax-1',
+      name: 'Nguyễn Thị Lan',
+      gender: 'F',
+      dob: '15/03/1990',
+      idType: 'passport',
+      idNo: 'B1234567',
+      nationality: 'VN',
+      roomType: 'double',
+      roomNo: '101',
+      dietary: 'vegetarian',
+      phone: '0901234567',
+      emergency: 'Anh Minh 0909999999',
+      note: 'Window seat',
+    });
+
+    expect(passengers![1]).toMatchObject({
+      id: 'pax-2',
+      name: 'Trần Văn Nam',
+      gender: 'M',
+      dob: '20/07/1985',
+      idType: 'cccd',
+      idNo: '079085012345',
+      nationality: 'VN',
+      roomType: 'double',
+      roomNo: '101',
+    });
+  });
+
   // ── M1 regression: RPC must NOT clobber index-owned name/status/depart_date ──
 
   it('M1 regression: sbSaveQuoteState does not overwrite index-owned name/status/departDate', async () => {
