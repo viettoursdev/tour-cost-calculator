@@ -29,6 +29,11 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { LEGACY } from '@/theme';
 
+/** Viết tắt chữ cái đầu mỗi từ trong tên (tối đa 3 ký tự). VD "Hoàng Anh Tuấn" → "HAT". */
+function initialsOf(name: string): string {
+  return name.trim().split(/\s+/).filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
+}
+
 // Navigation is a single unified tab bar inside QuoteToolbar (legacy layout):
 // Chi phí · Tổng kết & Định giá · Dashboard · Thanh toán · Lịch sử · Hợp đồng ·
 // Khách hàng · NCC — so AppShell just renders the global account bar + QuoteView.
@@ -106,23 +111,11 @@ export function AppShell() {
           </Typography>
           {currentUser && (
             <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
-              {/* Tài khoản — gọn: avatar + tên · chức danh trên 1 dòng */}
+              {/* Tài khoản — gọn: chỉ badge viết tắt chữ cái đầu (VD "HAT"); tên & chức vụ ở tooltip */}
               <Tooltip title={`${currentUser.name} · ${currentUser.role}`}>
-                <Stack
-                  direction="row" alignItems="center" spacing={0.75}
-                  sx={{
-                    background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.28)',
-                    borderRadius: 5, pl: 0.4, pr: 1, py: 0.3,
-                  }}
-                >
-                  <Avatar sx={{ width: 24, height: 24, bgcolor: '#dc3250', fontSize: 11, fontWeight: 800 }}>
-                    {currentUser.name.charAt(0).toUpperCase()}
-                  </Avatar>
-                  <Typography sx={{ fontSize: 12, fontWeight: 700, color: '#fff', maxWidth: 150, display: { xs: 'none', sm: 'block' } }} noWrap>
-                    {currentUser.name}
-                    <Box component="span" sx={{ fontWeight: 500, color: 'rgba(255,255,255,0.65)' }}> · {currentUser.role}</Box>
-                  </Typography>
-                </Stack>
+                <Avatar sx={{ width: 34, height: 34, bgcolor: '#dc3250', fontSize: 12.5, fontWeight: 800, border: '1px solid rgba(255,255,255,0.4)' }}>
+                  {initialsOf(currentUser.name)}
+                </Avatar>
               </Tooltip>
 
               {headDivider}
