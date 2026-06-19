@@ -28,6 +28,8 @@ import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 import { FilePreviewDialog } from '@/components/common/FilePreviewDialog';
 import { contractIssues } from './contractValidation';
+import { ContractReviewDialog } from './ContractReviewDialog';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 export function ContractView() {
   const contracts = useContractStore((s) => s.contracts);
@@ -61,6 +63,7 @@ export function ContractView() {
   const [deleteTarget, setDeleteTarget] = useState<Contract | null>(null);
   const [exportAnchor, setExportAnchor] = useState<{ el: HTMLElement; c: Contract } | null>(null);
   const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<Contract | null>(null);
 
   const closeExport = () => setExportAnchor(null);
   // Bản chính thức (PDF/Word) → cảnh báo nếu hồ sơ còn thiếu; Xem trước thì bỏ qua.
@@ -300,10 +303,13 @@ export function ContractView() {
             </Typography>
           </Box>
         )}
+        <MenuItem onClick={() => { const c = exportAnchor?.c; closeExport(); if (c) setReviewTarget(c); }}><AutoAwesomeIcon fontSize="small" sx={{ mr: 1, color: '#7c3aed' }} />AI rà soát hợp đồng</MenuItem>
         <MenuItem onClick={() => exportAnchor && doPreview(exportAnchor.c)}><VisibilityIcon fontSize="small" sx={{ mr: 1 }} />Xem trước (PDF)</MenuItem>
         <MenuItem onClick={() => exportAnchor && doExportPDF(exportAnchor.c)}><PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />Tải PDF</MenuItem>
         <MenuItem onClick={() => exportAnchor && doExportWord(exportAnchor.c)}><ArticleIcon fontSize="small" sx={{ mr: 1 }} />Tải Word (.docx)</MenuItem>
       </Menu>
+
+      <ContractReviewDialog contract={reviewTarget} onClose={() => setReviewTarget(null)} />
 
       <FilePreviewDialog open={!!preview} onClose={closePreview}
         file={preview ? { url: preview.url, name: preview.name, mime: 'application/pdf' } : null} />
