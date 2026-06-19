@@ -109,6 +109,7 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
       ...(p.name ? { name: p.name } : {}),
       ...(p.location ? { location: p.location } : {}),
       ...(p.note ? { note: f.note ? `${f.note}\n${p.note}` : p.note } : {}),
+      ...(p.analysis ? { aiAnalysis: f.aiAnalysis ? `${f.aiAnalysis}\n— ${p.analysis}` : p.analysis } : {}),
       sectors: Array.from(new Set([...(f.sectors ?? []), ...(p.sectors ?? [])])),
       contacts: merged.length ? merged : f.contacts,
     };
@@ -274,6 +275,18 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
             onChange={(e) => setF('note', e.target.value)}
             placeholder="Ghi chú thêm về NCC..."
             disabled={!canEdit}
+          />
+
+          {/* Phân tích & đánh giá của AI (lưu lại để tham khảo) */}
+          <TextField
+            label="🔎 Phân tích & đánh giá của AI"
+            multiline
+            minRows={2}
+            value={form.aiAnalysis ?? ''}
+            onChange={(e) => setF('aiAnalysis', e.target.value)}
+            placeholder="Tự điền khi dùng “AI nhập & phân tích”, hoặc nhập tay nhận định về NCC này…"
+            disabled={!canEdit}
+            sx={{ '& .MuiInputBase-root': { bgcolor: 'rgba(124,58,237,0.04)' } }}
           />
 
           {/* Đánh giá dịch vụ (log người + thời gian) */}
