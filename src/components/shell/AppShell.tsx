@@ -8,7 +8,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import SearchIcon from '@mui/icons-material/Search';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { AssistantPanel } from '@/components/assistant/AssistantPanel';
@@ -132,7 +132,7 @@ export function AppShell() {
               </Tooltip>
               <Tooltip title="Trợ lý ảo">
                 <IconButton sx={headBtnSx} onClick={() => setAssistantOpen(true)}>
-                  <AutoAwesomeIcon fontSize="small" />
+                  <SupportAgentIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Tin nhắn nội bộ">
