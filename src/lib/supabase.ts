@@ -3,6 +3,7 @@ import type { FileAttachment, User, Role, Customer, Ncc } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
+import type { CloudQuoteEntry, Template, Collaborator } from '@/types/quote';
 import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -2373,4 +2374,354 @@ export function sbSubscribePaymentApprovals(
   client: SupabaseClient = sb,
 ): Unsubscribe {
   return subscribeTable(client, 'payment_approvals', (cl) => assembleApprovals(cl), cb);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 2 — Quote History Index
+// Functions: generateQuoteCode, sbSaveQuote/sbSaveDMCQuote,
+//            sbSubscribeQuoteHistory/sbSubscribeDMCQuoteHistory
+// Source parity: firebase.ts:204-326
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Types (local; match firebase.ts:220-243) ──────────────────────────────────
+
+type SaveEntry = {
+  id: number;
+  cloudId: string;
+  quoteCode?: string;
+  name: string;
+  template: Template;
+  pax: number;
+  totalCost: number;
+  customerId?: string;
+  customerName?: string;
+  status?: string;
+  lossReason?: string;
+  departDate?: string;
+  workflowDue?: { label: string; dueDate: string; assignee?: string }[];
+  workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
+  collaborators?: Collaborator[];
+  attachment?: FileAttachment;
+  attachments?: FileAttachment[];
+  linkedQuoteId?: string;
+  linkedQuoteName?: string;
+  linkedQuoteTemplate?: Template;
+};
+
+type SavedBy = { u: string; name: string; role: string };
+
+// ── generateQuoteCode — verbatim copy of firebase.ts:204-216 ─────────────────
+
+/**
+ * Generate a quote code like "NĐ.01.31.05.26" / "NN.01.31.05.26" / "DMC.01.31.05.26".
+ * Seq is per-day-per-prefix count from `existing`.
+ * Source: public/legacy.html:235-248.
+ */
+export function generateQuoteCode(template: Template, existing: CloudQuoteEntry[]): string {
+  const prefix = template === 'intl' ? 'NN' : template === 'dmc' ? 'DMC' : 'NĐ';
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yy = String(now.getFullYear()).slice(-2);
+  const dateStr = `${dd}.${mm}.${yy}`;
+  const todaySameType = existing.filter(
+    (q) => q.quoteCode?.startsWith(prefix + '.') && q.quoteCode.endsWith('.' + dateStr),
+  ).length;
+  const seq = String(todaySameType + 1).padStart(2, '0');
+  return `${prefix}.${seq}.${dateStr}`;
+}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/** Assemble a CloudQuoteEntry from a quotes row + collaborator rows.
+ *  Note: quotes table stores `created_by_name` (display name). `createdByUsername`
+ *  is set from the same column for the subscribe/load path; the save path overrides
+ *  it from the call-context savedBy.u (see saveSingleQuoteEntry). */
+function rowToCloudQuoteEntry(
+  r: Record<string, unknown>,
+  collabs: Record<string, unknown>[],
+): CloudQuoteEntry {
+  return {
+    id: (r.legacy_num_id as number) ?? 0,
+    cloudId: r.cloud_id as string,
+    quoteCode: (r.quote_code as string) ?? '',
+    name: (r.name as string) ?? '',
+    template: r.template as Template,
+    pax: (r.pax as number) ?? 0,
+    totalCost: (r.total_cost as number) ?? 0,
+    status: (r.status as CloudQuoteEntry['status']) ?? undefined,
+    lossReason: (r.loss_reason as string) ?? undefined,
+    customerId: (r.customer_id as string) ?? undefined,
+    customerName: (r.customer_name as string) ?? undefined,
+    departDate: r.depart_date ? new Date(r.depart_date as string).toISOString().slice(0, 10) : undefined,
+    workflowDue: (r.workflow_due as CloudQuoteEntry['workflowDue']) ?? undefined,
+    workflowSummary: (r.workflow_summary as CloudQuoteEntry['workflowSummary']) ?? undefined,
+    paymentSummary: (r.payment_summary as CloudQuoteEntry['paymentSummary']) ?? undefined,
+    linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
+    linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
+    linkedQuoteTemplate: (r.linked_quote_template as Template) ?? undefined,
+    createdByUsername: '',  // overridden by saveSingleQuoteEntry; empty on subscribe path
+    createdByName: (r.created_by_name as string) ?? '',
+    collaborators: collabs.map((c) => ({ u: (c.username as string) ?? '', name: (c.name as string) ?? '' })),
+    createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : new Date().toISOString(),
+    updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : new Date().toISOString(),
+    updatedBy: (r.updated_by_name as string) ?? '',
+    attachment: undefined,
+    attachments: undefined,
+  };
+}
+
+/** Shared upsert logic for both regular and DMC save. isDmc controls which
+ *  existing rows are counted when auto-generating a quote_code. */
+async function saveSingleQuoteEntry(
+  entry: SaveEntry,
+  savedBy: SavedBy,
+  isDmc: boolean,
+  client: SupabaseClient,
+): Promise<CloudQuoteEntry> {
+  const nowIso = new Date().toISOString();
+  const savedByLabel = `${savedBy.name} (${savedBy.role})`;
+
+  // 1. Fetch the existing row for this cloud_id (to preserve code/createdAt on update)
+  const { data: existing, error: fetchErr } = await client
+    .from('quotes')
+    .select('id, quote_code, created_at, created_by_name')
+    .eq('cloud_id', entry.cloudId)
+    .maybeSingle();
+  if (fetchErr) throw new Error('sbSaveQuote fetch: ' + fetchErr.message);
+
+  let quoteCode: string;
+  let createdAt: string;
+  let createdByName: string;
+  // username for return value — not stored in DB column (Phase 4 may add created_by_username)
+  let createdByUsername: string;
+
+  if (existing) {
+    // update: preserve code + createdAt + creator info
+    quoteCode = (existing.quote_code as string) ?? entry.quoteCode ?? '';
+    createdAt = existing.created_at as string;
+    createdByName = (existing.created_by_name as string) ?? savedBy.name;
+    createdByUsername = savedBy.u; // best-effort on update; real username not stored
+  } else {
+    // insert: auto-generate code from existing same-family rows
+    if (entry.quoteCode) {
+      quoteCode = entry.quoteCode;
+    } else {
+      // count existing rows of the same template family to seed generateQuoteCode
+      let countQ = client.from('quotes').select('quote_code');
+      if (isDmc) {
+        countQ = countQ.eq('template', 'dmc');
+      } else {
+        countQ = countQ.neq('template', 'dmc');
+      }
+      const { data: existingRows, error: cntErr } = await countQ;
+      if (cntErr) throw new Error('sbSaveQuote count: ' + cntErr.message);
+      // Build a minimal CloudQuoteEntry[] sufficient for generateQuoteCode's filter
+      const existingEntries: CloudQuoteEntry[] = (existingRows ?? []).map(
+        (r) => ({ quoteCode: r.quote_code as string } as CloudQuoteEntry),
+      );
+      quoteCode = generateQuoteCode(entry.template, existingEntries);
+    }
+    createdAt = nowIso;
+    createdByName = savedBy.name;
+    createdByUsername = savedBy.u;
+  }
+
+  // 2. Build the index row
+  const row: Record<string, unknown> = {
+    cloud_id: entry.cloudId,
+    legacy_num_id: entry.id,
+    quote_code: quoteCode,
+    name: entry.name,
+    template: entry.template,
+    pax: entry.pax,
+    total_cost: entry.totalCost,
+    created_at: createdAt,
+    created_by_name: createdByName,
+    updated_at: nowIso,
+    updated_by_name: savedByLabel,
+  };
+
+  // optional fields: only write when defined (mirror firebase.ts:267-279 optionalFields pattern)
+  if (entry.status !== undefined)           row.status = entry.status;
+  if (entry.lossReason !== undefined)       row.loss_reason = entry.lossReason;
+  if (entry.customerName !== undefined)     row.customer_name = entry.customerName;
+  if (entry.departDate !== undefined)       row.depart_date = entry.departDate || null;
+  if (entry.workflowDue !== undefined)      row.workflow_due = entry.workflowDue;
+  if (entry.workflowSummary !== undefined)  row.workflow_summary = entry.workflowSummary;
+  if (entry.linkedQuoteId !== undefined)    row.linked_quote_id = entry.linkedQuoteId;
+  if (entry.linkedQuoteName !== undefined)  row.linked_quote_name = entry.linkedQuoteName;
+  if (entry.linkedQuoteTemplate !== undefined) row.linked_quote_template = entry.linkedQuoteTemplate;
+
+  // resolve customerId (legacy string) → uuid FK
+  if (entry.customerId !== undefined) {
+    const { data: cust } = await client
+      .from('customers')
+      .select('id')
+      .eq('legacy_id', entry.customerId)
+      .maybeSingle();
+    row.customer_id = cust?.id ?? null;
+  }
+
+  // resolve created_by uuid on insert
+  if (!existing) {
+    const idMap = await usernamesToIds(client, [savedBy.u]);
+    row.created_by = idMap.get(savedBy.u) ?? null;
+  }
+
+  // 3. Upsert the quotes index row
+  const { data: upserted, error: upErr } = await client
+    .from('quotes')
+    .upsert(row, { onConflict: 'cloud_id' })
+    .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
+            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
+            'linked_quote_id, linked_quote_name, linked_quote_template, ' +
+            'created_by_name, created_at, updated_at, updated_by_name')
+    .single();
+  if (upErr) throw new Error('sbSaveQuote upsert: ' + upErr.message);
+
+  const upsertedRow = upserted as unknown as Record<string, unknown>;
+  const quoteUuid = upsertedRow.id as string;
+
+  // 4. Upsert quote_collaborators (full replace for this quote)
+  if (entry.collaborators !== undefined) {
+    const collabRows = await Promise.all(
+      (entry.collaborators ?? []).map(async (col) => {
+        const idMap = await usernamesToIds(client, [col.u]);
+        return {
+          quote_id: quoteUuid,
+          user_id: idMap.get(col.u) ?? null,
+          username: col.u,
+          name: col.name,
+        };
+      }),
+    );
+    await replaceChildren(client, 'quote_collaborators', 'quote_id', quoteUuid, collabRows);
+  }
+
+  // 5. Save quote-level attachments (parent_type='quote', parent_id=cloud_id)
+  const atts = entry.attachments ?? (entry.attachment ? [entry.attachment] : undefined);
+  if (atts !== undefined) {
+    await saveAttachments(client, 'quote', entry.cloudId, atts);
+  }
+
+  // 6. Load the saved collaborators for the return value
+  const { data: collabData } = await client
+    .from('quote_collaborators')
+    .select('username, name')
+    .eq('quote_id', quoteUuid)
+    .order('name');
+
+  const savedEntry = rowToCloudQuoteEntry(upsertedRow, collabData ?? []);
+  // Override creator fields from call context — DB only stores created_by_name (display name)
+  savedEntry.createdByUsername = createdByUsername;
+  savedEntry.createdByName = createdByName;
+  return savedEntry;
+}
+
+// ── Assemble history list (shared between regular and DMC subscribe) ──────────
+
+async function loadQuoteHistory(
+  client: SupabaseClient,
+  isDmc: boolean,
+): Promise<CloudQuoteEntry[]> {
+  let q = client
+    .from('quotes')
+    .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
+            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
+            'linked_quote_id, linked_quote_name, linked_quote_template, ' +
+            'created_by_name, created_at, updated_at, updated_by_name')
+    .order('created_at', { ascending: false });
+
+  q = isDmc ? q.eq('template', 'dmc') : q.neq('template', 'dmc');
+
+  const { data: rawRows, error } = await q;
+  if (error) throw new Error('loadQuoteHistory: ' + error.message);
+
+  if (!rawRows || rawRows.length === 0) return [];
+
+  const rows = rawRows as unknown as Record<string, unknown>[];
+  const quoteIds = rows.map((r) => r.id as string);
+  const { data: collabRows, error: collabErr } = await client
+    .from('quote_collaborators')
+    .select('quote_id, username, name')
+    .in('quote_id', quoteIds)
+    .order('name');
+  if (collabErr) throw new Error('loadQuoteHistory collabs: ' + collabErr.message);
+
+  const collabsByQuote = new Map<string, Record<string, unknown>[]>();
+  for (const c of collabRows ?? []) {
+    const arr = collabsByQuote.get(c.quote_id as string) ?? [];
+    arr.push(c as Record<string, unknown>);
+    collabsByQuote.set(c.quote_id as string, arr);
+  }
+
+  return rows.map((r) =>
+    rowToCloudQuoteEntry(
+      r,
+      collabsByQuote.get(r.id as string) ?? [],
+    ),
+  );
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Save (insert or update) a regular quote's index metadata.
+ * Parity: firebase.ts:260 `fbSaveQuote` via `makeQuoteHistoryApi(historyDoc, ...)`.
+ * On insert: auto-generates quote_code (counting non-dmc rows) via generateQuoteCode.
+ * On update: preserves existing quote_code and createdAt.
+ * Drops Firestore's ≤500/1 MB caps — those are Firestore artifacts; Postgres rows are unbounded.
+ */
+export async function sbSaveQuote(
+  entry: SaveEntry,
+  savedBy: SavedBy,
+  client: SupabaseClient = sb,
+): Promise<CloudQuoteEntry> {
+  return saveSingleQuoteEntry(entry, savedBy, false, client);
+}
+
+/**
+ * Save (insert or update) a DMC quote's index metadata.
+ * Parity: firebase.ts:260 `fbSaveQuote` via `makeQuoteHistoryApi(dmcHistoryDoc, ...)`.
+ * On insert: auto-generates quote_code counting only template='dmc' rows.
+ */
+export async function sbSaveDMCQuote(
+  entry: SaveEntry,
+  savedBy: SavedBy,
+  client: SupabaseClient = sb,
+): Promise<CloudQuoteEntry> {
+  return saveSingleQuoteEntry(entry, savedBy, true, client);
+}
+
+/**
+ * Subscribe to the regular quote history index (template <> 'dmc'), newest first.
+ * Parity: firebase.ts:253 `fbSubscribeQuoteHistory`.
+ */
+export function sbSubscribeQuoteHistory(
+  cb: (quotes: CloudQuoteEntry[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(
+    client,
+    'quotes',
+    (cl) => loadQuoteHistory(cl, false),
+    cb,
+  );
+}
+
+/**
+ * Subscribe to the DMC quote history index (template = 'dmc'), newest first.
+ * Parity: firebase.ts:253 `fbSubscribeQuoteHistory` (DMC variant via makeQuoteHistoryApi(dmcHistoryDoc)).
+ */
+export function sbSubscribeDMCQuoteHistory(
+  cb: (quotes: CloudQuoteEntry[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(
+    client,
+    'quotes',
+    (cl) => loadQuoteHistory(cl, true),
+    cb,
+  );
 }
