@@ -5,7 +5,7 @@ import {
   sbSendNotificationMany, sbEnsureNotifThread, sbSubscribeNotifThread,
   sbAddThreadComment, sbSetThreadStatus,
 } from '../../src/lib/supabase';
-import type { Notification, NotifThread } from '@/types';
+import type { Notification, NotifThread, FileAttachment } from '@/types';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
@@ -13,6 +13,7 @@ const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
 describe('notifications gateway', () => {
   beforeEach(async () => {
     await truncate([
+      'attachments',
       'notification_comments', 'notification_thread_members',
       'notification_threads', 'notifications',
     ]);
@@ -200,5 +201,48 @@ describe('notifications gateway', () => {
     // verify nothing was inserted
     const t = await once<NotifThread | null>((cb) => sbSubscribeNotifThread('nonexistent-thread', cb, c));
     expect(t).toBeNull();
+  });
+
+  it('priority, reminder, and attachments round-trip through send → subscribe', async () => {
+    const c = await getViettoursClient();
+    const attachment: FileAttachment = {
+      key: 'r2/notif-test.pdf', name: 'brief.pdf',
+      uploadedBy: 'admin', uploadedAt: '2026-09-01T00:00:00.000Z',
+    };
+    await sbSendNotification('tester', {
+      type: 'announcement',
+      title: 'Urgent notice',
+      message: 'Please review',
+      createdBy: 'admin',
+      priority: 'urgent',
+      reminder: { every: '4h', deadline: '2026-09-01' },
+      attachments: [attachment],
+    }, c);
+    const list = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list).toHaveLength(1);
+    const n = list[0];
+    expect(n.priority).toBe('urgent');
+    expect(n.reminder).toEqual({ every: '4h', deadline: '2026-09-01' });
+    expect(n.attachments).toHaveLength(1);
+    expect(n.attachments![0].key).toBe('r2/notif-test.pdf');
+    expect(n.attachments![0].name).toBe('brief.pdf');
+  });
+
+  it('priority + reminder round-trip through push (sbPushNotifications)', async () => {
+    const c = await getViettoursClient();
+    await sbSendNotification('tester', {
+      type: 'task', title: 'Task', message: 'Do it', createdBy: 'admin',
+      priority: 'high',
+      reminder: { every: '8h' },
+    }, c);
+    const list = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list[0].priority).toBe('high');
+    expect(list[0].reminder).toEqual({ every: '8h' });
+    // push back: priority/reminder must survive the overwrite
+    await sbPushNotifications('tester', [{ ...list[0], read: true }], c);
+    const list2 = await once<Notification[]>((cb) => sbSubscribeNotifications('tester', cb, c));
+    expect(list2[0].priority).toBe('high');
+    expect(list2[0].reminder).toEqual({ every: '8h' });
+    expect(list2[0].read).toBe(true);
   });
 });

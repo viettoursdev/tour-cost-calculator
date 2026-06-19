@@ -1896,7 +1896,7 @@ async function resolveUserId(client: SupabaseClient, username: string): Promise<
   return map.get(username) ?? null;
 }
 
-const rowToNotif = (r: Record<string, unknown>): Notification => ({
+const rowToNotif = (r: Record<string, unknown>, attachments?: FileAttachment[]): Notification => ({
   id: (r.legacy_id as string) ?? (r.id as string),
   type: r.type as Notification['type'],
   title: r.title as string,
@@ -1906,6 +1906,9 @@ const rowToNotif = (r: Record<string, unknown>): Notification => ({
   read: (r.read as boolean) ?? false,
   link: (r.link as Notification['link']) ?? undefined,
   threadId: (r.thread_id as string) ?? undefined,
+  priority: (r.priority as Notification['priority']) ?? undefined,
+  reminder: (r.reminder as Notification['reminder']) ?? undefined,
+  attachments: attachments && attachments.length ? attachments : undefined,
   data: (r.data as Record<string, unknown>) ?? undefined,
 });
 
@@ -1937,9 +1940,14 @@ export async function sbSendNotification(
     read: false,
     link: notif.link ?? null,
     thread_id: notif.threadId ?? null,
+    priority: notif.priority ?? null,
+    reminder: notif.reminder ?? null,
     data: notif.data ?? null,
   });
   if (error) throw new Error('sbSendNotification: ' + error.message);
+  if (notif.attachments?.length) {
+    await saveAttachments(client, 'notification', legacyId, notif.attachments);
+  }
   // cap at 100: delete oldest beyond limit
   const { data: all } = await client.from('notifications')
     .select('id, created_at')
@@ -1969,7 +1977,15 @@ export function sbSubscribeNotifications(
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []).map(rowToNotif);
+    const rows = data ?? [];
+    const legacyIds = rows.map((r) => (r.legacy_id as string) ?? (r.id as string)).filter(Boolean);
+    const attMap = legacyIds.length
+      ? await loadAttachmentsForParents(cl, 'notification', legacyIds)
+      : new Map<string, FileAttachment[]>();
+    return rows.map((r) => {
+      const legacyId = (r.legacy_id as string) ?? (r.id as string);
+      return rowToNotif(r, attMap.get(legacyId));
+    });
   }, cb);
 }
 
@@ -1999,10 +2015,18 @@ export async function sbPushNotifications(
     read: n.read,
     link: n.link ?? null,
     thread_id: n.threadId ?? null,
+    priority: n.priority ?? null,
+    reminder: n.reminder ?? null,
     data: n.data ?? null,
   }));
   const ins = await client.from('notifications').insert(rows);
   if (ins.error) throw new Error('sbPushNotifications insert: ' + ins.error.message);
+  // Re-save attachments for each notification that carries them.
+  await Promise.all(
+    notifications
+      .filter((n) => n.attachments?.length)
+      .map((n) => saveAttachments(client, 'notification', n.id, n.attachments!)),
+  );
 }
 
 /**
