@@ -14,6 +14,8 @@ import { AssistantPanel } from '@/components/assistant/AssistantPanel';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { FilePreviewHost } from '@/components/common/FilePreviewHost';
 import { OnboardingDialog } from '@/components/shell/OnboardingDialog';
+import { WhatsNewDialog } from '@/components/shell/WhatsNewDialog';
+import { unseenWhatsNew, markWhatsNewSeen, type WhatsNewEntry } from '@/lib/whatsNew';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -46,11 +48,30 @@ export function AppShell() {
 
   const onboardKey = currentUser ? `vte_onboarded_${currentUser.u}` : '';
   const [onboardOpen, setOnboardOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [whatsNewEntries, setWhatsNewEntries] = useState<WhatsNewEntry[] | undefined>(undefined);
+  const [unseenNew, setUnseenNew] = useState(0);
   useEffect(() => {
     if (!currentUser) return;
-    try { if (!localStorage.getItem(`vte_onboarded_${currentUser.u}`)) setOnboardOpen(true); } catch { /* ignore */ }
+    let onboarded = true;
+    try { onboarded = !!localStorage.getItem(`vte_onboarded_${currentUser.u}`); } catch { /* ignore */ }
+    if (!onboarded) { setOnboardOpen(true); return; }
+    // Đã onboard rồi → hiện "Có gì mới" nếu có cập nhật chưa xem.
+    const unseen = unseenWhatsNew(currentUser.u);
+    setUnseenNew(unseen.length);
+    if (unseen.length) { setWhatsNewEntries(unseen); setWhatsNewOpen(true); }
   }, [currentUser?.u]); // eslint-disable-line react-hooks/exhaustive-deps
-  const closeOnboard = () => { try { localStorage.setItem(onboardKey, '1'); } catch { /* ignore */ } setOnboardOpen(false); };
+  const closeOnboard = () => {
+    try { localStorage.setItem(onboardKey, '1'); } catch { /* ignore */ }
+    // User mới: đánh dấu đã xem các cập nhật hiện có để không bị dồn ngay sau onboarding.
+    if (currentUser) { markWhatsNewSeen(currentUser.u); setUnseenNew(0); }
+    setOnboardOpen(false);
+  };
+  const closeWhatsNew = () => {
+    if (currentUser) { markWhatsNewSeen(currentUser.u); setUnseenNew(0); }
+    setWhatsNewOpen(false);
+  };
+  const openWhatsNew = () => { setWhatsNewEntries(undefined); setWhatsNewOpen(true); };
 
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
@@ -116,6 +137,11 @@ export function AppShell() {
                   Trợ lý
                 </Button>
               </Tooltip>
+              <Tooltip title="Có gì mới">
+                <IconButton onClick={openWhatsNew} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <Badge badgeContent={unseenNew} color="error"><span style={{ fontSize: 18, lineHeight: 1 }}>✨</span></Badge>
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Hướng dẫn nhanh">
                 <IconButton onClick={() => setOnboardOpen(true)} sx={{ color: '#fff', background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.3)' }}>
                   <HelpOutlineIcon />
@@ -168,6 +194,7 @@ export function AppShell() {
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
       <OnboardingDialog open={onboardOpen} onClose={closeOnboard} />
+      <WhatsNewDialog open={whatsNewOpen} onClose={closeWhatsNew} entries={whatsNewEntries} />
       <FilePreviewHost />
     </Box>
   );
