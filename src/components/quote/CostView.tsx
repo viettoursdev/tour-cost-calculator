@@ -6,6 +6,7 @@ import {
 import { CatBlock } from './CatBlock';
 import { QuoteWarningsBanner } from './QuoteWarningsBanner';
 import { StickyTotalsBar } from './StickyTotalsBar';
+import { AIQuoteImportDialog } from './AIQuoteImportDialog';
 import { GroupSizeTabs } from './GroupSizeTabs';
 import { HistPanel } from './HistPanel';
 import { CurrencySelector } from './CurrencySelector';
@@ -69,6 +70,7 @@ export function CostView() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hideOff, setHideOff] = useState(false);
   const [jumpAnchor, setJumpAnchor] = useState<HTMLElement | null>(null);
+  const [aiImportOpen, setAiImportOpen] = useState(false);
   const [density, setDensity] = useState<'comfortable' | 'compact'>(
     () => (typeof localStorage !== 'undefined' && localStorage.getItem('vte_density') === 'compact' ? 'compact' : 'comfortable'),
   );
@@ -139,6 +141,11 @@ export function CostView() {
           <Button size="small" variant="outlined" onClick={(e) => setJumpAnchor(e.currentTarget)} sx={{ textTransform: 'none', py: 0.25 }}>↧ Nhảy tới…</Button>
           <Button size="small" variant={density === 'compact' ? 'contained' : 'outlined'} onClick={toggleDensity} sx={{ textTransform: 'none', py: 0.25 }} title="Đổi mật độ hiển thị (lưu theo máy)">
             {density === 'compact' ? '▤ Gọn' : '▥ Thoáng'}
+          </Button>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button size="small" variant="outlined" onClick={() => setAiImportOpen(true)} title="Tải file báo giá để AI tự phân tích & điền"
+            sx={{ textTransform: 'none', py: 0.25, borderColor: '#7c3aed', color: '#7c3aed' }}>
+            🤖 Nhập từ file (AI)
           </Button>
           <Menu anchorEl={jumpAnchor} open={!!jumpAnchor} onClose={() => setJumpAnchor(null)}>
             {cats.map((c) => (
@@ -330,6 +337,8 @@ export function CostView() {
             </Box>
           </Paper>
         )}
+
+        <AIQuoteImportDialog open={aiImportOpen} onClose={() => setAiImportOpen(false)} />
 
         {!isDMC && <StickyTotalsBar totals={totals} pax={pax} />}
 
