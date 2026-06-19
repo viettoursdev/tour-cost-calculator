@@ -12,6 +12,8 @@ import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { MENU_CUR, newRestMenu, newRestaurant } from './constants';
 import { StarRating } from './StarRating';
+import { AIRestaurantImportDialog } from './AIRestaurantImportDialog';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import type { ChangeEvent } from 'react';
 import type { Restaurant } from '@/types';
 
@@ -43,6 +45,8 @@ export function RestaurantLibrary({ onBack }: Props) {
   };
 
   const addR = () => persist([...list, newRestaurant()]);
+  const [aiOpen, setAiOpen] = useState(false);
+  const addRestaurant = (r: Restaurant) => persist([...useRestaurantStore.getState().list, r]);
   const updR = (id: string, patch: Partial<Restaurant>) =>
     persist(list.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const delR = (id: string) => {
@@ -112,6 +116,10 @@ export function RestaurantLibrary({ onBack }: Props) {
             </Typography>
           </Typography>
           <Stack direction="row" spacing={1}>
+            <Button variant="outlined" color="inherit" startIcon={<AutoAwesomeIcon />} onClick={() => setAiOpen(true)}
+              title="Tải file/ảnh thực đơn để AI tự phân tích & thêm">
+              AI từ thực đơn
+            </Button>
             <Button variant="contained" color="inherit" startIcon={<AddIcon />} onClick={addR}
               sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800 }}>
               Thêm nhà hàng
@@ -316,6 +324,8 @@ export function RestaurantLibrary({ onBack }: Props) {
           ))}
         </Stack>
       </Box>
+
+      <AIRestaurantImportDialog open={aiOpen} onClose={() => setAiOpen(false)} onAdd={addRestaurant} />
     </Box>
   );
 }
