@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import {
-  Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-  MenuItem, Paper, Stack, TextField, Typography,
+  Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
+  MenuItem, Paper, Rating, Stack, TextField, Typography,
 } from '@mui/material';
+import { useAuthStore } from '@/stores/authStore';
+import type { NccRating } from '@/types';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
@@ -39,6 +41,22 @@ type Props = {
 export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
   const { state: form, set: setForm, undo, redo, canUndo, canRedo } = useHistoryState<Ncc>(ncc ?? EMPTY_NCC);
   const [aiOpen, setAiOpen] = useState(false);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [newStars, setNewStars] = useState<number | null>(null);
+  const [newComment, setNewComment] = useState('');
+  const ratings = form.ratings ?? [];
+  const avgStars = ratings.length ? ratings.reduce((s, r) => s + r.stars, 0) / ratings.length : 0;
+  const addRating = () => {
+    if (!newStars || !currentUser) return;
+    const r: NccRating = {
+      id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      by: currentUser.u, byName: currentUser.name, at: new Date().toISOString(),
+      stars: newStars, comment: newComment.trim(),
+    };
+    setForm((p) => ({ ...p, ratings: [r, ...(p.ratings ?? [])] }));
+    setNewStars(null); setNewComment('');
+  };
+  const delRating = (id: string) => setForm((p) => ({ ...p, ratings: (p.ratings ?? []).filter((r) => r.id !== id) }));
   useUndoRedoShortcuts(undo, redo, canEdit);
 
   const setF = <K extends keyof Ncc>(k: K, v: Ncc[K]) =>
@@ -257,6 +275,41 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
             placeholder="Ghi chú thêm về NCC..."
             disabled={!canEdit}
           />
+
+          {/* Đánh giá dịch vụ (log người + thời gian) */}
+          <Divider textAlign="left">
+            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              ⭐ Đánh giá dịch vụ{ratings.length > 0 ? ` · TB ${avgStars.toFixed(1)}/5 (${ratings.length})` : ''}
+            </Typography>
+          </Divider>
+          {canEdit && (
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Rating value={newStars} onChange={(_, v) => setNewStars(v)} />
+              <TextField size="small" placeholder="Nhận xét dịch vụ (tuỳ chọn)…" value={newComment}
+                onChange={(e) => setNewComment(e.target.value)} sx={{ flex: 1, minWidth: 180 }} />
+              <Button variant="outlined" onClick={addRating} disabled={!newStars}>Thêm đánh giá</Button>
+            </Stack>
+          )}
+          {ratings.length === 0 ? (
+            <Typography variant="caption" color="text.disabled">Chưa có đánh giá.</Typography>
+          ) : (
+            <Stack spacing={0.75}>
+              {ratings.map((r) => (
+                <Box key={r.id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Rating value={r.stars} readOnly size="small" />
+                    <Typography variant="caption" fontWeight={700}>{r.byName}</Typography>
+                    <Typography variant="caption" color="text.disabled">{new Date(r.at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</Typography>
+                    <Box sx={{ flex: 1 }} />
+                    {canEdit && r.by === currentUser?.u && (
+                      <IconButton size="small" color="error" onClick={() => delRating(r.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    )}
+                  </Stack>
+                  {r.comment && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{r.comment}</Typography>}
+                </Box>
+              ))}
+            </Stack>
+          )}
         </Stack>
       </DialogContent>
 
