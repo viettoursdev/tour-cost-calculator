@@ -2847,9 +2847,51 @@ async function saveQuoteStateImpl(
     state,
   };
 
-  // 5. Call the atomic RPC
+  // 5. Resolve workflow assignee usernames → UUIDs (cosmetic #9: populate assignee_user_id FK).
+  const assigneeUsernames = (state.workflow ?? []).map((s) => s.assignee).filter(Boolean) as string[];
+  const assigneeIdMap = assigneeUsernames.length
+    ? await usernamesToIds(client, assigneeUsernames)
+    : new Map<string, string>();
+
+  // 6. Call the atomic RPC
   const { error } = await client.rpc('save_quote_state', { p: payload });
   if (error) throw new Error('sbSaveQuoteState: ' + error.message);
+
+  // 7. After RPC: save step attachments and populate assignee_user_id (no new migration needed).
+  //    a) Fetch the quote uuid (needed to scope the workflow step rows)
+  const { data: freshRow } = await client
+    .from('quotes')
+    .select('id')
+    .eq('cloud_id', cloudId)
+    .maybeSingle();
+  const quoteUuidForPost = freshRow?.id as string | undefined;
+
+  if (quoteUuidForPost) {
+    const workflowSteps = state.workflow ?? [];
+
+    // a) Save per-step attachments (unconditional — empty array clears stale rows)
+    await Promise.all(
+      workflowSteps.map((s) =>
+        saveAttachments(client, 'quote_workflow_step', `${cloudId}::${s.id}`, s.attachments ?? []),
+      ),
+    );
+
+    // b) Populate assignee_user_id for steps that have a resolvable assignee
+    const stepsWithAssignee = workflowSteps.filter(
+      (s) => s.assignee && assigneeIdMap.has(s.assignee),
+    );
+    if (stepsWithAssignee.length) {
+      await Promise.all(
+        stepsWithAssignee.map((s) =>
+          client
+            .from('quote_workflow_steps')
+            .update({ assignee_user_id: assigneeIdMap.get(s.assignee!) })
+            .eq('quote_id', quoteUuidForPost)
+            .eq('legacy_step_id', s.id),
+        ),
+      );
+    }
+  }
 }
 
 // ── shared get implementation ─────────────────────────────────────────────────
@@ -2938,6 +2980,16 @@ async function getQuoteProjectImpl(
     payments: (payments ?? []) as unknown as Record<string, unknown>[],
     passengers: (passengerRows ?? []) as unknown as Record<string, unknown>[],
   });
+
+  // 4b. Batch-load per-step attachments using composite parent_id = `${cloudId}::${step.id}`
+  if (currentState.workflow && currentState.workflow.length > 0) {
+    const compositeIds = currentState.workflow.map((s) => `${cloudId}::${s.id}`);
+    const attMap = await loadAttachmentsForParents(client, 'quote_workflow_step', compositeIds);
+    for (const step of currentState.workflow) {
+      const atts = attMap.get(`${cloudId}::${step.id}`);
+      if (atts && atts.length > 0) step.attachments = atts;
+    }
+  }
 
   // 5. Map quote_versions rows → QuoteVersion[] (already ordered newest-first by version_no desc)
   const mappedVersions: QuoteVersion[] = (versions ?? []).map((v) => {

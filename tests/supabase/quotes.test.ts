@@ -665,6 +665,124 @@ describe('Task 5 — sbSaveQuoteState / sbGetQuoteProject', () => {
     expect(data!.status).toBe('sent');
     expect(data!.depart_date).toBe('2026-01-01');
   });
+
+  // ── Task 5: WorkflowStep attachments round-trip ──────────────────────────
+
+  it('Task 5: workflow step attachments round-trip via attachments table', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'WF Attachments Test', pax: 10,
+        totalCost: 0, status: 'in_progress',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: 'tester', createdByName: 'QA',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA',
+        id: 50, quoteCode: 'DL-050',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const att = { key: 'r2-wf-step-1', name: 'contract.pdf', uploadedBy: 'tester', uploadedAt: '2026-06-01T00:00:00.000Z' };
+    const draftWithAtt = makeDraft({
+      workflow: [
+        {
+          id: 'wf-att-1', label: 'Xác nhận khách sạn', status: 'done', key: 'confirm_hotel',
+          assignee: 'tester', note: 'test',
+          log: [],
+          attachments: [att],
+        },
+      ],
+    });
+
+    await sbSaveQuoteState(CLOUD_ID, draftWithAtt, 'With attachment', { name: 'QA', role: 'Sales' }, c);
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    expect(project).not.toBeNull();
+    const step = project!.currentState.workflow![0];
+    expect(step.attachments).toBeDefined();
+    expect(step.attachments).toHaveLength(1);
+    expect(step.attachments![0].key).toBe('r2-wf-step-1');
+    expect(step.attachments![0].name).toBe('contract.pdf');
+    expect(step.attachments![0].uploadedBy).toBe('tester');
+  });
+
+  it('Task 5: re-saving with empty step attachments clears stale rows', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'WF Attach Clear Test', pax: 10,
+        totalCost: 0, status: 'in_progress',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: 'tester', createdByName: 'QA',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA',
+        id: 51, quoteCode: 'DL-051',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    // First save: step has an attachment
+    const att = { key: 'r2-wf-step-clear', name: 'brief.pdf', uploadedBy: 'tester', uploadedAt: '2026-06-01T00:00:00.000Z' };
+    await sbSaveQuoteState(
+      CLOUD_ID,
+      makeDraft({ workflow: [{ id: 'wf-clr-1', label: 'Step A', status: 'todo', log: [], attachments: [att] }] }),
+      'v1',
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    // Second save: same step but attachments stripped to []
+    await sbSaveQuoteState(
+      CLOUD_ID,
+      makeDraft({ workflow: [{ id: 'wf-clr-1', label: 'Step A', status: 'todo', log: [], attachments: [] }] }),
+      'v2',
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    const step = project!.currentState.workflow![0];
+    // Stale attachment must be gone
+    expect(step.attachments ?? []).toHaveLength(0);
+  });
+
+  it('Task 5 (#9): workflow step assignee_user_id FK is populated in DB after save', async () => {
+    const c = await getViettoursClient();
+    const admin = getServiceClient();
+
+    // 'tester' is the username auto-assigned to the test auth user (tester@viettours.com.vn)
+    // by the on_auth_user_created trigger — no manual profile insert needed.
+    const testUsername = 'tester';
+
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'WF Assignee Test', pax: 10,
+        totalCost: 0, status: 'in_progress',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: testUsername, createdByName: 'QA Tester',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA Tester',
+        id: 52, quoteCode: 'DL-052',
+      },
+      { name: 'QA Tester', role: 'Sales' },
+      c,
+    );
+
+    await sbSaveQuoteState(
+      CLOUD_ID,
+      makeDraft({ workflow: [{ id: 'wf-assignee-1', label: 'Step X', status: 'todo', log: [], assignee: testUsername }] }),
+      'v1',
+      { name: 'QA Tester', role: 'Sales' },
+      c,
+    );
+
+    // Verify the DB row has assignee_user_id set
+    const { data: stepRows } = await admin
+      .from('quote_workflow_steps')
+      .select('assignee_username, assignee_user_id')
+      .eq('legacy_step_id', 'wf-assignee-1');
+    expect(stepRows).toHaveLength(1);
+    expect(stepRows![0].assignee_username).toBe(testUsername);
+    // assignee_user_id should be a non-null UUID (the 'tester' profile)
+    expect(stepRows![0].assignee_user_id).toBeTruthy();
+  });
 });
 
 describe('Task 6 — delete + collaborators (regular + DMC)', () => {
