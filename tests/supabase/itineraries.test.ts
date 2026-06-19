@@ -53,6 +53,24 @@ describe('itineraries gateway', () => {
     await truncate(['itinerary_flights', 'itinerary_days', 'itineraries']);
   });
 
+  it('round-trips startDate through save/get', async () => {
+    const c = await getViettoursClient();
+    const withDate: Itinerary = { ...ITIN, id: 'itin-start-date', startDate: '2026-07-01' };
+    await sbSaveItinerary(withDate, 'tester', c);
+    const got = await sbGetItinerary('itin-start-date', c);
+    expect(got).not.toBeNull();
+    expect(got!.startDate).toBe('2026-07-01');
+  });
+
+  it('startDate is undefined when not set', async () => {
+    const c = await getViettoursClient();
+    const noDate: Itinerary = { ...ITIN, id: 'itin-no-date' };
+    await sbSaveItinerary(noDate, 'tester', c);
+    const got = await sbGetItinerary('itin-no-date', c);
+    expect(got).not.toBeNull();
+    expect(got!.startDate).toBeUndefined();
+  });
+
   it('saves, gets, lists, and deletes an itinerary', async () => {
     const c = await getViettoursClient();
 
