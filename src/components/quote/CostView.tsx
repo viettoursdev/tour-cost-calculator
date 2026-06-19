@@ -21,6 +21,7 @@ import { orderCats, reorderWithinShown } from './catOrder';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { canEditQuote, canSeePrices } from '@/auth/quotePerms';
+import { AiButton } from '@/components/common/AiButton';
 import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
 export function CostView() {
@@ -149,10 +150,10 @@ export function CostView() {
           </Button>
           <Box sx={{ flexGrow: 1 }} />
           {!readOnly && (
-            <Button size="small" variant="outlined" onClick={() => setAiImportOpen(true)} title="Tải file báo giá để AI tự phân tích & điền"
-              sx={{ textTransform: 'none', py: 0.25, borderColor: '#7c3aed', color: '#7c3aed' }}>
-              🤖 Nhập từ file (AI)
-            </Button>
+            <AiButton size="small" onClick={() => setAiImportOpen(true)} title="Tải file báo giá để AI tự phân tích & điền"
+              sx={{ py: 0.25 }}>
+              Nhập từ file (AI)
+            </AiButton>
           )}
           <Menu anchorEl={jumpAnchor} open={!!jumpAnchor} onClose={() => setJumpAnchor(null)}>
             {cats.map((c) => (

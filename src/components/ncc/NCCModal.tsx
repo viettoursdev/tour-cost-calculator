@@ -12,7 +12,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
 import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import type { ParsedNcc } from '@/lib/partyParse';
 import type { NameCardFields } from '@/lib/nameCard';
 import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
@@ -155,10 +155,9 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
               }}
             >
               <NameCardScanButton onScanned={applyNameCard} />
-              <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => setAiOpen(true)}
-                sx={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+              <AiButton size="small" onClick={() => setAiOpen(true)}>
                 AI nhập & phân tích
-              </Button>
+              </AiButton>
               <Typography variant="caption" color="text.secondary">
                 Ảnh danh thiếp (quét nhanh) hoặc dán văn bản/hồ sơ → AI điền & nhận định.
               </Typography>

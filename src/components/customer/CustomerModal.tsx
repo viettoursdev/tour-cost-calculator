@@ -3,7 +3,7 @@ import {
   Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import { CUSTOMER_SOURCES, CUSTOMER_TAGS } from './constants';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -135,10 +135,9 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
               }}
             >
               <NameCardScanButton onScanned={applyNameCard} />
-              <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => setAiOpen(true)}
-                sx={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+              <AiButton size="small" onClick={() => setAiOpen(true)}>
                 AI nhập & phân tích
-              </Button>
+              </AiButton>
               <Typography variant="caption" color="text.secondary">
                 Ảnh danh thiếp (quét nhanh) hoặc dán văn bản/hồ sơ → AI điền & nhận định.
               </Typography>

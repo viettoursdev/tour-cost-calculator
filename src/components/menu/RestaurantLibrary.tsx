@@ -15,7 +15,7 @@ import { MENU_CUR, newRestMenu, newRestaurant } from './constants';
 import { StarRating } from './StarRating';
 import { AIRestaurantImportDialog } from './AIRestaurantImportDialog';
 import type { ParsedRestaurant } from '@/lib/restaurantFileParse';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import type { ChangeEvent } from 'react';
 import type { Restaurant } from '@/types';
 
@@ -133,10 +133,10 @@ export function RestaurantLibrary({ onBack }: Props) {
             </Typography>
           </Typography>
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" color="inherit" startIcon={<AutoAwesomeIcon />} onClick={() => setAiOpen(true)}
+            <AiButton size="small" onClick={() => setAiOpen(true)}
               title="Tải file/ảnh thực đơn để AI tự phân tích & thêm">
               AI từ thực đơn
-            </Button>
+            </AiButton>
             <Button variant="contained" color="inherit" startIcon={<AddIcon />} onClick={addR}
               sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800 }}>
               Thêm nhà hàng

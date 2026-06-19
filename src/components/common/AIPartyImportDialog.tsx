@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type ClipboardEvent, type DragEvent } from 
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import ImageIcon from '@mui/icons-material/Image';
 import { parseNccAI, parseCustomerAI, type ParsedNcc, type ParsedCustomer } from '@/lib/partyParse';
 
@@ -107,11 +107,10 @@ export function AIPartyImportDialog({ open, kind, onClose, onApply }: {
 
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.25 }}>
           <Box sx={{ flex: 1 }} />
-          <Button onClick={run} disabled={busy || (!text.trim() && !imageB64)} variant="contained"
-            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
-            sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+          <AiButton onClick={run} disabled={busy || (!text.trim() && !imageB64)}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
             {busy ? 'Đang phân tích…' : result ? 'Phân tích lại' : 'Phân tích'}
-          </Button>
+          </AiButton>
         </Stack>
 
         {error && !busy && <Alert severity="error" sx={{ mt: 1.5 }} action={<Button size="small" onClick={run}>Thử lại</Button>}>{error}</Alert>}

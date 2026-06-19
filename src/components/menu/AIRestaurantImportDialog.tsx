@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Stack, Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { analyzeRestaurantFile, type ParsedRestaurant } from '@/lib/restaurantFileParse';
 import { StarRating } from './StarRating';
@@ -64,9 +64,9 @@ export function AIRestaurantImportDialog({ open, onClose, onAdd, onMerge, restau
         </Box>
 
         <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.25 }}>
-          <Button onClick={run} disabled={!file || busy} variant="contained" startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />} sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+          <AiButton onClick={run} disabled={!file || busy} startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
             {busy ? (progress || 'Đang xử lý…') : result ? 'Phân tích lại' : 'Phân tích'}
-          </Button>
+          </AiButton>
         </Stack>
 
         {error && !busy && <Alert severity="error" sx={{ mt: 1.5 }} action={<Button size="small" onClick={run}>Thử lại</Button>}>{error}</Alert>}

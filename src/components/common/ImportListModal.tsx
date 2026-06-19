@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle,
   Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import { LEGACY } from '@/theme';
 import { toast } from '@/stores/toastStore';
 import { parseTableAI } from '@/lib/aiTableParse';
@@ -156,10 +156,9 @@ export function ImportListModal({ open, onClose, title, columns, note, onImport 
           />
           <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
             <Button variant="outlined" onClick={previewFromText} disabled={!text.trim() || busy || aiBusy}>Xem trước (dán)</Button>
-            <Button variant="contained" startIcon={<AutoAwesomeIcon />} onClick={aiScan} disabled={!text.trim() || busy || aiBusy}
-              sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
-              {aiBusy ? 'AI đang quét…' : '🤖 AI quét'}
-            </Button>
+            <AiButton onClick={aiScan} disabled={!text.trim() || busy || aiBusy}>
+              {aiBusy ? 'AI đang quét…' : 'AI quét'}
+            </AiButton>
             <Button component="label" variant="outlined" disabled={busy || aiBusy}>
               Tải file .csv/.xlsx
               <Box component="input" type="file" hidden accept=".csv,.xlsx" onChange={onPickFile} />

@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
   IconButton, MenuItem, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { extractFileContent, parseQuoteAI, type ParsedQuoteLine, type QuoteCat } from '@/lib/quoteFileParse';
@@ -106,11 +106,10 @@ export function AIQuoteImportDialog({ open, onClose }: { open: boolean; onClose:
         </Box>
 
         <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.25 }}>
-          <Button onClick={run} disabled={!file || busy} variant="contained"
-            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
-            sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+          <AiButton onClick={run} disabled={!file || busy}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
             {busy ? (progress || 'Đang xử lý…') : result ? 'Phân tích lại' : 'Phân tích'}
-          </Button>
+          </AiButton>
         </Stack>
 
         {error && !busy && <Alert severity="error" sx={{ mt: 1.5 }} action={<Button size="small" onClick={run}>Thử lại</Button>}>{error}</Alert>}
