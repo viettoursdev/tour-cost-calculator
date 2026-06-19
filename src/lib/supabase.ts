@@ -3086,8 +3086,8 @@ export async function sbSetDMCEntryLink(
 /**
  * Update status (and optional lossReason) on a regular quote.
  * Mirrors fbSetEntryStatus (firebase.ts:462-473):
- * - Loss states ('not_selected' | 'cancelled'): set loss_reason to provided value
- *   or preserve existing (here we always write the provided value, defaulting null).
+ * - Loss states ('not_selected' | 'cancelled'): set loss_reason to provided value;
+ *   if lossReason is undefined, READ existing loss_reason and preserve it (fb parity).
  * - Non-loss states: clear loss_reason (set to null).
  * The optional `lossReason` parameter is only applied when `status` is a loss state;
  * otherwise it is ignored and loss_reason is cleared — matching firebase.ts:470-471.
@@ -3099,11 +3099,18 @@ export async function sbSetQuoteStatus(
   lossReason?: string,
 ): Promise<void> {
   const isLoss = status === 'not_selected' || status === 'cancelled';
-  const { error } = await client.from('quotes').update({
-    status,
-    loss_reason: isLoss ? (lossReason ?? null) : null,
-    updated_at: new Date().toISOString(),
-  }).eq('cloud_id', cloudId);
+  let resolvedLossReason: string | null = null;
+  if (isLoss) {
+    if (lossReason !== undefined) {
+      resolvedLossReason = lossReason;
+    } else {
+      const { data } = await client.from('quotes').select('loss_reason').eq('cloud_id', cloudId).single();
+      resolvedLossReason = ((data as { loss_reason?: string | null } | null)?.loss_reason) ?? null;
+    }
+  }
+  const { error } = await client.from('quotes')
+    .update({ status, loss_reason: resolvedLossReason, updated_at: new Date().toISOString() })
+    .eq('cloud_id', cloudId);
   if (error) throw new Error('sbSetQuoteStatus: ' + error.message);
 }
 

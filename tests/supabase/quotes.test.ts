@@ -743,6 +743,7 @@ describe('Task 7 — cross-links + status (regular + DMC)', () => {
     const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
     const found = list.find((e) => e.cloudId === 'q-dmc-link-1')!;
     expect(found.linkedQuoteId).toBe('q-intl-50');
+    expect(found.linkedQuoteName).toBe('Intl 50pax');
     expect(found.linkedQuoteTemplate).toBe('intl');
   });
 
@@ -792,6 +793,39 @@ describe('Task 7 — cross-links + status (regular + DMC)', () => {
     const e2 = list2.find((e) => e.cloudId === 'q-status-2')!;
     expect(e2.status).toBe('won');
     expect(e2.lossReason ?? null).toBeNull();
+  });
+
+  it('sbSetQuoteStatus: preserves loss_reason when transitioning loss→loss without new reason (fb parity)', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 16, cloudId: 'q-status-3', quoteCode: 'DT016', name: 'Loss Preserve',
+        template: 'domestic', pax: 5, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    // Step 1: set not_selected with a reason
+    await sbSetQuoteStatus('q-status-3', 'not_selected', c, 'Giá cao');
+    const list1 = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    expect(list1.find((e) => e.cloudId === 'q-status-3')!.lossReason).toBe('Giá cao');
+
+    // Step 2: transition loss→loss (cancelled) WITHOUT passing lossReason — must PRESERVE 'Giá cao'
+    await sbSetQuoteStatus('q-status-3', 'cancelled', c);
+    const list2 = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e2 = list2.find((e) => e.cloudId === 'q-status-3')!;
+    expect(e2.status).toBe('cancelled');
+    expect(e2.lossReason).toBe('Giá cao'); // MUST be preserved, not erased
+
+    // Step 3: transition to a win state — loss_reason must be cleared
+    await sbSetQuoteStatus('q-status-3', 'won', c);
+    const list3 = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e3 = list3.find((e) => e.cloudId === 'q-status-3')!;
+    expect(e3.status).toBe('won');
+    expect(e3.lossReason ?? null).toBeNull();
   });
 
   // ── sbSetDMCQuoteStatus ───────────────────────────────────────────────────
