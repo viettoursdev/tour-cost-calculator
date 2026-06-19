@@ -38,6 +38,8 @@ export type Notification = {
   priority?: 'normal' | 'high' | 'urgent';
   /** File đính kèm (R2) — xem trước qua khung dùng chung. */
   attachments?: FileAttachment[];
+  /** Nhắc lại lặp lại tới hạn chót (re-surface qua toast khi app mở). */
+  reminder?: { every: '4h' | '8h' | '12h' | 'daily'; deadline?: string };
   data?: Record<string, unknown>;
 };
 

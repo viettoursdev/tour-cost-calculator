@@ -22,6 +22,7 @@ import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers } from '@/lib/notifications';
+import { checkNotifReminders } from '@/lib/notifReminders';
 import { AppShell } from './AppShell';
 import { ToastHost } from '@/components/common/ToastHost';
 import { UnsavedGuard } from '@/components/common/UnsavedGuard';
@@ -96,7 +97,12 @@ export function MainApp() {
     setTimeout(() => { void checkSalesFollowups(currentUser); }, 6000);
     setTimeout(() => { void checkCustomerFollowups(currentUser); }, 7000);
     setTimeout(() => { void checkDormantCustomers(currentUser); }, 8000);
+    // Nhắc lại lặp lại: kiểm tra ngay + mỗi 5 phút khi app mở.
+    const remindOnce = () => checkNotifReminders(useNotificationStore.getState().notifications, currentUser.u);
+    setTimeout(remindOnce, 9000);
+    const remindTimer = setInterval(remindOnce, 5 * 60 * 1000);
     return () => {
+      clearInterval(remindTimer);
       window.removeEventListener('storage', onFxStorage);
       fxUnsub?.();
       rcUnsub?.();

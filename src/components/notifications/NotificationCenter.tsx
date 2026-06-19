@@ -22,6 +22,7 @@ import {
 import { LEGACY } from '@/theme';
 import type { FileAttachment, NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
 import { NOTIF_TEMPLATES } from './notifCompose';
+import { REMINDER_OPTIONS } from '@/lib/notifReminders';
 import { NOTIF_PRIORITY } from '@/types';
 
 const TYPE_META: Record<string, { label: string; color: string; icon: string }> = {
@@ -427,6 +428,8 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
   const [uploadPct, setUploadPct] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [remindEvery, setRemindEvery] = useState<'off' | '4h' | '8h' | '12h' | 'daily'>('off');
+  const [deadline, setDeadline] = useState('');
   const [busy, setBusy] = useState(false);
 
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -478,6 +481,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
         type, title: title.trim(), message: message.trim(), createdBy: currentUser.name,
         ...(link ? { link } : {}), threadId, ...(priority !== 'normal' ? { priority } : {}),
         ...(attachments.length ? { attachments } : {}),
+        ...(remindEvery !== 'off' ? { reminder: { every: remindEvery, ...(deadline ? { deadline } : {}) } } : {}),
       });
       onClose();
     } catch (e) {
@@ -536,6 +540,21 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
               />
               <Typography fontSize={11} color="text.secondary">Báo giá đang mở</Typography>
             </Stack>
+          )}
+
+          {/* Nhắc lại lặp lại tới hạn chót */}
+          <Stack direction="row" spacing={1.5}>
+            <TextField select size="small" label="Nhắc lại" value={remindEvery} onChange={(e) => setRemindEvery(e.target.value as typeof remindEvery)} sx={{ flex: 1 }}>
+              {REMINDER_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
+            </TextField>
+            {remindEvery !== 'off' && (
+              <TextField type="date" size="small" label="Hạn chót" InputLabelProps={{ shrink: true }} value={deadline} onChange={(e) => setDeadline(e.target.value)} sx={{ width: 170 }} />
+            )}
+          </Stack>
+          {remindEvery !== 'off' && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+              ⏰ Sẽ nhắc lại {REMINDER_OPTIONS.find((o) => o.value === remindEvery)?.label.toLowerCase()} {deadline ? `tới ${deadline}` : '(tối đa 3 ngày)'} — khi người nhận mở app.
+            </Typography>
           )}
 
           {/* Đính kèm file */}
