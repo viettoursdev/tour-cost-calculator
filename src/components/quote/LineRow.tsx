@@ -308,9 +308,18 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
       }}
       sx={{ opacity: off ? 0.4 : 1, ...(warns.length ? { background: 'rgba(245,166,35,0.07)' } : null) }}
     >
-      {/* STT + tay kéo sắp xếp */}
-      <TableCell padding="checkbox" className="row-drag" sx={{ textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.4)', userSelect: 'none', fontSize: 11, fontVariantNumeric: 'tabular-nums', '&:hover': { color: '#0d7a6a' } }} title="Kéo để đổi thứ tự">
-        {typeof index === 'number' ? index + 1 : '⋮⋮'}
+      {/* STT — rê chuột hiện tay kéo ⋮⋮ để đổi thứ tự */}
+      <TableCell padding="checkbox" className="row-drag" title="Kéo để đổi thứ tự dòng"
+        sx={{
+          textAlign: 'center', cursor: 'grab', color: 'rgba(15,58,74,0.4)', userSelect: 'none', fontSize: 11,
+          fontVariantNumeric: 'tabular-nums',
+          '& .stt-grip': { display: 'none', color: '#0d7a6a', fontSize: 13 },
+          '&:hover': { bgcolor: 'rgba(13,122,106,0.08)' },
+          '&:hover .stt-num': { display: 'none' },
+          '&:hover .stt-grip': { display: 'inline' },
+        }}>
+        <Box component="span" className="stt-num">{typeof index === 'number' ? index + 1 : ''}</Box>
+        <Box component="span" className="stt-grip">⋮⋮</Box>
       </TableCell>
       {/* Enable toggle (legacy pill) */}
       <TableCell padding="checkbox" sx={{ textAlign: 'center' }}>
