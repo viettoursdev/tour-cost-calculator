@@ -18,6 +18,7 @@ import { flightDep, flightArr, normalizeFlight } from './flightFields';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { ItineraryCheckDialog } from './ItineraryCheckDialog';
+import { ItineraryPreviewDialog } from './ItineraryPreviewDialog';
 import { callAIWorker } from '@/lib/aiWorker';
 // Trình xuất lịch trình nạp động khi bấm.
 import { useMenuStore } from '@/stores/menuStore';
@@ -76,6 +77,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const doExportWord = () => void import('@/lib/exports/exportItineraryDocx').then((m) => m.exportItineraryDocx(it, code));
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const pois = usePoiStore((s) => s.pois);
@@ -340,6 +342,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             <Button color="inherit" variant="outlined" startIcon={<span>✅</span>}
               onClick={() => setCheckOpen(true)}>
               Kiểm tra
+            </Button>
+            <Button color="inherit" variant="outlined" startIcon={<span>👁</span>}
+              onClick={() => setPreviewOpen(true)}>
+              Xem trước
             </Button>
             <Button color="inherit" variant="contained"
               startIcon={<DescriptionIcon />}
@@ -753,7 +759,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
       </Box>
 
       <AISettingsModal open={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} />
-      <ItineraryCheckDialog itinerary={checkOpen ? it : null} onClose={() => setCheckOpen(false)} onExportWord={doExportWord} />
+      <ItineraryCheckDialog itinerary={checkOpen ? it : null} onClose={() => setCheckOpen(false)} onExportWord={doExportWord}
+        onPreview={() => setPreviewOpen(true)} />
+      <ItineraryPreviewDialog itinerary={previewOpen ? it : null} code={code} onClose={() => setPreviewOpen(false)} />
     </Box>
   );
 }
