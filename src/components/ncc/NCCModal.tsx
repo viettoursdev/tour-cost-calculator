@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Paper, Stack, TextField, Typography,
@@ -8,6 +9,9 @@ import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
+import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import type { ParsedNcc } from '@/lib/partyParse';
 import type { NameCardFields } from '@/lib/nameCard';
 import { NCC_SECTORS, SECTOR_COLOR } from './constants';
 import type { Ncc, NccContact } from '@/types';
@@ -34,6 +38,7 @@ type Props = {
 
 export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
   const { state: form, set: setForm, undo, redo, canUndo, canRedo } = useHistoryState<Ncc>(ncc ?? EMPTY_NCC);
+  const [aiOpen, setAiOpen] = useState(false);
   useUndoRedoShortcuts(undo, redo, canEdit);
 
   const setF = <K extends keyof Ncc>(k: K, v: Ncc[K]) =>
@@ -85,6 +90,20 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
       return next;
     });
 
+  const applyAI = (p: ParsedNcc) => setForm((f) => {
+    const kept = f.contacts.filter((c) => c.name || c.phone || c.email || c.position);
+    const added: NccContact[] = (p.contacts ?? []).map((c) => ({ name: c.name ?? '', phone: c.phone ?? '', email: c.email ?? '', position: c.position ?? '' }));
+    const merged = [...kept, ...added];
+    return {
+      ...f,
+      ...(p.name ? { name: p.name } : {}),
+      ...(p.location ? { location: p.location } : {}),
+      ...(p.note ? { note: f.note ? `${f.note}\n${p.note}` : p.note } : {}),
+      sectors: Array.from(new Set([...(f.sectors ?? []), ...(p.sectors ?? [])])),
+      contacts: merged.length ? merged : f.contacts,
+    };
+  });
+
   const handleSave = () => {
     if (!form.name.trim()) {
       window.alert('Vui lòng nhập tên NCC');
@@ -125,8 +144,12 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
               }}
             >
               <NameCardScanButton onScanned={applyNameCard} />
+              <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => setAiOpen(true)}
+                sx={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+                AI nhập & phân tích
+              </Button>
               <Typography variant="caption" color="text.secondary">
-                Đính kèm ảnh danh thiếp — hệ thống tự nhận diện & điền các trường.
+                Ảnh danh thiếp (quét nhanh) hoặc dán văn bản/hồ sơ → AI điền & nhận định.
               </Typography>
             </Box>
           )}
@@ -263,6 +286,7 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
           </Button>
         )}
       </DialogActions>
+      <AIPartyImportDialog open={aiOpen} kind="ncc" onClose={() => setAiOpen(false)} onApply={(p) => applyAI(p as ParsedNcc)} />
     </Dialog>
   );
 }

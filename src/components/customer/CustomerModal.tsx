@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import {
   Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { CUSTOMER_SOURCES, CUSTOMER_TAGS } from './constants';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -9,7 +11,9 @@ import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
+import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
 import type { NameCardFields } from '@/lib/nameCard';
+import type { ParsedCustomer } from '@/lib/partyParse';
 import type { Customer, CustomerContact } from '@/types';
 
 const EMPTY_CONTACT: CustomerContact = { name: '', phone: '', email: '', position: '' };
@@ -35,7 +39,25 @@ type Props = {
 
 export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
   const { state: form, set: setForm, undo, redo, canUndo, canRedo } = useHistoryState<Customer>(customer ?? EMPTY_CUSTOMER);
+  const [aiOpen, setAiOpen] = useState(false);
   useUndoRedoShortcuts(undo, redo, canEdit);
+
+  const applyAI = (p: ParsedCustomer) => setForm((f) => {
+    const kept = f.contacts.filter((c) => c.name || c.phone || c.email || c.position);
+    const added: CustomerContact[] = (p.contacts ?? []).map((c) => ({ name: c.name ?? '', phone: c.phone ?? '', email: c.email ?? '', position: c.position ?? '' }));
+    const merged = [...kept, ...added];
+    return {
+      ...f,
+      ...(p.name ? { name: p.name } : {}),
+      ...(p.type ? { type: p.type } : {}),
+      ...(p.address ? { address: p.address } : {}),
+      ...(p.taxCode ? { taxCode: p.taxCode } : {}),
+      ...(p.source ? { source: p.source } : {}),
+      ...(p.note ? { note: f.note ? `${f.note}\n${p.note}` : p.note } : {}),
+      tags: Array.from(new Set([...(f.tags ?? []), ...(p.tags ?? [])])),
+      contacts: merged.length ? merged : f.contacts,
+    };
+  });
 
   const setF = <K extends keyof Customer>(k: K, v: Customer[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
@@ -113,8 +135,12 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
               }}
             >
               <NameCardScanButton onScanned={applyNameCard} />
+              <Button size="small" variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => setAiOpen(true)}
+                sx={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+                AI nhập & phân tích
+              </Button>
               <Typography variant="caption" color="text.secondary">
-                Đính kèm ảnh danh thiếp — hệ thống tự nhận diện & điền các trường.
+                Ảnh danh thiếp (quét nhanh) hoặc dán văn bản/hồ sơ → AI điền & nhận định.
               </Typography>
             </Box>
           )}
@@ -255,6 +281,7 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
           </Button>
         )}
       </DialogActions>
+      <AIPartyImportDialog open={aiOpen} kind="customer" onClose={() => setAiOpen(false)} onApply={(p) => applyAI(p as ParsedCustomer)} />
     </Dialog>
   );
 }
