@@ -17,6 +17,7 @@ import { parseFlights as parseFlightsAI } from '@/lib/flightParse';
 import { flightDep, flightArr, normalizeFlight } from './flightFields';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
+import { ItineraryCheckDialog } from './ItineraryCheckDialog';
 import { callAIWorker } from '@/lib/aiWorker';
 // Trình xuất lịch trình nạp động khi bấm.
 import { useMenuStore } from '@/stores/menuStore';
@@ -74,6 +75,8 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [flightAiBusy, setFlightAiBusy] = useState(false);
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const [checkOpen, setCheckOpen] = useState(false);
+  const doExportWord = () => void import('@/lib/exports/exportItineraryDocx').then((m) => m.exportItineraryDocx(it, code));
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const pois = usePoiStore((s) => s.pois);
 
@@ -334,9 +337,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               onClick={handleSave} disabled={saving}>
               {saving ? 'Đang lưu...' : 'Lưu'}
             </Button>
+            <Button color="inherit" variant="outlined" startIcon={<span>✅</span>}
+              onClick={() => setCheckOpen(true)}>
+              Kiểm tra
+            </Button>
             <Button color="inherit" variant="contained"
               startIcon={<DescriptionIcon />}
-              onClick={() => void import('@/lib/exports/exportItineraryDocx').then((m) => m.exportItineraryDocx(it, code))}
+              onClick={doExportWord}
               sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
               Xuất Word
             </Button>
@@ -746,6 +753,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
       </Box>
 
       <AISettingsModal open={aiSettingsOpen} onClose={() => setAiSettingsOpen(false)} />
+      <ItineraryCheckDialog itinerary={checkOpen ? it : null} onClose={() => setCheckOpen(false)} onExportWord={doExportWord} />
     </Box>
   );
 }
