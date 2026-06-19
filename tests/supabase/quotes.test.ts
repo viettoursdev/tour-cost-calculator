@@ -14,6 +14,10 @@ import {
   sbDeleteDMCQuote,
   sbUpdateCollaborators,
   sbUpdateDMCCollaborators,
+  sbSetRegularEntryLink,
+  sbSetDMCEntryLink,
+  sbSetQuoteStatus,
+  sbSetDMCQuoteStatus,
 } from '../../src/lib/supabase';
 import type { CloudQuoteEntry, QuoteDraft, Collaborator } from '../../src/types/quote';
 
@@ -650,5 +654,164 @@ describe('Task 6 — delete + collaborators (regular + DMC)', () => {
     await sbDeleteDMCQuote(entry.id, entry.cloudId, c);
     const after = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
     expect(after.some((e) => e.cloudId === 'q-dmc-del-1')).toBe(false);
+  });
+});
+
+describe('Task 7 — cross-links + status (regular + DMC)', () => {
+  beforeEach(async () => {
+    await truncate([
+      'quote_collaborators', 'quote_versions',
+      'quote_payments', 'quote_workflow_logs', 'quote_workflow_steps',
+      'quote_group_items', 'quote_groups', 'quote_flight_fares',
+      'quote_flight_segments', 'quote_flights', 'quote_line_items',
+      'quotes',
+    ]);
+  });
+
+  // ── sbSetRegularEntryLink ─────────────────────────────────────────────────
+
+  it('sbSetRegularEntryLink: sets linked_quote_id/name/template on the quotes row', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 10, cloudId: 'q-link-1', quoteCode: 'DT010', name: 'Link Test',
+        template: 'intl', pax: 20, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSetRegularEntryLink('q-link-1', {
+      linkedQuoteId: 'q-dmc-999',
+      linkedQuoteName: 'DMC Ref',
+      linkedQuoteTemplate: 'dmc',
+    }, c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const found = list.find((e) => e.cloudId === 'q-link-1')!;
+    expect(found.linkedQuoteId).toBe('q-dmc-999');
+    expect(found.linkedQuoteName).toBe('DMC Ref');
+    expect(found.linkedQuoteTemplate).toBe('dmc');
+  });
+
+  it('sbSetRegularEntryLink: partial update (only linkedQuoteId provided)', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 11, cloudId: 'q-link-2', quoteCode: 'DT011', name: 'Partial Link',
+        template: 'domestic', pax: 5, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSetRegularEntryLink('q-link-2', { linkedQuoteId: 'q-other-1' }, c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const found = list.find((e) => e.cloudId === 'q-link-2')!;
+    expect(found.linkedQuoteId).toBe('q-other-1');
+    // name and template are undefined/null when not provided
+    expect(found.linkedQuoteName ?? null).toBeNull();
+    expect(found.linkedQuoteTemplate ?? null).toBeNull();
+  });
+
+  // ── sbSetDMCEntryLink ─────────────────────────────────────────────────────
+
+  it('sbSetDMCEntryLink: sets link fields on a DMC quote', async () => {
+    const c = await getViettoursClient();
+    await sbSaveDMCQuote(
+      {
+        id: 12, cloudId: 'q-dmc-link-1', quoteCode: 'DMC010', name: 'DMC Link',
+        template: 'dmc', pax: 15, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSetDMCEntryLink('q-dmc-link-1', {
+      linkedQuoteId: 'q-intl-50',
+      linkedQuoteName: 'Intl 50pax',
+      linkedQuoteTemplate: 'intl',
+    }, c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
+    const found = list.find((e) => e.cloudId === 'q-dmc-link-1')!;
+    expect(found.linkedQuoteId).toBe('q-intl-50');
+    expect(found.linkedQuoteTemplate).toBe('intl');
+  });
+
+  // ── sbSetQuoteStatus ──────────────────────────────────────────────────────
+
+  it('sbSetQuoteStatus: updates status on regular quote', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 13, cloudId: 'q-status-1', quoteCode: 'DT013', name: 'Status Test',
+        template: 'domestic', pax: 8, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSetQuoteStatus('q-status-1', 'won', c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    expect(list.find((e) => e.cloudId === 'q-status-1')!.status).toBe('won');
+  });
+
+  it('sbSetQuoteStatus: sets loss_reason for not_selected; clears it for won', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 14, cloudId: 'q-status-2', quoteCode: 'DT014', name: 'Loss Reason',
+        template: 'domestic', pax: 3, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSetQuoteStatus('q-status-2', 'not_selected', c, 'Giá cao hơn đối thủ');
+    const list1 = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e1 = list1.find((e) => e.cloudId === 'q-status-2')!;
+    expect(e1.status).toBe('not_selected');
+    expect(e1.lossReason).toBe('Giá cao hơn đối thủ');
+
+    // Switching to a win state should clear lossReason.
+    await sbSetQuoteStatus('q-status-2', 'won', c);
+    const list2 = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e2 = list2.find((e) => e.cloudId === 'q-status-2')!;
+    expect(e2.status).toBe('won');
+    expect(e2.lossReason ?? null).toBeNull();
+  });
+
+  // ── sbSetDMCQuoteStatus ───────────────────────────────────────────────────
+
+  it('sbSetDMCQuoteStatus: updates status on DMC quote', async () => {
+    const c = await getViettoursClient();
+    await sbSaveDMCQuote(
+      {
+        id: 15, cloudId: 'q-dmc-status-1', quoteCode: 'DMC015', name: 'DMC Status',
+        template: 'dmc', pax: 12, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSetDMCQuoteStatus('q-dmc-status-1', 'sent', c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
+    expect(list.find((e) => e.cloudId === 'q-dmc-status-1')!.status).toBe('sent');
   });
 });

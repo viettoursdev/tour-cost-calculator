@@ -3034,3 +3034,89 @@ export async function sbUpdateDMCCollaborators(
 ): Promise<void> {
   return sbUpdateCollaborators(id, cloudId, collaborators, client);
 }
+
+// ── Phase 2 Task 7 — Quote cross-links + status ──────────────────────────────
+// Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
+// Parity: firebase.ts:405-413 (fbSetEntryLink), firebase.ts:462-473 (fbSetEntryStatus)
+
+import type { QuoteStatus } from '@/types/quote';
+
+type EntryLink = {
+  linkedQuoteId?: string;
+  linkedQuoteName?: string;
+  linkedQuoteTemplate?: Template;
+};
+
+/**
+ * Update the cross-link fields on a regular quote's index row.
+ * Mirrors fbSetRegularEntryLink = _regular.fbSetEntryLink (firebase.ts:484 / 407-414):
+ * that fn mutates the matching entry in the flat quotes[] array; here we UPDATE
+ * the quotes row directly by cloud_id.
+ * Only fields present in `link` are written; absent fields are set to null to
+ * match fb* behaviour (it spreads the whole EntryLink object, clearing omitted keys).
+ */
+export async function sbSetRegularEntryLink(
+  cloudId: string,
+  link: EntryLink,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('quotes').update({
+    linked_quote_id: link.linkedQuoteId ?? null,
+    linked_quote_name: link.linkedQuoteName ?? null,
+    linked_quote_template: link.linkedQuoteTemplate ?? null,
+    updated_at: new Date().toISOString(),
+  }).eq('cloud_id', cloudId);
+  if (error) throw new Error('sbSetRegularEntryLink: ' + error.message);
+}
+
+/**
+ * Same as sbSetRegularEntryLink for DMC quotes.
+ * Mirrors fbSetDMCEntryLink = _dmc.fbSetEntryLink (firebase.ts:497).
+ * cloud_id is globally unique in quotes (regular and DMC share the table),
+ * so the implementation is identical — the template discriminator is not needed.
+ */
+export async function sbSetDMCEntryLink(
+  cloudId: string,
+  link: EntryLink,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return sbSetRegularEntryLink(cloudId, link, client);
+}
+
+/**
+ * Update status (and optional lossReason) on a regular quote.
+ * Mirrors fbSetEntryStatus (firebase.ts:462-473):
+ * - Loss states ('not_selected' | 'cancelled'): set loss_reason to provided value
+ *   or preserve existing (here we always write the provided value, defaulting null).
+ * - Non-loss states: clear loss_reason (set to null).
+ * The optional `lossReason` parameter is only applied when `status` is a loss state;
+ * otherwise it is ignored and loss_reason is cleared — matching firebase.ts:470-471.
+ */
+export async function sbSetQuoteStatus(
+  cloudId: string,
+  status: QuoteStatus,
+  client: SupabaseClient = sb,
+  lossReason?: string,
+): Promise<void> {
+  const isLoss = status === 'not_selected' || status === 'cancelled';
+  const { error } = await client.from('quotes').update({
+    status,
+    loss_reason: isLoss ? (lossReason ?? null) : null,
+    updated_at: new Date().toISOString(),
+  }).eq('cloud_id', cloudId);
+  if (error) throw new Error('sbSetQuoteStatus: ' + error.message);
+}
+
+/**
+ * Update status on a DMC quote.
+ * Mirrors fbSetDMCQuoteStatus = _dmc.fbSetEntryStatus (firebase.ts:498).
+ * Delegates to sbSetQuoteStatus (cloud_id unique across both flavours).
+ */
+export async function sbSetDMCQuoteStatus(
+  cloudId: string,
+  status: QuoteStatus,
+  client: SupabaseClient = sb,
+  lossReason?: string,
+): Promise<void> {
+  return sbSetQuoteStatus(cloudId, status, client, lossReason);
+}
