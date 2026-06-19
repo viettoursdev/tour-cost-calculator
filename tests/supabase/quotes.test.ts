@@ -196,4 +196,71 @@ describe('quote history index (Task 4)', () => {
     expect(list.some((e) => e.cloudId === 'qdmc-3')).toBe(true);
     expect(list.some((e) => e.cloudId === 'qreg-8')).toBe(false);
   });
+
+  // ── Fix 1: createdByUsername on subscribe path ─────────────────────────────
+
+  it('subscribe: createdByUsername is populated (=== saver username), not empty', async () => {
+    const c = await getViettoursClient();
+    const savedBy = { u: 'creator_user', name: 'Creator', role: 'Sales' };
+    await sbSaveQuote(
+      { id: 10001, cloudId: 'qreg-u1', name: 'Username Test', template: 'domestic', pax: 1, totalCost: 1 },
+      savedBy,
+      c,
+    );
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const entry = list.find((e) => e.cloudId === 'qreg-u1')!;
+    expect(entry).toBeDefined();
+    expect(entry.createdByUsername).toBe('creator_user');
+  });
+
+  // ── Fix 1: createdByUsername preserved when a different user re-saves ──────
+
+  it('subscribe: createdByUsername stays the original saver\'s after a re-save by a different user', async () => {
+    const c = await getViettoursClient();
+    const originalSaver = { u: 'original_creator', name: 'Original', role: 'Sales' };
+    const anotherUser   = { u: 'another_editor', name: 'Another', role: 'Operations' };
+
+    await sbSaveQuote(
+      { id: 10002, cloudId: 'qreg-u2', name: 'Preserve Test', template: 'domestic', pax: 1, totalCost: 1 },
+      originalSaver,
+      c,
+    );
+    // Re-save (update) by a different user
+    await sbSaveQuote(
+      { id: 10002, cloudId: 'qreg-u2', name: 'Preserve Test v2', template: 'domestic', pax: 2, totalCost: 2 },
+      anotherUser,
+      c,
+    );
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const entry = list.find((e) => e.cloudId === 'qreg-u2')!;
+    expect(entry).toBeDefined();
+    // Original creator's username must be preserved, not replaced by the editor's
+    expect(entry.createdByUsername).toBe('original_creator');
+  });
+
+  // ── Fix 3: attachments loaded on subscribe path ────────────────────────────
+
+  it('subscribe: entry saved with an attachment shows that attachment via subscribe path', async () => {
+    const c = await getViettoursClient();
+    const savedBy = { u: 'tester', name: 'QA', role: 'Sales' };
+    const att = { key: 'r2-att-sub', name: 'doc.pdf', uploadedBy: 'tester', uploadedAt: '2026-06-01T00:00:00.000Z' };
+
+    await sbSaveQuote(
+      {
+        id: 10003, cloudId: 'qreg-att1', name: 'Attachment Test', template: 'domestic', pax: 1, totalCost: 1,
+        attachments: [att],
+      },
+      savedBy,
+      c,
+    );
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const entry = list.find((e) => e.cloudId === 'qreg-att1')!;
+    expect(entry).toBeDefined();
+    expect(entry.attachments).toBeDefined();
+    expect(entry.attachments!.length).toBe(1);
+    expect(entry.attachments![0].key).toBe('r2-att-sub');
+    expect(entry.attachments![0].name).toBe('doc.pdf');
+  });
 });

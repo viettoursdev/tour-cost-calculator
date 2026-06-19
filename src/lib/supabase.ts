@@ -2460,7 +2460,7 @@ function rowToCloudQuoteEntry(
     linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
     linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
     linkedQuoteTemplate: (r.linked_quote_template as Template) ?? undefined,
-    createdByUsername: '',  // overridden by saveSingleQuoteEntry; empty on subscribe path
+    createdByUsername: (r.created_by_username as string) ?? '',
     createdByName: (r.created_by_name as string) ?? '',
     collaborators: collabs.map((c) => ({ u: (c.username as string) ?? '', name: (c.name as string) ?? '' })),
     createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : new Date().toISOString(),
@@ -2485,7 +2485,7 @@ async function saveSingleQuoteEntry(
   // 1. Fetch the existing row for this cloud_id (to preserve code/createdAt on update)
   const { data: existing, error: fetchErr } = await client
     .from('quotes')
-    .select('id, quote_code, created_at, created_by_name')
+    .select('id, quote_code, created_at, created_by_name, created_by_username')
     .eq('cloud_id', entry.cloudId)
     .maybeSingle();
   if (fetchErr) throw new Error('sbSaveQuote fetch: ' + fetchErr.message);
@@ -2493,15 +2493,14 @@ async function saveSingleQuoteEntry(
   let quoteCode: string;
   let createdAt: string;
   let createdByName: string;
-  // username for return value — not stored in DB column (Phase 4 may add created_by_username)
   let createdByUsername: string;
 
   if (existing) {
-    // update: preserve code + createdAt + creator info
+    // update: preserve code + createdAt + creator info (mirror firebase.ts:291-292)
     quoteCode = (existing.quote_code as string) ?? entry.quoteCode ?? '';
     createdAt = existing.created_at as string;
-    createdByName = (existing.created_by_name as string) ?? savedBy.name;
-    createdByUsername = savedBy.u; // best-effort on update; real username not stored
+    createdByName = (existing.created_by_name as string) || savedBy.name;
+    createdByUsername = (existing.created_by_username as string) || savedBy.u;
   } else {
     // insert: auto-generate code from existing same-family rows
     if (entry.quoteCode) {
@@ -2538,6 +2537,7 @@ async function saveSingleQuoteEntry(
     total_cost: entry.totalCost,
     created_at: createdAt,
     created_by_name: createdByName,
+    created_by_username: createdByUsername,
     updated_at: nowIso,
     updated_by_name: savedByLabel,
   };
@@ -2576,7 +2576,7 @@ async function saveSingleQuoteEntry(
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, ' +
-            'created_by_name, created_at, updated_at, updated_by_name')
+            'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .single();
   if (upErr) throw new Error('sbSaveQuote upsert: ' + upErr.message);
 
@@ -2585,17 +2585,14 @@ async function saveSingleQuoteEntry(
 
   // 4. Upsert quote_collaborators (full replace for this quote)
   if (entry.collaborators !== undefined) {
-    const collabRows = await Promise.all(
-      (entry.collaborators ?? []).map(async (col) => {
-        const idMap = await usernamesToIds(client, [col.u]);
-        return {
-          quote_id: quoteUuid,
-          user_id: idMap.get(col.u) ?? null,
-          username: col.u,
-          name: col.name,
-        };
-      }),
-    );
+    const collaborators = entry.collaborators ?? [];
+    const collabIdMap = await usernamesToIds(client, collaborators.map((c) => c.u));
+    const collabRows = collaborators.map((col) => ({
+      quote_id: quoteUuid,
+      user_id: collabIdMap.get(col.u) ?? null,
+      username: col.u,
+      name: col.name,
+    }));
     await replaceChildren(client, 'quote_collaborators', 'quote_id', quoteUuid, collabRows);
   }
 
@@ -2630,7 +2627,7 @@ async function loadQuoteHistory(
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, ' +
-            'created_by_name, created_at, updated_at, updated_by_name')
+            'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .order('created_at', { ascending: false });
 
   q = isDmc ? q.eq('template', 'dmc') : q.neq('template', 'dmc');
@@ -2642,11 +2639,19 @@ async function loadQuoteHistory(
 
   const rows = rawRows as unknown as Record<string, unknown>[];
   const quoteIds = rows.map((r) => r.id as string);
-  const { data: collabRows, error: collabErr } = await client
-    .from('quote_collaborators')
-    .select('quote_id, username, name')
-    .in('quote_id', quoteIds)
-    .order('name');
+  const cloudIds = rows.map((r) => r.cloud_id as string);
+
+  const [
+    { data: collabRows, error: collabErr },
+    attMap,
+  ] = await Promise.all([
+    client
+      .from('quote_collaborators')
+      .select('quote_id, username, name')
+      .in('quote_id', quoteIds)
+      .order('name'),
+    loadAttachmentsForParents(client, 'quote', cloudIds),
+  ]);
   if (collabErr) throw new Error('loadQuoteHistory collabs: ' + collabErr.message);
 
   const collabsByQuote = new Map<string, Record<string, unknown>[]>();
@@ -2656,12 +2661,12 @@ async function loadQuoteHistory(
     collabsByQuote.set(c.quote_id as string, arr);
   }
 
-  return rows.map((r) =>
-    rowToCloudQuoteEntry(
-      r,
-      collabsByQuote.get(r.id as string) ?? [],
-    ),
-  );
+  return rows.map((r) => {
+    const entry = rowToCloudQuoteEntry(r, collabsByQuote.get(r.id as string) ?? []);
+    const atts = attMap.get(r.cloud_id as string);
+    if (atts && atts.length > 0) entry.attachments = atts;
+    return entry;
+  });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
