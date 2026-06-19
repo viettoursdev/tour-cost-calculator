@@ -164,9 +164,9 @@ export function CustomerView() {
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
           owners={owners} owner={owner} onOwner={setOwner}
         />
-        <Button size="small" variant="outlined" onClick={toggleCompact}
-          title={compact ? 'Xem dạng thẻ' : 'Thu gọn (chỉ tên)'}>
-          {compact ? '▦ Thẻ' : '▤ Thu gọn'}
+        <Button size="small" variant={compact ? 'contained' : 'outlined'} onClick={toggleCompact}
+          title={compact ? 'Hiện đầy đủ (kèm contact)' : 'Thu gọn (ẩn contact)'}>
+          {compact ? '▦ Đầy đủ' : '▤ Thu gọn'}
         </Button>
         {(search || filterType || owner || dateRange !== 'all') && (
           <Button
@@ -195,23 +195,8 @@ export function CustomerView() {
         </Box>
       )}
 
-      {/* Thu gọn — danh sách chỉ tên */}
-      {!loading && filtered.length > 0 && compact && (
-        <Stack sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
-          {filtered.map((c, i) => (
-            <Box key={c.id} onClick={() => setView360(c)}
-              sx={{ px: 1.5, py: 0.9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
-                borderTop: i ? '1px solid' : 'none', borderColor: 'divider', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
-              <Typography fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>{c.name}</Typography>
-              <Chip label={c.type === 'company' ? 'Công ty' : 'Cá nhân'} size="small" sx={{ height: 18, fontSize: 10 }} />
-              {c.address && <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 160 }}>{c.address}</Typography>}
-            </Box>
-          ))}
-        </Stack>
-      )}
-
-      {/* Card grid */}
-      {!loading && filtered.length > 0 && !compact && (
+      {/* Card grid (Thu gọn = ẩn preview contact) */}
+      {!loading && filtered.length > 0 && (
         <Box
           sx={{
             display: 'grid',
@@ -225,6 +210,7 @@ export function CustomerView() {
               customer={c}
               canEdit={canEdit}
               canConvert={canConvert}
+              compact={compact}
               onEdit={() => setModal({ customer: c })}
               onDelete={() => handleDeleteNow(c)}
               onConvert={() => setConvertTarget(c)}
@@ -304,6 +290,7 @@ function CustomerCard({
   customer: c,
   canEdit,
   canConvert,
+  compact,
   onEdit,
   onDelete,
   onConvert,
@@ -312,6 +299,7 @@ function CustomerCard({
   customer: Customer;
   canEdit: boolean;
   canConvert: boolean;
+  compact?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onConvert: () => void;
@@ -382,8 +370,8 @@ function CustomerCard({
         </Stack>
       )}
 
-      {/* Contacts preview */}
-      {(c.contacts ?? [])
+      {/* Contacts preview (ẩn khi Thu gọn) */}
+      {!compact && (c.contacts ?? [])
         .filter((ct) => ct.name || ct.phone || ct.email)
         .slice(0, 2)
         .map((ct, i) => (
@@ -432,7 +420,7 @@ function CustomerCard({
             )}
           </Stack>
         ))}
-      {(c.contacts ?? []).length > 2 && (
+      {!compact && (c.contacts ?? []).length > 2 && (
         <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
           +{c.contacts.length - 2} contact khác...
         </Typography>

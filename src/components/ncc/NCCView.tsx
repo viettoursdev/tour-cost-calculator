@@ -168,9 +168,9 @@ export function NCCView() {
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
           owners={owners} owner={owner} onOwner={setOwner}
         />
-        <Button size="small" variant="outlined" onClick={toggleCompact}
-          title={compact ? 'Xem dạng thẻ' : 'Thu gọn (chỉ tên)'}>
-          {compact ? '▦ Thẻ' : '▤ Thu gọn'}
+        <Button size="small" variant={compact ? 'contained' : 'outlined'} onClick={toggleCompact}
+          title={compact ? 'Hiện đầy đủ (kèm contact)' : 'Thu gọn (ẩn contact)'}>
+          {compact ? '▦ Đầy đủ' : '▤ Thu gọn'}
         </Button>
         {(search || filterSector || filterContinent || filterCountry || owner || dateRange !== 'all') && (
           <Button size="small" color="error" variant="outlined"
@@ -193,25 +193,8 @@ export function NCCView() {
         </Box>
       )}
 
-      {/* Thu gọn — danh sách chỉ tên */}
-      {!loading && filtered.length > 0 && compact && (
-        <Stack sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
-          {filtered.map((s, i) => (
-            <Box key={s.id} onClick={() => setModal({ ncc: s })}
-              sx={{ px: 1.5, py: 0.9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
-                borderTop: i ? '1px solid' : 'none', borderColor: 'divider', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
-              <Typography fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>{s.name}</Typography>
-              {s.country && <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{s.country}</Typography>}
-              {(s.sectors ?? []).slice(0, 2).map((sec) => (
-                <Chip key={sec} label={sec} size="small" sx={{ height: 18, fontSize: 10, bgcolor: (SECTOR_COLOR[sec] ?? '#7f8c8d') + '22', color: SECTOR_COLOR[sec] ?? '#555' }} />
-              ))}
-            </Box>
-          ))}
-        </Stack>
-      )}
-
-      {/* Card grid */}
-      {!loading && filtered.length > 0 && !compact && (
+      {/* Card grid (Thu gọn = ẩn preview contact) */}
+      {!loading && filtered.length > 0 && (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
           {filtered.map((s) => (
             <NccCard
@@ -219,6 +202,7 @@ export function NCCView() {
               ncc={s}
               canEdit={canEdit}
               canConvert={canConvert}
+              compact={compact}
               onEdit={() => setModal({ ncc: s })}
               onDelete={() => handleDeleteNow(s)}
               onConvert={() => setConvertTarget(s)}
@@ -297,6 +281,7 @@ function NccCard({
   ncc: s,
   canEdit,
   canConvert,
+  compact,
   onEdit,
   onDelete,
   onConvert,
@@ -305,6 +290,7 @@ function NccCard({
   ncc: Ncc;
   canEdit: boolean;
   canConvert: boolean;
+  compact?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onConvert: () => void;
@@ -381,8 +367,8 @@ function NccCard({
         </Typography>
       )}
 
-      {/* Contacts preview */}
-      {(s.contacts ?? [])
+      {/* Contacts preview (ẩn khi Thu gọn) */}
+      {!compact && (s.contacts ?? [])
         .filter((ct) => ct.name || ct.phone || ct.email)
         .slice(0, 2)
         .map((ct, i) => (
@@ -431,7 +417,7 @@ function NccCard({
             )}
           </Stack>
         ))}
-      {(s.contacts ?? []).length > 2 && (
+      {!compact && (s.contacts ?? []).length > 2 && (
         <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
           +{s.contacts.length - 2} contact khác...
         </Typography>
