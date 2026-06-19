@@ -103,9 +103,9 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
         >
           {!showRates && (rateEntries.length
             ? rateEntries.map(([c, r]) => (
-                <Box key={c} sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.4, background: 'rgba(20,150,140,0.08)', borderRadius: '6px', px: 0.7, py: 0.1, whiteSpace: 'nowrap' }}>
-                  <Box component="span" sx={{ fontSize: 10.5, fontWeight: 700, color: '#0d7a6a' }}>{fxLabel(c)}</Box>
-                  <Box component="span" sx={{ fontSize: 11.5, fontWeight: 800, color: '#c2410c' }}>{r.toLocaleString('vi-VN')}</Box>
+                <Box key={c} sx={{ display: 'inline-flex', alignItems: 'baseline', gap: 0.4, background: 'rgba(15,58,74,0.05)', borderRadius: '6px', px: 0.7, py: 0.1, whiteSpace: 'nowrap' }}>
+                  <Box component="span" sx={{ fontSize: 10.5, fontWeight: 600, color: 'rgba(15,58,74,0.5)' }}>{fxLabel(c)}</Box>
+                  <Box component="span" sx={{ fontSize: 11.5, fontWeight: 700, color: 'rgba(15,58,74,0.7)' }}>{r.toLocaleString('vi-VN')}</Box>
                 </Box>
               ))
             : <Typography sx={{ color: 'rgba(15,58,74,0.4)', fontSize: 11 }}>Chưa có tỷ giá ngoại tệ</Typography>)}
