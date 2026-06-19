@@ -19,10 +19,15 @@ import { fmtOutput } from '@/lib/currency';
 import { getCATS } from './constants';
 import { orderCats, reorderWithinShown } from './catOrder';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { useAuthStore } from '@/stores/authStore';
+import { canEditQuote, canSeePrices } from '@/auth/quotePerms';
 import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
 export function CostView() {
   const template = useQuoteStore((s) => s.draft.template) as Template;
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const readOnly = !canEditQuote(currentUser, template);
+  const hidePrice = !canSeePrices(currentUser);
   const items = useQuoteStore((s) => s.draft.items);
   const catEnabled = useQuoteStore((s) => s.draft.catEnabled);
   const pax = useQuoteStore((s) => s.draft.pax);
@@ -143,10 +148,12 @@ export function CostView() {
             {density === 'compact' ? '▤ Gọn' : '▥ Thoáng'}
           </Button>
           <Box sx={{ flexGrow: 1 }} />
-          <Button size="small" variant="outlined" onClick={() => setAiImportOpen(true)} title="Tải file báo giá để AI tự phân tích & điền"
-            sx={{ textTransform: 'none', py: 0.25, borderColor: '#7c3aed', color: '#7c3aed' }}>
-            🤖 Nhập từ file (AI)
-          </Button>
+          {!readOnly && (
+            <Button size="small" variant="outlined" onClick={() => setAiImportOpen(true)} title="Tải file báo giá để AI tự phân tích & điền"
+              sx={{ textTransform: 'none', py: 0.25, borderColor: '#7c3aed', color: '#7c3aed' }}>
+              🤖 Nhập từ file (AI)
+            </Button>
+          )}
           <Menu anchorEl={jumpAnchor} open={!!jumpAnchor} onClose={() => setJumpAnchor(null)}>
             {cats.map((c) => (
               <MenuItem key={c.id} onClick={() => jumpTo(c.id)} sx={{ fontSize: 13, gap: 1 }}>
@@ -159,7 +166,15 @@ export function CostView() {
           </Menu>
         </Stack>
 
-        <QuoteWarningsBanner cats={cats} items={items} catEnabled={catEnabled} />
+        {readOnly && (
+          <Paper variant="outlined" sx={{ mb: 1.5, p: 1.25, borderRadius: 2, borderColor: 'rgba(245,166,35,0.6)', background: 'rgba(245,166,35,0.08)' }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: '#b9770f' }}>
+              🔒 Chỉ xem — phòng của bạn không được sửa báo giá {template === 'domestic' ? 'nội địa' : 'quốc tế/DMC'} này.
+            </Typography>
+          </Paper>
+        )}
+
+        {!hidePrice && <QuoteWarningsBanner cats={cats} items={items} catEnabled={catEnabled} />}
 
         <GroupSizeTabs />
 
@@ -182,6 +197,8 @@ export function CostView() {
               domId={`cat-${cat.id}`}
               expanded={expanded[cat.id] ?? !!catEnabled[catId]}
               onExpandedChange={(v) => setExpanded((m) => ({ ...m, [cat.id]: v }))}
+              readOnly={readOnly}
+              hidePrice={hidePrice}
               items={items[catId] ?? []}
               enabled={catEnabled[catId]}
               pax={pax}
@@ -227,7 +244,7 @@ export function CostView() {
           />
         )}
 
-        {isDMC && dmcMargin !== undefined && (() => {
+        {!hidePrice && isDMC && dmcMargin !== undefined && (() => {
           const marginVND = dmcMargin.type === 'percent'
             ? Math.round(totals.totalCost * (dmcMargin.value || 0) / 100)
             : Math.round((dmcMargin.value || 0) * (outputCurrency !== 'VND' && rates[outputCurrency] ? rates[outputCurrency] : 1));
@@ -296,7 +313,7 @@ export function CostView() {
           );
         })()}
 
-        {isDMC && dmcPrices && dmcMargin && (() => {
+        {!hidePrice && isDMC && dmcPrices && dmcMargin && (() => {
           const marginVND = dmcMargin.type === 'percent'
             ? Math.round(totals.totalCost * (dmcMargin.value || 0) / 100)
             : Math.round((dmcMargin.value || 0) * (outputCurrency !== 'VND' && rates[outputCurrency] ? rates[outputCurrency] : 1));
@@ -321,7 +338,7 @@ export function CostView() {
           );
         })()}
 
-        {isDMC && (
+        {!hidePrice && isDMC && (
           <Paper
             variant="outlined"
             sx={{ borderRadius: 2, p: 2.5, mt: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}
@@ -340,7 +357,7 @@ export function CostView() {
 
         <AIQuoteImportDialog open={aiImportOpen} onClose={() => setAiImportOpen(false)} />
 
-        {!isDMC && <StickyTotalsBar totals={totals} pax={pax} />}
+        {!hidePrice && !isDMC && <StickyTotalsBar totals={totals} pax={pax} />}
 
         {!isDMC && <HistPanel />}
       </Box>

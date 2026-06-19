@@ -7,6 +7,8 @@ import { CostView } from './CostView';
 import { SummaryView } from './SummaryView';
 import { SaveCloudQuoteModal } from './SaveCloudQuoteModal';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { useAuthStore } from '@/stores/authStore';
+import { canSeePrices } from '@/auth/quotePerms';
 import { LEGACY } from '@/theme';
 
 // Tách bundle: các view phụ + app mẫu (itinerary/menu/visa/doctranslate) chỉ tải
@@ -40,7 +42,13 @@ const ViewFallback = () => (
 
 export function QuoteView() {
   const template = useQuoteStore((s) => s.draft.template);
-  const view = useQuoteStore((s) => s.view);
+  const rawView = useQuoteStore((s) => s.view);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  // Phòng HDV bị ẩn giá: nếu draft còn lưu view thuần về giá thì ép về "Báo giá".
+  const hidePrice = !canSeePrices(currentUser);
+  const view = hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard')
+    ? 'cost'
+    : rawView;
   // `currentUsername` is null until `quoteStore.init(user)` has run from
   // MainApp's post-commit effect. Without this guard, the first render after
   // login sees the placeholder `template: null` from EMPTY_DRAFT and briefly

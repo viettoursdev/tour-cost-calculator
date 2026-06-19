@@ -30,6 +30,7 @@ import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { ROLE_RANK } from '@/auth/ROLES';
+import { canSeePrices } from '@/auth/quotePerms';
 import { fmtOutput } from '@/lib/currency';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
@@ -286,6 +287,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
+  // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
+  const hidePrice = !canSeePrices(currentUser);
+  const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
   const item = (v: QuoteViewKey, label: string) => ({ v, label });
   // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
   const NAV: NavNode[] = isDMC
@@ -316,7 +320,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           ...(canNcc ? [item('nccProducts', '📦 Sản phẩm NCC')] : []),
         ] },
         ...(isMgr ? [item('audit', '📋 Nhật ký')] : []),
-      ].filter((n) => !('group' in n) || n.items.length > 0);
+      ]
+        .map((n) => (hidePrice && 'group' in n
+          ? { ...n, items: n.items.filter((it) => !PRICE_ONLY_VIEWS.has(it.v)) }
+          : n))
+        .filter((n) => (hidePrice && !('group' in n) ? !PRICE_ONLY_VIEWS.has(n.v) : true))
+        .filter((n) => !('group' in n) || n.items.length > 0);
 
   return (
     <AppBar
@@ -401,8 +410,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* RIGHT: price summary cards */}
-          {isDMC ? (
+          {/* RIGHT: price summary cards (ẩn với phòng HDV) */}
+          {hidePrice ? null : isDMC ? (
             <Stack direction="row" gap={1.25} alignItems="stretch">
               <Box
                 sx={{

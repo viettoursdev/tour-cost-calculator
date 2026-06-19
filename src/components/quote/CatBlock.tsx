@@ -38,10 +38,14 @@ type Props = {
   onOpenRate?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), totals show in this currency. */
   displayCurrency?: OutputCurrency;
+  /** Chỉ-đọc (phòng ban không được sửa template này): ẩn mọi nút thêm/sửa. */
+  readOnly?: boolean;
+  /** Ẩn giá (phòng HDV): ẩn cột đơn giá/thành tiền. */
+  hidePrice?: boolean;
 };
 
 export function CatBlock({
-  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onReorder, domId, expanded, onExpandedChange, onOpenRate, displayCurrency,
+  cat, items, enabled, pax, rates, onToggleCat, onUpd, onAdd, onDel, onDup, onAddMany, onReorder, domId, expanded, onExpandedChange, onOpenRate, displayCurrency, readOnly, hidePrice,
 }: Props) {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -113,19 +117,23 @@ export function CatBlock({
         sx={{ background: `linear-gradient(90deg, ${cat.color}14, transparent)` }}
       >
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
-          <Box
-            component="span"
-            className="cat-drag"
-            title="Kéo để đổi thứ tự hạng mục"
-            onClick={(e) => e.stopPropagation()}
-            sx={{ flexShrink: 0, cursor: 'grab', color: 'rgba(15,58,74,0.3)', fontSize: 16, userSelect: 'none', '&:hover': { color: cat.color } }}
-          >⋮⋮</Box>
+          {!readOnly && (
+            <Box
+              component="span"
+              className="cat-drag"
+              title="Kéo để đổi thứ tự hạng mục"
+              onClick={(e) => e.stopPropagation()}
+              sx={{ flexShrink: 0, cursor: 'grab', color: 'rgba(15,58,74,0.3)', fontSize: 16, userSelect: 'none', '&:hover': { color: cat.color } }}
+            >⋮⋮</Box>
+          )}
           <Box
             role="switch"
             aria-checked={enabled}
             aria-label={`Bật/tắt ${cat.label}`}
-            onClick={(e) => { e.stopPropagation(); onToggleCat(); }}
+            onClick={(e) => { if (readOnly) { e.stopPropagation(); return; } e.stopPropagation(); onToggleCat(); }}
             sx={{
+              pointerEvents: readOnly ? 'none' : 'auto',
+              opacity: readOnly ? 0.5 : 1,
               flexShrink: 0, width: 38, height: 21, borderRadius: 11, cursor: 'pointer',
               position: 'relative', transition: 'background .2s',
               background: enabled ? cat.color : 'rgba(15,58,74,0.15)',
@@ -139,7 +147,7 @@ export function CatBlock({
           </Box>
           <Box sx={{ fontSize: 20 }}>{cat.icon}</Box>
           <Typography fontWeight={700} sx={{ flex: 1 }}>{cat.label}</Typography>
-          {onOpenRate && enabled && (
+          {onOpenRate && enabled && !readOnly && (
             <Box
               component="button"
               onClick={(e) => { e.stopPropagation(); onOpenRate(); }}
@@ -163,7 +171,7 @@ export function CatBlock({
           )}
           <Typography variant="caption" color="text.secondary">{items.length} dòng</Typography>
           {enabled
-            ? <Typography fontWeight={800} sx={{ color: cat.color, mr: 1 }}>{fmtMoney(sub)}</Typography>
+            ? (!hidePrice && <Typography fontWeight={800} sx={{ color: cat.color, mr: 1 }}>{fmtMoney(sub)}</Typography>)
             : <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>Đã tắt</Typography>}
         </Stack>
       </AccordionSummary>
@@ -182,15 +190,15 @@ export function CatBlock({
                   <TableCell padding="checkbox">✓</TableCell>
                   <TableCell>Hạng mục</TableCell>
                   <TableCell>Chi tiết / Ghi chú</TableCell>
-                  <TableCell>Đơn giá</TableCell>
+                  {!hidePrice && <TableCell>Đơn giá</TableCell>}
                   <TableCell>Đơn vị</TableCell>
                   <TableCell align="center">Lần</TableCell>
                   <TableCell align="center">SL</TableCell>
-                  <TableCell align="right">Thành tiền</TableCell>
+                  {!hidePrice && <TableCell align="right">Thành tiền</TableCell>}
                   <TableCell padding="checkbox" />
                 </TableRow>
               </TableHead>
-              <TableBody ref={bodyRef}>
+              <TableBody ref={bodyRef} sx={readOnly ? { pointerEvents: 'none' } : undefined}>
                 {items.map((item, i) => (
                   <LineRow
                     key={item.id}
@@ -207,13 +215,15 @@ export function CatBlock({
                     onMove={(dir) => onReorder(i, dir === 'up' ? i - 1 : i + 1)}
                     onAddRow={onAdd}
                     displayCurrency={displayCurrency}
+                    hidePrice={hidePrice}
                   />
                 ))}
                 {/* Hàng thêm nhanh: gõ tên là tạo dòng, không cần bấm nút */}
+                {!readOnly && (
                 <TableRow>
                   <TableCell padding="checkbox" />
                   <TableCell padding="checkbox" sx={{ textAlign: 'center', color: 'rgba(15,58,74,0.3)' }}>＋</TableCell>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={hidePrice ? 6 : 8}>
                     <Box
                       component="input"
                       value={quickAdd}
@@ -232,9 +242,11 @@ export function CatBlock({
                     />
                   </TableCell>
                 </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
+          {!readOnly && (
           <Stack direction="row" sx={{ borderTop: '1px dashed', borderColor: 'divider' }}>
             <Button fullWidth onClick={onAdd}>＋ Thêm dòng</Button>
             <Button onClick={() => setPasteOpen(true)} startIcon={<ContentPasteIcon />} sx={{ whiteSpace: 'nowrap', color: 'text.secondary' }}>Dán từ Excel</Button>
@@ -242,6 +254,7 @@ export function CatBlock({
               <Button onClick={() => setHelpOpen(true)} sx={{ minWidth: 44, color: 'text.secondary' }}>⌨</Button>
             </Tooltip>
           </Stack>
+          )}
         </AccordionDetails>
       )}
 

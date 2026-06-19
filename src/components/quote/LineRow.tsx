@@ -31,6 +31,8 @@ type Props = {
   onAddRow?: () => void;
   /** When set (DMC: "hiển thị tổng theo"), line totals show in this currency. */
   displayCurrency?: OutputCurrency;
+  /** Ẩn giá (phòng HDV): ẩn ô đơn giá + thành tiền. */
+  hidePrice?: boolean;
 };
 
 /** Compact bordered <select> matching legacy `.sel`. */
@@ -260,7 +262,7 @@ function EditNote({
   );
 }
 
-export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, warnings, prevItem, onMove, onAddRow, displayCurrency }: Props) {
+export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index, warnings, prevItem, onMove, onAddRow, displayCurrency, hidePrice }: Props) {
   const warns = warnings ?? [];
   const vnd = calcVND(item, rates, pax);
   const off = !item.enabled;
@@ -365,6 +367,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
       </TableCell>
 
       {/* Currency + price */}
+      {!hidePrice && (
       <TableCell sx={{ whiteSpace: 'nowrap' }}>
         <Stack direction="row" spacing={0.75} alignItems="center">
           <Sel value={item.cur} onChange={(e) => u({ cur: e.target.value })}>
@@ -373,6 +376,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
           <EditNum value={item.price} onChange={(v) => u({ price: v })} min={0} width={86} bold navCol="price" showWords fillFrom={prevItem?.price} />
         </Stack>
       </TableCell>
+      )}
 
       {/* Unit */}
       <TableCell>
@@ -408,6 +412,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
       </TableCell>
 
       {/* Total + FOC + Optional + Including */}
+      {!hidePrice && (
       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
         <Stack alignItems="flex-end" spacing={0.5}>
           {item.foc ? (
@@ -480,6 +485,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
           </Stack>
         </Stack>
       </TableCell>
+      )}
 
       {/* Nhân bản + Xoá */}
       <TableCell padding="checkbox" sx={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
