@@ -3127,3 +3127,87 @@ export async function sbSetDMCQuoteStatus(
 ): Promise<void> {
   return sbSetQuoteStatus(cloudId, status, client, lossReason);
 }
+
+// ── Quote: backfill helpers ───────────────────────────────────────────────────
+
+/**
+ * Batch-update workflow index columns for many quotes.
+ * Mirrors fbBackfillWorkflowIndex (firebase.ts:418-434): that fn reads the full
+ * Firestore history array, patches matching entries, writes once. Here each
+ * cloud_id requires its own UPDATE (Supabase JS client has no bulk conditional
+ * update with per-row values), but the pattern is sequential and the total row
+ * count is bounded by the number of active quotes in the system.
+ *
+ * Returns the number of quotes actually updated (cloud_ids that exist in the DB).
+ *
+ * Fields written:
+ *  - workflow_due jsonb    ← CloudQuoteEntry.workflowDue
+ *  - workflow_summary jsonb ← CloudQuoteEntry.workflowSummary
+ *  - depart_date date      ← CloudQuoteEntry.departDate (ISO yyyy-mm-dd string or undefined)
+ */
+export async function sbBackfillWorkflowIndex(
+  updates: Record<string, Pick<CloudQuoteEntry, 'workflowDue' | 'workflowSummary' | 'departDate'>>,
+  client: SupabaseClient = sb,
+): Promise<number> {
+  const cloudIds = Object.keys(updates);
+  if (!cloudIds.length) return 0;
+
+  let count = 0;
+  for (const cloudId of cloudIds) {
+    const u = updates[cloudId];
+    const { data, error } = await client.from('quotes').update({
+      workflow_due: u.workflowDue ?? null,
+      workflow_summary: (u.workflowSummary as unknown as Record<string, unknown>) ?? null,
+      depart_date: u.departDate ?? null,
+      updated_at: new Date().toISOString(),
+    }).eq('cloud_id', cloudId).select('id');
+    if (error) throw new Error('sbBackfillWorkflowIndex: ' + error.message);
+    if ((data as unknown[]).length > 0) count++;
+  }
+  return count;
+}
+
+/**
+ * Update payment_summary for a single quote by cloud_id.
+ * Mirrors fbSetEntryPaymentSummary / fbSetQuotePaymentSummary (firebase.ts:436-445).
+ */
+export async function sbSetQuotePaymentSummary(
+  cloudId: string,
+  paymentSummary: CloudQuoteEntry['paymentSummary'],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('quotes').update({
+    payment_summary: (paymentSummary as unknown as Record<string, unknown>) ?? null,
+    updated_at: new Date().toISOString(),
+  }).eq('cloud_id', cloudId);
+  if (error) throw new Error('sbSetQuotePaymentSummary: ' + error.message);
+}
+
+/**
+ * Batch-update payment_summary for many quotes.
+ * Mirrors fbBackfillPaymentIndex (firebase.ts:447-459).
+ * Returns count of quotes actually updated.
+ *
+ * Design note: Firestore's fb* version reads the full 1-document array and
+ * writes once (one write cycle regardless of N). Supabase rows are independent
+ * so we issue N sequential UPDATEs. For the expected scale (hundreds of active
+ * quotes) this is acceptable; if N grows large, consider a PL/pgSQL RPC.
+ */
+export async function sbBackfillPaymentIndex(
+  updates: Record<string, CloudQuoteEntry['paymentSummary']>,
+  client: SupabaseClient = sb,
+): Promise<number> {
+  const cloudIds = Object.keys(updates);
+  if (!cloudIds.length) return 0;
+
+  let count = 0;
+  for (const cloudId of cloudIds) {
+    const { data, error } = await client.from('quotes').update({
+      payment_summary: (updates[cloudId] as unknown as Record<string, unknown>) ?? null,
+      updated_at: new Date().toISOString(),
+    }).eq('cloud_id', cloudId).select('id');
+    if (error) throw new Error('sbBackfillPaymentIndex: ' + error.message);
+    if ((data as unknown[]).length > 0) count++;
+  }
+  return count;
+}

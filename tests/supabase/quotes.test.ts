@@ -18,6 +18,9 @@ import {
   sbSetDMCEntryLink,
   sbSetQuoteStatus,
   sbSetDMCQuoteStatus,
+  sbBackfillWorkflowIndex,
+  sbSetQuotePaymentSummary,
+  sbBackfillPaymentIndex,
 } from '../../src/lib/supabase';
 import type { CloudQuoteEntry, QuoteDraft, Collaborator } from '../../src/types/quote';
 
@@ -847,5 +850,158 @@ describe('Task 7 — cross-links + status (regular + DMC)', () => {
 
     const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeDMCQuoteHistory(cb, c));
     expect(list.find((e) => e.cloudId === 'q-dmc-status-1')!.status).toBe('sent');
+  });
+});
+
+// ── Task 8: workflow/payment backfills ─────────────────────────────────────
+
+describe('Task 8 — workflow/payment backfills', () => {
+  beforeEach(async () => {
+    await truncate([
+      'quote_collaborators', 'attachments', 'quote_versions',
+      'quote_payments', 'quote_workflow_logs', 'quote_workflow_steps',
+      'quote_group_items', 'quote_groups', 'quote_flight_fares',
+      'quote_flight_segments', 'quote_flights', 'quote_line_items',
+      'quotes',
+    ]);
+  });
+
+  // ── sbBackfillWorkflowIndex ───────────────────────────────────────────────
+
+  it('sbBackfillWorkflowIndex: updates workflow_due + workflow_summary + depart_date; returns count', async () => {
+    const c = await getViettoursClient();
+
+    await sbSaveQuote(
+      {
+        id: 20, cloudId: 'q-wf-1', quoteCode: 'DT020', name: 'WF 1',
+        template: 'domestic', pax: 10, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+    await sbSaveQuote(
+      {
+        id: 21, cloudId: 'q-wf-2', quoteCode: 'DT021', name: 'WF 2',
+        template: 'domestic', pax: 5, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const updates: Record<string, Pick<CloudQuoteEntry, 'workflowDue' | 'workflowSummary' | 'departDate'>> = {
+      'q-wf-1': {
+        workflowDue: [{ label: 'Đặt khách sạn', dueDate: '2026-07-01', assignee: 'tester' }],
+        workflowSummary: { current: 'Đặt khách sạn', donePct: 30, total: 10, overdue: 1 },
+        departDate: '2026-08-15',
+      },
+      'q-wf-2': {
+        workflowDue: [],
+        workflowSummary: { donePct: 100, total: 10, overdue: 0 },
+        departDate: '2026-09-01',
+      },
+      'q-nonexistent': {
+        workflowDue: [],
+        workflowSummary: { donePct: 0, total: 0, overdue: 0 },
+        departDate: undefined,
+      },
+    };
+
+    const count = await sbBackfillWorkflowIndex(updates, c);
+    // Only 2 of the 3 cloud_ids exist; count = 2.
+    expect(count).toBe(2);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e1 = list.find((e) => e.cloudId === 'q-wf-1')!;
+    const e2 = list.find((e) => e.cloudId === 'q-wf-2')!;
+
+    expect(e1.workflowDue).toHaveLength(1);
+    expect(e1.workflowDue![0].label).toBe('Đặt khách sạn');
+    expect(e1.workflowSummary!.donePct).toBe(30);
+    expect(e1.departDate).toBe('2026-08-15');
+
+    expect(e2.workflowDue).toHaveLength(0);
+    expect(e2.workflowSummary!.donePct).toBe(100);
+    expect(e2.departDate).toBe('2026-09-01');
+  });
+
+  it('sbBackfillWorkflowIndex: returns 0 for empty updates map', async () => {
+    const c = await getViettoursClient();
+    const count = await sbBackfillWorkflowIndex({}, c);
+    expect(count).toBe(0);
+  });
+
+  // ── sbSetQuotePaymentSummary ──────────────────────────────────────────────
+
+  it('sbSetQuotePaymentSummary: updates payment_summary for a single quote', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 22, cloudId: 'q-pay-1', quoteCode: 'DT022', name: 'Pay 1',
+        template: 'domestic', pax: 8, totalCost: 10000000,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const summary: CloudQuoteEntry['paymentSummary'] = {
+      payable: 8000000, paid: 3000000, remaining: 5000000,
+    };
+    await sbSetQuotePaymentSummary('q-pay-1', summary, c);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e = list.find((e) => e.cloudId === 'q-pay-1')!;
+    expect(e.paymentSummary).toMatchObject({ payable: 8000000, paid: 3000000, remaining: 5000000 });
+  });
+
+  // ── sbBackfillPaymentIndex ────────────────────────────────────────────────
+
+  it('sbBackfillPaymentIndex: batch-updates payment_summary; returns count', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        id: 23, cloudId: 'q-pay-2', quoteCode: 'DT023', name: 'Pay 2',
+        template: 'domestic', pax: 4, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+    await sbSaveQuote(
+      {
+        id: 24, cloudId: 'q-pay-3', quoteCode: 'DT024', name: 'Pay 3',
+        template: 'domestic', pax: 6, totalCost: 0,
+        collaborators: [], createdByUsername: 'tester', createdByName: 'QA',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), updatedBy: 'QA',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const updates: Record<string, CloudQuoteEntry['paymentSummary']> = {
+      'q-pay-2': { payable: 5000000, paid: 5000000, remaining: 0 },
+      'q-pay-3': { payable: 2000000, paid: 0, remaining: 2000000 },
+      'q-no-such-id': { payable: 999, paid: 0, remaining: 999 },
+    };
+
+    const count = await sbBackfillPaymentIndex(updates, c);
+    expect(count).toBe(2);
+
+    const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    const e2 = list.find((e) => e.cloudId === 'q-pay-2')!;
+    const e3 = list.find((e) => e.cloudId === 'q-pay-3')!;
+    expect(e2.paymentSummary!.remaining).toBe(0);
+    expect(e3.paymentSummary!.remaining).toBe(2000000);
+  });
+
+  it('sbBackfillPaymentIndex: returns 0 for empty map', async () => {
+    const c = await getViettoursClient();
+    expect(await sbBackfillPaymentIndex({}, c)).toBe(0);
   });
 });
