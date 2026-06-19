@@ -1,3 +1,5 @@
+import type { FileAttachment } from './quote';
+
 export type NotificationType =
   | 'payment_due'
   | 'payment_approval'
@@ -34,6 +36,8 @@ export type Notification = {
   threadId?: string;   // shared comment thread (collaboration group)
   /** Mức ưu tiên — 'high'/'urgent' hiển thị nổi bật ở chuông & Center. */
   priority?: 'normal' | 'high' | 'urgent';
+  /** File đính kèm (R2) — xem trước qua khung dùng chung. */
+  attachments?: FileAttachment[];
   data?: Record<string, unknown>;
 };
 

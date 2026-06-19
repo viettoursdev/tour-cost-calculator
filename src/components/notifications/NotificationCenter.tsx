@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Alert, Autocomplete, Avatar, Box, Button, Chip, Dialog, Divider, IconButton,
-  List, ListItemButton, MenuItem, Stack, TextField, Tooltip, Typography,
+  LinearProgress, List, ListItemButton, MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import CampaignIcon from '@mui/icons-material/Campaign';
@@ -9,6 +9,9 @@ import SendIcon from '@mui/icons-material/Send';
 import AddCommentIcon from '@mui/icons-material/AddComment';
 import LinkIcon from '@mui/icons-material/Link';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -17,7 +20,7 @@ import {
   fbSubscribeNotifThread, fbAddThreadComment, fbEnsureNotifThread, fbSendNotificationMany,
 } from '@/lib/firebase';
 import { LEGACY } from '@/theme';
-import type { NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
+import type { FileAttachment, NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
 import { NOTIF_TEMPLATES } from './notifCompose';
 import { NOTIF_PRIORITY } from '@/types';
 
@@ -320,6 +323,14 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
         <Typography fontSize={12} color="text.secondary" sx={{ mb: 2 }}>Từ: {notif.createdBy}</Typography>
       )}
 
+      {(notif.attachments?.length ?? 0) > 0 && (
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+          {notif.attachments!.map((a) => (
+            <Chip key={a.key} size="small" icon={<AttachFileIcon />} label={a.name} onClick={() => openFilePreview({ key: a.key, name: a.name })} />
+          ))}
+        </Stack>
+      )}
+
       {notif.link && (
         <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={() => onOpenLink(notif.link!)} sx={{ mb: 3, color: LEGACY.teal, borderColor: 'rgba(20,150,140,0.4)' }}>
           {LINK_LABEL[notif.link.kind] ?? 'Mở'}: {notif.link.label}
@@ -412,7 +423,23 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [attachQuote, setAttachQuote] = useState(!!currentQuote);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    if (f.size > 20 * 1024 * 1024) { window.alert('File vượt quá 20MB.'); return; }
+    setUploading(true); setUploadPct(0);
+    try {
+      const up = await uploadFileToWorker(f, setUploadPct);
+      setAttachments((p) => [...p, { key: up.key, name: up.name, uploadedBy: currentUser.name, uploadedAt: new Date().toISOString() }]);
+    } catch (e2) { window.alert('Tải file lỗi: ' + (e2 as Error).message); }
+    finally { setUploading(false); setUploadPct(0); }
+  };
 
   const otherUsers = users.filter((u) => u.u !== currentUser.u);
   // Nhóm chọn nhanh người nhận theo vai trò (chỉ các vai trò có người).
@@ -450,6 +477,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
       await fbSendNotificationMany(members, {
         type, title: title.trim(), message: message.trim(), createdBy: currentUser.name,
         ...(link ? { link } : {}), threadId, ...(priority !== 'normal' ? { priority } : {}),
+        ...(attachments.length ? { attachments } : {}),
       });
       onClose();
     } catch (e) {
@@ -509,6 +537,42 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
               <Typography fontSize={11} color="text.secondary">Báo giá đang mở</Typography>
             </Stack>
           )}
+
+          {/* Đính kèm file */}
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Button component="label" size="small" variant="outlined" startIcon={<AttachFileIcon />} disabled={uploading}>
+                Đính kèm file<input type="file" hidden onChange={onPickFile} />
+              </Button>
+              {uploading && <Typography variant="caption" color="text.secondary">Đang tải… {uploadPct}%</Typography>}
+            </Stack>
+            {uploading && <LinearProgress variant={uploadPct > 0 && uploadPct < 100 ? 'determinate' : 'indeterminate'} value={uploadPct} sx={{ mt: 0.5, borderRadius: 2 }} />}
+            <Stack spacing={0.5} sx={{ mt: attachments.length ? 0.75 : 0 }}>
+              {attachments.map((a, i) => (
+                <Stack key={a.key} direction="row" alignItems="center" spacing={1}>
+                  <Chip size="small" icon={<AttachFileIcon />} label={a.name} onClick={() => openFilePreview({ key: a.key, name: a.name })} sx={{ maxWidth: 280 }} />
+                  <Button size="small" color="error" onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))} sx={{ minWidth: 0, fontSize: 11 }}>Gỡ</Button>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Xem trước */}
+          <Box>
+            <Button size="small" onClick={() => setShowPreview((v) => !v)}>{showPreview ? 'Ẩn xem trước' : '👁 Xem trước tin'}</Button>
+            {showPreview && (
+              <Box sx={{ mt: 1, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: '#f7faf9' }}>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.5 }}>
+                  {priority !== 'normal' && <Chip size="small" label={NOTIF_PRIORITY[priority].label} sx={{ height: 18, fontSize: 9.5, fontWeight: 800, bgcolor: NOTIF_PRIORITY[priority].color, color: '#fff' }} />}
+                  <Typography fontWeight={800} fontSize={14}>{title || '(chưa có tiêu đề)'}</Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>{message || '(chưa có nội dung)'}</Typography>
+                {(attachQuote && currentQuote) && <Chip size="small" icon={<LinkIcon />} label={currentQuote.name} sx={{ mt: 1, mr: 0.5 }} />}
+                {attachments.map((a) => <Chip key={a.key} size="small" icon={<AttachFileIcon />} label={a.name} sx={{ mt: 1, mr: 0.5 }} />)}
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1 }}>Gửi tới {recipients.length} người</Typography>
+              </Box>
+            )}
+          </Box>
         </Stack>
         <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: 3 }}>
           <Button onClick={onClose} disabled={busy}>Huỷ</Button>
