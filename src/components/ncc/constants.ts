@@ -1,5 +1,5 @@
 export const NCC_SECTORS: string[] = [
-  'Khách sạn', 'DMC', 'Hàng không', 'Event', 'Venue', 'Transport',
+  'Khách sạn', 'DMC', 'Tourism Board', 'Hàng không', 'Event', 'Venue', 'Transport',
   'Nhà hàng', 'Bảo hiểm', 'Logistics', 'Visa', 'Âm thanh – Ánh sáng',
   'In ấn & Quà tặng', 'Khác',
 ];
@@ -21,6 +21,7 @@ export const NCC_ALL_COUNTRIES: string[] = Object.values(NCC_COUNTRIES).flat();
 export const SECTOR_COLOR: Record<string, string> = {
   'Khách sạn':           '#f5a623',
   'DMC':                 '#8e44ad',
+  'Tourism Board':       '#1abc9c',
   'Hàng không':          '#2980b9',
   'Event':               '#e74c3c',
   'Venue':               '#16a085',
