@@ -381,7 +381,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                 <WhiteNum value={pax} min={1} onChange={(v) => setPax(v)} />
                 <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 13 }}>khách</Typography>
               </HeaderPill>
-              <HeaderPill icon="🚀">
+              <HeaderPill icon="✈️">
                 <Box
                   component="input" type="date" value={info.startDate ?? ''}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => patchInfo({ startDate: e.target.value || null })}

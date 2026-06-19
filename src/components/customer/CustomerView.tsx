@@ -52,6 +52,8 @@ export function CustomerView() {
   const suppliers = useNccStore((s) => s.suppliers);
   const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageNCC');
   const [convertTarget, setConvertTarget] = useState<Customer | null>(null);
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem('vte_cust_compact') === '1'; } catch { return false; } });
+  const toggleCompact = () => setCompact((v) => { const nv = !v; try { localStorage.setItem('vte_cust_compact', nv ? '1' : '0'); } catch { /* quota */ } return nv; });
 
   const owners = useMemo(
     () => [...new Set(customers.map((c) => c.createdBy).filter(Boolean))].sort(),
@@ -162,6 +164,10 @@ export function CustomerView() {
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
           owners={owners} owner={owner} onOwner={setOwner}
         />
+        <Button size="small" variant="outlined" onClick={toggleCompact}
+          title={compact ? 'Xem dạng thẻ' : 'Thu gọn (chỉ tên)'}>
+          {compact ? '▦ Thẻ' : '▤ Thu gọn'}
+        </Button>
         {(search || filterType || owner || dateRange !== 'all') && (
           <Button
             size="small"
@@ -189,8 +195,23 @@ export function CustomerView() {
         </Box>
       )}
 
+      {/* Thu gọn — danh sách chỉ tên */}
+      {!loading && filtered.length > 0 && compact && (
+        <Stack sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+          {filtered.map((c, i) => (
+            <Box key={c.id} onClick={() => setView360(c)}
+              sx={{ px: 1.5, py: 0.9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
+                borderTop: i ? '1px solid' : 'none', borderColor: 'divider', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+              <Typography fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>{c.name}</Typography>
+              <Chip label={c.type === 'company' ? 'Công ty' : 'Cá nhân'} size="small" sx={{ height: 18, fontSize: 10 }} />
+              {c.address && <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 160 }}>{c.address}</Typography>}
+            </Box>
+          ))}
+        </Stack>
+      )}
+
       {/* Card grid */}
-      {!loading && filtered.length > 0 && (
+      {!loading && filtered.length > 0 && !compact && (
         <Box
           sx={{
             display: 'grid',

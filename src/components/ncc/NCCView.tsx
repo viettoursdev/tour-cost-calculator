@@ -52,6 +52,8 @@ export function NCCView() {
   const customers = useCustomerStore((s) => s.customers);
   const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageCustomers');
   const [convertTarget, setConvertTarget] = useState<Ncc | null>(null);
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem('vte_ncc_compact') === '1'; } catch { return false; } });
+  const toggleCompact = () => setCompact((v) => { const nv = !v; try { localStorage.setItem('vte_ncc_compact', nv ? '1' : '0'); } catch { /* quota */ } return nv; });
 
   const owners = useMemo(
     () => [...new Set(suppliers.map((s) => s.createdBy).filter(Boolean))].sort(),
@@ -166,6 +168,10 @@ export function NCCView() {
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
           owners={owners} owner={owner} onOwner={setOwner}
         />
+        <Button size="small" variant="outlined" onClick={toggleCompact}
+          title={compact ? 'Xem dạng thẻ' : 'Thu gọn (chỉ tên)'}>
+          {compact ? '▦ Thẻ' : '▤ Thu gọn'}
+        </Button>
         {(search || filterSector || filterContinent || filterCountry || owner || dateRange !== 'all') && (
           <Button size="small" color="error" variant="outlined"
             onClick={() => { setSearch(''); setFilterSector(''); setFilterContinent(''); setFilterCountry(''); setOwner(''); setDateRange('all'); }}>
@@ -187,8 +193,25 @@ export function NCCView() {
         </Box>
       )}
 
+      {/* Thu gọn — danh sách chỉ tên */}
+      {!loading && filtered.length > 0 && compact && (
+        <Stack sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+          {filtered.map((s, i) => (
+            <Box key={s.id} onClick={() => setModal({ ncc: s })}
+              sx={{ px: 1.5, py: 0.9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 1,
+                borderTop: i ? '1px solid' : 'none', borderColor: 'divider', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+              <Typography fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>{s.name}</Typography>
+              {s.country && <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{s.country}</Typography>}
+              {(s.sectors ?? []).slice(0, 2).map((sec) => (
+                <Chip key={sec} label={sec} size="small" sx={{ height: 18, fontSize: 10, bgcolor: (SECTOR_COLOR[sec] ?? '#7f8c8d') + '22', color: SECTOR_COLOR[sec] ?? '#555' }} />
+              ))}
+            </Box>
+          ))}
+        </Stack>
+      )}
+
       {/* Card grid */}
-      {!loading && filtered.length > 0 && (
+      {!loading && filtered.length > 0 && !compact && (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
           {filtered.map((s) => (
             <NccCard
