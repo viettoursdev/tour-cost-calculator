@@ -46,7 +46,7 @@ begin
       now(), q->>'updated_by_name')
   on conflict (cloud_id) do update set
       template = excluded.template, name = excluded.name, pax = excluded.pax,
-      total_cost = coalesce(excluded.total_cost, public.quotes.total_cost),
+      total_cost = case when q ? 'total_cost' then excluded.total_cost else public.quotes.total_cost end,
       status = excluded.status, info = excluded.info,
       rates = excluded.rates, rate_base = excluded.rate_base, margin = excluded.margin,
       vat = excluded.vat, svc_basis = excluded.svc_basis, rounding = excluded.rounding,
@@ -151,7 +151,10 @@ begin
     values (v_quote_id, coalesce((p->'version'->>'version_no')::int, 1),
         coalesce(nullif(p->'version'->>'saved_at','')::timestamptz, now()),
         coalesce(p->'version'->>'saved_by',''), coalesce(p->'version'->>'note',''),
-        coalesce(p->'version'->'state','{}'::jsonb));
+        coalesce(p->'version'->'state','{}'::jsonb))
+    on conflict (quote_id, version_no) do update set
+        saved_at = excluded.saved_at, saved_by = excluded.saved_by,
+        note = excluded.note, state = excluded.state;
     delete from public.quote_versions where quote_id = v_quote_id and id not in (
       select id from public.quote_versions where quote_id = v_quote_id
       order by version_no desc limit 20);
