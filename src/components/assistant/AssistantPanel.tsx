@@ -5,6 +5,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import PublicIcon from '@mui/icons-material/Public';
+import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import { runAssistant, type AssistantProposal } from '@/lib/assistant/agent';
 import { applyItineraryDraft, applyQuoteDraft, applySupplierDraft } from '@/lib/assistant/draftBuilders';
 import { toast } from '@/stores/toastStore';
@@ -91,7 +92,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
     <Drawer anchor="right" open={open} onClose={onClose}
       slotProps={{ paper: { sx: { width: { xs: '100%', sm: 440 }, display: 'flex', flexDirection: 'column' } } }}>
       <Box sx={{ px: 2, py: 1.5, background: LEGACY.headerGradient, color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ fontSize: 20 }}>🤖</Box>
+        <SupportAgentIcon sx={{ fontSize: 24 }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography fontWeight={900}>Trợ lý ảo Viettours</Typography>
           <Typography variant="caption" sx={{ opacity: 0.85 }}>Tra cứu · phân tích · tư vấn (theo quyền của bạn)</Typography>
