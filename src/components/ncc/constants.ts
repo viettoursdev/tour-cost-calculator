@@ -4,6 +4,20 @@ export const NCC_SECTORS: string[] = [
   'In ấn & Quà tặng', 'Khác',
 ];
 
+export const NCC_CONTINENTS: string[] = ['Châu Á', 'Châu Âu', 'Châu Mỹ', 'Châu Phi', 'Châu Đại Dương'];
+
+/** Quốc gia theo châu lục (Việt Nam đứng đầu Châu Á cho NCC nội địa). */
+export const NCC_COUNTRIES: Record<string, string[]> = {
+  'Châu Á': ['Việt Nam', 'Trung Quốc', 'Nhật Bản', 'Hàn Quốc', 'Thái Lan', 'Singapore', 'Malaysia', 'Indonesia', 'Campuchia', 'Lào', 'Ấn Độ', 'UAE/Dubai', 'Đài Loan', 'Hồng Kông', 'Philippines'],
+  'Châu Âu': ['Pháp', 'Anh', 'Đức', 'Ý', 'Tây Ban Nha', 'Thụy Sĩ', 'Hà Lan', 'Nga', 'Áo', 'Bỉ'],
+  'Châu Mỹ': ['Mỹ', 'Canada', 'Brazil', 'Mexico', 'Argentina'],
+  'Châu Phi': ['Ai Cập', 'Nam Phi', 'Morocco', 'Kenya'],
+  'Châu Đại Dương': ['Úc', 'New Zealand'],
+};
+
+/** Danh sách phẳng tất cả quốc gia (cho ô lọc khi chưa chọn châu lục). */
+export const NCC_ALL_COUNTRIES: string[] = Object.values(NCC_COUNTRIES).flat();
+
 export const SECTOR_COLOR: Record<string, string> = {
   'Khách sạn':           '#f5a623',
   'DMC':                 '#8e44ad',

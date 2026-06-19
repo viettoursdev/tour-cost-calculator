@@ -15,7 +15,7 @@ import { NCCModal } from './NCCModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
 import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
-import { NCC_SECTORS, SECTOR_COLOR } from './constants';
+import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
 import type { Ncc } from '@/types';
 import { filterRank, normalizeVN } from '@/lib/search';
 import { toast } from '@/stores/toastStore';
@@ -37,6 +37,8 @@ export function NCCView() {
 
   const [search, setSearch] = useState('');
   const [filterSector, setFilterSector] = useState('');
+  const [filterContinent, setFilterContinent] = useState('');
+  const [filterCountry, setFilterCountry] = useState('');
   const [sort, setSort] = useState<SortMode>('oldest');
   const [dateRange, setDateRange] = useState<DateRangeKey>('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -59,16 +61,18 @@ export function NCCView() {
     const base = suppliers.filter((s) => {
       if (!viewAll && s.createdBy !== currentUser?.name) return false;
       if (filterSector && !s.sectors.includes(filterSector)) return false;
+      if (filterContinent && s.continent !== filterContinent) return false;
+      if (filterCountry && s.country !== filterCountry) return false;
       if (owner && s.createdBy !== owner) return false;
       if (!inDateRange(s.updatedAt ?? s.createdAt, dateRange, dateFrom, dateTo)) return false;
       return true;
     });
     const text = (s: Ncc) => [
-      s.name, s.location, s.note, (s.sectors ?? []).join(' '),
+      s.name, s.location, s.country, s.continent, s.note, (s.sectors ?? []).join(' '),
       ...(s.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
-  }, [suppliers, search, filterSector, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
+  }, [suppliers, search, filterSector, filterContinent, filterCountry, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Ncc) => {
     const norm = normalizeVN(form.name);
@@ -135,6 +139,18 @@ export function NCCView() {
             <MenuItem key={s} value={s}>{s}</MenuItem>
           ))}
         </Select>
+        <Select size="small" value={filterContinent}
+          onChange={(e) => { setFilterContinent(e.target.value); setFilterCountry(''); }}
+          sx={{ minWidth: 150 }}>
+          <MenuItem value="">Tất cả châu lục</MenuItem>
+          {NCC_CONTINENTS.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+        </Select>
+        <Select size="small" value={filterCountry} displayEmpty
+          onChange={(e) => setFilterCountry(e.target.value)}
+          sx={{ minWidth: 150 }}>
+          <MenuItem value="">Tất cả quốc gia</MenuItem>
+          {(filterContinent ? (NCC_COUNTRIES[filterContinent] ?? []) : NCC_ALL_COUNTRIES).map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+        </Select>
         <Select
           size="small"
           value={sort}
@@ -150,9 +166,9 @@ export function NCCView() {
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
           owners={owners} owner={owner} onOwner={setOwner}
         />
-        {(search || filterSector || owner || dateRange !== 'all') && (
+        {(search || filterSector || filterContinent || filterCountry || owner || dateRange !== 'all') && (
           <Button size="small" color="error" variant="outlined"
-            onClick={() => { setSearch(''); setFilterSector(''); setOwner(''); setDateRange('all'); }}>
+            onClick={() => { setSearch(''); setFilterSector(''); setFilterContinent(''); setFilterCountry(''); setOwner(''); setDateRange('all'); }}>
             ✕ Xoá lọc
           </Button>
         )}

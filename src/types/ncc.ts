@@ -36,13 +36,29 @@ export type NccProduct = {
 
 export type NccProductsDoc = { products: NccProduct[] };
 
+/** Đánh giá dịch vụ NCC — có log người + thời điểm. */
+export type NccRating = {
+  id: string;
+  by: string;       // username
+  byName: string;   // tên người đánh giá
+  at: string;       // ISO
+  stars: number;    // 1..5
+  comment: string;
+};
+
 export type Ncc = {
   id: string;
   name: string;
   sectors: string[];
-  location: string;
+  continent?: string;   // châu lục (lọc)
+  country?: string;     // quốc gia (lọc)
+  location: string;     // địa điểm/thành phố cụ thể
   contacts: NccContact[];
   note: string;
+  /** Phân tích/đánh giá của AI (lưu để tham khảo, hiển thị dưới ghi chú). */
+  aiAnalysis?: string;
+  /** Lịch sử đánh giá dịch vụ. */
+  ratings?: NccRating[];
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

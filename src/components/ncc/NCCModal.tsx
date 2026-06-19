@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-  Paper, Stack, TextField, Typography,
+  MenuItem, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -13,7 +13,7 @@ import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import type { ParsedNcc } from '@/lib/partyParse';
 import type { NameCardFields } from '@/lib/nameCard';
-import { NCC_SECTORS, SECTOR_COLOR } from './constants';
+import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
 import type { Ncc, NccContact } from '@/types';
 
 const EMPTY_CONTACT: NccContact = { name: '', phone: '', email: '', position: '' };
@@ -207,9 +207,23 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
             </Box>
           </Box>
 
+          {/* Châu lục + Quốc gia */}
+          <Stack direction="row" spacing={1.5}>
+            <TextField select fullWidth label="Châu lục" value={form.continent ?? ''} disabled={!canEdit}
+              onChange={(e) => setForm((p) => ({ ...p, continent: e.target.value, country: '' }))}>
+              <MenuItem value=""><em>—</em></MenuItem>
+              {NCC_CONTINENTS.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </TextField>
+            <TextField select fullWidth label="Quốc gia" value={form.country ?? ''} disabled={!canEdit}
+              onChange={(e) => setF('country', e.target.value)}>
+              <MenuItem value=""><em>—</em></MenuItem>
+              {(form.continent ? (NCC_COUNTRIES[form.continent] ?? []) : NCC_ALL_COUNTRIES).map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </TextField>
+          </Stack>
+
           {/* Location */}
           <TextField
-            label="Địa điểm"
+            label="Địa điểm / Thành phố"
             value={form.location}
             onChange={(e) => setF('location', e.target.value)}
             placeholder="VD: TP. Hồ Chí Minh, Đà Nẵng..."
