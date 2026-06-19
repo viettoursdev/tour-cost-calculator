@@ -8,6 +8,7 @@ import GroupIcon from '@mui/icons-material/Group';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META } from './constants';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -99,6 +100,8 @@ export function QuoteHistoryView() {
   const visibleQuotes = useQuoteHistoryStore((s) => s.visibleQuotes);
   const currentUserU = useAuthStore((s) => s.currentUser?.u);
   const users = useAuthStore((s) => s.users);
+  const customers = useCustomerStore((s) => s.customers);
+  const custById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const applyImport = useQuoteStore((s) => s.applyImport);
@@ -185,6 +188,28 @@ export function QuoteHistoryView() {
   const columns: GridColDef<CloudQuoteEntry>[] = [
     { field: 'quoteCode', headerName: 'Mã', width: 140 },
     { field: 'name', headerName: 'Tên báo giá', flex: 1, minWidth: 180 },
+    {
+      field: 'customerName',
+      headerName: 'Khách hàng',
+      width: 200,
+      renderCell: (p: GridRenderCellParams<CloudQuoteEntry, string>) => {
+        const name = p.row.customerName;
+        if (!name) return <Typography variant="caption" color="text.disabled">—</Typography>;
+        const cust = p.row.customerId ? custById.get(p.row.customerId) : undefined;
+        const contact = cust?.contacts?.find((c) => c.phone || c.email || c.name);
+        const sub = [contact?.phone, contact?.email].filter(Boolean).join(' · ');
+        return (
+          <Stack sx={{ minWidth: 0, justifyContent: 'center', height: '100%' }}>
+            <Typography variant="body2" fontWeight={600} noWrap>{name}</Typography>
+            {(sub || cust?.taxCode) && (
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {sub}{cust?.taxCode ? `${sub ? ' · ' : ''}MST ${cust.taxCode}` : ''}
+              </Typography>
+            )}
+          </Stack>
+        );
+      },
+    },
     {
       field: 'template',
       headerName: 'Loại',
