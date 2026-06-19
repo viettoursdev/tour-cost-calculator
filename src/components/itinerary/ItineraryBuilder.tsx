@@ -19,6 +19,7 @@ import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { ItineraryCheckDialog } from './ItineraryCheckDialog';
 import { ItineraryPreviewDialog } from './ItineraryPreviewDialog';
+import { AIScheduleDialog } from './AIScheduleDialog';
 import { callAIWorker } from '@/lib/aiWorker';
 // Trình xuất lịch trình nạp động khi bấm.
 import { useMenuStore } from '@/stores/menuStore';
@@ -78,6 +79,11 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [aiBusy, setAiBusy] = useState<string | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [aiSchedOpen, setAiSchedOpen] = useState(false);
+  const applyAISchedule = (days: Day[], mode: 'replace' | 'append') => setIt((p) => {
+    const merged = mode === 'append' ? [...p.schedule, ...days] : days;
+    return { ...p, schedule: merged.map((d, i) => ({ ...d, dayNum: i + 1 })) };
+  });
   const doExportWord = () => void import('@/lib/exports/exportItineraryDocx').then((m) => m.exportItineraryDocx(it, code));
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const pois = usePoiStore((s) => s.pois);
@@ -551,6 +557,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             <TextField size="small" type="date" label="Ngày khởi hành" InputLabelProps={{ shrink: true }}
               value={it.startDate ?? ''} onChange={(e) => fillDates(e.target.value)}
               sx={{ width: 168 }} title="Chọn ngày khởi hành → tự điền ngày cho từng Ngày" />
+            <Button variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => setAiSchedOpen(true)}
+              sx={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+              AI lịch trình
+            </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
               sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
               Thêm ngày
@@ -762,6 +772,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
       <ItineraryCheckDialog itinerary={checkOpen ? it : null} onClose={() => setCheckOpen(false)} onExportWord={doExportWord}
         onPreview={() => setPreviewOpen(true)} />
       <ItineraryPreviewDialog itinerary={previewOpen ? it : null} code={code} onClose={() => setPreviewOpen(false)} />
+      <AIScheduleDialog open={aiSchedOpen} onClose={() => setAiSchedOpen(false)}
+        defaultDestination={it.destination} defaultDays={it.days || it.schedule.length || 4}
+        hasSchedule={it.schedule.length > 0} onApply={applyAISchedule} />
     </Box>
   );
 }
