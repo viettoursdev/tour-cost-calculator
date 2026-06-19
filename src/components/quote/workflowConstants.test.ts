@@ -29,6 +29,12 @@ describe('workflowProgress', () => {
     expect(workflowProgress(w)).toEqual({ done: 2, total: 13, pct: 13 });
   });
   it('handles empty', () => expect(workflowProgress([])).toEqual({ done: 0, total: 0, pct: 0 }));
+  it('bỏ bước "Không thực hiện" (skipped) khỏi tổng/percent', () => {
+    const w = [newWorkflowStep('A'), newWorkflowStep('B'), newWorkflowStep('C')];
+    w[0].status = 'done'; w[1].status = 'skipped'; // C còn 'todo'
+    // applicable = A,C → done 1/2 = 50%; total (không tính skipped) = 2
+    expect(workflowProgress(w)).toEqual({ done: 1, total: 2, pct: 50 });
+  });
 });
 
 describe('cycleTimeMs', () => {
@@ -158,8 +164,9 @@ describe('workflowDueSummary', () => {
 });
 
 describe('status meta', () => {
-  it('covers all 4 statuses with label + hex color', () => {
-    expect(WORKFLOW_STATUS_ORDER).toHaveLength(4);
+  it('covers all 5 statuses with label + hex color', () => {
+    expect(WORKFLOW_STATUS_ORDER).toHaveLength(5);
+    expect(WORKFLOW_STATUS_ORDER).toContain('skipped');
     for (const s of WORKFLOW_STATUS_ORDER) {
       expect(WORKFLOW_STATUS_META[s].label).toBeTruthy();
       expect(WORKFLOW_STATUS_META[s].color).toMatch(/^#[0-9a-f]{6}$/i);

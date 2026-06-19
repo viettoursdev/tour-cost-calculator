@@ -22,9 +22,10 @@ export const WORKFLOW_STATUS_META: Record<WorkflowStatus, { label: string; color
   doing:   { label: 'Đang làm',  color: '#2563eb' },
   done:    { label: 'Hoàn tất',  color: '#27ae60' },
   blocked: { label: 'Tạm hoãn',  color: '#dc3250' },
+  skipped: { label: 'Không thực hiện', color: '#78716c' },
 };
 
-export const WORKFLOW_STATUS_ORDER: WorkflowStatus[] = ['todo', 'doing', 'done', 'blocked'];
+export const WORKFLOW_STATUS_ORDER: WorkflowStatus[] = ['todo', 'doing', 'done', 'blocked', 'skipped'];
 
 let seq = 0;
 export const newWorkflowStep = (label = 'Bước mới', status: WorkflowStatus = 'todo'): WorkflowStep => ({
@@ -60,9 +61,11 @@ const weightOf = (s: WorkflowStep): number => {
 };
 /** % hoàn thành CÓ TRỌNG SỐ (bước đã 'done' tính theo trọng số / tổng trọng số). */
 export function weightedPct(steps: WorkflowStep[]): number {
-  const wTotal = steps.reduce((a, s) => a + weightOf(s), 0);
+  // Bước "Không thực hiện" (skipped) coi như N/A — không tính vào mẫu số.
+  const applicable = steps.filter((s) => s.status !== 'skipped');
+  const wTotal = applicable.reduce((a, s) => a + weightOf(s), 0);
   if (!wTotal) return 0;
-  const wDone = steps.filter((s) => s.status === 'done').reduce((a, s) => a + weightOf(s), 0);
+  const wDone = applicable.filter((s) => s.status === 'done').reduce((a, s) => a + weightOf(s), 0);
   return Math.round((wDone / wTotal) * 100);
 }
 
@@ -152,12 +155,12 @@ export function workflowSignals(ctx: WorkflowSignalCtx): Partial<Record<Workflow
   return out;
 }
 
-const RANK: Record<WorkflowStatus, number> = { todo: 0, doing: 1, done: 2, blocked: -1 };
+const RANK: Record<WorkflowStatus, number> = { todo: 0, doing: 1, done: 2, blocked: -1, skipped: -1 };
 /** Gợi ý cho 1 bước nếu tín hiệu CAO HƠN trạng thái hiện tại (và không bị Tạm hoãn). */
 export function suggestionFor(step: WorkflowStep, signals: Partial<Record<WorkflowStepKey, WorkflowStatus>>): WorkflowStatus | null {
   const k = keyOf(step);
   const sig = k ? signals[k] : undefined;
-  if (!sig || step.status === 'blocked') return null;
+  if (!sig || step.status === 'blocked' || step.status === 'skipped') return null;
   return RANK[sig] > RANK[step.status] ? sig : null;
 }
 
@@ -214,7 +217,11 @@ export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null
 
 /** Tiến độ: số bước hoàn tất / tổng (đếm) + phần trăm CÓ TRỌNG SỐ. */
 export function workflowProgress(steps: WorkflowStep[]): { done: number; total: number; pct: number } {
-  return { done: steps.filter((s) => s.status === 'done').length, total: steps.length, pct: weightedPct(steps) };
+  return {
+    done: steps.filter((s) => s.status === 'done').length,
+    total: steps.filter((s) => s.status !== 'skipped').length,
+    pct: weightedPct(steps),
+  };
 }
 
 /** Thời gian xử lý 1 bước (ms) = từ lần chuyển 'Đang làm' đầu tiên → 'Hoàn tất' gần nhất.

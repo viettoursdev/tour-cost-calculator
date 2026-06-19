@@ -152,7 +152,7 @@ export type Passenger = {
 };
 
 /** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */
-export type WorkflowStatus = 'todo' | 'doing' | 'done' | 'blocked';
+export type WorkflowStatus = 'todo' | 'doing' | 'done' | 'blocked' | 'skipped';
 
 /** Một dòng nhật ký hoạt động của bước quy trình. */
 export type WorkflowLogEntry = {

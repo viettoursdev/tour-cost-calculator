@@ -57,7 +57,7 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
               sx={{ minHeight: 60, display: 'flex', flexDirection: 'column', gap: 1, p: 0.5 }}
             >
               {items.map((s) => {
-                const dl = s.dueDate ? deadlineMeta(s.dueDate, s.status === 'done') : null;
+                const dl = s.dueDate ? deadlineMeta(s.dueDate, s.status === 'done' || s.status === 'skipped') : null;
                 const dept = s.assignee ? undefined : roleOfStep(s);
                 return (
                   <Paper
