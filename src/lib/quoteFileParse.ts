@@ -82,11 +82,50 @@ export async function extractFileContent(
   throw new Error('Định dạng chưa hỗ trợ. Hãy dùng Excel (.xlsx), PDF, Word (.docx), CSV hoặc ẢNH.');
 }
 
-/** Bóc mảng JSON từ output AI. */
+function tryParseArr(s: string): unknown[] | null {
+  try {
+    const o = JSON.parse(s);
+    if (Array.isArray(o)) return o;
+    if (o && typeof o === 'object') {
+      for (const v of Object.values(o as Record<string, unknown>)) if (Array.isArray(v)) return v as unknown[];
+      if ('name' in (o as object) || 'price' in (o as object)) return [o];
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** Cắt đoạn JSON cân bằng ngoặc từ vị trí `start`; nếu bị cắt cụt thì sửa (đóng mảng tới object cuối). */
+function balancedSlice(s: string, start: number): string | null {
+  const open = s[start];
+  const close = open === '[' ? ']' : '}';
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; continue; }
+    if (ch === '"') inStr = true;
+    else if (ch === open) depth += 1;
+    else if (ch === close) { depth -= 1; if (depth === 0) return s.slice(start, i + 1); }
+  }
+  // Không tìm thấy ngoặc đóng → JSON bị cắt cụt. Mảng object: đóng tới object hoàn chỉnh cuối.
+  if (open === '[') { const lastObj = s.lastIndexOf('}'); if (lastObj > start) return s.slice(start, lastObj + 1) + ']'; }
+  return null;
+}
+
+/**
+ * Bóc mảng JSON từ output AI — chịu được: bọc ```fence, kèm chữ giải thích,
+ * bọc trong object {"lines":[...]}, và JSON bị cắt cụt do quá dài.
+ */
 export function extractArray(raw: string): unknown[] | null {
-  const m = raw.match(/\[[\s\S]*\]/);
-  if (!m) return null;
-  try { const a = JSON.parse(m[0]); return Array.isArray(a) ? a : null; } catch { return null; }
+  const t = (raw ?? '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const direct = tryParseArr(t);
+  if (direct) return direct;
+  for (const open of ['[', '{'] as const) {
+    const start = t.indexOf(open);
+    if (start < 0) continue;
+    const sub = balancedSlice(t, start);
+    if (sub) { const r = tryParseArr(sub); if (r) return r; }
+  }
+  return null;
 }
 
 /** Chuẩn hoá từng dòng AI trả về; category không hợp lệ → hạng mục mặc định đầu tiên. */
@@ -133,8 +172,13 @@ export async function parseQuoteAI(input: { text?: string; imageB64?: string }, 
   content.push({ type: 'text', text: input.text?.trim() || 'Phân tích báo giá trong ảnh.' });
   const res = await callAIWorker('/chat', { system: buildPrompt(cats), messages: [{ role: 'user', content }] });
   if (res.error) throw new Error(res.error);
-  const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
+  const raw = ((res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()) || (res.text ?? '').trim();
   const arr = extractArray(raw);
-  if (!arr) throw new Error('AI trả về dữ liệu không đọc được. Hãy thử lại hoặc dùng file rõ hơn.');
+  if (!arr) {
+    console.warn('[parseQuoteAI] không bóc được JSON. Phản hồi AI:', raw.slice(0, 800));
+    throw new Error(raw
+      ? 'AI chưa trả về đúng định dạng. Thử lại, hoặc nếu file quá nhiều dòng hãy chia nhỏ / dùng Excel rõ ràng hơn.'
+      : 'AI không trả về nội dung. Kiểm tra kết nối AI Worker rồi thử lại.');
+  }
   return coerceQuoteLines(arr, cats.map((c) => c.id));
 }

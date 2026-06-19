@@ -12,6 +12,16 @@ describe('extractArray', () => {
   it('null nếu không phải mảng', () => {
     expect(extractArray('{"a":1}')).toBeNull();
   });
+  it('bọc trong object {"lines":[...]}', () => {
+    expect(extractArray('{"lines":[{"name":"A"},{"name":"B"}]}')).toEqual([{ name: 'A' }, { name: 'B' }]);
+  });
+  it('kèm chữ giải thích quanh mảng (không over-match dấu ] khác)', () => {
+    expect(extractArray('Kết quả: [{"name":"A"}] (xong) [ghi chú]')).toEqual([{ name: 'A' }]);
+  });
+  it('JSON bị cắt cụt → giữ các object hoàn chỉnh', () => {
+    const r = extractArray('[{"name":"A","price":100},{"name":"B","price":200},{"name":"C","pri');
+    expect(r).toEqual([{ name: 'A', price: 100 }, { name: 'B', price: 200 }]);
+  });
 });
 
 describe('coerceQuoteLines', () => {
