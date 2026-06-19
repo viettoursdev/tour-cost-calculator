@@ -13,6 +13,7 @@ import { openFilePreview } from '@/stores/filePreviewStore';
 import { MENU_CUR, newRestMenu, newRestaurant } from './constants';
 import { StarRating } from './StarRating';
 import { AIRestaurantImportDialog } from './AIRestaurantImportDialog';
+import type { ParsedRestaurant } from '@/lib/restaurantFileParse';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import type { ChangeEvent } from 'react';
 import type { Restaurant } from '@/types';
@@ -85,6 +86,19 @@ export function RestaurantLibrary({ onBack }: Props) {
     finally { setUploadingId(null); }
   };
   const delFile = (rid: string, key: string) => patchFresh(rid, (r) => ({ ...r, files: (r.files ?? []).filter((f) => f.key !== key) }));
+
+  const mergeIntoR = (rid: string, p: ParsedRestaurant) => patchFresh(rid, (r) => ({
+    ...r,
+    name: r.name || p.name,
+    address: r.address || p.address,
+    city: r.city || p.city,
+    country: r.country || p.country,
+    continent: r.continent || p.continent,
+    contact: r.contact || p.contact,
+    note: r.note ? (p.note ? `${r.note}\n${p.note}` : r.note) : p.note,
+    rating: r.rating || p.rating,
+    menus: [...(r.menus ?? []), ...p.menus.map((m) => ({ ...newRestMenu(m.name), name: m.name, dishes: m.dishes, price: m.price, cur: m.cur, review: m.review }))],
+  }));
 
   const filtered = list.filter((r) => {
     if (filterCont && r.continent !== filterCont) return false;
@@ -325,7 +339,7 @@ export function RestaurantLibrary({ onBack }: Props) {
         </Stack>
       </Box>
 
-      <AIRestaurantImportDialog open={aiOpen} onClose={() => setAiOpen(false)} onAdd={addRestaurant} />
+      <AIRestaurantImportDialog open={aiOpen} onClose={() => setAiOpen(false)} onAdd={addRestaurant} onMerge={mergeIntoR} restaurants={list} />
     </Box>
   );
 }

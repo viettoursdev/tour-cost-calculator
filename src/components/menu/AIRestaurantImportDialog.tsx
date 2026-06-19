@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type DragEvent } from 'react';
 import {
-  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography,
+  Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Stack, Typography,
 } from '@mui/material';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -8,10 +8,15 @@ import { analyzeRestaurantFile, type ParsedRestaurant } from '@/lib/restaurantFi
 import { StarRating } from './StarRating';
 import type { Restaurant } from '@/types';
 
-/** Upload file/ảnh thực đơn → AI phân tích → xem trước → thêm nhà hàng vào thư viện. */
-export function AIRestaurantImportDialog({ open, onClose, onAdd }: {
-  open: boolean; onClose: () => void; onAdd: (r: Restaurant) => void;
+/** Upload file/ảnh thực đơn → AI phân tích → thêm NH mới hoặc điền vào NH đang có. */
+export function AIRestaurantImportDialog({ open, onClose, onAdd, onMerge, restaurants }: {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (r: Restaurant) => void;
+  onMerge: (targetId: string, parsed: ParsedRestaurant) => void;
+  restaurants: Restaurant[];
 }) {
+  const [target, setTarget] = useState('');  // '' = thêm mới
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -19,7 +24,7 @@ export function AIRestaurantImportDialog({ open, onClose, onAdd }: {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ parsed: ParsedRestaurant; restaurant: Restaurant } | null>(null);
 
-  const reset = () => { setFile(null); setResult(null); setError(null); setProgress(''); };
+  const reset = () => { setFile(null); setResult(null); setError(null); setProgress(''); setTarget(''); };
   const close = () => { reset(); onClose(); };
   const pick = (f: File | null | undefined) => { if (f) { setFile(f); setResult(null); setError(null); } };
   const onDrop = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files[0]); };
@@ -33,7 +38,11 @@ export function AIRestaurantImportDialog({ open, onClose, onAdd }: {
       .catch((e) => setError((e as Error).message))
       .finally(() => { setBusy(false); setProgress(''); });
   };
-  const apply = () => { if (result) { onAdd(result.restaurant); close(); } };
+  const apply = () => {
+    if (!result) return;
+    if (target) onMerge(target, result.parsed); else onAdd(result.restaurant);
+    close();
+  };
 
   const p = result?.parsed;
 
@@ -84,12 +93,27 @@ export function AIRestaurantImportDialog({ open, onClose, onAdd }: {
               ))}
             </Stack>
             <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1 }}>⚠ AI có thể nhầm — sau khi thêm hãy soát lại trong thư viện.</Typography>
+
+            <Box sx={{ mt: 1.5 }}>
+              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Áp dụng vào:</Typography>
+              <Select size="small" fullWidth value={target} onChange={(e) => setTarget(e.target.value)}>
+                <MenuItem value="">➕ Thêm nhà hàng mới</MenuItem>
+                {restaurants.map((r) => (
+                  <MenuItem key={r.id} value={r.id}>✎ {r.name || '(chưa đặt tên)'}{r.city ? ` · ${r.city}` : ''}</MenuItem>
+                ))}
+              </Select>
+              {target && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>Sẽ ghép set menu + điền các ô đang trống vào nhà hàng đã chọn.</Typography>}
+            </Box>
           </Box>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={close} color="inherit">Huỷ</Button>
-        {result && <Button variant="contained" onClick={apply} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Thêm vào thư viện</Button>}
+        {result && (
+          <Button variant="contained" onClick={apply} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+            {target ? 'Điền vào nhà hàng' : 'Thêm vào thư viện'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
