@@ -253,6 +253,8 @@ export type CloudQuoteEntry = {
   lossReason?: string;
   /** Ngày khởi hành (ISO yyyy-mm-dd) — index cho Lịch khởi hành. */
   departDate?: string;
+  /** Số ngày của tour — để suy ra ngày về (= khởi hành + (days-1)). */
+  days?: number;
   /** Tóm tắt bước quy trình có hạn & chưa xong — để nhắc deadline toàn hệ thống. */
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   /** Tóm tắt tiến độ quy trình cho Bảng điều phối toàn hệ thống. */

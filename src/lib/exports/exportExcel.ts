@@ -182,9 +182,15 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
         if (c === 2 && j === 0) cc.font = fnt({ size: 9.5, bold: true, color: { argb: TEAL } });
       }
       // Highlight đơn giá + thành tiền theo cờ: FOC = xanh lá nhạt, Optional = đỏ nhạt.
+      // Cột Thành tiền ghi chữ "FOC"/"Tuỳ chọn" (không phải số) → không cộng vào tổng.
       const hl = it.foc ? FOC_HL : it.optional ? OPT_HL : null;
       if (hl) {
         [...priceCols, totalCol].forEach((c) => { ws.getCell(r, c).fill = fill(hl); });
+        const tc = ws.getCell(r, totalCol);
+        tc.value = it.foc ? 'FOC' : 'Tuỳ chọn';
+        tc.numFmt = '@';
+        tc.alignment = rt;
+        tc.font = fnt({ size: 9.5, bold: true, color: { argb: it.foc ? 'FF1B7F4B' : 'FFC2410C' } });
       } else {
         summedRows.push(r); // chỉ dòng thường mới cộng vào tổng
       }

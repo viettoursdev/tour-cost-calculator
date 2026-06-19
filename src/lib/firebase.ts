@@ -230,6 +230,7 @@ type SaveEntry = {
   status?: QuoteStatus;
   lossReason?: string;
   departDate?: string;
+  days?: number;
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
   workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
   collaborators?: Collaborator[];
@@ -268,6 +269,7 @@ function makeQuoteHistoryApi(
       if (entry.status !== undefined) optionalFields.status = entry.status;
       if (entry.lossReason !== undefined) optionalFields.lossReason = entry.lossReason;
       if (entry.departDate !== undefined) optionalFields.departDate = entry.departDate;
+      if (entry.days !== undefined) optionalFields.days = entry.days;
       if (entry.workflowDue !== undefined) optionalFields.workflowDue = entry.workflowDue;
       if (entry.workflowSummary !== undefined) optionalFields.workflowSummary = entry.workflowSummary;
       if (entry.customerId !== undefined) optionalFields.customerId = entry.customerId;

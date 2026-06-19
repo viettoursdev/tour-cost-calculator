@@ -9,6 +9,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useCustomerStore } from '@/stores/customerStore';
+import { useMenuStore } from '@/stores/menuStore';
+import { useItineraryStore } from '@/stores/itineraryStore';
+import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META } from './constants';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -23,17 +26,27 @@ import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 
-const TEMPLATE_LABEL: Record<Template, string> = {
-  domestic: 'Nội địa',
-  intl: 'Quốc tế',
-  dmc: 'DMC',
-  itinerary: 'Chương trình',
-  menu: 'Thực đơn',
-  visa: 'Visa',
-  doctranslate: 'Dịch hồ sơ',
-};
-
 type TemplateFilter = 'all' | Template;
+
+/** ISO yyyy-mm-dd → dd/mm/yyyy (theo giờ địa phương, không lệch múi giờ). */
+function fmtDMY(iso?: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const p = (x: number) => String(x).padStart(2, '0');
+  return `${p(d)}/${p(m)}/${y}`;
+}
+
+/** Ngày về = khởi hành + (số ngày − 1), trả ISO yyyy-mm-dd. */
+function returnISO(departDate?: string, days?: number): string {
+  if (!departDate || !days) return '';
+  const [y, m, d] = departDate.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + Math.max(0, days - 1));
+  const p = (x: number) => String(x).padStart(2, '0');
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
 
 /** Cell hiển thị file đính kèm: 0 → trống, 1 → link, nhiều → badge + popover. */
 function AttachmentsCell({ row }: { row: CloudQuoteEntry }) {
@@ -103,6 +116,21 @@ export function QuoteHistoryView() {
   const customers = useCustomerStore((s) => s.customers);
   const custById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
+  // Liên kết hồ sơ được lưu ở phía hồ sơ (menu/itinerary có linkedQuoteId) — gom
+  // theo cloudId báo giá để hiển thị cột "Chương trình" / "Thực đơn".
+  const menus = useMenuStore((s) => s.list);
+  const itineraries = useItineraryStore((s) => s.list);
+  const menuByQuote = useMemo(() => {
+    const m = new Map<string, { id: string; title: string }>();
+    menus.forEach((x) => { if (x.linkedQuoteId) m.set(x.linkedQuoteId, { id: x.id, title: x.title }); });
+    return m;
+  }, [menus]);
+  const itinByQuote = useMemo(() => {
+    const m = new Map<string, { id: string; title: string }>();
+    itineraries.forEach((x) => { if (x.linkedQuoteId) m.set(x.linkedQuoteId, { id: x.id, title: x.title }); });
+    return m;
+  }, [itineraries]);
+
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const applyImport = useQuoteStore((s) => s.applyImport);
   const deleteCloud = useQuoteStore((s) => s.deleteCloud);
@@ -138,8 +166,17 @@ export function QuoteHistoryView() {
       (isDMC || templateFilter === 'all' || q.template === templateFilter)
       && (!owner || q.createdByName === owner)
       && inDateRange(q.updatedAt ?? q.createdAt, dateRange, dateFrom, dateTo));
-    return filterRank(base, search, (q) => [q.name, q.quoteCode, q.customerName].filter(Boolean).join(' '));
-  }, [visible, search, templateFilter, isDMC, owner, dateRange, dateFrom, dateTo]);
+    // Tìm theo: tên báo giá · mã · tên khách hàng (kể cả tên/điện thoại/email
+    // người liên hệ & MST từ hồ sơ khách hàng).
+    return filterRank(base, search, (q) => {
+      const cust = q.customerId ? custById.get(q.customerId) : undefined;
+      const contacts = (cust?.contacts ?? [])
+        .map((c) => [c.name, c.phone, c.email].filter(Boolean).join(' '))
+        .join(' ');
+      return [q.name, q.quoteCode, q.customerName, cust?.name, cust?.taxCode, contacts]
+        .filter(Boolean).join(' ');
+    });
+  }, [visible, search, templateFilter, isDMC, owner, dateRange, dateFrom, dateTo, custById]);
 
   const handleLoad = async (row: CloudQuoteEntry) => {
     if (currentQuoteId && currentQuoteId !== row.cloudId) {
@@ -149,6 +186,15 @@ export function QuoteHistoryView() {
     }
     const result = await loadCloud(row.cloudId);
     if (!result.ok) window.alert('⚠ ' + result.error);
+  };
+
+  // Mở hồ sơ liên kết (Chương trình / Thực đơn) — rời báo giá hiện tại sang app
+  // tương ứng, dùng linkNavStore để app đích tự load đúng bản ghi.
+  const openAlt = (kind: LinkNavKind, id: string, what: string) => {
+    if (!window.confirm(`Rời báo giá hiện tại để mở ${what}? Thay đổi chưa lưu có thể mất.`)) return;
+    useLinkNavStore.getState().request(kind, id);
+    const tpl: Template = kind === 'menu' ? 'menu' : 'itinerary';
+    useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: tpl }, view: 'cost' }));
   };
 
   const handleOpenLinked = async (row: CloudQuoteEntry) => {
@@ -211,14 +257,6 @@ export function QuoteHistoryView() {
       },
     },
     {
-      field: 'template',
-      headerName: 'Loại',
-      width: 110,
-      renderCell: (p: GridRenderCellParams<CloudQuoteEntry, Template>) => (
-        <Chip size="small" label={TEMPLATE_LABEL[p.value as Template]} />
-      ),
-    },
-    {
       field: 'status',
       headerName: 'Trạng thái',
       width: 150,
@@ -235,6 +273,20 @@ export function QuoteHistoryView() {
       align: 'right',
       headerAlign: 'right',
       valueFormatter: (v: number) => fmtVND(v),
+    },
+    {
+      field: 'departDate',
+      headerName: 'Ngày khởi hành',
+      width: 130,
+      valueFormatter: (v: string) => fmtDMY(v) || '—',
+    },
+    {
+      field: 'returnDate',
+      headerName: 'Ngày về',
+      width: 120,
+      sortable: false,
+      valueGetter: (_v, row) => returnISO(row.departDate, row.days),
+      valueFormatter: (v: string) => fmtDMY(v) || '—',
     },
     {
       field: 'updatedAt',
@@ -268,8 +320,42 @@ export function QuoteHistoryView() {
       ),
     },
     {
+      field: 'itinerary',
+      headerName: 'Chương trình',
+      width: 130,
+      sortable: false,
+      filterable: false,
+      renderCell: (p) => {
+        const it = itinByQuote.get(p.row.cloudId);
+        if (!it) return <Typography variant="caption" color="text.disabled">—</Typography>;
+        return (
+          <Tooltip title={`Mở chương trình: ${it.title}`}>
+            <Chip size="small" color="success" variant="outlined" clickable
+              label="🗺️ Mở" onClick={() => openAlt('itinerary', it.id, `chương trình "${it.title}"`)} />
+          </Tooltip>
+        );
+      },
+    },
+    {
+      field: 'menu',
+      headerName: 'Thực đơn',
+      width: 120,
+      sortable: false,
+      filterable: false,
+      renderCell: (p) => {
+        const mn = menuByQuote.get(p.row.cloudId);
+        if (!mn) return <Typography variant="caption" color="text.disabled">—</Typography>;
+        return (
+          <Tooltip title={`Mở thực đơn: ${mn.title}`}>
+            <Chip size="small" color="warning" variant="outlined" clickable
+              label="🍽️ Mở" onClick={() => openAlt('menu', mn.id, `thực đơn "${mn.title}"`)} />
+          </Tooltip>
+        );
+      },
+    },
+    {
       field: 'linkedQuoteId',
-      headerName: 'Liên kết',
+      headerName: 'Liên kết DMC',
       width: 140,
       sortable: false,
       renderCell: (p) => (p.row.linkedQuoteId ? (
@@ -364,6 +450,18 @@ export function QuoteHistoryView() {
           loading={loading}
           getRowId={(r) => r.id}
           disableRowSelectionOnClick
+          disableVirtualization
+          sx={{
+            // Ghim 2 cột đầu (Mã + Tên báo giá) khi cuộn ngang.
+            '& [data-field="quoteCode"]': { position: 'sticky', left: 0, zIndex: 2, bgcolor: '#fff' },
+            '& [data-field="name"]': {
+              position: 'sticky', left: 140, zIndex: 2, bgcolor: '#fff',
+              boxShadow: '6px 0 6px -6px rgba(15,58,74,0.25)',
+            },
+            '& .MuiDataGrid-columnHeader[data-field="quoteCode"], & .MuiDataGrid-columnHeader[data-field="name"]': {
+              zIndex: 4, bgcolor: '#f3faf8',
+            },
+          }}
           initialState={{
             sorting: { sortModel: [{ field: 'updatedAt', sort: 'desc' }] },
             pagination: { paginationModel: { pageSize: 25 } },

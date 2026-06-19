@@ -724,6 +724,7 @@ export const useQuoteStore = create<QuoteState>()(
               status: draft.status ?? 'in_progress',
               ...(draft.lossReason ? { lossReason: draft.lossReason } : {}),
               ...(draft.info.startDate ? { departDate: draft.info.startDate } : {}),
+              ...(draft.info.days ? { days: draft.info.days } : {}),
               ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow), workflowSummary: workflowBoardSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
               ...(attachments ? { attachments } : {}),

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent,
   DialogTitle, Stack, TextField, Typography,
@@ -45,6 +45,11 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   }, [existingEntry, customers]);
 
   const [name, setName] = useState(draftName || '');
+  // Mặc định lưu theo tên báo giá: mỗi lần mở hộp thoại, đồng bộ ô tên với tên
+  // báo giá hiện tại (người dùng vẫn sửa tay được sau đó).
+  useEffect(() => {
+    if (open) setName(draftName || '');
+  }, [open, draftName]);
   const [collabUsers, setCollabUsers] = useState<User[]>(() => {
     if (!existingEntry) return [];
     const set = new Set((existingEntry.collaborators ?? []).map((c) => c.u));
