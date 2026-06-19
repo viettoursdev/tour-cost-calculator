@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Autocomplete, Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from '@mui/material';
+import { NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from '@/components/ncc/constants';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -115,8 +116,10 @@ export function RestaurantLibrary({ onBack }: Props) {
     );
   });
 
-  const contOpts = useMemo(() => uniq([...CONT_SEED, ...list.map((r) => r.continent)]), [list]);
-  const countryOpts = (cont: string) => uniq(list.filter((r) => !cont || r.continent === cont).map((r) => r.country));
+  // Danh mục chuẩn (như NCC) + giá trị đang có trong dữ liệu.
+  const contOpts = useMemo(() => uniq([...NCC_CONTINENTS, ...CONT_SEED, ...list.map((r) => r.continent)]), [list]);
+  const countryOpts = (cont: string) =>
+    uniq([...(cont ? (NCC_COUNTRIES[cont] ?? []) : NCC_ALL_COUNTRIES), ...list.filter((r) => !cont || r.continent === cont).map((r) => r.country)]);
   const cityOpts = (country: string) => uniq(list.filter((r) => !country || r.country === country).map((r) => r.city));
 
   return (
@@ -194,27 +197,15 @@ export function RestaurantLibrary({ onBack }: Props) {
                   onChange={(e) => updR(r.id, { name: e.target.value })}
                   placeholder="Tên nhà hàng"
                   InputProps={{ sx: { fontWeight: 700 } }} />
-                <TextField size="small" value={r.continent}
-                  onChange={(e) => updR(r.id, { continent: e.target.value })}
-                  placeholder="Châu lục ▾"
-                  inputProps={{ list: `dl-cont-${r.id}` }} />
-                <Box component="datalist" id={`dl-cont-${r.id}`}>
-                  {contOpts.map((o) => <option key={o} value={o} />)}
-                </Box>
-                <TextField size="small" value={r.country}
-                  onChange={(e) => updR(r.id, { country: e.target.value })}
-                  placeholder="Quốc gia ▾"
-                  inputProps={{ list: `dl-country-${r.id}` }} />
-                <Box component="datalist" id={`dl-country-${r.id}`}>
-                  {countryOpts(r.continent).map((o) => <option key={o} value={o} />)}
-                </Box>
-                <TextField size="small" value={r.city}
-                  onChange={(e) => updR(r.id, { city: e.target.value })}
-                  placeholder="Thành phố ▾"
-                  inputProps={{ list: `dl-city-${r.id}` }} />
-                <Box component="datalist" id={`dl-city-${r.id}`}>
-                  {cityOpts(r.country).map((o) => <option key={o} value={o} />)}
-                </Box>
+                <Autocomplete freeSolo size="small" options={contOpts} value={r.continent || ''}
+                  onInputChange={(_, v) => { if (v !== (r.continent || '')) updR(r.id, { continent: v }); }}
+                  renderInput={(params) => <TextField {...params} placeholder="Châu lục ▾" />} />
+                <Autocomplete freeSolo size="small" options={countryOpts(r.continent)} value={r.country || ''}
+                  onInputChange={(_, v) => { if (v !== (r.country || '')) updR(r.id, { country: v }); }}
+                  renderInput={(params) => <TextField {...params} placeholder="Quốc gia ▾" />} />
+                <Autocomplete freeSolo size="small" options={cityOpts(r.country)} value={r.city || ''}
+                  onInputChange={(_, v) => { if (v !== (r.city || '')) updR(r.id, { city: v }); }}
+                  renderInput={(params) => <TextField {...params} placeholder="Thành phố ▾" />} />
                 <IconButton size="small" color="error" onClick={() => delR(r.id)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
