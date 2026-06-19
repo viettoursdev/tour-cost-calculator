@@ -28,6 +28,10 @@ export function RestaurantLibrary({ onBack }: Props) {
   const list = useRestaurantStore((s) => s.list);
   const user = useAuthStore((s) => s.currentUser);
   const [search, setSearch] = useState('');
+  const [filterCont, setFilterCont] = useState('');
+  const [filterCountry, setFilterCountry] = useState('');
+  const [filterCity, setFilterCity] = useState('');
+  const [filterRating, setFilterRating] = useState(0);
 
   const persist = (next: Restaurant[]) => {
     const savedBy = user ? `${user.name} (${user.role})` : 'unknown';
@@ -59,12 +63,17 @@ export function RestaurantLibrary({ onBack }: Props) {
   };
 
   const filtered = list.filter((r) => {
+    if (filterCont && r.continent !== filterCont) return false;
+    if (filterCountry && r.country !== filterCountry) return false;
+    if (filterCity && r.city !== filterCity) return false;
+    if (filterRating && (r.rating ?? 0) < filterRating) return false;
     const q = search.toLowerCase();
     if (!q) return true;
     return (
       (r.name ?? '').toLowerCase().includes(q) ||
       (r.city ?? '').toLowerCase().includes(q) ||
-      (r.country ?? '').toLowerCase().includes(q)
+      (r.country ?? '').toLowerCase().includes(q) ||
+      (r.address ?? '').toLowerCase().includes(q)
     );
   });
 
@@ -95,13 +104,45 @@ export function RestaurantLibrary({ onBack }: Props) {
       </Box>
 
       <Box sx={{ p: 3, maxWidth: 1100, mx: 'auto' }}>
-        <TextField
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Tìm nhà hàng, thành phố..."
-          size="small"
-          sx={{ maxWidth: 420, mb: 2, width: '100%' }}
-        />
+        <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+          <TextField
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Tìm tên, địa chỉ, thành phố..."
+            size="small"
+            sx={{ flex: 1, minWidth: 220 }}
+          />
+          <Select size="small" displayEmpty value={filterCont}
+            onChange={(e) => { setFilterCont(e.target.value); setFilterCountry(''); setFilterCity(''); }}
+            sx={{ minWidth: 140 }}>
+            <MenuItem value="">Tất cả châu lục</MenuItem>
+            {contOpts.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+          </Select>
+          <Select size="small" displayEmpty value={filterCountry}
+            onChange={(e) => { setFilterCountry(e.target.value); setFilterCity(''); }}
+            sx={{ minWidth: 140 }}>
+            <MenuItem value="">Tất cả quốc gia</MenuItem>
+            {countryOpts(filterCont).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+          </Select>
+          <Select size="small" displayEmpty value={filterCity}
+            onChange={(e) => setFilterCity(e.target.value)} sx={{ minWidth: 140 }}>
+            <MenuItem value="">Tất cả thành phố</MenuItem>
+            {cityOpts(filterCountry).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+          </Select>
+          <Select size="small" value={filterRating}
+            onChange={(e) => setFilterRating(Number(e.target.value))} sx={{ minWidth: 130 }}>
+            <MenuItem value={0}>Mọi đánh giá</MenuItem>
+            <MenuItem value={5}>★ 5</MenuItem>
+            <MenuItem value={4}>★ ≥ 4</MenuItem>
+            <MenuItem value={3}>★ ≥ 3</MenuItem>
+          </Select>
+          {(search || filterCont || filterCountry || filterCity || filterRating > 0) && (
+            <Button size="small" color="error" variant="outlined"
+              onClick={() => { setSearch(''); setFilterCont(''); setFilterCountry(''); setFilterCity(''); setFilterRating(0); }}>
+              ✕ Xoá lọc
+            </Button>
+          )}
+        </Stack>
 
         <Stack spacing={2}>
           {filtered.map((r) => (
