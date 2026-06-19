@@ -537,6 +537,45 @@ describe('Task 5 — sbSaveQuoteState / sbGetQuoteProject', () => {
     const result = await sbGetQuoteProject('nonexistent-cloud-id', c);
     expect(result).toBeNull();
   });
+
+  // ── M1 regression: RPC must NOT clobber index-owned name/status/depart_date ──
+
+  it('M1 regression: sbSaveQuoteState does not overwrite index-owned name/status/departDate', async () => {
+    const c = await getViettoursClient();
+    const admin = getServiceClient();
+
+    // 1. Index save with explicit name, status, departDate
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'Explicit Name',
+        pax: 10, totalCost: 0, status: 'sent',
+        departDate: '2026-01-01',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: 'tester', createdByName: 'QA',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA',
+        id: 99, quoteCode: 'DL-099',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    // 2. State save with a draft whose info.name/status/info.startDate differ from the index
+    const conflictingDraft = makeDraft({
+      info: { name: 'Different Draft Name', dest: 'Quảng Ninh', days: 4, nights: 3, startDate: '2026-12-31' },
+      status: 'won',
+    });
+    await sbSaveQuoteState(CLOUD_ID, conflictingDraft, undefined, { name: 'QA', role: 'Sales' }, c);
+
+    // 3. Assert the index still shows the original index-owned values
+    const { data } = await admin
+      .from('quotes')
+      .select('name, status, depart_date')
+      .eq('cloud_id', CLOUD_ID)
+      .single();
+
+    expect(data!.name).toBe('Explicit Name');
+    expect(data!.status).toBe('sent');
+    expect(data!.depart_date).toBe('2026-01-01');
+  });
 });
 
 describe('Task 6 — delete + collaborators (regular + DMC)', () => {

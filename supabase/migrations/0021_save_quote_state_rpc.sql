@@ -45,17 +45,16 @@ begin
       coalesce(nullif(q->>'created_at','')::timestamptz, now()), q->>'created_by_name',
       now(), q->>'updated_by_name')
   on conflict (cloud_id) do update set
-      template = excluded.template, name = excluded.name, pax = excluded.pax,
+      template = excluded.template, pax = excluded.pax,
       total_cost = case when q ? 'total_cost' then excluded.total_cost else public.quotes.total_cost end,
-      status = excluded.status, info = excluded.info,
+      info = excluded.info,
       rates = excluded.rates, rate_base = excluded.rate_base, margin = excluded.margin,
       vat = excluded.vat, svc_basis = excluded.svc_basis, rounding = excluded.rounding,
       cat_enabled = excluded.cat_enabled, pricing_options = excluded.pricing_options,
       inclusions = excluded.inclusions, exclusions = excluded.exclusions,
       output_currency = excluded.output_currency, dmc_prices = excluded.dmc_prices,
       dmc_margin = excluded.dmc_margin, active_group_id = excluded.active_group_id,
-      depart_date = excluded.depart_date, updated_at = now(),
-      updated_by_name = excluded.updated_by_name
+      updated_at = now(), updated_by_name = excluded.updated_by_name
   returning id into v_quote_id;
 
   -- (b) replace children. Delete all, then re-insert from payload arrays.
