@@ -10,6 +10,7 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canManageArea } from '@/auth/departments';
 import { canViewAll } from '@/auth/ROLES';
 import { CustomerModal } from './CustomerModal';
 import { Customer360 } from './Customer360';
@@ -32,7 +33,7 @@ export function CustomerView() {
   const save = useCustomerStore((s) => s.save);
   const del = useCustomerStore((s) => s.delete);
   const currentUser = useAuthStore((s) => s.currentUser);
-  const canEdit = !!currentUser && hasPerm(currentUser, 'manageCustomers');
+  const canEdit = !!currentUser && hasPerm(currentUser, 'manageCustomers') && canManageArea(currentUser, 'customers');
   // Sales trở lên xem toàn bộ; dưới ngưỡng chỉ thấy khách hàng do mình tạo.
   const viewAll = !!currentUser && canViewAll(currentUser.role, 'customers');
 

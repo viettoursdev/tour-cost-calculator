@@ -15,6 +15,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canManageArea } from '@/auth/departments';
 import { canViewAll } from '@/auth/ROLES';
 import { CONTRACT_STATUS, emptyContract, contractFromQuote, ContractStatusKey } from './constants';
 import { ContractModal } from './ContractModal';
@@ -42,7 +43,7 @@ export function ContractView() {
   const updateStatus = useContractStore((s) => s.updateStatus);
 
   const currentUser = useAuthStore((s) => s.currentUser);
-  const canEdit = !!currentUser && hasPerm(currentUser, 'manageContracts');
+  const canEdit = !!currentUser && hasPerm(currentUser, 'manageContracts') && canManageArea(currentUser, 'contracts');
   // Ban Giám Đốc trở lên xem toàn bộ; dưới ngưỡng chỉ thấy HĐ do mình tạo.
   const viewAll = !!currentUser && canViewAll(currentUser.role, 'contracts');
   const ownContracts = useMemo(

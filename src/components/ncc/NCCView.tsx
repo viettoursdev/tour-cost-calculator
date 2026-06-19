@@ -10,6 +10,7 @@ import { useNccStore } from '@/stores/nccStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canManageArea } from '@/auth/departments';
 import { canViewAll } from '@/auth/ROLES';
 import { NCCModal } from './NCCModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
@@ -31,7 +32,7 @@ export function NCCView() {
   const save = useNccStore((s) => s.save);
   const del = useNccStore((s) => s.delete);
   const currentUser = useAuthStore((s) => s.currentUser);
-  const canEdit = !!currentUser && hasPerm(currentUser, 'manageNCC');
+  const canEdit = !!currentUser && hasPerm(currentUser, 'manageNCC') && canManageArea(currentUser, 'ncc');
   // Operations trở lên xem toàn bộ; dưới ngưỡng chỉ thấy NCC do mình tạo.
   const viewAll = !!currentUser && canViewAll(currentUser.role, 'ncc');
 
