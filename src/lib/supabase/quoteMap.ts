@@ -262,7 +262,10 @@ export function decomposeQuote(
       status: d.status ?? null, info: d.info ?? {}, rates: d.rates ?? {}, rate_base: d.rateBase ?? null,
       margin: d.margin ?? 0, vat: d.vat ?? 0, svc_basis: d.svcBasis ?? 0, rounding: d.rounding ?? 0,
       cat_enabled: d.catEnabled ?? {}, pricing_options: d.pricingOptions ?? null,
-      inclusions: d.inclusions ?? null, exclusions: d.exclusions ?? null,
+      // inclusions/exclusions are omitted (not set to null) when absent so the RPC's
+      // `CASE WHEN q ? 'inclusions'` returns false and avoids jsonb_array_elements_text(null).
+      ...(d.inclusions != null ? { inclusions: d.inclusions } : {}),
+      ...(d.exclusions != null ? { exclusions: d.exclusions } : {}),
       output_currency: d.outputCurrency ?? null, dmc_prices: d.dmcPrices ?? null, dmc_margin: d.dmcMargin ?? null,
       active_group_id: d.activeGroupId ?? null,
       depart_date: d.info?.startDate ?? null,

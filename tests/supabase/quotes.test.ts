@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { getViettoursClient, truncate } from './_setup';
+import { getServiceClient, getViettoursClient, truncate } from './_setup';
 import {
   generateQuoteCode,
   sbSaveQuote,
   sbSaveDMCQuote,
   sbSubscribeQuoteHistory,
   sbSubscribeDMCQuoteHistory,
+  sbSaveQuoteState,
+  sbSaveDMCQuoteState,
+  sbGetQuoteProject,
+  sbGetDMCQuoteProject,
 } from '../../src/lib/supabase';
-import type { CloudQuoteEntry } from '../../src/types/quote';
+import type { CloudQuoteEntry, QuoteDraft } from '../../src/types/quote';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void): Promise<T> =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
@@ -262,5 +266,264 @@ describe('quote history index (Task 4)', () => {
     expect(entry.attachments!.length).toBe(1);
     expect(entry.attachments![0].key).toBe('r2-att-sub');
     expect(entry.attachments![0].name).toBe('doc.pdf');
+  });
+});
+
+// ── helpers ────────────────────────────────────────────────────────────────────
+
+/** Build a realistic full QuoteDraft with items / flights / workflow / groups / payments. */
+const makeDraft = (overrides: Partial<QuoteDraft> = {}): QuoteDraft => ({
+  template: 'domestic',
+  info: { name: 'Hạ Long 4N3Đ', dest: 'Quảng Ninh', days: 4, nights: 3, startDate: '2026-09-01' },
+  pax: 20,
+  rates: { USD: 25800, EUR: 28000 },
+  margin: 12,
+  vat: 8,
+  svcBasis: 0,
+  rounding: 1000,
+  items: {
+    hotel: [
+      { id: 1, name: 'Vinpearl Paradise Hạ Long', note: '3 đêm', cur: 'VND', price: 2_800_000, times: 3, qtyMode: 'per_pax', customQty: 0, unit: 'đêm/pax', enabled: true, foc: false },
+    ],
+    transport: [
+      { id: 2, name: 'Xe 45 chỗ HN–Hạ Long', note: '', cur: 'VND', price: 4_500_000, times: 2, qtyMode: 'per_group', customQty: 0, unit: 'lượt', enabled: true, foc: false },
+    ],
+  },
+  catEnabled: { hotel: true, transport: true, flight: false, meal: false, sight: false, meeting: false, teambuild: false, gala: false, logistics: false, staff: false, insurance: false, visa: false, dmc: false, service_fee: false, event: false, other: false },
+  currentQuoteId: null,
+  status: 'in_progress',
+  flights: [
+    {
+      id: 'fl-1',
+      segments: [
+        { date: '01SEP', flightNo: 'VJ123', airlineCode: 'VJ', airlineName: 'Vietjet Air', depAirport: 'SGN', arrAirport: 'HAN', depCity: 'TP.HCM', arrCity: 'Hà Nội', depTime: '06:00', arrTime: '08:10' },
+      ],
+      fares: [
+        { id: 'fa-1', label: 'Economy', amount: 1_200_000, cur: 'VND' },
+      ],
+      note: 'Giá vé tạm tính',
+    },
+  ],
+  workflow: [
+    {
+      id: 'wf-1', label: 'Xác nhận khách sạn', status: 'done', key: 'confirm_hotel',
+      dueOffset: -14, startDate: '2026-08-15', dueDate: '2026-08-18', doneDate: '2026-08-17',
+      assignee: 'tester', note: 'Đã xác nhận Vinpearl',
+      log: [
+        { at: '2026-08-17T09:00:00.000Z', by: 'Linh', action: 'Trạng thái → Hoàn tất' },
+      ],
+    },
+  ],
+  groups: [
+    {
+      id: 'g-1', label: '20 khách', pax: 20,
+      items: {
+        hotel: [{ id: 10, name: 'Phòng đôi', note: '', cur: 'VND', price: 1_400_000, times: 3, qtyMode: 'per_pax', customQty: 0, unit: '', enabled: true, foc: false }],
+      },
+      catEnabled: { hotel: true, transport: false, flight: false, meal: false, sight: false, meeting: false, teambuild: false, gala: false, logistics: false, staff: false, insurance: false, visa: false, dmc: false, service_fee: false, event: false, other: false },
+    },
+  ],
+  payments: [
+    { id: 'pay-1', label: 'Đợt 1 – Cọc giữ chỗ', amount: 10_000_000, note: 'Trong vòng 3 ngày sau khi confirm' },
+    { id: 'pay-2', label: 'Đợt 2 – Thanh toán còn lại', amount: 0, note: 'Trước khởi hành 7 ngày' },
+  ],
+  ...overrides,
+});
+
+const CLOUD_ID = 'task5-test-regular';
+const DMC_CLOUD_ID = 'task5-test-dmc';
+
+// ── Task 5 tests ───────────────────────────────────────────────────────────────
+
+describe('Task 5 — sbSaveQuoteState / sbGetQuoteProject', () => {
+  beforeEach(async () => {
+    await truncate([
+      'quote_versions', 'quote_workflow_logs', 'quote_workflow_steps',
+      'quote_flight_fares', 'quote_flight_segments', 'quote_flights',
+      'quote_group_items', 'quote_groups',
+      'quote_payments', 'quote_line_items',
+      'quote_collaborators', 'quotes',
+    ]);
+  });
+
+  it('sbSaveQuoteState: saves a full draft and sbGetQuoteProject reassembles currentState', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'Hạ Long 4N3Đ', pax: 20,
+        totalCost: 56_000_000, status: 'in_progress',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: 'tester', createdByName: 'QA',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA',
+        id: 1, quoteCode: 'DL-001', customerName: undefined, customerId: undefined,
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    const draft = makeDraft();
+    await sbSaveQuoteState(CLOUD_ID, draft, 'Bản đầu tiên', { name: 'QA', role: 'Sales' }, c);
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    expect(project).not.toBeNull();
+
+    const cs = project!.currentState;
+    expect(cs.template).toBe('domestic');
+    expect(cs.pax).toBe(20);
+    expect(cs.margin).toBe(12);
+    expect(cs.vat).toBe(8);
+    expect(cs.info.name).toBe('Hạ Long 4N3Đ');
+    expect(cs.info.startDate).toBe('2026-09-01');
+
+    expect(cs.items.hotel).toHaveLength(1);
+    expect(cs.items.hotel![0]).toMatchObject({ id: 1, name: 'Vinpearl Paradise Hạ Long', price: 2_800_000, times: 3 });
+    expect(cs.items.transport).toHaveLength(1);
+    expect(cs.items.transport![0]).toMatchObject({ id: 2, name: 'Xe 45 chỗ HN–Hạ Long', qtyMode: 'per_group' });
+
+    expect(cs.flights).toHaveLength(1);
+    expect(cs.flights![0].id).toBe('fl-1');
+    expect(cs.flights![0].segments).toHaveLength(1);
+    expect(cs.flights![0].segments[0]).toMatchObject({ flightNo: 'VJ123', depAirport: 'SGN', arrAirport: 'HAN' });
+    expect(cs.flights![0].fares).toHaveLength(1);
+    expect(cs.flights![0].fares[0]).toMatchObject({ label: 'Economy', amount: 1_200_000 });
+
+    expect(cs.workflow).toHaveLength(1);
+    expect(cs.workflow![0]).toMatchObject({ id: 'wf-1', label: 'Xác nhận khách sạn', status: 'done', assignee: 'tester' });
+    expect(cs.workflow![0].log).toHaveLength(1);
+    expect(cs.workflow![0].log![0]).toMatchObject({ by: 'Linh', action: 'Trạng thái → Hoàn tất' });
+
+    expect(cs.groups).toHaveLength(1);
+    expect(cs.groups![0].id).toBe('g-1');
+    expect(cs.groups![0].items.hotel).toHaveLength(1);
+    expect(cs.groups![0].items.hotel![0]).toMatchObject({ id: 10, name: 'Phòng đôi' });
+
+    expect(cs.payments).toHaveLength(2);
+    expect(cs.payments![0]).toMatchObject({ id: 'pay-1', label: 'Đợt 1 – Cọc giữ chỗ', amount: 10_000_000 });
+    expect(cs.payments![1]).toMatchObject({ id: 'pay-2', label: 'Đợt 2 – Thanh toán còn lại', amount: 0 });
+
+    expect(project!.versions).toHaveLength(1);
+    expect(project!.versions[0].versionNo).toBe(1);
+    expect(project!.versions[0].savedBy).toBe('QA (Sales)');
+    expect(project!.versions[0].note).toBe('Bản đầu tiên');
+    expect(project!.versions[0].state).toMatchObject({ template: 'domestic', pax: 20 });
+
+    expect(project!.updatedBy).toBe('QA');
+  });
+
+  it('versions accumulate and version_no increments correctly', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'Trip', pax: 10, totalCost: 0,
+        status: 'in_progress', createdAt: '2026-06-19T00:00:00.000Z',
+        createdByUsername: 'tester', createdByName: 'QA', collaborators: [],
+        updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA', id: 2, quoteCode: 'DL-002',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSaveQuoteState(CLOUD_ID, makeDraft(), undefined, { name: 'Linh', role: 'Operations' }, c);
+    await sbSaveQuoteState(CLOUD_ID, makeDraft({ pax: 25 }), 'Tăng đoàn', { name: 'Tony', role: 'CEO' }, c);
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    expect(project!.versions).toHaveLength(2);
+
+    const [newest, older] = project!.versions;
+    expect(newest.versionNo).toBe(2);
+    expect(newest.savedBy).toBe('Tony (CEO)');
+    expect(newest.note).toBe('Tăng đoàn');
+
+    expect(older.versionNo).toBe(1);
+    expect(older.savedBy).toBe('Linh (Operations)');
+    expect(older.note).toBe('Phiên bản 1');
+  });
+
+  it('versions are capped at 20 (oldest trimmed)', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'Trip', pax: 10, totalCost: 0,
+        status: 'in_progress', createdAt: '2026-06-19T00:00:00.000Z',
+        createdByUsername: 'tester', createdByName: 'QA', collaborators: [],
+        updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA', id: 3, quoteCode: 'DL-003',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    for (let i = 1; i <= 22; i++) {
+      await sbSaveQuoteState(
+        CLOUD_ID,
+        makeDraft({ pax: i }),
+        `Lần ${i}`,
+        { name: 'QA', role: 'Sales' },
+        c,
+      );
+    }
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    expect(project!.versions).toHaveLength(20);
+
+    expect(project!.versions[0].versionNo).toBe(22);
+    expect(project!.versions[19].versionNo).toBe(3);
+
+    expect(project!.currentState.pax).toBe(22);
+  });
+
+  it('index total_cost is NOT zeroed by sbSaveQuoteState', async () => {
+    const c = await getViettoursClient();
+    const admin = getServiceClient();
+    await sbSaveQuote(
+      {
+        cloudId: CLOUD_ID, template: 'domestic', name: 'Trip', pax: 10,
+        totalCost: 99_000_000, status: 'in_progress',
+        createdAt: '2026-06-19T00:00:00.000Z', createdByUsername: 'tester', createdByName: 'QA',
+        collaborators: [], updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA',
+        id: 4, quoteCode: 'DL-004',
+      },
+      { name: 'QA', role: 'Sales' },
+      c,
+    );
+
+    await sbSaveQuoteState(CLOUD_ID, makeDraft(), undefined, { name: 'QA', role: 'Sales' }, c);
+
+    const { data } = await admin.from('quotes').select('total_cost').eq('cloud_id', CLOUD_ID).single();
+    expect(data!.total_cost).toBe(99_000_000);
+  });
+
+  it('DMC variant: sbSaveDMCQuoteState + sbGetDMCQuoteProject round-trip under template=dmc', async () => {
+    const c = await getViettoursClient();
+    await sbSaveQuote(
+      {
+        cloudId: DMC_CLOUD_ID, template: 'dmc', name: 'DMC Thailand', pax: 30, totalCost: 0,
+        status: 'in_progress', createdAt: '2026-06-19T00:00:00.000Z',
+        createdByUsername: 'tester', createdByName: 'QA', collaborators: [],
+        updatedAt: '2026-06-19T00:00:00.000Z', updatedBy: 'QA', id: 5, quoteCode: 'DMC-001',
+      },
+      { name: 'QA', role: 'CEO' },
+      c,
+    );
+
+    const dmcDraft = makeDraft({
+      template: 'dmc',
+      outputCurrency: 'USD',
+      dmcMargin: { type: 'percent', value: 15 },
+    });
+
+    await sbSaveDMCQuoteState(DMC_CLOUD_ID, dmcDraft, 'DMC bản 1', { name: 'QA', role: 'CEO' }, c);
+
+    const project = await sbGetDMCQuoteProject(DMC_CLOUD_ID, c);
+    expect(project).not.toBeNull();
+    expect(project!.currentState.template).toBe('dmc');
+    expect(project!.currentState.outputCurrency).toBe('USD');
+    expect(project!.currentState.dmcMargin).toMatchObject({ type: 'percent', value: 15 });
+    expect(project!.versions).toHaveLength(1);
+    expect(project!.versions[0].note).toBe('DMC bản 1');
+  });
+
+  it('sbGetQuoteProject returns null for unknown cloudId', async () => {
+    const c = await getViettoursClient();
+    const result = await sbGetQuoteProject('nonexistent-cloud-id', c);
+    expect(result).toBeNull();
   });
 });

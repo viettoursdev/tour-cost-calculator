@@ -2730,3 +2730,224 @@ export function sbSubscribeDMCQuoteHistory(
     cb,
   );
 }
+
+// ── Phase 2 Task 5 — Quote Project State ────────────────────────────────────
+// Functions: sbSaveQuoteState/sbSaveDMCQuoteState, sbGetQuoteProject/sbGetDMCQuoteProject
+// Parity: firebase.ts:327-403
+
+import type { QuoteDraft, QuoteVersion, CloudQuoteProject } from '@/types/quote';
+import { decomposeQuote, assembleQuote } from './supabase/quoteMap';
+
+// ── shared save implementation ────────────────────────────────────────────────
+
+async function saveQuoteStateImpl(
+  cloudId: string,
+  state: QuoteDraft,
+  note: string | undefined,
+  savedBy: { name: string; role: string },
+  client: SupabaseClient,
+): Promise<void> {
+  // 1. Look up the quotes row uuid by cloud_id to derive max(version_no)
+  const { data: qRow, error: qErr } = await client
+    .from('quotes')
+    .select('id, created_at, created_by_name')
+    .eq('cloud_id', cloudId)
+    .maybeSingle();
+  if (qErr) throw new Error('sbSaveQuoteState fetch quote: ' + qErr.message);
+
+  const quoteUuid = qRow?.id as string | undefined;
+
+  // 2. Derive next version_no from current max (handles concurrent trims correctly)
+  let versionNo = 1;
+  if (quoteUuid) {
+    const { data: maxRow } = await client
+      .from('quote_versions')
+      .select('version_no')
+      .eq('quote_id', quoteUuid)
+      .order('version_no', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (maxRow) versionNo = (maxRow.version_no as number) + 1;
+  }
+
+  // 3. Build RPC payload — decomposeQuote omits total_cost so the RPC's CASE WHEN
+  //    q ? 'total_cost' clause preserves the index-owned value on conflict.
+  const payload = decomposeQuote(cloudId, state, {
+    createdAt: qRow?.created_at as string | undefined,
+    createdByName: qRow?.created_by_name as string | undefined,
+    updatedByName: savedBy.name,
+  });
+
+  // 4. Attach version snapshot
+  const savedByLabel = `${savedBy.name} (${savedBy.role})`;
+  (payload as Record<string, unknown>).version = {
+    version_no: versionNo,
+    saved_at: new Date().toISOString(),
+    saved_by: savedByLabel,
+    note: note?.trim() || `Phiên bản ${versionNo}`,
+    state,
+  };
+
+  // 5. Call the atomic RPC
+  const { error } = await client.rpc('save_quote_state', { p: payload });
+  if (error) throw new Error('sbSaveQuoteState: ' + error.message);
+}
+
+// ── shared get implementation ─────────────────────────────────────────────────
+
+async function getQuoteProjectImpl(
+  cloudId: string,
+  client: SupabaseClient,
+): Promise<CloudQuoteProject | null> {
+  // 1. Fetch the quotes row (full row for assembleQuote)
+  const { data: qRow, error: qErr } = await client
+    .from('quotes')
+    .select('*')
+    .eq('cloud_id', cloudId)
+    .maybeSingle();
+  if (qErr) throw new Error('sbGetQuoteProject quotes: ' + qErr.message);
+  if (!qRow) return null;
+
+  const quoteId = (qRow as unknown as Record<string, unknown>).id as string;
+  const row = qRow as unknown as Record<string, unknown>;
+
+  // 2. Fetch all child rows + versions + collaborators in parallel
+  const [
+    { data: lineItems, error: liErr },
+    { data: flights, error: flErr },
+    { data: workflow, error: wfErr },
+    { data: groups, error: grErr },
+    { data: payments, error: pyErr },
+    { data: versions, error: vErr },
+    { data: collabRows, error: cErr },
+  ] = await Promise.all([
+    client.from('quote_line_items').select('*').eq('quote_id', quoteId).order('sort_order'),
+    client.from('quote_flights').select('*').eq('quote_id', quoteId).order('sort_order'),
+    client.from('quote_workflow_steps').select('*').eq('quote_id', quoteId).order('sort_order'),
+    client.from('quote_groups').select('*').eq('quote_id', quoteId).order('sort_order'),
+    client.from('quote_payments').select('*').eq('quote_id', quoteId).order('sort_order'),
+    client.from('quote_versions').select('*').eq('quote_id', quoteId).order('version_no', { ascending: false }),
+    client.from('quote_collaborators').select('*').eq('quote_id', quoteId),
+  ]);
+
+  for (const e of [liErr, flErr, wfErr, grErr, pyErr, vErr, cErr]) {
+    if (e) throw new Error('sbGetQuoteProject fetch: ' + e.message);
+  }
+
+  // 3. Resolve child ids for nested children (segments, fares, logs, group items)
+  const flightIds = (flights ?? []).map((f) => (f as unknown as Record<string, unknown>).id as string);
+  const stepIds = (workflow ?? []).map((s) => (s as unknown as Record<string, unknown>).id as string);
+  const groupIds = (groups ?? []).map((g) => (g as unknown as Record<string, unknown>).id as string);
+
+  const [
+    { data: segments, error: segErr },
+    { data: fares, error: farErr },
+    { data: logs, error: logErr },
+    { data: groupItems, error: giErr },
+  ] = await Promise.all([
+    flightIds.length
+      ? client.from('quote_flight_segments').select('*').in('flight_id', flightIds).order('sort_order')
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    flightIds.length
+      ? client.from('quote_flight_fares').select('*').in('flight_id', flightIds).order('sort_order')
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    stepIds.length
+      ? client.from('quote_workflow_logs').select('*').in('step_id', stepIds).order('sort_order')
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    groupIds.length
+      ? client.from('quote_group_items').select('*').in('group_id', groupIds).order('sort_order')
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+  ]);
+
+  for (const e of [segErr, farErr, logErr, giErr]) {
+    if (e) throw new Error('sbGetQuoteProject children: ' + (e as { message: string }).message);
+  }
+
+  // 4. Assemble currentState from shredded rows
+  const currentState = assembleQuote({
+    quote: row,
+    lineItems: (lineItems ?? []) as unknown as Record<string, unknown>[],
+    flights: (flights ?? []) as unknown as Record<string, unknown>[],
+    segments: (segments ?? []) as unknown as Record<string, unknown>[],
+    fares: (fares ?? []) as unknown as Record<string, unknown>[],
+    workflow: (workflow ?? []) as unknown as Record<string, unknown>[],
+    logs: (logs ?? []) as unknown as Record<string, unknown>[],
+    groups: (groups ?? []) as unknown as Record<string, unknown>[],
+    groupItems: (groupItems ?? []) as unknown as Record<string, unknown>[],
+    payments: (payments ?? []) as unknown as Record<string, unknown>[],
+  });
+
+  // 5. Map quote_versions rows → QuoteVersion[] (already ordered newest-first by version_no desc)
+  const mappedVersions: QuoteVersion[] = (versions ?? []).map((v) => {
+    const vr = v as unknown as Record<string, unknown>;
+    return {
+      versionNo: vr.version_no as number,
+      savedAt: new Date(vr.saved_at as string).toISOString(),
+      savedBy: vr.saved_by as string,
+      note: vr.note as string,
+      state: vr.state as QuoteDraft,
+    };
+  });
+
+  // 6. Map collaborators (username → Collaborator)
+  const collaborators: Collaborator[] = (collabRows ?? []).map((r) => {
+    const cr = r as unknown as Record<string, unknown>;
+    return { u: (cr.username as string) ?? '', name: (cr.name as string) ?? '' };
+  });
+
+  return {
+    versions: mappedVersions,
+    currentState,
+    collaborators,
+    updatedAt: new Date(row.updated_at as string).toISOString(),
+    updatedBy: (row.updated_by_name as string) ?? '',
+  };
+}
+
+// ── public exports ────────────────────────────────────────────────────────────
+
+/** Mirror of `fbSaveQuoteState` (firebase.ts:329). Computes next version_no via
+ *  max(version_no)+1, builds decomposeQuote payload with version snapshot, calls
+ *  save_quote_state(p jsonb) RPC atomically. decomposeQuote omits total_cost so the
+ *  RPC's CASE WHEN q ? 'total_cost' clause preserves the index-owned value. */
+export async function sbSaveQuoteState(
+  cloudId: string,
+  state: QuoteDraft,
+  note: string | undefined,
+  savedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return saveQuoteStateImpl(cloudId, state, note, savedBy, client);
+}
+
+/** DMC variant of sbSaveQuoteState. The draft's template field already equals 'dmc';
+ *  this function is a thin alias kept for API parity with fbSaveDMCQuoteState. */
+export async function sbSaveDMCQuoteState(
+  cloudId: string,
+  state: QuoteDraft,
+  note: string | undefined,
+  savedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return saveQuoteStateImpl(cloudId, state, note, savedBy, client);
+}
+
+/** Mirror of `fbGetQuoteProject` (firebase.ts:400). SELECTs the quotes row + all
+ *  child tables + quote_versions + quote_collaborators; reassembles currentState via
+ *  assembleQuote; returns QuoteVersion[] newest-first. Returns null if absent. */
+export async function sbGetQuoteProject(
+  cloudId: string,
+  client: SupabaseClient = sb,
+): Promise<CloudQuoteProject | null> {
+  return getQuoteProjectImpl(cloudId, client);
+}
+
+/** DMC variant of sbGetQuoteProject. Behaviour is identical — the quotes.template
+ *  discriminator ('dmc') is already in the row; this alias preserves API parity with
+ *  fbGetDMCQuoteProject. */
+export async function sbGetDMCQuoteProject(
+  cloudId: string,
+  client: SupabaseClient = sb,
+): Promise<CloudQuoteProject | null> {
+  return getQuoteProjectImpl(cloudId, client);
+}
