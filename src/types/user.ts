@@ -9,6 +9,16 @@ export type Role =
   | 'Accountant'
   | 'Standard';
 
+/** Phòng ban (trục CHỨC NĂNG, độc lập với cấp bậc `role`). */
+export type Department =
+  | 'dh_noidia'     // Điều hành nội địa
+  | 'dh_nuocngoai'  // Điều hành nước ngoài
+  | 'ketoan'        // Kế toán
+  | 'visa'          // Visa
+  | 'hdv'           // Hướng dẫn viên
+  | 'muahang'       // Mua hàng
+  | 'sukien';       // Sự kiện
+
 export type User = {
   u: string;          // username — canonical app-level identifier
   email?: string;     // company email (@viettours.com.vn). Required for new
@@ -20,6 +30,7 @@ export type User = {
    *  fbPushUsers/fbPullUsers loại bỏ; fbPurgeLegacyPasswords xoá bản ghi cũ. */
   p?: string;
   role: Role;
+  department?: Department;  // phòng ban — quyết định mảng được TẠO/SỬA
   name: string;
   color: string;      // hex
 };
