@@ -90,6 +90,8 @@ export interface Itinerary {
   destination: string;
   days: number;
   nights: number;
+  /** Ngày khởi hành (ISO yyyy-MM-dd) — để tự điền ngày cho từng Ngày 1..N. */
+  startDate?: string;
   intro: string;
   flights: Flight[];
   schedule: Day[];

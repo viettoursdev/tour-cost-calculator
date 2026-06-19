@@ -10,7 +10,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode } from './itinCode';
 import {
-  ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, newActivity, newDay, newSegment, TRANSPORT_PRESETS,
+  ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, cloneDay, newActivity, newDay, newSegment, TRANSPORT_PRESETS,
 } from './constants';
 import { parseFlights } from './parseFlights';
 import { parseFlights as parseFlightsAI } from '@/lib/flightParse';
@@ -29,6 +29,7 @@ import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
 import type { Activity, Day, Flight, Itinerary, ItineraryType, QuoteFlight, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import BoltIcon from '@mui/icons-material/Bolt';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -172,10 +173,25 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     ...p,
     schedule: [...p.schedule, newDay(p.schedule.length + 1)],
   }));
+  const dupDay = (id: string) => setIt((p) => {
+    const idx = p.schedule.findIndex((d) => d.id === id);
+    if (idx < 0) return p;
+    const copy: Day = { ...cloneDay(p.schedule[idx]), date: '' };
+    const arr = [...p.schedule];
+    arr.splice(idx + 1, 0, copy);
+    return { ...p, schedule: arr.map((d, i) => ({ ...d, dayNum: i + 1 })) };
+  });
   const delDay = (id: string) => setIt((p) => ({
     ...p,
     schedule: p.schedule.filter((d) => d.id !== id).map((d, i) => ({ ...d, dayNum: i + 1 })),
   }));
+  // Tự điền ngày tháng cho Ngày 1..N từ ngày khởi hành (định dạng dd/MM/yyyy).
+  const fillDates = (startISO: string) => setIt((p) => {
+    const base = new Date(startISO + 'T00:00:00');
+    if (Number.isNaN(base.getTime())) return { ...p, startDate: startISO };
+    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    return { ...p, startDate: startISO, schedule: p.schedule.map((d, i) => ({ ...d, date: fmt(new Date(base.getTime() + i * 86400000)) })) };
+  });
   const updDay = (id: string, patch: Partial<Day>) =>
     updDayById(id, (d) => ({ ...d, ...patch }));
   const reorderDays = (from: number, to: number) =>
@@ -518,10 +534,15 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               · kéo ⋮⋮ để đổi thứ tự
             </Typography>
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
-            sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
-            Thêm ngày
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <TextField size="small" type="date" label="Ngày khởi hành" InputLabelProps={{ shrink: true }}
+              value={it.startDate ?? ''} onChange={(e) => fillDates(e.target.value)}
+              sx={{ width: 168 }} title="Chọn ngày khởi hành → tự điền ngày cho từng Ngày" />
+            <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
+              sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+              Thêm ngày
+            </Button>
+          </Stack>
         </Stack>
 
         <SortableList
@@ -545,7 +566,11 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                   placeholder="Điểm đến / tuyến (VD: TP.HCM → BẮC KINH)"
                   sx={{ flex: 1, minWidth: 200, '& .MuiInputBase-input': { color: '#fff', fontWeight: 600 },
                         '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
-                <IconButton size="small" sx={{ bgcolor: 'rgba(220,50,80,0.25)', color: '#fff' }}
+                <IconButton size="small" title="Nhân bản ngày" sx={{ bgcolor: 'rgba(255,255,255,0.18)', color: '#fff' }}
+                  onClick={() => dupDay(d.id)}>
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+                <IconButton size="small" title="Xoá ngày" sx={{ bgcolor: 'rgba(220,50,80,0.25)', color: '#fff' }}
                   onClick={() => delDay(d.id)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>

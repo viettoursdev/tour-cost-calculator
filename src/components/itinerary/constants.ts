@@ -47,6 +47,19 @@ export function newDay(n: number): Day {
   };
 }
 
+/** Nhân bản 1 ngày (deep copy, cấp id mới cho ngày/chặng/hoạt động). */
+export function cloneDay(d: Day): Day {
+  return {
+    ...d,
+    id: execId('d'),
+    segments: d.segments.map((s) => ({
+      ...s,
+      id: execId('s'),
+      activities: s.activities.map((a) => ({ ...a, id: execId('a') })),
+    })),
+  };
+}
+
 // Source: public/legacy.html:5605-5614.
 export const ITIN_DEFAULT_INC: readonly string[] = [
   'Vé máy bay khứ hồi hạng phổ thông theo hành trình, bao gồm hành lý ký gửi.',
