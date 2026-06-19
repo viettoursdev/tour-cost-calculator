@@ -11,7 +11,8 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAuthStore } from '@/stores/authStore';
 import { PERMISSIONS } from '@/auth/PERMISSIONS';
 import { ROLES, USER_COLORS, DEFAULT_USERS } from '@/auth/ROLES';
-import type { Role, User } from '@/types';
+import { DEPARTMENTS, DEPT_LABEL } from '@/auth/departments';
+import type { Department, Role, User } from '@/types';
 
 type Props = {
   open: boolean;
@@ -19,9 +20,9 @@ type Props = {
   currentUser: User;
 };
 
-type FormState = Pick<User, 'u' | 'p' | 'name' | 'role' | 'color'> & { email: string; phone: string };
+type FormState = Pick<User, 'u' | 'p' | 'name' | 'role' | 'color'> & { email: string; phone: string; department?: Department };
 
-const EMPTY_FORM: FormState = { u: '', email: '', phone: '', p: '', name: '', role: 'Sales', color: USER_COLORS[2] };
+const EMPTY_FORM: FormState = { u: '', email: '', phone: '', p: '', name: '', role: 'Sales', department: undefined, color: USER_COLORS[2] };
 
 const MATRIX_KEYS: { key: keyof typeof PERMISSIONS['CEO']; label: string }[] = [
   { key: 'manageUsers',  label: 'QL tài khoản' },
@@ -51,7 +52,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
   };
   const startEdit = (usr: User) => {
     setEditingId(usr.u);
-    setForm({ u: usr.u, email: usr.email ?? '', phone: usr.phone ?? '', p: usr.p, name: usr.name, role: usr.role, color: usr.color });
+    setForm({ u: usr.u, email: usr.email ?? '', phone: usr.phone ?? '', p: usr.p, name: usr.name, role: usr.role, department: usr.department, color: usr.color });
     setShowForm(true);
   };
 
@@ -85,6 +86,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
       p: legacyPassword,
       name: form.name.trim(),
       role: form.role,
+      ...(form.department ? { department: form.department } : {}),
       color: form.color,
     };
     const next = editingId
@@ -185,6 +187,17 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                     <MenuItem key={r} value={r}>{r}</MenuItem>
                   ))}
                 </Select>
+                <Select
+                  displayEmpty
+                  value={form.department ?? ''}
+                  onChange={(e) => setF('department', (e.target.value || undefined) as Department | undefined)}
+                  size="small" fullWidth
+                >
+                  <MenuItem value=""><em>— Chưa gán phòng (toàn quyền) —</em></MenuItem>
+                  {DEPARTMENTS.map((d) => (
+                    <MenuItem key={d.id} value={d.id}>{d.icon} {d.label}</MenuItem>
+                  ))}
+                </Select>
               </Stack>
               <Box>
                 <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
@@ -233,6 +246,13 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                       size="small"
                       sx={{ height: 18, fontSize: 10, fontWeight: 700, bgcolor: usr.color + '22', color: usr.color }}
                     />
+                    {usr.department && (
+                      <Chip
+                        label={DEPT_LABEL[usr.department]}
+                        size="small"
+                        sx={{ height: 18, fontSize: 10, fontWeight: 700, bgcolor: 'rgba(124,58,237,0.12)', color: '#7c3aed' }}
+                      />
+                    )}
                     {self && (
                       <Chip
                         label="Đang đăng nhập"
