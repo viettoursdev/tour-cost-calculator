@@ -458,16 +458,14 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         </Stack>
       </Box>
 
-      {/* ── Thanh điều hướng gom nhóm (tab phẳng + menu nhóm) ── */}
-      <Box sx={{ px: 1.5, display: 'flex', alignItems: 'stretch', gap: 0.25, overflowX: 'auto', borderBottom: '1px solid rgba(20,150,140,0.12)',
-        '&::-webkit-scrollbar': { height: 0 } }}>
-        {NAV.map((n, i) => ('group' in n
-          ? <NavGroup key={`g${i}`} label={n.group} items={n.items} view={view} onSelect={(v) => setView(v)} />
-          : <NavTab key={n.v} label={n.label} active={view === n.v} onClick={() => setView(n.v)} />
-        ))}
-      </Box>
-
-      <Toolbar sx={{ flexWrap: 'wrap', gap: 1.5, py: 1, minHeight: 'auto' }}>
+      {/* ── Thanh điều hướng + nút thao tác trên CÙNG một hàng ── */}
+      <Toolbar sx={{ flexWrap: 'wrap', gap: 1.5, py: 1, px: 1.5, minHeight: 'auto', borderBottom: '1px solid rgba(20,150,140,0.12)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.25, overflowX: 'auto', minWidth: 0, '&::-webkit-scrollbar': { height: 0 } }}>
+          {NAV.map((n, i) => ('group' in n
+            ? <NavGroup key={`g${i}`} label={n.group} items={n.items} view={view} onSelect={(v) => setView(v)} />
+            : <NavTab key={n.v} label={n.label} active={view === n.v} onClick={() => setView(n.v)} />
+          ))}
+        </Box>
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Rate Card dropdown (legacy "📋 Rate Card") */}
