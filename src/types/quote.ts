@@ -240,6 +240,9 @@ export interface TourAdvance {
   /** Số tiền đề nghị tạm ứng (VND). */
   advanceRequested: number;
   note?: string;
+  /** Hai người duyệt — chỉnh được cả sau khi đã gửi yêu cầu duyệt. */
+  approver1?: { u: string; name: string };
+  approver2?: { u: string; name: string };
   requestedBy?: string;
   requestedAt?: string;
   settledBy?: string;

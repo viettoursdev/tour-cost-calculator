@@ -118,17 +118,17 @@ export function exportAdvancePDF({
     pdf.text(pdf.splitTextToSize(adv.note, CW - 18) as string[], M + 16, y); y += 8;
   }
 
-  // ── Signatures ──
-  ensure(30); y = Math.max(y, PH - 40);
+  // ── Signatures: người đề nghị + 2 người duyệt ──
+  ensure(34); y = Math.max(y, PH - 42);
+  const cx = [M + 22, PW / 2, PW - M - 22];
+  const titles = ['NGƯỜI ĐỀ NGHỊ', 'NGƯỜI DUYỆT 1', 'NGƯỜI DUYỆT 2'];
+  const names = [adv.requestedBy || savedBy, adv.approver1?.name ?? '', adv.approver2?.name ?? ''];
   setF('bold'); pdf.setFontSize(10); pdf.setTextColor(...NAVY);
-  pdf.text('NGƯỜI ĐỀ NGHỊ', M + 20, y, { align: 'center' });
-  pdf.text('KẾ TOÁN', PW / 2, y, { align: 'center' });
-  pdf.text('GIÁM ĐỐC DUYỆT', PW - M - 20, y, { align: 'center' });
+  titles.forEach((tt, i) => pdf.text(tt, cx[i], y, { align: 'center' }));
   setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
-  pdf.text('(Ký, ghi rõ họ tên)', M + 20, y + 5, { align: 'center' });
-  pdf.text('(Ký, ghi rõ họ tên)', PW / 2, y + 5, { align: 'center' });
-  pdf.text('(Ký, ghi rõ họ tên)', PW - M - 20, y + 5, { align: 'center' });
-  if (savedBy) { setF('normal'); pdf.setFontSize(9); pdf.setTextColor(...INK); pdf.text(savedBy, M + 20, y + 22, { align: 'center' }); }
+  cx.forEach((x) => pdf.text('(Ký, ghi rõ họ tên)', x, y + 5, { align: 'center' }));
+  setF('normal'); pdf.setFontSize(9); pdf.setTextColor(...INK);
+  names.forEach((nm, i) => { if (nm) pdf.text(nm, cx[i], y + 24, { align: 'center' }); });
 
   const slug = (info.name || 'Tour').replace(/[^a-zA-Z0-9_À-ỹ]/g, '_').slice(0, 30);
   pdf.save(`DeNghiTamUng_${slug}.pdf`);

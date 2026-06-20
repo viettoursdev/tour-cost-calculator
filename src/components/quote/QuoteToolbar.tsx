@@ -285,7 +285,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
   const hidePrice = !canSeePrices(currentUser);
-  const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment', 'advance']);
+  const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
   const item = (v: QuoteViewKey, label: string) => ({ v, label });
   // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
   const NAV: NavNode[] = isDMC

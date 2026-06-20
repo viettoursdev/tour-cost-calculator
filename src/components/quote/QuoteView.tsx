@@ -47,7 +47,7 @@ export function QuoteView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   // Phòng HDV bị ẩn giá: nếu draft còn lưu view thuần về giá thì ép về "Báo giá".
   const hidePrice = !canSeePrices(currentUser);
-  const view = hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard' || rawView === 'advance')
+  const view = hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard')
     ? 'cost'
     : rawView;
   // `currentUsername` is null until `quoteStore.init(user)` has run from

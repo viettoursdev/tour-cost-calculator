@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack,
+  Autocomplete, Box, Button, Chip, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -33,6 +33,7 @@ export function AdvanceView() {
   const advance = useQuoteStore((s) => s.draft.advance);
   const setAdvance = useQuoteStore((s) => s.setAdvance);
   const currentUser = useAuthStore((s) => s.currentUser);
+  const users = useAuthStore((s) => s.users);
 
   const adv = advance ?? emptyAdvance();
   const t = advanceTotals(adv);
@@ -196,6 +197,28 @@ export function AdvanceView() {
           </Typography>
         </Paper>
       )}
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>
+          👥 Người duyệt <Typography component="span" variant="caption" color="text.secondary">· có thể chỉnh cả sau khi đã gửi duyệt</Typography>
+        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+          {([1, 2] as const).map((n) => {
+            const key = (n === 1 ? 'approver1' : 'approver2') as 'approver1' | 'approver2';
+            const cur = adv[key];
+            return (
+              <Autocomplete
+                key={n} size="small" options={users}
+                value={users.find((u) => u.u === cur?.u) ?? null}
+                onChange={(_, v) => patch({ [key]: v ? { u: v.u, name: v.name } : undefined })}
+                getOptionLabel={(u) => `${u.name} (${u.role})`}
+                isOptionEqualToValue={(a, b) => a.u === b.u}
+                renderInput={(params) => <TextField {...params} label={`Người duyệt ${n}`} placeholder="Chọn người duyệt" />}
+              />
+            );
+          })}
+        </Box>
+      </Paper>
 
       <Section title="① Chi phí đi tour" k="tourCosts" rate />
       <Section title="② Chi phí thanh toán khác" k="otherCosts" />
