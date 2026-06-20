@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';

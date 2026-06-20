@@ -21,8 +21,8 @@ export const firebaseBackend: AuthBackend = {
   signOut: () => fbSignOut(),
 
   subscribe: (cb) => {
-    fbOnIdTokenChanged((fbUser) => {
-      cb(fbUser ? { uid: (fbUser as { uid: string }).uid, email: ((fbUser as { email?: string }).email ?? '').toLowerCase() } : null);
+    fbOnIdTokenChanged(async (fbUser) => {
+      await cb(fbUser ? { uid: (fbUser as { uid: string }).uid, email: ((fbUser as { email?: string }).email ?? '').toLowerCase() } : null);
     });
   },
 
