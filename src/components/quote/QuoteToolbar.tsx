@@ -27,6 +27,11 @@ import { FxRatesPanel } from './FxRatesPanel';
 import { QuoteLinksModal } from './QuoteLinksModal';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import HistoryIcon from '@mui/icons-material/History';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
+import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined';
+import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -98,13 +103,13 @@ function NavGroup({ label, items, view, onSelect }: { label: string; items: NavI
 }
 
 /** Translucent "glass pill" used in the teal header band (legacy style). */
-function HeaderPill({ icon, children }: { icon: string; children: ReactNode }) {
+function HeaderPill({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <Stack
       direction="row" alignItems="center" spacing={0.5}
-      sx={{ background: 'rgba(255,255,255,0.12)', borderRadius: 1, px: 1, py: 0.3 }}
+      sx={{ background: 'rgba(255,255,255,0.12)', borderRadius: 1, px: 1, py: 0.3, '& svg': { fontSize: 15, opacity: 0.9 } }}
     >
-      <Box component="span" sx={{ opacity: 0.8, fontSize: 12 }}>{icon}</Box>
+      {icon}
       {children}
     </Stack>
   );
@@ -349,15 +354,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
                   transition: 'opacity .15s, transform .15s', '&:hover': { opacity: 0.82, transform: 'scale(1.03)' } }}
               />
             </Tooltip>
-            {tpl && (
-              <Box sx={{
+            {tpl && template && (() => { const Ic = TPL_ACCENT[template].Icon; return (
+              <Stack direction="row" alignItems="center" spacing={0.6} sx={{
                 background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
-                borderRadius: 5, px: 1.5, py: 0.4, fontSize: 10, fontWeight: 800,
+                borderRadius: 5, px: 1.25, py: 0.4, fontSize: 10, fontWeight: 800,
                 letterSpacing: 1, textTransform: 'uppercase', whiteSpace: 'nowrap',
+                '& svg': { fontSize: 14 },
               }}>
-                {tpl.icon} {tpl.label}
-              </Box>
-            )}
+                <Ic />
+                <span>{tpl.label}</span>
+              </Stack>
+            ); })()}
           </Stack>
 
           {/* COL2: tour name/dest + meta pills + actions */}
@@ -383,19 +390,19 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
 
             {/* Meta pills + actions */}
             <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap rowGap={0.75}>
-              <HeaderPill icon="🗓️">
+              <HeaderPill icon={<CalendarMonthOutlinedIcon />}>
                 <WhiteNum value={info.days} min={1} onChange={(v) => patchInfo({ days: v, nights: Math.max(0, v - 1) })} />
                 <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>ngày</Typography>
               </HeaderPill>
-              <HeaderPill icon="🌙">
+              <HeaderPill icon={<DarkModeOutlinedIcon />}>
                 <WhiteNum value={info.nights} min={0} onChange={(v) => patchInfo({ nights: v })} />
                 <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>đêm</Typography>
               </HeaderPill>
-              <HeaderPill icon="👥">
+              <HeaderPill icon={<GroupsOutlinedIcon />}>
                 <WhiteNum value={pax} min={1} onChange={(v) => setPax(v)} />
                 <Typography component="span" sx={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>khách</Typography>
               </HeaderPill>
-              <HeaderPill icon="✈️">
+              <HeaderPill icon={<FlightTakeoffOutlinedIcon />}>
                 <Box
                   component="input" type="date" value={info.startDate ?? ''}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => patchInfo({ startDate: e.target.value || null })}
