@@ -212,7 +212,39 @@ export type QuoteDraft = {
   outputCurrency?: OutputCurrency;
   dmcPrices?: DmcPrices;
   dmcMargin?: DmcMargin;
+  // Đề nghị tạm ứng & quyết toán tour (optional — absent cho tới khi tạo).
+  advance?: TourAdvance;
 };
+
+// ── Đề nghị tạm ứng & Quyết toán tour ──
+export interface AdvanceLine {
+  id: string;
+  name: string;
+  note?: string;
+  unit?: string;
+  qty: number;     // số lượng
+  price: number;   // đơn giá (VND)
+  /** Số tiền QUYẾT TOÁN thực tế (giai đoạn quyết toán). Trống = dùng dự toán qty*price. */
+  actual?: number;
+}
+
+/** draft → tam_ung (đã gửi duyệt, chờ/đã tạm ứng) → quyet_toan (đã quyết toán, đóng case). */
+export type AdvanceStatus = 'draft' | 'tam_ung' | 'quyet_toan';
+
+export interface TourAdvance {
+  status: AdvanceStatus;
+  /** Chi phí đi tour (có rate card). */
+  tourCosts: AdvanceLine[];
+  /** Chi phí thanh toán khác. */
+  otherCosts: AdvanceLine[];
+  /** Số tiền đề nghị tạm ứng (VND). */
+  advanceRequested: number;
+  note?: string;
+  requestedBy?: string;
+  requestedAt?: string;
+  settledBy?: string;
+  settledAt?: string;
+}
 
 export type Snapshot = {
   id: number;

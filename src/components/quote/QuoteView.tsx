@@ -14,6 +14,7 @@ import { LEGACY } from '@/theme';
 // Tách bundle: các view phụ + app mẫu (itinerary/menu/visa/doctranslate) chỉ tải
 // khi thực sự mở → giảm mạnh bundle khởi động (giữ nguyên Home/Cost/Summary eager).
 const DashboardView = lazy(() => import('./DashboardView').then((m) => ({ default: m.DashboardView })));
+const AdvanceView = lazy(() => import('./AdvanceView').then((m) => ({ default: m.AdvanceView })));
 const PaymentView = lazy(() => import('./PaymentView').then((m) => ({ default: m.PaymentView })));
 const QuoteHistoryView = lazy(() => import('./QuoteHistoryView').then((m) => ({ default: m.QuoteHistoryView })));
 const FlightView = lazy(() => import('./FlightView').then((m) => ({ default: m.FlightView })));
@@ -46,7 +47,7 @@ export function QuoteView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   // Phòng HDV bị ẩn giá: nếu draft còn lưu view thuần về giá thì ép về "Báo giá".
   const hidePrice = !canSeePrices(currentUser);
-  const view = hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard')
+  const view = hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard' || rawView === 'advance')
     ? 'cost'
     : rawView;
   // `currentUsername` is null until `quoteStore.init(user)` has run from
@@ -97,6 +98,7 @@ export function QuoteView() {
             {view === 'cost' && <CostView />}
             {view === 'summary' && <SummaryView />}
             {view === 'dashboard' && <DashboardView />}
+            {view === 'advance' && <AdvanceView />}
             {view === 'payment' && <PaymentView />}
             {view === 'flights' && <FlightView />}
             {view === 'workflow' && <WorkflowView />}
