@@ -762,7 +762,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                               </li>
                             )}
                             renderInput={(params) => (
-                              <TextField {...params} placeholder="Nội dung hoạt động / thuyết minh… (gõ tên điểm để gợi ý)" />
+                              <TextField {...params} multiline maxRows={8}
+                                onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}
+                                placeholder="Nội dung… (Enter xuống dòng · **đậm** · *nghiêng* · gõ tên điểm để gợi ý)" />
                             )}
                           />
                           <Button size="small" variant="outlined"

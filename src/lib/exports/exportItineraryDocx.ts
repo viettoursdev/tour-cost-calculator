@@ -13,6 +13,7 @@ import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import { flightDepStr, flightArrStr } from '@/components/itinerary/flightFields';
 import { dayLabel } from '@/components/itinerary/itinCode';
+import { parseInlineRich, splitLines } from '@/lib/richText';
 import type { Itinerary } from '@/types';
 
 // 9 ảnh mẫu (GIỮ NGUYÊN file gốc, không nén) — phục vụ từ public/, tải lúc xuất.
@@ -69,6 +70,21 @@ const tr = (t: string | number | null | undefined, o: RunOpts = {}): TextRun =>
     italics: !!o.italics,
     color: o.color ?? INK,
   });
+
+/** Nội dung nhiều dòng + đậm/nghiêng (markdown) thành mảng TextRun (xuống dòng bằng break). */
+const richRuns = (text: string, o: RunOpts = {}): TextRun[] => {
+  const out: TextRun[] = [];
+  splitLines(text).forEach((line, li) => {
+    parseInlineRich(line).forEach((r, ri) => {
+      out.push(new TextRun({
+        text: r.text, font: FONT, size: o.size ?? 19,
+        bold: r.bold || !!o.bold, italics: r.italic || !!o.italics, color: o.color ?? INK,
+        ...(li > 0 && ri === 0 ? { break: 1 } : {}),
+      }));
+    });
+  });
+  return out.length ? out : [tr('', o)];
+};
 
 interface ParaOpts {
   align?: (typeof AlignmentType)[keyof typeof AlignmentType];
@@ -215,7 +231,7 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
           children: [
             cell([P(tr(a.time, { size: 18, bold: true, color: TEAL }), { after: 0 })],
               { width: tW, fill: i % 2 ? ZEBRA : WHITE, mt: 16, mb: 16, ml: 90, mr: 20 }),
-            cell([P(tr(a.text, { size: 19, color: INK }), { after: 0 })],
+            cell([P(richRuns(a.text, { size: 19, color: INK }), { after: 0 })],
               { width: cW, fill: i % 2 ? ZEBRA : WHITE, mt: 16, mb: 16, ml: 90, mr: 130 }),
           ],
         }));

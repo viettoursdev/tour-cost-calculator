@@ -6,6 +6,26 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { toast } from '@/stores/toastStore';
 import type { Itinerary, Day } from '@/types';
 import { dayLabel } from './itinCode';
+import { parseInlineRich, splitLines } from '@/lib/richText';
+
+/** Hiển thị nội dung hoạt động: xuống dòng + **đậm** + *nghiêng*. */
+function RichText({ text }: { text: string }) {
+  return (
+    <>
+      {splitLines(text).map((ln, i) => (
+        <Box component="span" key={i}>
+          {i > 0 && <br />}
+          {parseInlineRich(ln).map((r, j) => (
+            <Box component="span" key={j}
+              sx={{ fontWeight: r.bold ? 800 : undefined, fontStyle: r.italic ? 'italic' : undefined }}>
+              {r.text}
+            </Box>
+          ))}
+        </Box>
+      ))}
+    </>
+  );
+}
 
 const MEALS: [keyof Day['meals'], string][] = [['B', 'Sáng'], ['L', 'Trưa'], ['D', 'Tối']];
 const real = (d: Day) => d.segments.map((s) => ({ ...s, activities: s.activities.filter((a) => a.text.trim()) })).filter((s) => s.activities.length || s.transport.trim());
@@ -74,7 +94,7 @@ export function ItineraryPreviewDialog({ itinerary, code, onClose }: { itinerary
                     {seg.transport?.trim() && <Typography sx={{ color: '#14a08c', fontWeight: 600, fontSize: 12 }}>🚌 {seg.transport}</Typography>}
                     {seg.activities.map((a) => (
                       <Typography key={a.id} sx={{ fontSize: 12.5, pl: 1 }}>
-                        {a.time && <Box component="span" sx={{ fontWeight: 700, color: '#0f3a4a', mr: 0.75 }}>{a.time}</Box>}{a.text}
+                        {a.time && <Box component="span" sx={{ fontWeight: 700, color: '#0f3a4a', mr: 0.75 }}>{a.time}</Box>}<RichText text={a.text} />
                       </Typography>
                     ))}
                   </Box>
