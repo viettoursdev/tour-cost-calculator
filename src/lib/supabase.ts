@@ -8,11 +8,17 @@ import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/help
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
-if (!url || !anon) {
+// This module is imported eagerly at startup (authStore → auth/backend →
+// supabaseBackend), so it must NOT throw when Supabase is dormant. Only hard-fail
+// when Supabase is the active backend; otherwise build a placeholder client that is
+// never called while Firebase is active. Keeps production (Firebase) booting without
+// Supabase env until cutover.
+const sbActive = import.meta.env.VITE_AUTH_BACKEND === 'supabase';
+if (sbActive && (!url || !anon)) {
   throw new Error('Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (see .env.example).');
 }
 
-export const sb: SupabaseClient = createClient(url, anon, {
+export const sb: SupabaseClient = createClient(url || 'https://placeholder.invalid', anon || 'placeholder-anon-key', {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
