@@ -10,20 +10,24 @@
 const LS_KEY = 'vte_ai_worker';
 
 /**
- * Header xác thực gửi kèm mọi lời gọi Worker: Firebase ID token của người đang đăng
- * nhập. Worker (sau khi redeploy bản có auth) sẽ verify token + domain @viettours
+ * Header xác thực gửi kèm mọi lời gọi Worker: bearer token của backend auth đang
+ * hoạt động (Firebase ID token hoặc Supabase access token tuỳ `VITE_AUTH_BACKEND`).
+ * Worker (sau khi redeploy bản có auth) sẽ verify token + domain @viettours
  * trước khi gọi Anthropic / ghi R2 — chặn lạm dụng API key & file từ bên ngoài.
  * Worker CŨ (chưa auth) bỏ qua header này nên không ảnh hưởng.
  */
 async function authHeaders(): Promise<Record<string, string>> {
   try {
-    const { auth } = await import('@/lib/firebase'); // lazy — tránh khởi tạo Firebase khi import module
-    const token = await auth.currentUser?.getIdToken();
+    const { authBackend } = await import('@/auth/backend'); // lazy — tránh khởi tạo IdP khi import module
+    const token = await authBackend.getAccessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};
   }
 }
+
+// Test seam.
+export const __getAuthHeadersForTest = authHeaders;
 
 /**
  * Default deployed Cloudflare Worker (holds upstream keys + R2 bucket).
