@@ -16,33 +16,6 @@ import { dayLabel } from '@/components/itinerary/itinCode';
 import { parseInlineRich, splitLines } from '@/lib/richText';
 import type { Itinerary } from '@/types';
 
-// 9 ảnh mẫu (GIỮ NGUYÊN file gốc, không nén) — phục vụ từ public/, tải lúc xuất.
-// Kích thước hiển thị (px @96dpi) tính theo ĐÚNG TỈ LỆ GỐC của từng ảnh (vừa khít
-// trong khung mẫu, KHÔNG kéo giãn): banner ~1.5:1, wide 1:1, portrait 0.75:1.
-const SAMPLE_IMAGES: { file: string; w: number; h: number }[] = [
-  { file: 'banner1.jpg', w: 196, h: 110 },
-  { file: 'banner2.jpg', w: 165, h: 110 },
-  { file: 'banner3.jpg', w: 165, h: 110 },
-  { file: 'banner4.jpg', w: 166, h: 110 },
-  { file: 'wide1.jpg', w: 160, h: 160 },
-  { file: 'wide2.jpg', w: 160, h: 160 },
-  { file: 'wide3.jpg', w: 160, h: 160 },
-  { file: 'wide4.jpg', w: 160, h: 160 },
-  { file: 'portrait1.jpg', w: 290, h: 387 },
-];
-
-async function fetchSampleImages(): Promise<{ data: Uint8Array; w: number; h: number }[]> {
-  const base = import.meta.env.BASE_URL;
-  try {
-    return await Promise.all(SAMPLE_IMAGES.map(async (m) => {
-      const r = await fetch(`${base}itinerary-sample/${m.file}`);
-      return { data: new Uint8Array(await r.arrayBuffer()), w: m.w, h: m.h };
-    }));
-  } catch {
-    return [];
-  }
-}
-
 const FONT = 'Aptos';
 const NAVY = '0F3A4A';
 const TEAL = '14A08C';
@@ -134,14 +107,6 @@ const tbl = (rows: TableRow[], widths: number[], o: TblOpts = {}): Table => new 
   rows,
 });
 
-// Ảnh layout mẫu (căn giữa) — giữ nguyên ảnh gốc theo file mẫu.
-const imgPara = (data: Uint8Array, w: number, h: number): Paragraph =>
-  new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 80 },
-    children: [new ImageRun({ type: 'jpg', data, transformation: { width: w, height: h } })],
-  });
-
 // Footer công ty (Times New Roman, căn giữa) — giữ nguyên theo mẫu.
 const ftrLine = (t: string, bold = false): Paragraph =>
   new Paragraph({
@@ -152,7 +117,6 @@ const ftrLine = (t: string, bold = false): Paragraph =>
 
 export async function exportItineraryDocx(it: Itinerary, code: string): Promise<void> {
   const C: (Paragraph | Table)[] = [];
-  const sampleImgs = await fetchSampleImages();
 
   // Title block (theo mẫu: bắt đầu thẳng bằng tiêu đề, không logo/mã ở đầu trang)
   C.push(P(tr('CHƯƠNG TRÌNH THAM QUAN DU LỊCH', { size: 18, bold: true, color: MUTE }),
@@ -272,12 +236,6 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
     }
     C.push(P(mealRuns, { before: 40, after: 140 }));
   });
-
-  // Layout 9 hình ảnh mẫu — giữ nguyên theo file mẫu (4 banner + 4 ảnh ngang +
-  // 1 ảnh đứng); có thể thay ảnh khác vào sau khi cần.
-  C.push(P(tr('*** Lay out hình ảnh tham khảo', { size: 16, bold: true, color: MUTE }),
-    { before: 120, after: 60 }));
-  sampleImgs.forEach((im) => C.push(imgPara(im.data, im.w, im.h)));
 
   // Note
   C.push(P(tr('✱ Chương trình có thể thay đổi thứ tự tùy thời tiết & tình hình thực tế, vẫn đảm bảo đầy đủ nội dung.',
