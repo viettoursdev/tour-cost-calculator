@@ -40,6 +40,7 @@ export function NCCView() {
   const viewAll = !!currentUser && canViewAll(currentUser.role, 'ncc');
 
   const [search, setSearch] = useState('');
+  const [tourSearch, setTourSearch] = useState('');
   const [filterSector, setFilterSector] = useState('');
   const [filterContinent, setFilterContinent] = useState('');
   const [filterCountry, setFilterCountry] = useState('');
@@ -64,21 +65,24 @@ export function NCCView() {
     [suppliers],
   );
   const filtered = useMemo(() => {
+    const tq = normalizeVN(tourSearch.trim());
     const base = suppliers.filter((s) => {
       if (!viewAll && s.createdBy !== currentUser?.name) return false;
       if (filterSector && !s.sectors.includes(filterSector)) return false;
       if (filterContinent && s.continent !== filterContinent) return false;
       if (filterCountry && s.country !== filterCountry) return false;
       if (owner && s.createdBy !== owner) return false;
+      if (tq && !(s.tours ?? []).some((t) => normalizeVN(t).includes(tq))) return false;
       if (!inDateRange(s.updatedAt ?? s.createdAt, dateRange, dateFrom, dateTo)) return false;
       return true;
     });
+    // Tìm CHỈ theo tên NCC + tên người liên hệ (không quét note/lĩnh vực/SĐT… cho gọn).
     const text = (s: Ncc) => [
-      s.name, s.location, s.country, s.continent, s.note, (s.sectors ?? []).join(' '),
-      ...(s.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
+      s.name,
+      ...(s.contacts ?? []).map((ct) => ct.name ?? ''),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
-  }, [suppliers, search, filterSector, filterContinent, filterCountry, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
+  }, [suppliers, search, tourSearch, filterSector, filterContinent, filterCountry, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Ncc) => {
     const norm = normalizeVN(form.name);
@@ -91,6 +95,31 @@ export function NCCView() {
   const handleDeleteNow = (s: Ncc) => {
     void del(s.id);
     toast(`Đã xoá NCC "${s.name}".`, 'info', { label: 'Hoàn tác', onClick: () => void save(s) });
+  };
+
+  // Gộp NCC `source` vào `targetId`: dồn dữ liệu về target rồi xoá source.
+  const handleMerge = async (source: Ncc, targetId: string) => {
+    const target = suppliers.find((s) => s.id === targetId);
+    if (!target || target.id === source.id) return;
+    const dedupeContacts = [...target.contacts];
+    (source.contacts ?? []).forEach((c) => {
+      if (!dedupeContacts.some((tc) => tc.name === c.name && tc.phone === c.phone)) dedupeContacts.push(c);
+    });
+    const merged: Ncc = {
+      ...target,
+      sectors: [...new Set([...(target.sectors ?? []), ...(source.sectors ?? [])])],
+      tours: [...new Set([...(target.tours ?? []), ...(source.tours ?? [])])],
+      contacts: dedupeContacts,
+      note: [target.note, source.note].filter((x) => x && x.trim()).join('\n'),
+      ratings: [...(target.ratings ?? []), ...(source.ratings ?? [])],
+      location: target.location || source.location,
+      country: target.country || source.country,
+      continent: target.continent || source.continent,
+    };
+    await save(merged);
+    await del(source.id);
+    setModal(null);
+    toast(`✅ Đã gộp "${source.name}" vào "${target.name}".`);
   };
 
   const handleConvert = async () => {
@@ -129,10 +158,21 @@ export function NCCView() {
       <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
         <TextField
           size="small"
-          placeholder="Tìm tên, địa điểm, contact..."
+          label="Tìm theo tên NCC / tên người liên hệ"
+          placeholder="VD: Champa Island, anh Tuấn…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ flex: 1, minWidth: 220, maxWidth: 360, ...filterFieldSx }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ flex: 1, minWidth: 240, maxWidth: 320, ...filterFieldSx }}
+        />
+        <TextField
+          size="small"
+          label="Tìm theo tour"
+          placeholder="Tên tour NCC từng phục vụ…"
+          value={tourSearch}
+          onChange={(e) => setTourSearch(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 200, ...filterFieldSx }}
         />
         <Select
           size="small"
@@ -224,6 +264,8 @@ export function NCCView() {
           canEdit={canEdit}
           onSave={handleSave}
           onClose={() => setModal(null)}
+          allNccs={suppliers}
+          onMerge={(source, targetId) => void handleMerge(source, targetId)}
         />
       )}
 

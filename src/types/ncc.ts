@@ -53,6 +53,8 @@ export type Ncc = {
   continent?: string;   // châu lục (lọc)
   country?: string;     // quốc gia (lọc)
   location: string;     // địa điểm/thành phố cụ thể
+  /** Các tour NCC này từng phục vụ — để tìm NCC theo tour. */
+  tours?: string[];
   contacts: NccContact[];
   note: string;
   /** Phân tích/đánh giá của AI (lưu để tham khảo, hiển thị dưới ghi chú). */

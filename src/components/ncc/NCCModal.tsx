@@ -15,7 +15,8 @@ import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
 import { AiButton } from '@/components/common/AiButton';
 import type { ParsedNcc } from '@/lib/partyParse';
 import type { NameCardFields } from '@/lib/nameCard';
-import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
+import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES, deriveLocation } from './constants';
+import MergeOutlinedIcon from '@mui/icons-material/MergeOutlined';
 import type { Ncc, NccContact } from '@/types';
 
 const EMPTY_CONTACT: NccContact = { name: '', phone: '', email: '', position: '' };
@@ -36,11 +37,15 @@ type Props = {
   canEdit: boolean;
   onSave: (form: Ncc) => void;
   onClose: () => void;
+  /** Danh sách NCC khác (để gộp khi trùng); onMerge(source, targetId). */
+  allNccs?: Ncc[];
+  onMerge?: (source: Ncc, targetId: string) => void;
 };
 
-export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
+export function NCCModal({ ncc, canEdit, onSave, onClose, allNccs = [], onMerge }: Props) {
   const { state: form, set: setForm, undo, redo, canUndo, canRedo } = useHistoryState<Ncc>(ncc ?? EMPTY_NCC);
   const [aiOpen, setAiOpen] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<Ncc | null>(null);
   const currentUser = useAuthStore((s) => s.currentUser);
   const [newStars, setNewStars] = useState<number | null>(null);
   const [newComment, setNewComment] = useState('');
@@ -211,13 +216,30 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
             </TextField>
           </Stack>
 
-          {/* Location */}
+          {/* Location — tự suy ra Quốc gia + Châu lục khi rời ô (nếu chưa chọn). */}
           <TextField
             label="Địa điểm / Thành phố"
             value={form.location}
             onChange={(e) => setF('location', e.target.value)}
-            placeholder="VD: TP. Hồ Chí Minh, Đà Nẵng..."
+            onBlur={() => {
+              if (!canEdit) return;
+              const d = deriveLocation(form.location);
+              if (d.country) setForm((p) => ({ ...p, country: p.country || d.country!, continent: p.continent || d.continent || p.continent }));
+            }}
+            placeholder="VD: TP. Hồ Chí Minh, Honolulu, Bangkok..."
+            helperText="Nhập địa điểm → tự điền Quốc gia/Châu lục nếu chưa chọn."
             disabled={!canEdit}
+          />
+
+          {/* Tour đã phục vụ — để tìm NCC theo tour */}
+          <Autocomplete
+            multiple freeSolo size="small" disabled={!canEdit}
+            options={[...new Set(allNccs.flatMap((n) => n.tours ?? []))].sort()}
+            value={form.tours ?? []}
+            onChange={(_, v) => setF('tours', v as string[])}
+            renderInput={(params) => (
+              <TextField {...params} label="Tour đã phục vụ" placeholder="Gõ tên tour rồi Enter…" />
+            )}
           />
 
           {/* Contacts */}
@@ -321,6 +343,35 @@ export function NCCModal({ ncc, canEdit, onSave, onClose }: Props) {
                 </Box>
               ))}
             </Stack>
+          )}
+
+          {/* Gộp NCC trùng */}
+          {canEdit && onMerge && ncc?.id && allNccs.some((n) => n.id !== ncc.id) && (
+            <Box sx={{ pt: 1.5, borderTop: '1px dashed rgba(15,58,74,0.15)' }}>
+              <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                <MergeOutlinedIcon sx={{ fontSize: 15, verticalAlign: '-2px', mr: 0.5 }} />
+                Gộp NCC này vào NCC khác (khi trùng)
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Autocomplete
+                  size="small" sx={{ flex: 1 }}
+                  options={allNccs.filter((n) => n.id !== ncc.id)}
+                  value={mergeTarget}
+                  onChange={(_, v) => setMergeTarget(v)}
+                  getOptionLabel={(n) => n.name}
+                  isOptionEqualToValue={(a, b) => a.id === b.id}
+                  renderInput={(params) => <TextField {...params} placeholder="Chọn NCC giữ lại…" />}
+                />
+                <Button variant="outlined" color="warning" startIcon={<MergeOutlinedIcon />} disabled={!mergeTarget}
+                  onClick={() => {
+                    if (!mergeTarget) return;
+                    if (!window.confirm(`Gộp "${form.name}" vào "${mergeTarget.name}"? Dữ liệu (liên hệ, lĩnh vực, tour, ghi chú, đánh giá) sẽ dồn về "${mergeTarget.name}" và NCC này sẽ bị xoá.`)) return;
+                    onMerge(form, mergeTarget.id);
+                  }}>
+                  Gộp
+                </Button>
+              </Stack>
+            </Box>
           )}
         </Stack>
       </DialogContent>
