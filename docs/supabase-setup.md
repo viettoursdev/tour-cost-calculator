@@ -382,6 +382,12 @@ When a new user signs in for the first time, the `handle_new_user()` trigger (mi
 
 The Cloudflare Worker currently verifies Firebase JWTs (or passes requests through if no auth header is set). Phase 3 only changed which token the **client** sends — the Worker-side JWT verification swap is **Phase 5** and is not done here. Until Phase 5 ships, a Supabase-issued JWT sent to the Worker behaves the same as today (unauthenticated from the Worker's perspective). This is acceptable for the dev-testing period; do not flip `VITE_AUTH_BACKEND=supabase` in production until Phase 5 is deployed.
 
+### Data layer is still Firestore — the Supabase flag swaps auth ONLY
+
+Phase 3 swaps **authentication only**. Every Zustand store still reads and writes **Firestore** (none import `@/lib/supabase` yet — that is the Phase 4 store cutover). Firestore Rules require a Firebase Auth token (`request.auth != null` + `@viettours.com.vn`). Under `VITE_AUTH_BACKEND=supabase` the user holds a Supabase session but **no Firebase session**, so every Firestore read/write is denied: you can sign in, but data sync, quotes, rate cards, notifications, etc. stay dead until Phase 4.
+
+This is expected, not a bug. Do not expect a working app under the Supabase flag before Phase 4, and do not flip `VITE_AUTH_BACKEND=supabase` in production until both Phase 4 (store wiring) and Phase 5 (Worker JWT) ship. The smoke checklist below verifies the **auth** path in isolation; a blank/error-laden data UI under the flag is the Firestore denial described here, not an auth failure.
+
 ### Manual browser smoke checklist
 
 Run these checks with `VITE_AUTH_BACKEND=supabase` against a dev Supabase project (`npm run dev` with a local `.env` override). No automated test covers the browser-side PKCE redirect.
