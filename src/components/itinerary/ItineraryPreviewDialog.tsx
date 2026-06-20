@@ -5,6 +5,7 @@ import {
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { toast } from '@/stores/toastStore';
 import type { Itinerary, Day } from '@/types';
+import { dayLabel } from './itinCode';
 
 const MEALS: [keyof Day['meals'], string][] = [['B', 'Sáng'], ['L', 'Trưa'], ['D', 'Tối']];
 const real = (d: Day) => d.segments.map((s) => ({ ...s, activities: s.activities.filter((a) => a.text.trim()) })).filter((s) => s.activities.length || s.transport.trim());
@@ -62,7 +63,7 @@ export function ItineraryPreviewDialog({ itinerary, code, onClose }: { itinerary
           {it.schedule.map((d) => (
             <Box key={d.id} sx={{ mb: 1.75, breakInside: 'avoid' }}>
               <Box sx={{ background: 'linear-gradient(135deg,#0f3a4a,#14566b)', color: '#fff', px: 1.5, py: 0.85, borderRadius: '6px 6px 0 0' }}>
-                <Typography component="span" sx={{ fontWeight: 900, fontSize: 13 }}>NGÀY {d.dayNum}</Typography>
+                <Typography component="span" sx={{ fontWeight: 900, fontSize: 13 }}>NGÀY {dayLabel(d.dayNum, it.dayStart)}</Typography>
                 {d.date && <Typography component="span" sx={{ fontSize: 12, opacity: 0.85, ml: 1 }}>({d.date})</Typography>}
                 {d.title && <Typography component="span" sx={{ fontWeight: 700, fontSize: 13, ml: 1 }}>· {d.title}</Typography>}
               </Box>

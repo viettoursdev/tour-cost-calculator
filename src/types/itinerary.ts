@@ -95,6 +95,8 @@ export interface Itinerary {
   customerName?: string;
   /** Ngày khởi hành (ISO yyyy-MM-dd) — để tự điền ngày cho từng Ngày 1..N. */
   startDate?: string;
+  /** Nhãn ngày bắt đầu từ 0 hay 1 (mặc định 1). Ảnh hưởng hiển thị "NGÀY x". */
+  dayStart?: 0 | 1;
   intro: string;
   flights: Flight[];
   schedule: Day[];

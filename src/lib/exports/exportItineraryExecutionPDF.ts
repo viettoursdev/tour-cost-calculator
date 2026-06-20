@@ -8,6 +8,7 @@ import { loadVNFont } from './vnFont';
 import { VTE_LOGO } from './vteLogo';
 import { fmtDate } from '@/lib/dateUtils';
 import { buildExecModel, mealsLabel } from './execModel';
+import { dayLabel } from '@/components/itinerary/itinCode';
 import type { ExecContact, Itinerary, Menu, Restaurant } from '@/types';
 
 type RGB = [number, number, number];
@@ -134,7 +135,7 @@ export function exportItineraryExecutionPDF(
 
   // ── Day by day ──
   m.dayVMs.forEach((d) => {
-    sectionHead(`Ngày ${d.dayNum}${d.date ? ' · ' + fmtDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`);
+    sectionHead(`Ngày ${dayLabel(d.dayNum, it.dayStart)}${d.date ? ' · ' + fmtDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`);
     para('Ăn:', mealsLabel(d.meals) + (d.mealNote ? ` (${d.mealNote})` : ''));
     // schedule
     d.segments.forEach((s) => {

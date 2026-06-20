@@ -12,6 +12,7 @@ import {
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import { flightDepStr, flightArrStr } from '@/components/itinerary/flightFields';
+import { dayLabel } from '@/components/itinerary/itinCode';
 import type { Itinerary } from '@/types';
 
 // 9 ảnh mẫu (GIỮ NGUYÊN file gốc, không nén) — phục vụ từ public/, tải lúc xuất.
@@ -187,7 +188,7 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
       children: [cell(
         [new Paragraph({
           children: [
-            tr(`NGÀY ${d.dayNum}`, { size: 22, bold: true, color: WHITE }),
+            tr(`NGÀY ${dayLabel(d.dayNum, it.dayStart)}`, { size: 22, bold: true, color: WHITE }),
             tr(`     ${d.title || ''}`, { size: 19, bold: true, color: 'CFE6E0' }),
           ],
           spacing: { after: 0 },

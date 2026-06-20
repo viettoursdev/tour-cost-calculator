@@ -56,6 +56,39 @@ export function generateItinCode(
   return `${t}.${c}.${pad2(seq || 1)}.${dateTag(date)}`;
 }
 
+/** Nhãn số ngày hiển thị, theo cấu hình bắt đầu từ 0 hay 1 (mặc định 1). */
+export function dayLabel(dayNum: number, dayStart: number | undefined): number {
+  return dayNum - 1 + (dayStart ?? 1);
+}
+
+const VN_DATE_RE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+
+/** 'dd/MM/yyyy' → 'yyyy-MM-dd' (cho input type=date). Rỗng nếu không hợp lệ. */
+export function vnDateToISO(s: string | undefined): string {
+  const m = VN_DATE_RE.exec((s ?? '').trim());
+  if (!m) return '';
+  const [, d, mo, y] = m;
+  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+/** 'yyyy-MM-dd' → 'dd/MM/yyyy'. */
+export function isoToVNDate(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return '';
+  const [, y, mo, d] = m;
+  return `${d}/${mo}/${y}`;
+}
+
+const WEEKDAYS_VN = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
+/** Thứ trong tuần (tiếng Việt) từ chuỗi 'dd/MM/yyyy'. Rỗng nếu không parse được. */
+export function weekdayVN(vnDate: string | undefined): string {
+  const iso = vnDateToISO(vnDate);
+  if (!iso) return '';
+  const dt = new Date(iso + 'T00:00:00');
+  return Number.isNaN(dt.getTime()) ? '' : WEEKDAYS_VN[dt.getDay()];
+}
+
 /** STT kế tiếp trong ngày cho cặp (type, continent): đếm mã đã tạo hôm nay + 1. */
 export function nextItinSeqToday(
   codes: (string | undefined)[],

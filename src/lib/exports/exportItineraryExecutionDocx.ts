@@ -9,6 +9,7 @@ import {
 import { saveAs } from 'file-saver';
 import { fmtDate } from '@/lib/dateUtils';
 import { buildExecModel, mealsLabel } from './execModel';
+import { dayLabel } from '@/components/itinerary/itinCode';
 import type { ExecContact, Itinerary, Menu, Restaurant } from '@/types';
 
 const FONT = 'Aptos';
@@ -87,7 +88,7 @@ export async function exportItineraryExecutionDocx(
 
   // Days
   m.dayVMs.forEach((d) => {
-    kids.push(heading(`Ngày ${d.dayNum}${d.date ? ' · ' + fmtDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`));
+    kids.push(heading(`Ngày ${dayLabel(d.dayNum, it.dayStart)}${d.date ? ' · ' + fmtDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`));
     kids.push(line([tr('Ăn: ', { bold: true }), tr(mealsLabel(d.meals) + (d.mealNote ? ` (${d.mealNote})` : ''))]));
     d.segments.forEach((s) => {
       if (s.groupLabel || s.transport) kids.push(line([tr([s.groupLabel, s.transport && `🚌 ${s.transport}`].filter(Boolean).join('  ·  '), { bold: true, color: TEAL })]));

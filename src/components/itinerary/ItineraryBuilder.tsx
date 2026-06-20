@@ -8,7 +8,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
-import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode, nextItinSeqToday } from './itinCode';
+import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode, nextItinSeqToday, dayLabel, vnDateToISO, weekdayVN } from './itinCode';
 import { useCustomerStore } from '@/stores/customerStore';
 import { AiButton } from '@/components/common/AiButton';
 import type { Customer } from '@/types';
@@ -205,12 +205,24 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     ...p,
     schedule: p.schedule.filter((d) => d.id !== id).map((d, i) => ({ ...d, dayNum: i + 1 })),
   }));
+  const fmtVN = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   // Tự điền ngày tháng cho Ngày 1..N từ ngày khởi hành (định dạng dd/MM/yyyy).
   const fillDates = (startISO: string) => setIt((p) => {
     const base = new Date(startISO + 'T00:00:00');
     if (Number.isNaN(base.getTime())) return { ...p, startDate: startISO };
-    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-    return { ...p, startDate: startISO, schedule: p.schedule.map((d, i) => ({ ...d, date: fmt(new Date(base.getTime() + i * 86400000)) })) };
+    return { ...p, startDate: startISO, schedule: p.schedule.map((d, i) => ({ ...d, date: fmtVN(new Date(base.getTime() + i * 86400000)) })) };
+  });
+  // Chọn ngày cho 1 ngày cụ thể → tịnh tiến tăng dần cho các ngày SAU đó.
+  const fillDatesFrom = (dayId: string, iso: string) => setIt((p) => {
+    const idx = p.schedule.findIndex((d) => d.id === dayId);
+    if (idx < 0) return p;
+    const base = new Date(iso + 'T00:00:00');
+    if (Number.isNaN(base.getTime())) return p;
+    return {
+      ...p,
+      ...(idx === 0 ? { startDate: iso } : {}),
+      schedule: p.schedule.map((d, i) => (i >= idx ? { ...d, date: fmtVN(new Date(base.getTime() + (i - idx) * 86400000)) } : d)),
+    };
   });
   const updDay = (id: string, patch: Partial<Day>) =>
     updDayById(id, (d) => ({ ...d, ...patch }));
@@ -608,6 +620,17 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             </Typography>
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={0.5} alignItems="center"
+              sx={{ border: '1px solid rgba(15,58,74,0.18)', borderRadius: 1, px: 1, py: 0.25 }}>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">Bắt đầu:</Typography>
+              {([1, 0] as const).map((v) => (
+                <Button key={v} size="small" variant={(it.dayStart ?? 1) === v ? 'contained' : 'text'}
+                  onClick={() => set('dayStart', v)}
+                  sx={{ minWidth: 30, px: 0.75, py: 0, fontSize: 12, ...((it.dayStart ?? 1) === v ? { background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' } : {}) }}>
+                  Ngày {v}
+                </Button>
+              ))}
+            </Stack>
             <TextField size="small" type="date" label="Ngày khởi hành" InputLabelProps={{ shrink: true }}
               value={it.startDate ?? ''} onChange={(e) => fillDates(e.target.value)}
               sx={{ width: 168 }} title="Chọn ngày khởi hành → tự điền ngày cho từng Ngày" />
@@ -631,12 +654,17 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             <Paper key={d.id} data-sid={d.id} variant="outlined" sx={{ overflow: 'hidden' }}>
               <Box sx={{ background: 'linear-gradient(135deg,#0f3a4a,#14566b)', color: '#fff', px: 1.75, py: 1.25, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Box component="span" className="day-handle" sx={{ cursor: 'grab', fontSize: 16, opacity: 0.7, userSelect: 'none' }}>⋮⋮</Box>
-                <Typography fontWeight={900} fontSize={14}>NGÀY {d.dayNum}</Typography>
-                <TextField size="small" variant="outlined"
-                  value={d.date} onChange={(e) => updDay(d.id, { date: e.target.value })}
-                  placeholder="Date (tuỳ chọn)"
-                  sx={{ width: 140, '& .MuiInputBase-input': { color: '#fff', fontSize: 12 },
-                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
+                <Typography fontWeight={900} fontSize={14}>NGÀY {dayLabel(d.dayNum, it.dayStart)}</Typography>
+                <TextField size="small" variant="outlined" type="date"
+                  value={vnDateToISO(d.date)} onChange={(e) => fillDatesFrom(d.id, e.target.value)}
+                  title="Chọn ngày (từ lịch) — các ngày sau tự tịnh tiến"
+                  InputProps={{ sx: { color: '#fff', fontSize: 12, colorScheme: 'dark' } }}
+                  sx={{ width: 150, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
+                {weekdayVN(d.date) && (
+                  <Typography sx={{ color: '#ffe082', fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {weekdayVN(d.date)}
+                  </Typography>
+                )}
                 <TextField size="small" variant="outlined" fullWidth
                   value={d.title} onChange={(e) => updDay(d.id, { title: e.target.value })}
                   placeholder="Điểm đến / tuyến (VD: TP.HCM → BẮC KINH)"
