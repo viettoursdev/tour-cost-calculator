@@ -436,3 +436,28 @@ The function-level gateway + realtime are covered by the integration suite (`npm
 - [ ] **Realtime:** create a supplier in a second tab → it appears in the first without reload.
 - [ ] Open a quote, save, reopen → reassembles correctly (`save_quote_state` RPC + `assemble*`/`decompose*`).
 - [ ] Flag off (`npm run dev`) → behaves exactly as today on Firebase.
+
+---
+
+## Phase 5 — Cloudflare Worker JWT verification swap (2026-06-20)
+
+The client side was already done in Phase 3: `src/lib/aiWorker.ts:authHeaders()` reads the token via `authBackend.getAccessToken()`, so the Bearer token follows the active auth backend automatically. Phase 5 is **worker-only**.
+
+### What changed in `cloudflare-worker/viettours-ai-worker.js`
+
+A clean **swap** (not a rewrite) of the verification path, per the design spec:
+
+- **Removed** the Firebase path: Google X.509 cert fetch/cache (`CERT_URL`, `getGoogleCerts`) and the DER/SPKI parsing helpers (`pemToDer`, `readTLV`, `tlvContentStart`, `extractSPKI`, `verifyFirebaseToken`). The shared `b64urlBytes`/`jsonFromB64url` helpers stay.
+- **Added** `verifySupabaseToken(token, ref)` + `getSupabaseJWKS(ref)`:
+  - JWKS from `https://<ref>.supabase.co/auth/v1/.well-known/jwks.json` (cached per `cache-control`, default 10 min), keyed by the token header `kid`.
+  - Imports the JWK and verifies — **ES256** (EC P-256, Supabase's asymmetric default) or RS256 if the project uses RSA keys (branch on `jwk.kty`). The JWT ES256 signature is raw `r‖s` (IEEE P1363), exactly what Web Crypto ECDSA verify expects — no DER conversion.
+  - Claims: `aud === 'authenticated'`, `iss === https://<ref>.supabase.co/auth/v1`, `exp`, and the same `@viettours.com.vn` email-domain check.
+- **Env rename:** `FIREBASE_PROJECT_ID` → `SUPABASE_PROJECT_REF`. Same optional gating — **unset = open** (safe rollback). The Worker holds no shared secret.
+
+### Verification done
+
+No CI harness covers the Worker (plain JS, manually deployed). Validated by: `node --check` (syntax) + an offline self-test that mints an ES256 JWT with a generated P-256 key and runs it through the exact verify logic — a valid token is accepted, a tampered signature is rejected, and an out-of-domain email is rejected.
+
+### ⚠️ Do NOT deploy until cutover
+
+Production runs Firebase Auth; this Worker no longer verifies Firebase ID tokens. Deploying it (with `SUPABASE_PROJECT_REF` set) before the frontend cutover would 401 every AI/translate/upload call. Keep the currently-deployed Firebase Worker live until the frontend is on Supabase, then (cutover runbook step 4): enable asymmetric **ES256** signing keys in the Supabase dashboard, paste the new Worker, and set `SUPABASE_PROJECT_REF=zkzrvctqwnhzklvsoahk`. Rollback = delete that variable.

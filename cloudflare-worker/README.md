@@ -61,23 +61,33 @@ curl -X POST https://tour-cost-calculator.<tên>.workers.dev/ai \
 # → {"text":"OK"}   (nếu vẫn {"error":"Request not allowed"} → key vẫn sai)
 ```
 
-## 🔐 Bảo mật: bắt buộc đăng nhập (Firebase ID token)
+## 🔐 Bảo mật: bắt buộc đăng nhập (Supabase access token)
 
-Worker này xác thực **Firebase ID token** của người dùng trước khi gọi Claude / ghi R2
-→ chặn người ngoài đốt `ANTHROPIC_API_KEY` hay upload file vào R2 (URL worker là công khai
-trong bundle). App tự đính kèm token (header `Authorization: Bearer …`) cho mọi lời gọi.
+Worker này xác thực **Supabase access token** (JWT ES256, JWKS bất đối xứng) của người dùng
+trước khi gọi Claude / ghi R2 → chặn người ngoài đốt `ANTHROPIC_API_KEY` hay upload file vào
+R2 (URL worker là công khai trong bundle). App tự đính kèm token (header
+`Authorization: Bearer …`) cho mọi lời gọi; client lấy token theo backend đang bật qua
+`authBackend.getAccessToken()`.
+
+> **Khi nào deploy bản này:** chỉ tại **bước cutover** (xem `docs/supabase-setup.md` → runbook).
+> Production hiện chạy Firebase Auth — token là Firebase ID token, mà worker này KHÔNG còn
+> xác thực được. Deploy sớm + đặt biến = mọi request AI/dịch/upload bị 401. Giữ bản worker
+> Firebase đang chạy cho tới khi frontend cutover sang Supabase.
 
 **Bật/tắt bằng 1 biến — rollout an toàn, rollback tức thì:**
 
 1. Deploy bản worker mới (dán lại `viettours-ai-worker.js`). **Chưa đặt biến** → worker
    chạy y như cũ (chưa bắt buộc auth) — không gì gãy.
 2. Kiểm tra các tính năng AI/dịch/upload vẫn chạy bình thường trong app.
-3. Khi sẵn sàng **bật xác thực**: Settings → Variables and Secrets → Add
-   - Name: `FIREBASE_PROJECT_ID`  ·  Value: `tour-cost-calculator-4336c`  → Save/Deploy.
-   - ⚠ Phải khớp **đúng project production hiện tại** (xem CLAUDE.md → Firebase → Project ID).
-     Đặt sai project = mọi token bị từ chối (sai `aud`) → AI/dịch/upload đều 401.
+3. Khi sẵn sàng **bật xác thực** (sau khi frontend đã chạy Supabase): Settings → Variables
+   and Secrets → Add
+   - Name: `SUPABASE_PROJECT_REF`  ·  Value: `zkzrvctqwnhzklvsoahk`  → Save/Deploy.
+   - ⚠ Phải khớp **đúng project ref Supabase production** (phần subdomain của `*.supabase.co`).
+     Đặt sai ref = JWKS sai → mọi token bị từ chối → AI/dịch/upload đều 401.
+   - ⚠ Cần đã bật **asymmetric JWT signing keys (ES256)** trong Supabase dashboard, nếu không
+     `.well-known/jwks.json` rỗng và mọi token bị từ chối.
 4. Từ giờ mọi request thiếu/sai token (gồm curl ngoài) bị **401**. App đã đăng nhập vẫn chạy.
-5. **Rollback:** xoá biến `FIREBASE_PROJECT_ID` → quay lại không bắt buộc auth ngay.
+5. **Rollback:** xoá biến `SUPABASE_PROJECT_REF` → quay lại không bắt buộc auth ngay.
 
 > Lưu ý: endpoint `GET /file/<key>` vẫn mở (key là UUID ngẫu nhiên, dùng trong `<img>`/
 > link tải nên không gắn được header). Rủi ro thấp; nếu cần siết, chuyển sang signed URL —

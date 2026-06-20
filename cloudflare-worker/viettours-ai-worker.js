@@ -135,21 +135,22 @@ async function callClaude(env, content, maxTokens = 8000, model = MODEL) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Xác thực Firebase ID token (RS256). CHỈ bật khi env.FIREBASE_PROJECT_ID được đặt
-// (vd "tour-cost-calculator-v2"). Chưa đặt → bỏ qua (giữ nguyên hành vi cũ) để
-// deploy an toàn: bật/tắt tức thì bằng cách thêm/xoá biến này.
+// Xác thực Supabase access token (ES256/RS256 — JWKS bất đối xứng). CHỈ bật khi
+// env.SUPABASE_PROJECT_REF được đặt (vd "zkzrvctqwnhzklvsoahk"). Chưa đặt → bỏ qua
+// (giữ nguyên hành vi cũ) để rollback an toàn: bật/tắt bằng cách thêm/xoá biến này.
+// Worker KHÔNG giữ secret chung — chỉ lấy public key từ JWKS endpoint của Supabase.
 // Chặn lạm dụng ANTHROPIC_API_KEY & ghi R2 từ bên ngoài app.
 // ─────────────────────────────────────────────────────────────────────────────
-const CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
-let CERT_CACHE = { exp: 0, certs: null };
+let JWKS_CACHE = { exp: 0, keys: null, ref: '' };
 
-async function getGoogleCerts() {
-  if (CERT_CACHE.certs && Date.now() < CERT_CACHE.exp) return CERT_CACHE.certs;
-  const r = await fetch(CERT_URL);
-  const certs = await r.json();
+async function getSupabaseJWKS(ref) {
+  if (JWKS_CACHE.keys && JWKS_CACHE.ref === ref && Date.now() < JWKS_CACHE.exp) return JWKS_CACHE.keys;
+  const r = await fetch(`https://${ref}.supabase.co/auth/v1/.well-known/jwks.json`);
+  if (!r.ok) throw new Error('không lấy được JWKS');
+  const body = await r.json();
   const m = /max-age=(\d+)/.exec(r.headers.get('cache-control') || '');
-  CERT_CACHE = { exp: Date.now() + (m ? +m[1] * 1000 : 3600000), certs };
-  return certs;
+  JWKS_CACHE = { exp: Date.now() + (m ? +m[1] * 1000 : 600000), keys: body.keys || [], ref };
+  return JWKS_CACHE.keys;
 }
 
 function b64urlBytes(s) {
@@ -162,63 +163,26 @@ function b64urlBytes(s) {
 }
 const jsonFromB64url = (s) => JSON.parse(new TextDecoder().decode(b64urlBytes(s)));
 
-function pemToDer(pem) {
-  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
-  const bin = atob(b64);
-  const u = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-  return u;
-}
-
-// Đọc 1 TLV (tag-length-value) DER tại offset.
-function readTLV(buf, off) {
-  let i = off + 1;
-  let len = buf[i++];
-  if (len & 0x80) {
-    const n = len & 0x7f;
-    len = 0;
-    for (let k = 0; k < n; k++) len = (len << 8) | buf[i++];
-  }
-  return { tag: buf[off], end: i + len };
-}
-
-// Offset nội dung (content start) của TLV tại off — dùng để "bước vào" 1 SEQUENCE.
-function tlvContentStart(buf, off) {
-  let i = off + 1;
-  const lenByte = buf[i++];
-  if (lenByte & 0x80) i += (lenByte & 0x7f);
-  return i;
-}
-
-// Trích SubjectPublicKeyInfo (SPKI DER) từ certificate X.509 DER.
-// Certificate ::= SEQ { tbsCertificate SEQ { [0]version?, serial, sig, issuer,
-//   validity, subject, subjectPublicKeyInfo, ... }, ... }
-function extractSPKI(certDer) {
-  let off = tlvContentStart(certDer, 0);   // vào Certificate → tbsCertificate
-  off = tlvContentStart(certDer, off);     // vào tbsCertificate → phần tử đầu
-  let el = readTLV(certDer, off);
-  if (el.tag === 0xA0) { off = el.end; el = readTLV(certDer, off); } // bỏ [0] version
-  // bỏ serial, signature, issuer, validity, subject (5 phần tử) → tới SPKI
-  for (let k = 0; k < 5; k++) { off = el.end; el = readTLV(certDer, off); }
-  return certDer.slice(off, el.end);
-}
-
-async function verifyFirebaseToken(token, projectId) {
+async function verifySupabaseToken(token, ref) {
   const parts = String(token).split('.');
   if (parts.length !== 3) throw new Error('token sai định dạng');
   const header = jsonFromB64url(parts[0]);
   const payload = jsonFromB64url(parts[1]);
   const now = Math.floor(Date.now() / 1000);
-  if (payload.aud !== projectId) throw new Error('sai aud');
-  if (payload.iss !== `https://securetoken.google.com/${projectId}`) throw new Error('sai iss');
+  if (payload.aud !== 'authenticated') throw new Error('sai aud');
+  if (payload.iss !== `https://${ref}.supabase.co/auth/v1`) throw new Error('sai iss');
   if (!payload.exp || payload.exp < now) throw new Error('token hết hạn');
   if (!/@viettours\.com\.vn$/.test(String(payload.email || '').toLowerCase())) throw new Error('email ngoài miền');
-  const certs = await getGoogleCerts();
-  const pem = certs[header.kid];
-  if (!pem) throw new Error('không có chứng chỉ (kid)');
-  const key = await crypto.subtle.importKey('spki', extractSPKI(pemToDer(pem)),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
-  const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key,
+  const keys = await getSupabaseJWKS(ref);
+  const jwk = keys.find((k) => k.kid === header.kid);
+  if (!jwk) throw new Error('không có khoá (kid)');
+  // ES256 (EC P-256) là mặc định của Supabase asymmetric keys; cũng nhận RS256 nếu dự án dùng RSA.
+  const algo = jwk.kty === 'EC'
+    ? { import: { name: 'ECDSA', namedCurve: jwk.crv || 'P-256' }, verify: { name: 'ECDSA', hash: 'SHA-256' } }
+    : { import: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, verify: { name: 'RSASSA-PKCS1-v1_5' } };
+  const key = await crypto.subtle.importKey('jwk', jwk, algo.import, false, ['verify']);
+  // Chữ ký ES256 trong JWT là r||s thô (IEEE P1363) — đúng định dạng Web Crypto ECDSA cần.
+  const ok = await crypto.subtle.verify(algo.verify, key,
     b64urlBytes(parts[2]), new TextEncoder().encode(parts[0] + '.' + parts[1]));
   if (!ok) throw new Error('chữ ký không hợp lệ');
   return payload;
@@ -226,11 +190,11 @@ async function verifyFirebaseToken(token, projectId) {
 
 /** Trả về Response lỗi nếu xác thực bật & token không hợp lệ; null nếu hợp lệ/đang tắt. */
 async function requireAuth(request, env) {
-  if (!env.FIREBASE_PROJECT_ID) return null; // chưa cấu hình → không bắt buộc
+  if (!env.SUPABASE_PROJECT_REF) return null; // chưa cấu hình → không bắt buộc
   const h = request.headers.get('Authorization') || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : '';
   if (!token) return json({ error: 'Thiếu xác thực (Bearer token)' }, 401);
-  try { await verifyFirebaseToken(token, env.FIREBASE_PROJECT_ID); return null; }
+  try { await verifySupabaseToken(token, env.SUPABASE_PROJECT_REF); return null; }
   catch (e) { return json({ error: 'Xác thực thất bại: ' + (e.message || e) }, 401); }
 }
 
