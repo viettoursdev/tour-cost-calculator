@@ -182,6 +182,63 @@ function NotificationItem({
     notif.type === 'payment_approval'
     && (notif.data as { contractId?: string } | undefined)?.contractId != null
     && canApprove && !acted;
+  // Đề nghị tạm ứng tour (gửi đích danh tới người duyệt → không cần gate canApprove).
+  const isAdvanceApproval =
+    notif.type === 'payment_approval'
+    && (notif.data as { advanceStage?: number } | undefined)?.advanceStage != null
+    && !acted && !resolved;
+
+  const handleAdvanceApproval = async (approved: boolean) => {
+    if (acting) return;
+    setActing(true);
+    try {
+      const d = notif.data as {
+        advanceStage?: number; approver2Username?: string; requestedBy?: string;
+        requestedByName?: string; tourName?: string; amount?: number;
+      };
+      const stage = d.advanceStage;
+      const approverLabel = `${currentUserName} (${currentUserRole})`;
+      if (notif.threadId) {
+        const newStatus: ActivityStatus = !approved
+          ? 'rejected'
+          : (stage === 1 && d.approver2Username ? 'pending_stage2' : 'approved');
+        try { await fbSetThreadStatus(notif.threadId, newStatus, currentUserName); }
+        catch (err) { console.warn('Cập nhật trạng thái duyệt tạm ứng lỗi:', (err as Error).message); }
+      }
+      // Duyệt bước 1 + có người duyệt 2 → chuyển tiếp.
+      if (approved && stage === 1 && d.approver2Username) {
+        await fbSendNotification(d.approver2Username, {
+          type: 'payment_approval',
+          title: '💵 Đề nghị duyệt TẠM ỨNG tour (bước 2)',
+          message: `${d.requestedByName ?? ''} đề nghị tạm ứng ${(d.amount ?? 0).toLocaleString('vi-VN')} đ · Tour: ${d.tourName ?? ''}`,
+          createdBy: approverLabel,
+          ...(notif.threadId ? { threadId: notif.threadId } : {}),
+          ...(notif.link ? { link: notif.link } : {}),
+          data: { ...d, advanceStage: 2 },
+        });
+      }
+      // Báo kết quả cho người đề nghị.
+      if (d.requestedBy) {
+        const done = approved && !(stage === 1 && d.approver2Username);
+        await fbSendNotification(d.requestedBy, {
+          type: 'payment_approval',
+          title: !approved ? '❌ Đề nghị tạm ứng bị từ chối'
+            : done ? '✅ Đề nghị tạm ứng đã được duyệt' : '✅ Tạm ứng được duyệt (bước 1)',
+          message: `Tour: ${d.tourName ?? ''} · ${(d.amount ?? 0).toLocaleString('vi-VN')} đ`,
+          createdBy: currentUserName,
+          ...(notif.threadId ? { threadId: notif.threadId } : {}),
+          ...(notif.link ? { link: notif.link } : {}),
+          data: { approved, advKind: 'advance_result', stage },
+        });
+      }
+      setActed(true);
+      onRead();
+    } catch (e) {
+      window.alert('❌ Lỗi: ' + (e as Error).message);
+    } finally {
+      setActing(false);
+    }
+  };
 
   const handleTourPaymentApproval = async (approved: boolean) => {
     if (acting) return;
@@ -417,6 +474,18 @@ function NotificationItem({
             disabled={acting}
             onClick={(e) => { e.stopPropagation(); void handleApproval(false); }}
           >
+            ❌ Từ chối
+          </Button>
+        </Stack>
+      )}
+      {isAdvanceApproval && (
+        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+          <Button size="small" color="success" variant="outlined" disabled={acting}
+            onClick={(e) => { e.stopPropagation(); void handleAdvanceApproval(true); }}>
+            ✅ Duyệt tạm ứng
+          </Button>
+          <Button size="small" color="error" variant="outlined" disabled={acting}
+            onClick={(e) => { e.stopPropagation(); void handleAdvanceApproval(false); }}>
             ❌ Từ chối
           </Button>
         </Stack>

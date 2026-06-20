@@ -247,6 +247,8 @@ export interface TourAdvance {
   requestedAt?: string;
   settledBy?: string;
   settledAt?: string;
+  /** Thread duyệt chung (cả người đề nghị & 2 người duyệt cùng thấy trạng thái). */
+  threadId?: string;
 }
 
 export type Snapshot = {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Autocomplete, Box, Button, Chip, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack,
   Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
@@ -15,8 +15,9 @@ import { fmtVND } from './calc';
 import { advanceTotals, emptyAdvance, lineAmount, newAdvanceLine } from './advanceCalc';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { RateCardModal } from '@/components/rates/RateCardModal';
+import { fbEnsureNotifThread, fbSendNotification, fbSubscribeNotifThread } from '@/lib/firebase';
 import { LEGACY } from '@/theme';
-import type { AdvanceLine, Item, TourAdvance } from '@/types';
+import type { ActivityStatus, AdvanceLine, Item, TourAdvance } from '@/types';
 
 type CostKey = 'tourCosts' | 'otherCosts';
 
@@ -26,12 +27,20 @@ const STATUS_META: Record<TourAdvance['status'], { label: string; color: string 
   quyet_toan: { label: '✅ Đã quyết toán', color: '#27ae60' },
 };
 
+const APPROVAL_META: Partial<Record<ActivityStatus, { label: string; color: string }>> = {
+  pending: { label: '⏳ Chờ duyệt', color: '#f39c12' },
+  pending_stage2: { label: '⏳ Chờ duyệt bước 2', color: '#e67e22' },
+  approved: { label: '✅ Đã duyệt', color: '#27ae60' },
+  rejected: { label: '❌ Bị từ chối', color: '#dc3250' },
+};
+
 export function AdvanceView() {
   const info = useQuoteStore((s) => s.draft.info);
   const pax = useQuoteStore((s) => s.draft.pax);
   const template = useQuoteStore((s) => s.draft.template);
   const advance = useQuoteStore((s) => s.draft.advance);
   const setAdvance = useQuoteStore((s) => s.setAdvance);
+  const cloudId = useQuoteStore((s) => s.draft.currentQuoteId);
   const currentUser = useAuthStore((s) => s.currentUser);
   const users = useAuthStore((s) => s.users);
 
@@ -42,6 +51,12 @@ export function AdvanceView() {
 
   const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
   const [rateModal, setRateModal] = useState<{ type: string; label: string } | null>(null);
+  // Trạng thái duyệt live từ thread chung (cả người đề nghị & người duyệt cùng thấy).
+  const [approvalStatus, setApprovalStatus] = useState<ActivityStatus | undefined>(undefined);
+  useEffect(() => {
+    if (!adv.threadId) { setApprovalStatus(undefined); return; }
+    return fbSubscribeNotifThread(adv.threadId, (th) => setApprovalStatus(th?.status));
+  }, [adv.threadId]);
 
   const patch = (p: Partial<TourAdvance>) => setAdvance({ ...adv, ...p });
   const updLine = (key: CostKey, id: string, lp: Partial<AdvanceLine>) =>
@@ -51,17 +66,41 @@ export function AdvanceView() {
 
   const who = currentUser ? `${currentUser.name} (${currentUser.role})` : '';
 
-  const sendApproval = () => {
+  const sendApproval = async () => {
     if (adv.tourCosts.length === 0 && adv.otherCosts.length === 0) {
       window.alert('Chưa có dòng chi phí nào để đề nghị tạm ứng.');
       return;
     }
-    patch({
-      status: 'tam_ung',
-      advanceRequested: adv.advanceRequested || t.grandTotal,
-      requestedBy: who, requestedAt: new Date().toISOString(),
-    });
-    toast('💵 Đã chuyển trạng thái TẠM ỨNG. Bấm "Xuất PDF" để gửi yêu cầu duyệt.');
+    if (!adv.approver1) { window.alert('Hãy chọn ít nhất "Người duyệt 1" trước khi gửi.'); return; }
+    if (!cloudId) { window.alert('Hãy LƯU báo giá lên cloud trước để người duyệt mở được đề nghị (nút Lưu ở thanh trên).'); return; }
+    if (!currentUser) return;
+    const amount = adv.advanceRequested || t.grandTotal;
+    const threadId = `adv_${cloudId}`;
+    const members = [currentUser.u, adv.approver1.u, ...(adv.approver2 ? [adv.approver2.u] : [])];
+    const link = { kind: 'quote' as const, id: cloudId, label: info.name || 'Tạm ứng tour' };
+    try {
+      await fbEnsureNotifThread({
+        id: threadId, title: `Tạm ứng: ${info.name || 'Tour'}`, members,
+        comments: [], createdAt: new Date().toISOString(), createdBy: currentUser.name,
+        actType: 'payment_approval', status: 'pending', link, data: { kind: 'advance', amount },
+      });
+      await fbSendNotification(adv.approver1.u, {
+        type: 'payment_approval',
+        title: '💵 Đề nghị duyệt TẠM ỨNG tour',
+        message: `${currentUser.name} đề nghị tạm ứng ${amount.toLocaleString('vi-VN')} đ · Tour: ${info.name || '—'}`,
+        createdBy: who, priority: 'high', threadId, link,
+        data: {
+          kind: 'advance', advanceStage: 1,
+          approver1Username: adv.approver1.u, approver2Username: adv.approver2?.u,
+          requestedBy: currentUser.u, requestedByName: currentUser.name,
+          tourName: info.name || '', amount, cloudId, threadId,
+        },
+      });
+      patch({ status: 'tam_ung', advanceRequested: amount, requestedBy: who, requestedAt: new Date().toISOString(), threadId });
+      toast(`✅ Đã gửi yêu cầu duyệt tới ${adv.approver1.name}.`);
+    } catch (e) {
+      window.alert('❌ Gửi duyệt lỗi: ' + (e as Error).message);
+    }
   };
   const closeSettlement = () => {
     if (!window.confirm('Quyết toán và ĐÓNG case? Sau khi đóng sẽ khoá chỉnh sửa (có thể mở lại nếu cần).')) return;
@@ -172,9 +211,15 @@ export function AdvanceView() {
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <Chip label={STATUS_META[adv.status].label} sx={{ bgcolor: STATUS_META[adv.status].color + '22', color: STATUS_META[adv.status].color, fontWeight: 800 }} />
-          {adv.status === 'draft' && (
-            <Button variant="contained" startIcon={<SendIcon />} onClick={sendApproval}
-              sx={{ background: LEGACY.headerGradient, fontWeight: 700 }}>Gửi duyệt (Tạm ứng)</Button>
+          {approvalStatus && APPROVAL_META[approvalStatus] && (
+            <Chip label={APPROVAL_META[approvalStatus]!.label}
+              sx={{ bgcolor: APPROVAL_META[approvalStatus]!.color + '22', color: APPROVAL_META[approvalStatus]!.color, fontWeight: 800 }} />
+          )}
+          {(adv.status === 'draft' || (adv.status === 'tam_ung' && approvalStatus === 'rejected')) && (
+            <Button variant="contained" startIcon={<SendIcon />} onClick={() => void sendApproval()}
+              sx={{ background: LEGACY.headerGradient, fontWeight: 700 }}>
+              {adv.status === 'draft' ? 'Gửi duyệt (Tạm ứng)' : 'Gửi lại duyệt'}
+            </Button>
           )}
           {adv.status === 'tam_ung' && (
             <Button variant="contained" color="success" startIcon={<TaskAltIcon />} onClick={closeSettlement}>
