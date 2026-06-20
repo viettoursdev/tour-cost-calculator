@@ -33,7 +33,7 @@ import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
-import type { Activity, Day, Flight, Itinerary, ItineraryType, QuoteFlight, Segment, User } from '@/types';
+import type { Activity, Day, ExecDayOps, Flight, Itinerary, ItineraryType, QuoteFlight, Segment, User } from '@/types';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import BoltIcon from '@mui/icons-material/Bolt';
@@ -250,6 +250,46 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     }));
   const reorderActs = (dayId: string, segId: string, from: number, to: number) =>
     updSegById(dayId, segId, (s) => ({ ...s, activities: reorder(s.activities, from, to) }));
+
+  // Kéo-thả 1 hoạt động sang nhóm/ngày khác (listId = `${dayId}::${segId}`).
+  const moveActivity = (fromListId: string, fromIndex: number, toListId: string, toIndex: number) =>
+    setIt((p) => {
+      const [fromDayId, fromSegId] = fromListId.split('::');
+      const [toDayId, toSegId] = toListId.split('::');
+      let moved: Activity | undefined;
+      const removed = p.schedule.map((d) => (d.id !== fromDayId ? d : {
+        ...d,
+        segments: d.segments.map((s) => {
+          if (s.id !== fromSegId) return s;
+          const acts = [...s.activities];
+          [moved] = acts.splice(fromIndex, 1);
+          return { ...s, activities: acts };
+        }),
+      }));
+      if (!moved) return p;
+      const inserted = removed.map((d) => (d.id !== toDayId ? d : {
+        ...d,
+        segments: d.segments.map((s) => {
+          if (s.id !== toSegId) return s;
+          const acts = [...s.activities];
+          acts.splice(Math.min(toIndex, acts.length), 0, moved!);
+          return { ...s, activities: acts };
+        }),
+      }));
+      return { ...p, schedule: inserted };
+    });
+
+  // ── Vận hành theo ngày: nhập song song ngay trong từng thẻ Ngày (đồng bộ exec.dayOps) ──
+  const dayOpsFor = (dayNum: number): ExecDayOps | undefined =>
+    (it.exec?.dayOps ?? []).find((o) => o.dayNum === dayNum);
+  const setDayOps = (dayNum: number, patch: Partial<ExecDayOps>) => setIt((p) => {
+    const e = p.exec ?? {};
+    const list = [...(e.dayOps ?? [])];
+    const i = list.findIndex((o) => o.dayNum === dayNum);
+    const next: ExecDayOps = { ...(list[i] ?? { dayNum }), ...patch };
+    if (i >= 0) list[i] = next; else list.push(next);
+    return { ...p, exec: { ...e, dayOps: list } };
+  });
 
   // ── Includes / Excludes ops ──
   const updList = (key: 'includes' | 'excludes', i: number, v: string) =>
@@ -725,10 +765,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                     </Stack>
 
                     <SortableList
+                      group="itin-acts"
+                      listId={`${d.id}::${seg.id}`}
                       onReorder={(f, t) => reorderActs(d.id, seg.id, f, t)}
+                      onCrossMove={moveActivity}
                       handle=".act-handle"
-                      deps={[seg.activities.length, d.id]}
-                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}
+                      deps={[seg.activities.length, d.id, seg.id]}
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, minHeight: 8 }}
                     >
                       {seg.activities.map((a) => (
                         <Stack key={a.id} data-sid={a.id} direction="row" spacing={0.75} alignItems="center">
@@ -813,6 +856,23 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                     value={d.mealNote ?? ''}
                     onChange={(e) => updDay(d.id, { mealNote: e.target.value })}
                     placeholder="Ghi chú bữa ăn (VD: buffet KS, đặc sản địa phương...)" />
+                </Box>
+
+                {/* Vận hành ngày này (input song song — đồng bộ với khối Itinerary Execution) */}
+                <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px dashed rgba(15,58,74,0.18)' }}>
+                  <Typography variant="caption" fontWeight={700} sx={{ color: '#0f3a4a', display: 'block', mb: 0.75 }}>
+                    🧭 Vận hành ngày này (cho HDV)
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                    <TextField size="small" label="Khách sạn" value={dayOpsFor(d.dayNum)?.hotelName ?? ''}
+                      onChange={(e) => setDayOps(d.dayNum, { hotelName: e.target.value })} />
+                    <TextField size="small" label="Contact khách sạn" value={dayOpsFor(d.dayNum)?.hotelContact ?? ''}
+                      onChange={(e) => setDayOps(d.dayNum, { hotelContact: e.target.value })} />
+                  </Box>
+                  <TextField size="small" fullWidth multiline minRows={2} sx={{ mt: 1 }}
+                    label="Lưu ý điều hành trong ngày"
+                    value={dayOpsFor(d.dayNum)?.notes ?? ''}
+                    onChange={(e) => setDayOps(d.dayNum, { notes: e.target.value })} />
                 </Box>
               </Box>
             </Paper>
