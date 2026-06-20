@@ -360,7 +360,7 @@ Complete these steps in the Supabase dashboard **before** setting `VITE_AUTH_BAC
 2. **Site URL + Redirect URLs** — Authentication → URL Configuration:
    - Site URL: `https://viettoursdev.github.io/tour-cost-calculator/?mode=auth`
    - Add to Redirect URLs: `https://viettoursdev.github.io/tour-cost-calculator/?mode=auth`
-   - The `?mode=auth` suffix is required; `authStore.init()` checks for it before exchanging the PKCE `?code=` parameter.
+   - The `?mode=auth` suffix marks the auth callback (it is the redirect target Supabase appends `?code=` to). On load, `authStore.init()` → `sbIsSignInLink()` detects the callback by the presence of the `?code=` parameter and `sbCompleteSignInLink()` exchanges it via `exchangeCodeForSession`.
 3. **Restrict sign-ups to company domain** — Authentication → Providers → Email → Allowed email domains: `viettours.com.vn`. Sign-up attempts from any other domain are rejected at the Auth layer (matches the three-layer defence: client gate in `authStore`, Auth allowlist here, RLS `is_viettours_user()` predicate).
 4. **Email template action URL** — the magic-link email template must use the PKCE redirect URL above as the action link target so the link lands on the app with a `?code=` parameter, not a raw token.
 
