@@ -22,6 +22,12 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { canEditQuote, canSeePrices } from '@/auth/quotePerms';
 import { AiButton } from '@/components/common/AiButton';
+import UnfoldMoreOutlinedIcon from '@mui/icons-material/UnfoldMoreOutlined';
+import UnfoldLessOutlinedIcon from '@mui/icons-material/UnfoldLessOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined';
+import DensitySmallOutlinedIcon from '@mui/icons-material/DensitySmallOutlined';
+import DensityMediumOutlinedIcon from '@mui/icons-material/DensityMediumOutlined';
 import type { CategoryId, Item, OutputCurrency, Template } from '@/types';
 
 export function CostView() {
@@ -139,14 +145,14 @@ export function CostView() {
         )}
 
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.25 }}>
-          <Button size="small" variant="outlined" onClick={() => setAllExpanded(true)} sx={{ textTransform: 'none', py: 0.25 }}>⊞ Mở tất cả</Button>
-          <Button size="small" variant="outlined" onClick={() => setAllExpanded(false)} sx={{ textTransform: 'none', py: 0.25 }}>⊟ Thu gọn</Button>
-          <Button size="small" variant={hideOff ? 'contained' : 'outlined'} onClick={() => setHideOff((v) => !v)} sx={{ textTransform: 'none', py: 0.25 }}>
-            {hideOff ? '☑' : '☐'} Ẩn hạng mục đã tắt
+          <Button size="small" variant="outlined" startIcon={<UnfoldMoreOutlinedIcon />} onClick={() => setAllExpanded(true)} sx={{ textTransform: 'none', py: 0.25 }}>Mở tất cả</Button>
+          <Button size="small" variant="outlined" startIcon={<UnfoldLessOutlinedIcon />} onClick={() => setAllExpanded(false)} sx={{ textTransform: 'none', py: 0.25 }}>Thu gọn</Button>
+          <Button size="small" variant={hideOff ? 'contained' : 'outlined'} startIcon={<VisibilityOffOutlinedIcon />} onClick={() => setHideOff((v) => !v)} sx={{ textTransform: 'none', py: 0.25 }}>
+            Ẩn hạng mục đã tắt
           </Button>
-          <Button size="small" variant="outlined" onClick={(e) => setJumpAnchor(e.currentTarget)} sx={{ textTransform: 'none', py: 0.25 }}>↧ Nhảy tới…</Button>
-          <Button size="small" variant={density === 'compact' ? 'contained' : 'outlined'} onClick={toggleDensity} sx={{ textTransform: 'none', py: 0.25 }} title="Đổi mật độ hiển thị (lưu theo máy)">
-            {density === 'compact' ? '▤ Gọn' : '▥ Thoáng'}
+          <Button size="small" variant="outlined" startIcon={<FormatListBulletedOutlinedIcon />} onClick={(e) => setJumpAnchor(e.currentTarget)} sx={{ textTransform: 'none', py: 0.25 }}>Nhảy tới…</Button>
+          <Button size="small" variant={density === 'compact' ? 'contained' : 'outlined'} startIcon={density === 'compact' ? <DensitySmallOutlinedIcon /> : <DensityMediumOutlinedIcon />} onClick={toggleDensity} sx={{ textTransform: 'none', py: 0.25 }} title="Đổi mật độ hiển thị (lưu theo máy)">
+            {density === 'compact' ? 'Gọn' : 'Thoáng'}
           </Button>
           <Box sx={{ flexGrow: 1 }} />
           {!readOnly && (

@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ContentPasteIcon from '@mui/icons-material/ContentPaste';
+import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import { LineRow } from './LineRow';
 import { catTotal, fmtVND } from './calc';
 import { fmtOutput } from '@/lib/currency';
@@ -152,13 +153,14 @@ export function CatBlock({
               component="button"
               onClick={(e) => { e.stopPropagation(); onOpenRate(); }}
               sx={{
+                display: 'inline-flex', alignItems: 'center', gap: 0.5,
                 background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.4)',
                 borderRadius: '8px', px: 1.25, py: 0.5, fontSize: 11, color: '#d18a13',
                 fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                '&:hover': { background: 'rgba(245,166,35,0.25)' },
+                '& svg': { fontSize: 14 }, '&:hover': { background: 'rgba(245,166,35,0.25)' },
               }}
             >
-              📋 Rate card
+              <ListAltOutlinedIcon /> Rate card
             </Box>
           )}
           {warnCount > 0 && (

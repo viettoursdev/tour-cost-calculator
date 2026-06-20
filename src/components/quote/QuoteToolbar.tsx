@@ -37,6 +37,7 @@ import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
+import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -497,7 +498,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           <IconButton size="small" onClick={(e) => setRateAnchor(e.currentTarget)}
             sx={{ color: '#d18a13', border: '1px solid rgba(245,166,35,0.5)', borderRadius: 1.5, px: 0.75,
               '&:hover': { borderColor: '#d18a13', background: 'rgba(245,166,35,0.08)' } }}>
-            <Box component="span" sx={{ fontSize: 15 }}>📋</Box>
+            <ListAltOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)} disableRestoreFocus>
