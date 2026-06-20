@@ -223,8 +223,10 @@ export interface AdvanceLine {
   note?: string;
   unit?: string;
   qty: number;     // số lượng
-  price: number;   // đơn giá (VND)
-  /** Số tiền QUYẾT TOÁN thực tế (giai đoạn quyết toán). Trống = dùng dự toán qty*price. */
+  price: number;   // đơn giá (theo `cur`, mặc định VND)
+  /** Mã ngoại tệ của đơn giá (vd USD). Trống = VND. Quy đổi qua draft.rates. */
+  cur?: string;
+  /** Số tiền QUYẾT TOÁN thực tế — VND. Trống = dùng dự toán đã quy đổi. */
   actual?: number;
 }
 

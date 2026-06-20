@@ -34,4 +34,14 @@ describe('advanceTotals', () => {
   it('undefined → 0', () => {
     expect(advanceTotals(undefined).grandTotal).toBe(0);
   });
+  it('quy đổi ngoại tệ theo rates', () => {
+    expect(lineAmount(L({ qty: 2, price: 100, cur: 'USD' }), { USD: 25_000 })).toBe(5_000_000);
+    expect(lineAmount(L({ qty: 1, price: 500_000, cur: 'VND' }), { USD: 25_000 })).toBe(500_000);
+    const adv: TourAdvance = {
+      status: 'draft', advanceRequested: 0,
+      tourCosts: [L({ qty: 1, price: 100, cur: 'USD' })],
+      otherCosts: [L({ qty: 1, price: 200_000 })],
+    };
+    expect(advanceTotals(adv, { USD: 25_000 }).grandTotal).toBe(2_500_000 + 200_000);
+  });
 });

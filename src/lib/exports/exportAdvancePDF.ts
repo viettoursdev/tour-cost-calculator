@@ -19,10 +19,11 @@ const LINE: RGB = [215, 222, 226];
 const vnd = (n: number) => (n || 0).toLocaleString('vi-VN') + ' đ';
 
 export function exportAdvancePDF({
-  info, pax, adv, totals, savedBy,
+  info, pax, adv, totals, rates, savedBy,
 }: {
-  info: QuoteInfo; pax: number; adv: TourAdvance; totals: AdvanceTotals; savedBy: string;
+  info: QuoteInfo; pax: number; adv: TourAdvance; totals: AdvanceTotals; rates: Record<string, number>; savedBy: string;
 }): void {
+  const priceLabel = (l: AdvanceLine) => `${(l.price || 0).toLocaleString('vi-VN')} ${l.cur && l.cur !== 'VND' ? l.cur : 'đ'}`;
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const hasFont = loadVNFont(pdf);
   const FONT = hasFont ? 'DejaVu' : 'helvetica';
@@ -84,8 +85,8 @@ export function exportAdvancePDF({
     lines.forEach((l) => {
       ensure(8);
       const cells = showActual
-        ? [l.name || '—', String(l.qty || 0), vnd(l.price), vnd(lineAmount(l)), vnd(lineActual(l))]
-        : [l.name || '—', String(l.qty || 0), vnd(l.price), vnd(lineAmount(l))];
+        ? [l.name || '—', String(l.qty || 0), priceLabel(l), vnd(lineAmount(l, rates)), vnd(lineActual(l, rates))]
+        : [l.name || '—', String(l.qty || 0), priceLabel(l), vnd(lineAmount(l, rates))];
       const n = Math.max(...cells.map((txt, i) => cellText(txt, i, y)));
       if (l.note) { pdf.setTextColor(...MUTE); pdf.setFontSize(8); pdf.text(pdf.splitTextToSize(l.note, cols[0].w - 2) as string[], M + 1, y + 4); pdf.setFontSize(9.5); pdf.setTextColor(...INK); }
       y += 5.5 * n + (l.note ? 4 : 0);

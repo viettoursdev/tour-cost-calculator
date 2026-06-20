@@ -16,6 +16,8 @@ import { advanceTotals, emptyAdvance, lineAmount, newAdvanceLine } from './advan
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { RateCardModal } from '@/components/rates/RateCardModal';
 import { fbEnsureNotifThread, fbSendNotification, fbSubscribeNotifThread } from '@/lib/firebase';
+import { InlineNumberField } from '@/components/common/InlineNumberField';
+import { FxRatesPanel } from './FxRatesPanel';
 import { LEGACY } from '@/theme';
 import type { ActivityStatus, AdvanceLine, Item, TourAdvance } from '@/types';
 
@@ -38,6 +40,7 @@ export function AdvanceView() {
   const info = useQuoteStore((s) => s.draft.info);
   const pax = useQuoteStore((s) => s.draft.pax);
   const template = useQuoteStore((s) => s.draft.template);
+  const rates = useQuoteStore((s) => s.draft.rates);
   const advance = useQuoteStore((s) => s.draft.advance);
   const setAdvance = useQuoteStore((s) => s.setAdvance);
   const cloudId = useQuoteStore((s) => s.draft.currentQuoteId);
@@ -45,7 +48,8 @@ export function AdvanceView() {
   const users = useAuthStore((s) => s.users);
 
   const adv = advance ?? emptyAdvance();
-  const t = advanceTotals(adv);
+  const t = advanceTotals(adv, rates);
+  const currencies = ['VND', ...Object.keys(rates ?? {})];
   const editable = adv.status !== 'quyet_toan';
   const showActual = adv.status !== 'draft';
 
@@ -110,7 +114,7 @@ export function AdvanceView() {
   const reopen = () => patch({ status: 'tam_ung', settledBy: undefined, settledAt: undefined });
 
   const exportPDF = () => void import('@/lib/exports/exportAdvancePDF')
-    .then((m) => m.exportAdvancePDF({ info, pax, adv, totals: t, savedBy: who }))
+    .then((m) => m.exportAdvancePDF({ info, pax, adv, totals: t, rates, savedBy: who }))
     .catch((e) => window.alert('❌ Xuất PDF lỗi: ' + (e as Error).message));
 
   const onPickRate = (line: Partial<Item>) => {
@@ -118,7 +122,7 @@ export function AdvanceView() {
       tourCosts: [...adv.tourCosts, {
         ...newAdvanceLine(),
         name: line.name ?? '', price: line.price ?? 0, unit: line.unit, note: line.note,
-        qty: line.customQty ?? 1,
+        cur: line.cur ?? 'VND', qty: line.customQty ?? 1,
       }],
     });
     setRateModal(null);
@@ -163,22 +167,26 @@ export function AdvanceView() {
                   InputProps={{ disableUnderline: true }} />
               </TableCell>
               <TableCell align="center">
-                <TextField size="small" variant="standard" type="number" value={l.qty}
-                  onChange={(e) => updLine(k, l.id, { qty: Math.max(0, +e.target.value || 0) })} disabled={!editable}
-                  InputProps={{ disableUnderline: true, sx: { '& input': { textAlign: 'center' } } }} />
+                <InlineNumberField value={l.qty} width={48} align="center" disabled={!editable}
+                  onChange={(v) => updLine(k, l.id, { qty: v })} />
               </TableCell>
               <TableCell align="right">
-                <TextField size="small" variant="standard" type="number" value={l.price}
-                  onChange={(e) => updLine(k, l.id, { price: Math.max(0, +e.target.value || 0) })} disabled={!editable}
-                  InputProps={{ disableUnderline: true, sx: { '& input': { textAlign: 'right' } } }} />
+                <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
+                  <Box component="select" value={l.cur ?? 'VND'} disabled={!editable}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updLine(k, l.id, { cur: e.target.value })}
+                    sx={{ fontSize: 11, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '2px', background: '#fff', color: LEGACY.navy }}>
+                    {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </Box>
+                  <InlineNumberField value={l.price} width={84} disabled={!editable}
+                    onChange={(v) => updLine(k, l.id, { price: v })} />
+                </Stack>
               </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtVND(lineAmount(l))}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtVND(lineAmount(l, rates))}</TableCell>
               {showActual && (
                 <TableCell align="right">
-                  <TextField size="small" variant="standard" type="number" placeholder={String(lineAmount(l))}
-                    value={l.actual ?? ''} onChange={(e) => updLine(k, l.id, { actual: e.target.value === '' ? undefined : Math.max(0, +e.target.value || 0) })}
-                    disabled={!editable}
-                    InputProps={{ disableUnderline: true, sx: { '& input': { textAlign: 'right', color: '#c2410c', fontWeight: 700 } } }} />
+                  <InlineNumberField value={l.actual ?? 0} width={110} disabled={!editable} color="#c2410c" bold
+                    placeholder={lineAmount(l, rates).toLocaleString('vi-VN')}
+                    onChange={(v) => updLine(k, l.id, { actual: v })} />
                 </TableCell>
               )}
               <TableCell padding="checkbox">
@@ -243,6 +251,8 @@ export function AdvanceView() {
         </Paper>
       )}
 
+      <Box sx={{ mb: 2 }}><FxRatesPanel /></Box>
+
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>
           👥 Người duyệt <Typography component="span" variant="caption" color="text.secondary">· có thể chỉnh cả sau khi đã gửi duyệt</Typography>
@@ -275,10 +285,9 @@ export function AdvanceView() {
           <Row label="TỔNG DỰ TOÁN" value={fmtVND(t.grandTotal)} bold />
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
             <Typography fontWeight={700} color="#0f3a4a">Số tiền đề nghị tạm ứng</Typography>
-            <TextField size="small" type="number" value={adv.advanceRequested || ''} disabled={!editable}
-              onChange={(e) => patch({ advanceRequested: Math.max(0, +e.target.value || 0) })}
-              placeholder={String(t.grandTotal)}
-              InputProps={{ sx: { '& input': { textAlign: 'right', fontWeight: 800, color: '#d18a13' } } }} sx={{ width: 180 }} />
+            <InlineNumberField value={adv.advanceRequested} width={160} bold color="#d18a13" disabled={!editable}
+              placeholder={t.grandTotal.toLocaleString('vi-VN')}
+              onChange={(v) => patch({ advanceRequested: v })} />
           </Stack>
           {showActual && (
             <>

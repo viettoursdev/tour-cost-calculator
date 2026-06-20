@@ -144,6 +144,7 @@ export function QuoteHistoryView() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
+  const [customer, setCustomer] = useState('');
   const [collabAnchor, setCollabAnchor] = useState<{
     el: HTMLElement;
     row: CloudQuoteEntry;
@@ -162,10 +163,15 @@ export function QuoteHistoryView() {
     () => [...new Set(visible.map((q) => q.createdByName).filter(Boolean))].sort(),
     [visible],
   );
+  const customerNames = useMemo(
+    () => [...new Set(visible.map((q) => q.customerName).filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'vi')),
+    [visible],
+  );
   const filtered = useMemo(() => {
     const base = visible.filter((q) =>
       (isDMC || templateFilter === 'all' || q.template === templateFilter)
       && (!owner || q.createdByName === owner)
+      && (!customer || q.customerName === customer)
       && inDateRange(q.updatedAt ?? q.createdAt, dateRange, dateFrom, dateTo));
     // Tìm theo: tên báo giá · mã · tên khách hàng (kể cả tên/điện thoại/email
     // người liên hệ & MST từ hồ sơ khách hàng).
@@ -177,7 +183,7 @@ export function QuoteHistoryView() {
       return [q.name, q.quoteCode, q.customerName, cust?.name, cust?.taxCode, contacts]
         .filter(Boolean).join(' ');
     });
-  }, [visible, search, templateFilter, isDMC, owner, dateRange, dateFrom, dateTo, custById]);
+  }, [visible, search, templateFilter, isDMC, owner, customer, dateRange, dateFrom, dateTo, custById]);
 
   const handleLoad = async (row: CloudQuoteEntry) => {
     if (currentQuoteId && currentQuoteId !== row.cloudId) {
@@ -432,6 +438,13 @@ export function QuoteHistoryView() {
             <MenuItem value="intl">Quốc tế</MenuItem>
           </Select>
         )}
+        <Select
+          size="small" displayEmpty value={customer} onChange={(e) => setCustomer(e.target.value)}
+          sx={{ minWidth: 150, ...filterSelectSx }} renderValue={(v) => (v ? `👤 ${v}` : 'Mọi khách hàng')}
+        >
+          <MenuItem value="">Mọi khách hàng</MenuItem>
+          {customerNames.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+        </Select>
         <ListFilterBar
           dateRange={dateRange} onDateRange={setDateRange}
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
