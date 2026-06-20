@@ -1,6 +1,16 @@
-import { MenuItem, Stack, TextField } from '@mui/material';
+import { Box, MenuItem, Stack, TextField } from '@mui/material';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import type { ReactNode } from 'react';
 import { DATE_RANGE_OPTIONS, type DateRangeKey } from '@/lib/listFilters';
 import { filterFieldSx } from './filterStyles';
+
+/** Bọc icon + text cho renderValue của Select lọc (đồng bộ style icon). */
+const valWithIcon = (icon: ReactNode, text: string) => (
+  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.6, '& svg': { fontSize: 16, color: 'rgba(15,58,74,0.5)' } }}>
+    {icon}{text}
+  </Box>
+);
 
 type Props = {
   dateRange: DateRangeKey;
@@ -25,7 +35,7 @@ export function ListFilterBar({
       <TextField
         select size="small" value={dateRange}
         onChange={(e) => onDateRange(e.target.value as DateRangeKey)} sx={{ minWidth: 148, ...filterFieldSx }}
-        slotProps={{ select: { displayEmpty: true, renderValue: (v) => `📅 ${DATE_RANGE_OPTIONS.find((o) => o.key === v)?.label ?? dateLabel}` } }}
+        slotProps={{ select: { displayEmpty: true, renderValue: (v) => valWithIcon(<CalendarMonthOutlinedIcon />, DATE_RANGE_OPTIONS.find((o) => o.key === v)?.label ?? dateLabel) } }}
       >
         {DATE_RANGE_OPTIONS.map((o) => <MenuItem key={o.key} value={o.key}>{o.label}</MenuItem>)}
       </TextField>
@@ -39,7 +49,7 @@ export function ListFilterBar({
       )}
       {owners && onOwner && (
         <TextField select size="small" value={owner ?? ''} onChange={(e) => onOwner(e.target.value)} sx={{ minWidth: 150, ...filterFieldSx }}
-          slotProps={{ select: { displayEmpty: true, renderValue: (v) => (v ? `👤 ${v}` : 'Người tạo') } }}>
+          slotProps={{ select: { displayEmpty: true, renderValue: (v) => valWithIcon(<PersonOutlineIcon />, v ? String(v) : 'Người tạo') } }}>
           <MenuItem value="">Tất cả người tạo</MenuItem>
           {owners.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
         </TextField>

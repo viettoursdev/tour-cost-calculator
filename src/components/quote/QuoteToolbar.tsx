@@ -31,6 +31,12 @@ import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined';
+import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
+import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -63,31 +69,33 @@ type Props = {
   onOpenSaveCloud: () => void;
 };
 
-type NavItem = { v: QuoteViewKey; label: string };
-type NavNode = NavItem | { group: string; items: NavItem[] };
+type NavItem = { v: QuoteViewKey; label: string; icon?: ReactNode };
+type NavNode = NavItem | { group: string; icon?: ReactNode; items: NavItem[] };
+
+const navBtnSx = (active: boolean) => ({
+  textTransform: 'none' as const, fontSize: 13.5, fontWeight: active ? 800 : 600, minHeight: 44, px: 1.5, borderRadius: 0,
+  color: active ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: active ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
+  whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' },
+  '& .MuiButton-startIcon svg': { fontSize: 18 }, '& .MuiButton-startIcon': { mr: 0.6 },
+});
 
 /** Nút điều hướng phẳng (tab đơn). */
-function NavTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function NavTab({ label, icon, active, onClick }: { label: string; icon?: ReactNode; active: boolean; onClick: () => void }) {
   return (
-    <Button onClick={onClick} disableRipple
-      sx={{ textTransform: 'none', fontSize: 13.5, fontWeight: active ? 800 : 600, minHeight: 44, px: 1.5, borderRadius: 0,
-        color: active ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: active ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
-        whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+    <Button onClick={onClick} disableRipple startIcon={icon} sx={navBtnSx(active)}>
       {label}
     </Button>
   );
 }
 
 /** Nút nhóm điều hướng (mở menu các mục con). */
-function NavGroup({ label, items, view, onSelect }: { label: string; items: NavItem[]; view: QuoteViewKey; onSelect: (v: QuoteViewKey) => void }) {
+function NavGroup({ label, icon, items, view, onSelect }: { label: string; icon?: ReactNode; items: NavItem[]; view: QuoteViewKey; onSelect: (v: QuoteViewKey) => void }) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
   const activeItem = items.find((i) => i.v === view);
   return (
     <>
-      <Button onClick={(e) => setAnchor(e.currentTarget)} disableRipple endIcon={<ArrowDropDownIcon />}
-        sx={{ textTransform: 'none', fontSize: 13.5, fontWeight: activeItem ? 800 : 600, minHeight: 44, px: 1.5, borderRadius: 0,
-          color: activeItem ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: activeItem ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
-          whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+      <Button onClick={(e) => setAnchor(e.currentTarget)} disableRipple startIcon={icon} endIcon={<ArrowDropDownIcon />}
+        sx={navBtnSx(!!activeItem)}>
         {activeItem ? activeItem.label : label}
       </Button>
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
@@ -291,36 +299,36 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
   const hidePrice = !canSeePrices(currentUser);
   const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
-  const item = (v: QuoteViewKey, label: string) => ({ v, label });
+  const item = (v: QuoteViewKey, label: string, icon?: ReactNode) => ({ v, label, icon });
   // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
   const NAV: NavNode[] = isDMC
-    ? [item('cost', '📊 Bảng chi phí Breakdown'), item('history', '🕐 Lịch sử Breakdown')]
+    ? [item('cost', 'Bảng chi phí Breakdown', <BarChartOutlinedIcon />), item('history', 'Lịch sử Breakdown', <HistoryIcon />)]
     : [
-        item('home', '🏠 Hôm nay'),
-        item('cost', '📊 Báo giá'),
-        { group: '💼 Bán hàng', items: [
-          item('summary', '💰 Tổng kết'),
-          item('pipeline', '🧲 Pipeline bán hàng'),
-          item('salesanalytics', '📊 Phân tích bán hàng'),
-          item('history', '🕐 Lịch sử báo giá'),
+        item('home', 'Hôm nay', <TodayOutlinedIcon />),
+        item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
+        { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
+          item('summary', 'Tổng kết'),
+          item('pipeline', 'Pipeline bán hàng'),
+          item('salesanalytics', 'Phân tích bán hàng'),
+          item('history', 'Lịch sử báo giá'),
         ] },
-        { group: '🗂️ Vận hành', items: [
-          item('workflow', '🗂️ Quy trình vận hành'),
-          item('passengers', '👥 Khách đoàn'),
-          item('opsboard', '🧭 Điều phối'),
-          item('departures', '📅 Lịch khởi hành'),
-          item('payboard', '💰 Công nợ tổng'),
-          item('payment', '🧾 Quản lý thanh toán'),
-          item('flights', '✈️ Chuyến bay'),
-          item('dashboard', '📈 Dashboard biên lợi'),
-          ...(isMgr ? [item('audit', '📋 Nhật ký')] : []),
+        { group: 'Vận hành', icon: <EngineeringOutlinedIcon />, items: [
+          item('workflow', 'Quy trình vận hành'),
+          item('passengers', 'Khách đoàn'),
+          item('opsboard', 'Điều phối'),
+          item('departures', 'Lịch khởi hành'),
+          item('payboard', 'Công nợ tổng'),
+          item('payment', 'Quản lý thanh toán'),
+          item('flights', 'Chuyến bay'),
+          item('dashboard', 'Dashboard biên lợi'),
+          ...(isMgr ? [item('audit', 'Nhật ký')] : []),
         ] },
-        { group: '📇 Danh mục', items: [
-          item('advance', '💵 Đề nghị tạm ứng'),
-          ...(canContract ? [item('contract', '📜 Hợp đồng')] : []),
-          ...(canCust ? [item('customer', '👥 Khách hàng')] : []),
-          ...(canNcc ? [item('ncc', '🏢 Nhà Cung Cấp')] : []),
-          ...(canNcc ? [item('nccProducts', '📦 Sản phẩm NCC')] : []),
+        { group: 'Danh mục', icon: <CategoryOutlinedIcon />, items: [
+          item('advance', 'Đề nghị tạm ứng'),
+          ...(canContract ? [item('contract', 'Hợp đồng')] : []),
+          ...(canCust ? [item('customer', 'Khách hàng')] : []),
+          ...(canNcc ? [item('ncc', 'Nhà Cung Cấp')] : []),
+          ...(canNcc ? [item('nccProducts', 'Sản phẩm NCC')] : []),
         ] },
       ]
         .map((n) => (hidePrice && 'group' in n
@@ -478,8 +486,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
       <Toolbar sx={{ flexWrap: 'wrap', gap: 0.75, py: 0.75, px: 1.5, minHeight: 'auto', borderBottom: '1px solid rgba(20,150,140,0.12)' }}>
         <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.25, overflowX: 'auto', minWidth: 0, '&::-webkit-scrollbar': { height: 0 } }}>
           {NAV.map((n, i) => ('group' in n
-            ? <NavGroup key={`g${i}`} label={n.group} items={n.items} view={view} onSelect={(v) => setView(v)} />
-            : <NavTab key={n.v} label={n.label} active={view === n.v} onClick={() => setView(n.v)} />
+            ? <NavGroup key={`g${i}`} label={n.group} icon={n.icon} items={n.items} view={view} onSelect={(v) => setView(v)} />
+            : <NavTab key={n.v} label={n.label} icon={n.icon} active={view === n.v} onClick={() => setView(n.v)} />
           ))}
         </Box>
         <Box sx={{ flexGrow: 1 }} />

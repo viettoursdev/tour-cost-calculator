@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { Box, Button, MenuItem, Select, Stack, TextField, Typography } from '@mui/material';
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined';
+import CheckIcon from '@mui/icons-material/Check';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { fxRank, fxLabel, CURRENCY_FLAGS } from '@/lib/currency';
@@ -131,20 +134,20 @@ export function FxRatesPanel({ scope = 'quote', defaultOpen = false }: { scope?:
           )}
           {!isGlobal && (
             <Button
-              size="small" variant="outlined"
+              size="small" variant="outlined" startIcon={savedTick ? <CheckIcon /> : <SaveOutlinedIcon />}
               onClick={handleSaveLocal}
-              sx={{ minWidth: 0, px: 1, py: 0.15, fontSize: 11, fontWeight: 800, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}
+              sx={{ minWidth: 0, px: 1, py: 0.15, fontSize: 11, fontWeight: 800, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a', '& .MuiButton-startIcon': { mr: 0.4 }, '& svg': { fontSize: 15 } }}
             >
-              {savedTick ? '✓' : '💾 Lưu'}
+              {savedTick ? 'Đã lưu' : 'Lưu'}
             </Button>
           )}
           {isCEO && (
             <Button
-              size="small" variant="contained" disabled={syncing}
+              size="small" variant="contained" disabled={syncing} startIcon={<SyncOutlinedIcon />}
               onClick={handleSync}
-              sx={{ minWidth: 0, px: 1, py: 0.15, fontSize: 11, fontWeight: 800, background: LEGACY.headerGradient }}
+              sx={{ minWidth: 0, px: 1, py: 0.15, fontSize: 11, fontWeight: 800, background: LEGACY.headerGradient, '& .MuiButton-startIcon': { mr: 0.4 }, '& svg': { fontSize: 15 } }}
             >
-              {syncing ? '…' : '🔄 Đồng bộ'}
+              {syncing ? '…' : 'Đồng bộ'}
             </Button>
           )}
           <Box component="span" sx={{ color: 'rgba(15,58,74,0.45)', fontSize: 11 }}>{showRates ? '▲' : '▼'}</Box>
