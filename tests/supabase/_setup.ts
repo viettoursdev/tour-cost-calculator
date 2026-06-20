@@ -31,6 +31,30 @@ export async function getViettoursClient(): Promise<SupabaseClient> {
   return c;
 }
 
+/**
+ * Idempotent: creates an auth user (email_confirm: true) and returns its UID.
+ * If the user already exists, looks it up via listUsers and returns its existing UID.
+ */
+export async function adminCreateUser(email: string, password: string): Promise<string> {
+  const admin = getServiceClient();
+  const { data, error } = await admin.auth.admin.createUser({
+    email, password, email_confirm: true,
+  });
+  if (!error) return data.user.id;
+  // Already exists — look up by listing and filtering
+  const { data: list, error: listErr } = await admin.auth.admin.listUsers();
+  if (listErr) throw new Error('adminCreateUser listUsers: ' + listErr.message);
+  const found = list.users.find((u) => u.email === email);
+  if (!found) throw new Error('adminCreateUser: user not found after create failed: ' + error.message);
+  return found.id;
+}
+
+export async function adminDeleteUser(uid: string): Promise<void> {
+  const admin = getServiceClient();
+  const { error } = await admin.auth.admin.deleteUser(uid);
+  if (error) throw new Error('adminDeleteUser: ' + error.message);
+}
+
 const PK_COL: Record<string, string> = {
   fx_rates: 'currency',
   rate_card_hotels: 'city',

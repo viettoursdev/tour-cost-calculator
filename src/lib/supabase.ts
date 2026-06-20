@@ -12,7 +12,14 @@ if (!url || !anon) {
   throw new Error('Missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (see .env.example).');
 }
 
-export const sb: SupabaseClient = createClient(url, anon);
+export const sb: SupabaseClient = createClient(url, anon, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    flowType: 'pkce',
+  },
+});
 
 export async function loadAttachments(
   client: SupabaseClient, parentType: string, parentId: string,
@@ -129,6 +136,62 @@ export async function sbPushUsers(users: User[], client: SupabaseClient = sb): P
 /** No-op in Supabase (no plaintext password column exists). Kept for signature parity with Firebase gateway. */
 export async function sbPurgeLegacyPasswords(_client: SupabaseClient = sb): Promise<number> {
   return 0;
+}
+
+// ── Auth gateway (`sb*` auth fns — mirrors `fb*` auth fns in firebase.ts) ────
+
+export async function sbSendSignInLink(email: string, client: SupabaseClient = sb): Promise<void> {
+  // Compute redirect lazily so module scope doesn't reference window (node env).
+  const redirect = `${window.location.origin}${import.meta.env.BASE_URL}?mode=auth`;
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirect, shouldCreateUser: true },
+  });
+  if (error) throw new Error('sbSendSignInLink: ' + error.message);
+}
+
+export function sbIsSignInLink(url: string): boolean {
+  // PKCE magic-link callback carries ?code=...; our redirect also sets ?mode=auth.
+  try { return new URL(url).searchParams.has('code'); } catch { return false; }
+}
+
+export async function sbCompleteSignInLink(url: string, client: SupabaseClient = sb): Promise<void> {
+  const code = new URL(url).searchParams.get('code');
+  if (!code) throw new Error('sbCompleteSignInLink: no code in callback URL');
+  const { error } = await client.auth.exchangeCodeForSession(code);
+  if (error) throw new Error('sbCompleteSignInLink: ' + error.message);
+}
+
+export async function sbSignInWithPassword(email: string, password: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) throw new Error('sbSignInWithPassword: ' + error.message);
+}
+
+export async function sbSignOut(client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.auth.signOut();
+  if (error) throw new Error('sbSignOut: ' + error.message);
+}
+
+export function sbOnAuthChange(
+  cb: (session: { uid: string; email: string } | null) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  const { data } = client.auth.onAuthStateChange((_event, session) => {
+    cb(session?.user ? { uid: session.user.id, email: (session.user.email ?? '').toLowerCase() } : null);
+  });
+  return () => data.subscription.unsubscribe();
+}
+
+export async function sbGetProfileById(uid: string, client: SupabaseClient = sb): Promise<User | null> {
+  const { data, error } = await client.from('profiles')
+    .select('username, email, phone, role, name, color').eq('id', uid).maybeSingle();
+  if (error) throw new Error('sbGetProfileById: ' + error.message);
+  return data ? profileToUser(data) : null;
+}
+
+export async function sbGetAccessToken(client: SupabaseClient = sb): Promise<string | null> {
+  const { data } = await client.auth.getSession();
+  return data.session?.access_token ?? null;
 }
 
 // ── FX rates ──────────────────────────────────────────────────────────────────
