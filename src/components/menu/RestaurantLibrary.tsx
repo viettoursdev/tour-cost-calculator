@@ -16,6 +16,7 @@ import { StarRating } from './StarRating';
 import { AIRestaurantImportDialog } from './AIRestaurantImportDialog';
 import type { ParsedRestaurant } from '@/lib/restaurantFileParse';
 import { AiButton } from '@/components/common/AiButton';
+import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import type { ChangeEvent } from 'react';
 import type { Restaurant } from '@/types';
 
@@ -155,27 +156,27 @@ export function RestaurantLibrary({ onBack }: Props) {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="🔍 Tìm tên, địa chỉ, thành phố..."
             size="small"
-            sx={{ flex: 1, minWidth: 220 }}
+            sx={{ flex: 1, minWidth: 220, maxWidth: 340, ...filterFieldSx }}
           />
           <Select size="small" displayEmpty value={filterCont}
             onChange={(e) => { setFilterCont(e.target.value); setFilterCountry(''); setFilterCity(''); }}
-            sx={{ minWidth: 140 }}>
+            sx={{ minWidth: 140, ...filterSelectSx }}>
             <MenuItem value="">Tất cả châu lục</MenuItem>
             {contOpts.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </Select>
           <Select size="small" displayEmpty value={filterCountry}
             onChange={(e) => { setFilterCountry(e.target.value); setFilterCity(''); }}
-            sx={{ minWidth: 140 }}>
+            sx={{ minWidth: 140, ...filterSelectSx }}>
             <MenuItem value="">Tất cả quốc gia</MenuItem>
             {countryOpts(filterCont).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </Select>
           <Select size="small" displayEmpty value={filterCity}
-            onChange={(e) => setFilterCity(e.target.value)} sx={{ minWidth: 140 }}>
+            onChange={(e) => setFilterCity(e.target.value)} sx={{ minWidth: 140, ...filterSelectSx }}>
             <MenuItem value="">Tất cả thành phố</MenuItem>
             {cityOpts(filterCountry).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </Select>
           <Select size="small" value={filterRating}
-            onChange={(e) => setFilterRating(Number(e.target.value))} sx={{ minWidth: 130 }}>
+            onChange={(e) => setFilterRating(Number(e.target.value))} sx={{ minWidth: 130, ...filterSelectSx }}>
             <MenuItem value={0}>Mọi đánh giá</MenuItem>
             <MenuItem value={5}>★ 5</MenuItem>
             <MenuItem value={4}>★ ≥ 4</MenuItem>
@@ -189,10 +190,14 @@ export function RestaurantLibrary({ onBack }: Props) {
           )}
         </Stack>
 
-        <Stack spacing={2}>
+        <Stack spacing={1.5}>
           {filtered.map((r) => (
-            <Paper key={r.id} sx={{ p: 2.25 }} variant="outlined">
-              <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 40px', gap: 1.5, mb: 1.5, alignItems: 'center' }}>
+            <Paper key={r.id} variant="outlined"
+              sx={{ p: 1.75,
+                '& .MuiOutlinedInput-input': { py: 0.6, fontSize: 13.5 },
+                '& .MuiInputBase-inputMultiline': { py: 0 },
+                '& .MuiAutocomplete-input': { py: '2.5px !important' } }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 36px', gap: 1, mb: 1, alignItems: 'center' }}>
                 <TextField size="small" value={r.name}
                   onChange={(e) => updR(r.id, { name: e.target.value })}
                   placeholder="Tên nhà hàng"
@@ -214,9 +219,9 @@ export function RestaurantLibrary({ onBack }: Props) {
               <TextField fullWidth size="small" value={r.address ?? ''}
                 onChange={(e) => updR(r.id, { address: e.target.value })}
                 placeholder="📍 Địa chỉ"
-                sx={{ mb: 1.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
+                sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
-              <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1.5, flexWrap: 'wrap' }}>
+              <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
                 <Typography variant="caption" fontWeight={700} color="text.secondary">
                   Đánh giá chất lượng:
                 </Typography>
@@ -229,7 +234,7 @@ export function RestaurantLibrary({ onBack }: Props) {
                 />
               </Stack>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.25, mb: 1.5 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.25, mb: 1 }}>
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <TextField fullWidth size="small" value={r.website ?? ''}
                     onChange={(e) => updR(r.id, { website: e.target.value })}
@@ -257,9 +262,9 @@ export function RestaurantLibrary({ onBack }: Props) {
               <TextField fullWidth size="small" multiline minRows={2} value={r.note ?? ''}
                 onChange={(e) => updR(r.id, { note: e.target.value })}
                 placeholder="📝 Thông tin / ghi chú (đặc sản, lưu ý đặt bàn, sức chứa…)"
-                sx={{ mb: 1.5, '& .MuiInputBase-input': { fontSize: 12 } }} />
+                sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
                 <Button component="label" size="small" variant="outlined" startIcon={<AttachFileIcon fontSize="small" />} disabled={uploadingId === r.id}
                   sx={{ fontSize: 12 }}>
                   {uploadingId === r.id ? 'Đang tải…' : 'Thêm file'}
