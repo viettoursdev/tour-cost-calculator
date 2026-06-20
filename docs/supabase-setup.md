@@ -336,3 +336,62 @@ To apply: `supabase db push` (or `psql -f supabase/migrations/00{23..27}_*.sql` 
 ### Gateway type coverage — Phase 4 wiring is safe
 
 All entity types now have full column coverage in the gateway. No Firestore→Supabase field is silently dropped. Phase 4 (wiring Zustand stores to `sb*` functions instead of `fb*` functions) can proceed without further schema changes.
+
+---
+
+## Phase 3 — Auth
+
+**Status (2026-06-20):** Supabase Auth sign-in path implemented behind a feature flag. Production stays on Firebase until a coordinated cutover.
+
+### `VITE_AUTH_BACKEND` flag
+
+| Value | Behaviour |
+|---|---|
+| `firebase` (default) | Production magic-link + DEV password via Firebase Auth — unchanged from today |
+| `supabase` | Supabase Auth magic-link + DEV password via `sb*` gateway functions (Tasks 1–5) |
+
+Production `.env` and the CI secret stay `firebase`. Set `VITE_AUTH_BACKEND=supabase` only in a dev `.env` while testing against a dev Supabase project. Flip it to `supabase` in production only at the Phase 6 cutover.
+
+### One-time dashboard config (before flipping)
+
+Complete these steps in the Supabase dashboard **before** setting `VITE_AUTH_BACKEND=supabase` in production:
+
+1. **Enable Email provider** — Authentication → Providers → Email → toggle on.
+2. **Site URL + Redirect URLs** — Authentication → URL Configuration:
+   - Site URL: `https://viettoursdev.github.io/tour-cost-calculator/?mode=auth`
+   - Add to Redirect URLs: `https://viettoursdev.github.io/tour-cost-calculator/?mode=auth`
+   - The `?mode=auth` suffix is required; `authStore.init()` checks for it before exchanging the PKCE `?code=` parameter.
+3. **Restrict sign-ups to company domain** — Authentication → Providers → Email → Allowed email domains: `viettours.com.vn`. Sign-up attempts from any other domain are rejected at the Auth layer (matches the three-layer defence: client gate in `authStore`, Auth allowlist here, RLS `is_viettours_user()` predicate).
+4. **Email template action URL** — the magic-link email template must use the PKCE redirect URL above as the action link target so the link lands on the app with a `?code=` parameter, not a raw token.
+
+> The ES256 JWT signing algorithm change (step 2 of "Cloud project provisioning") must already be done — it is required by Phase 5 (Worker JWT verification) and must be set before the first user signs in.
+
+### First-login provisioning
+
+When a new user signs in for the first time, the `handle_new_user()` trigger (migration `0001_profiles_and_provisioning.sql`) fires on `auth.users` INSERT and creates a `profiles` row automatically:
+
+- **Role:** reads `app.bootstrap_ceo_email` GUC; if the signing-in email matches, role = `CEO`; otherwise `Standard`.
+- **username / name:** set to the email local-part (e.g. `nguyen.van.a` from `nguyen.van.a@viettours.com.vn`).
+
+**Known caveats — tracked for cutover:**
+
+- **(a) Bootstrap-CEO GUC unset in prod.** `supabase db push` runs as `supabase_admin`, which lacks superuser privilege to run `ALTER DATABASE ... SET app.bootstrap_ceo_email`. The GUC will be empty until manually applied. A fresh bootstrap user signs in as `Standard`. Fix before that user signs in using the SQL editor (see "Bootstrap CEO GUC" in the "First-deploy verification" section above).
+- **(b) username = email local-part, not historical username.** The trigger derives `username` from the email because no mapping table exists yet. The Phase 6 ETL backfills real usernames into `profiles` before the Supabase path goes live.
+
+### Worker token routing
+
+The Cloudflare Worker currently verifies Firebase JWTs (or passes requests through if no auth header is set). Phase 3 only changed which token the **client** sends — the Worker-side JWT verification swap is **Phase 5** and is not done here. Until Phase 5 ships, a Supabase-issued JWT sent to the Worker behaves the same as today (unauthenticated from the Worker's perspective). This is acceptable for the dev-testing period; do not flip `VITE_AUTH_BACKEND=supabase` in production until Phase 5 is deployed.
+
+### Manual browser smoke checklist
+
+Run these checks with `VITE_AUTH_BACKEND=supabase` against a dev Supabase project (`npm run dev` with a local `.env` override). No automated test covers the browser-side PKCE redirect.
+
+- [ ] **Request magic link** — enter a `@viettours.com.vn` email on the login screen and click send. The app shows the "check your email" prompt.
+- [ ] **Email arrives** — open the inbox; confirm the magic-link email was sent by Supabase (not Firebase).
+- [ ] **Click the link on the same device** — the link must be opened in the same browser that requested it (PKCE code-verifier is stored in that browser's session storage). The app URL should contain `?code=`.
+- [ ] **Session completes** — `authStore.init()` exchanges the `?code=` parameter, `onAuthStateChange` fires, `sbGetProfileById` resolves the `profiles` row, and `currentUser` is set. The main app loads.
+- [ ] **Reload keeps the session** — hard-reload the page; the user remains signed in (Supabase persists the session in `localStorage`).
+- [ ] **Sign out clears the session** — click sign-out; `currentUser` is null, localStorage Supabase keys are cleared, the login screen appears.
+- [ ] **DEV password panel** — in a DEV build (`import.meta.env.DEV = true`), expand the password accordion and sign in with a test user. `sbSignInWithPassword` should authenticate and resolve `currentUser` from `profiles`.
+
+**Cross-device limitation (known, deferred):** PKCE stores the code-verifier in the browser that requested the link. Opening the magic-link email on a different device (e.g. phone → desktop) will fail with an exchange error. This is parity with the existing Firebase behaviour ("different device → re-enter email") and is tracked for a post-cutover UX improvement.
