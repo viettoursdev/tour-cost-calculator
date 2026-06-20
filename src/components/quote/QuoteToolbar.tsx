@@ -38,6 +38,8 @@ import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
+import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -70,7 +72,7 @@ type Props = {
   onOpenSaveCloud: () => void;
 };
 
-type NavItem = { v: QuoteViewKey; label: string; icon?: ReactNode };
+type NavItem = { v?: QuoteViewKey; label: string; icon?: ReactNode; action?: () => void };
 type NavNode = NavItem | { group: string; icon?: ReactNode; items: NavItem[] };
 
 const navBtnSx = (active: boolean) => ({
@@ -92,7 +94,7 @@ function NavTab({ label, icon, active, onClick }: { label: string; icon?: ReactN
 /** Nút nhóm điều hướng (mở menu các mục con). */
 function NavGroup({ label, icon, items, view, onSelect }: { label: string; icon?: ReactNode; items: NavItem[]; view: QuoteViewKey; onSelect: (v: QuoteViewKey) => void }) {
   const [anchor, setAnchor] = useState<null | HTMLElement>(null);
-  const activeItem = items.find((i) => i.v === view);
+  const activeItem = items.find((i) => i.v && i.v === view);
   return (
     <>
       <Button onClick={(e) => setAnchor(e.currentTarget)} disableRipple startIcon={icon} endIcon={<ArrowDropDownIcon />}
@@ -101,9 +103,10 @@ function NavGroup({ label, icon, items, view, onSelect }: { label: string; icon?
       </Button>
       <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
         {items.map((i) => (
-          <MenuItem key={i.v} selected={i.v === view} onClick={() => { onSelect(i.v); setAnchor(null); }}
-            sx={{ fontWeight: 600, fontSize: 14, color: i.v === view ? LEGACY.teal : undefined }}>
-            {i.label}
+          <MenuItem key={i.v ?? i.label} selected={!!i.v && i.v === view}
+            onClick={() => { if (i.action) i.action(); else if (i.v) onSelect(i.v); setAnchor(null); }}
+            sx={{ fontWeight: 600, fontSize: 14, gap: 1, color: i.v === view ? LEGACY.teal : undefined, '& svg': { fontSize: 18 } }}>
+            {i.icon}{i.label}
           </MenuItem>
         ))}
       </Menu>
@@ -300,6 +303,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
   const hidePrice = !canSeePrices(currentUser);
   const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
+  // Mở app Chương trình tour / Thực đơn (template riêng) từ dropdown Vận hành.
+  const gotoApp = (tpl: 'itinerary' | 'menu') => {
+    const what = tpl === 'itinerary' ? 'Chương trình tour' : 'Thực đơn';
+    if (!window.confirm(`Rời báo giá để mở ${what}? Thay đổi chưa lưu của báo giá có thể mất.`)) return;
+    useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: tpl }, view: 'cost' }));
+  };
   const item = (v: QuoteViewKey, label: string, icon?: ReactNode) => ({ v, label, icon });
   // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
   const NAV: NavNode[] = isDMC
@@ -323,6 +332,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
           item('flights', 'Chuyến bay'),
           item('dashboard', 'Dashboard biên lợi'),
           ...(isMgr ? [item('audit', 'Nhật ký')] : []),
+          { label: 'Chương trình tour', icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') },
+          { label: 'Thực đơn', icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') },
         ] },
         { group: 'Danh mục', icon: <CategoryOutlinedIcon />, items: [
           item('advance', 'Đề nghị tạm ứng'),
@@ -333,7 +344,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         ] },
       ]
         .map((n) => (hidePrice && 'group' in n
-          ? { ...n, items: n.items.filter((it) => !PRICE_ONLY_VIEWS.has(it.v)) }
+          ? { ...n, items: n.items.filter((it) => !('v' in it && it.v && PRICE_ONLY_VIEWS.has(it.v))) }
           : n))
         .filter((n) => (hidePrice && !('group' in n) ? !PRICE_ONLY_VIEWS.has(n.v) : true))
         .filter((n) => !('group' in n) || n.items.length > 0);
@@ -488,7 +499,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         <Box sx={{ display: 'flex', alignItems: 'stretch', gap: 0.25, overflowX: 'auto', minWidth: 0, '&::-webkit-scrollbar': { height: 0 } }}>
           {NAV.map((n, i) => ('group' in n
             ? <NavGroup key={`g${i}`} label={n.group} icon={n.icon} items={n.items} view={view} onSelect={(v) => setView(v)} />
-            : <NavTab key={n.v} label={n.label} icon={n.icon} active={view === n.v} onClick={() => setView(n.v)} />
+            : <NavTab key={n.v ?? n.label} label={n.label} icon={n.icon} active={view === n.v}
+                onClick={() => { if (n.action) n.action(); else if (n.v) setView(n.v); }} />
           ))}
         </Box>
         <Box sx={{ flexGrow: 1 }} />

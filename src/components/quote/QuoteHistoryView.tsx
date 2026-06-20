@@ -14,6 +14,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META } from './constants';
+import { TPL_ACCENT } from './templateStyle';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, WorkflowStep } from '@/types';
@@ -337,10 +338,12 @@ export function QuoteHistoryView() {
       renderCell: (p) => {
         const it = itinByQuote.get(p.row.cloudId);
         if (!it) return <Typography variant="caption" color="text.disabled">—</Typography>;
+        const a = TPL_ACCENT.itinerary;
         return (
           <Tooltip title={`Mở chương trình: ${it.title}`}>
-            <Chip size="small" color="success" variant="outlined" clickable
-              label="🗺️ Mở" onClick={() => openAlt('itinerary', it.id, `chương trình "${it.title}"`)} />
+            <Chip size="small" variant="outlined" clickable icon={<a.Icon />} label="Mở"
+              onClick={() => openAlt('itinerary', it.id, `chương trình "${it.title}"`)}
+              sx={{ borderColor: `${a.accent}66`, color: a.accent, fontWeight: 700, '& .MuiChip-icon': { color: a.accent, fontSize: 16 } }} />
           </Tooltip>
         );
       },
@@ -354,10 +357,12 @@ export function QuoteHistoryView() {
       renderCell: (p) => {
         const mn = menuByQuote.get(p.row.cloudId);
         if (!mn) return <Typography variant="caption" color="text.disabled">—</Typography>;
+        const a = TPL_ACCENT.menu;
         return (
           <Tooltip title={`Mở thực đơn: ${mn.title}`}>
-            <Chip size="small" color="warning" variant="outlined" clickable
-              label="🍽️ Mở" onClick={() => openAlt('menu', mn.id, `thực đơn "${mn.title}"`)} />
+            <Chip size="small" variant="outlined" clickable icon={<a.Icon />} label="Mở"
+              onClick={() => openAlt('menu', mn.id, `thực đơn "${mn.title}"`)}
+              sx={{ borderColor: `${a.accent}66`, color: a.accent, fontWeight: 700, '& .MuiChip-icon': { color: a.accent, fontSize: 16 } }} />
           </Tooltip>
         );
       },
@@ -367,15 +372,19 @@ export function QuoteHistoryView() {
       headerName: 'Liên kết DMC',
       width: 140,
       sortable: false,
-      renderCell: (p) => (p.row.linkedQuoteId ? (
-        <Tooltip title={`Mở bản liên kết: ${p.row.linkedQuoteName ?? ''}`}>
-          <Chip
-            size="small" color="primary" variant="outlined" clickable
-            label={p.row.linkedQuoteTemplate === 'dmc' ? '🔗 DMC' : '🔗 Nước ngoài'}
-            onClick={() => void handleOpenLinked(p.row)}
-          />
-        </Tooltip>
-      ) : null),
+      renderCell: (p) => {
+        if (!p.row.linkedQuoteId) return null;
+        const tpl = p.row.linkedQuoteTemplate === 'dmc' ? 'dmc' : 'intl';
+        const a = TPL_ACCENT[tpl];
+        return (
+          <Tooltip title={`Mở bản liên kết: ${p.row.linkedQuoteName ?? ''}`}>
+            <Chip size="small" variant="outlined" clickable icon={<a.Icon />}
+              label={tpl === 'dmc' ? 'DMC' : 'Nước ngoài'}
+              onClick={() => void handleOpenLinked(p.row)}
+              sx={{ borderColor: `${a.accent}66`, color: a.accent, fontWeight: 700, '& .MuiChip-icon': { color: a.accent, fontSize: 16 } }} />
+          </Tooltip>
+        );
+      },
     },
     {
       field: 'attachment',
