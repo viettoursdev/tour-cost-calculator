@@ -14,6 +14,17 @@ import type { Template } from '@/types';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
 
+/** Màu nhấn + gradient riêng cho từng loại hồ sơ (cho thẻ chọn sang trọng hơn). */
+const TPL_ACCENT: Record<Template, { accent: string; grad: string }> = {
+  domestic:    { accent: '#dc3250', grad: 'linear-gradient(135deg,#dc3250,#f5a623)' },
+  intl:        { accent: '#2563eb', grad: 'linear-gradient(135deg,#2563eb,#38bdf8)' },
+  dmc:         { accent: '#7c3aed', grad: 'linear-gradient(135deg,#7c3aed,#a855f7)' },
+  itinerary:   { accent: '#0d7a6a', grad: 'linear-gradient(135deg,#0d7a6a,#14a08c)' },
+  menu:        { accent: '#ea580c', grad: 'linear-gradient(135deg,#ea580c,#f59e0b)' },
+  visa:        { accent: '#0891b2', grad: 'linear-gradient(135deg,#0891b2,#06b6d4)' },
+  doctranslate:{ accent: '#475569', grad: 'linear-gradient(135deg,#475569,#64748b)' },
+};
+
 export function TemplateSelectorModal({ open, onClose, canCancel = false }: Props) {
   // Narrow selectors — modal only needs to know whether a draft exists and whether
   // it has items. Subscribing to the whole `draft` would re-render this on every
@@ -112,31 +123,79 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           )}
         </Stack>
       </DialogTitle>
-      <DialogContent sx={{ background: 'linear-gradient(180deg,#f7fbfa,#ffffff)', pt: 4}}>
-
+      <DialogContent sx={{ background: 'linear-gradient(180deg,#f4faf9,#ffffff 60%)', pt: 4 }}>
+        <Box sx={{ textAlign: 'center', mt: 2, mb: 0.5 }}>
+          <Typography sx={{ fontSize: 24, fontWeight: 900, color: '#0f3a4a', letterSpacing: 0.2 }}>
+            Bạn muốn tạo gì hôm nay?
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'rgba(15,58,74,0.55)', mt: 0.5 }}>
+            Chọn loại hồ sơ — hệ thống tự cấu hình quy trình & biểu mẫu phù hợp.
+          </Typography>
+          <Box sx={{ width: 56, height: 3, borderRadius: 3, background: 'linear-gradient(90deg,#0d7a6a,#14a08c)', mx: 'auto', mt: 1.5 }} />
+        </Box>
 
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
-            gap: 4,
-            mb: 4,
-            mt: 4
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: 3,
+            mb: 5,
+            mt: 4,
+            maxWidth: 1200,
+            mx: 'auto',
           }}
         >
-          {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => (
-            <Card key={tpl.key} variant="outlined">
-              <CardActionArea onClick={() => handlePick(tpl.key)} sx={{ height: '100%' }}>
-                <CardContent>
-                  <Typography variant="h3" sx={{ mb: 1 }}>{tpl.icon}</Typography>
-                  <Typography fontWeight={700}>{tpl.label}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {tpl.desc}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          ))}
+          {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => {
+            const ac = TPL_ACCENT[tpl.key];
+            return (
+              <Card
+                key={tpl.key}
+                elevation={0}
+                sx={{
+                  position: 'relative', borderRadius: 3, overflow: 'hidden',
+                  border: '1px solid rgba(15,58,74,0.08)',
+                  background: '#fff',
+                  transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s, border-color .28s',
+                  boxShadow: '0 2px 10px rgba(15,58,74,0.05)',
+                  '&:hover': {
+                    transform: 'translateY(-6px)',
+                    boxShadow: `0 20px 44px ${ac.accent}26`,
+                    borderColor: `${ac.accent}55`,
+                  },
+                  '&:hover .tpl-badge': { transform: 'scale(1.08) rotate(-3deg)' },
+                  '&:hover .tpl-go': { opacity: 1, transform: 'translateX(0)' },
+                  '&:hover .tpl-bar': { opacity: 1 },
+                }}
+              >
+                <Box className="tpl-bar" sx={{ height: 4, background: ac.grad, opacity: 0.75, transition: 'opacity .28s' }} />
+                <CardActionArea onClick={() => handlePick(tpl.key)} sx={{ height: '100%', p: 2.5, alignItems: 'flex-start' }}>
+                  <CardContent sx={{ p: 0, width: '100%' }}>
+                    <Box
+                      className="tpl-badge"
+                      sx={{
+                        width: 56, height: 56, borderRadius: '16px', mb: 1.75,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28,
+                        background: ac.grad, color: '#fff',
+                        boxShadow: `0 10px 22px ${ac.accent}44`,
+                        transition: 'transform .28s cubic-bezier(.2,.8,.2,1)',
+                      }}
+                    >
+                      {tpl.icon}
+                    </Box>
+                    <Typography sx={{ fontWeight: 800, fontSize: 15.5, color: '#0f3a4a', lineHeight: 1.3 }}>
+                      {tpl.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.6, lineHeight: 1.55 }}>
+                      {tpl.desc}
+                    </Typography>
+                    <Box className="tpl-go" sx={{ mt: 1.5, display: 'inline-flex', alignItems: 'center', gap: 0.4, color: ac.accent, fontWeight: 800, fontSize: 13, opacity: 0, transform: 'translateX(-6px)', transition: 'opacity .28s, transform .28s' }}>
+                      Bắt đầu →
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            );
+          })}
         </Box>
 
         {pendingConfirm && (
