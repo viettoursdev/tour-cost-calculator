@@ -22,6 +22,7 @@ import { filterRank, normalizeVN } from '@/lib/search';
 import { toast } from '@/stores/toastStore';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 
 type ModalState = { ncc: Ncc | null } | null;
 
@@ -129,13 +130,13 @@ export function NCCView() {
           placeholder="Tìm tên, địa điểm, contact..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ flex: 1, minWidth: 220 }}
+          sx={{ flex: 1, minWidth: 220, maxWidth: 360, ...filterFieldSx }}
         />
         <Select
           size="small"
           value={filterSector}
           onChange={(e) => setFilterSector(e.target.value)}
-          sx={{ minWidth: 160 }}
+          sx={{ minWidth: 160, ...filterSelectSx }}
         >
           <MenuItem value="">Tất cả lĩnh vực</MenuItem>
           {NCC_SECTORS.map((s) => (
@@ -144,13 +145,13 @@ export function NCCView() {
         </Select>
         <Select size="small" value={filterContinent}
           onChange={(e) => { setFilterContinent(e.target.value); setFilterCountry(''); }}
-          sx={{ minWidth: 150 }}>
+          sx={{ minWidth: 150, ...filterSelectSx }}>
           <MenuItem value="">Tất cả châu lục</MenuItem>
           {NCC_CONTINENTS.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
         </Select>
         <Select size="small" value={filterCountry} displayEmpty
           onChange={(e) => setFilterCountry(e.target.value)}
-          sx={{ minWidth: 150 }}>
+          sx={{ minWidth: 150, ...filterSelectSx }}>
           <MenuItem value="">Tất cả quốc gia</MenuItem>
           {(filterContinent ? (NCC_COUNTRIES[filterContinent] ?? []) : NCC_ALL_COUNTRIES).map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
         </Select>
@@ -158,7 +159,7 @@ export function NCCView() {
           size="small"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortMode)}
-          sx={{ minWidth: 180 }}
+          sx={{ minWidth: 180, ...filterSelectSx }}
         >
           {SORT_OPTIONS.map((o) => (
             <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>

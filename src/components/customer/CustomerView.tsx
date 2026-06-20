@@ -22,6 +22,7 @@ import { filterRank, normalizeVN } from '@/lib/search';
 import { toast } from '@/stores/toastStore';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 
 type FilterType = '' | 'company' | 'individual';
 type ModalState = { customer: Customer | null } | null;
@@ -138,13 +139,13 @@ export function CustomerView() {
           placeholder="Tìm tên, contact, email, SĐT..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ flex: 1, minWidth: 220 }}
+          sx={{ flex: 1, minWidth: 220, maxWidth: 360, ...filterFieldSx }}
         />
         <Select
           size="small"
           value={filterType}
           onChange={(e) => setFilterType(e.target.value as FilterType)}
-          sx={{ minWidth: 140 }}
+          sx={{ minWidth: 140, ...filterSelectSx }}
         >
           <MenuItem value="">Tất cả</MenuItem>
           <MenuItem value="company">🏢 Công ty</MenuItem>
@@ -154,7 +155,7 @@ export function CustomerView() {
           size="small"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortMode)}
-          sx={{ minWidth: 180 }}
+          sx={{ minWidth: 180, ...filterSelectSx }}
         >
           {SORT_OPTIONS.map((o) => (
             <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>

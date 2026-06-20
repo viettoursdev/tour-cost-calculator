@@ -16,6 +16,7 @@ import { canViewAll } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import { ITIN_COUNTRY_LABEL } from './itinCode';
 
 async function openLinkedQuote(cloudId: string): Promise<void> {
@@ -115,9 +116,9 @@ export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Pr
           <TextField
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm mã, tên, điểm đến..."
+            placeholder="Tìm mã, tên, điểm đến, khách hàng..."
             size="small"
-            sx={{ maxWidth: 360, flex: 1, minWidth: 220 }}
+            sx={{ maxWidth: 360, flex: 1, minWidth: 220, ...filterFieldSx }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
@@ -126,7 +127,7 @@ export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Pr
           />
           <Select
             size="small" displayEmpty value={customer} onChange={(e) => setCustomer(e.target.value)}
-            sx={{ minWidth: 150 }} renderValue={(v) => (v ? `👤 ${v}` : 'Mọi khách hàng')}
+            sx={{ minWidth: 150, ...filterSelectSx }} renderValue={(v) => (v ? `👤 ${v}` : 'Mọi khách hàng')}
           >
             <MenuItem value="">Mọi khách hàng</MenuItem>
             {customers.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
@@ -136,7 +137,7 @@ export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Pr
             onChange={(e) => setCountries(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
             input={<OutlinedInput />}
             renderValue={(sel) => (sel.length === 0 ? 'Mọi quốc gia' : `🌍 ${sel.length} quốc gia`)}
-            sx={{ minWidth: 150 }}
+            sx={{ minWidth: 150, ...filterSelectSx }}
           >
             {countryOptions.length === 0 && <MenuItem disabled value="">— Chưa có dữ liệu quốc gia —</MenuItem>}
             {countryOptions.map((c) => (

@@ -14,6 +14,7 @@ import { canViewAll } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { filterFieldSx } from '@/components/common/filterStyles';
 
 async function openLinkedQuote(cloudId: string): Promise<void> {
   if (!window.confirm('Rời phần thực đơn để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
@@ -97,7 +98,7 @@ export function MenuHome({ onNew, onOpen, onRestaurants, onBack }: Props) {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm mã, tên, điểm đến..."
             size="small"
-            sx={{ maxWidth: 360, flex: 1, minWidth: 220 }}
+            sx={{ maxWidth: 360, flex: 1, minWidth: 220, ...filterFieldSx }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>

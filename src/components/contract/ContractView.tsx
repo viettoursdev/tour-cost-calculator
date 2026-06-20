@@ -27,6 +27,7 @@ import type { Contract, CloudQuoteEntry } from '@/types';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import { FilePreviewDialog } from '@/components/common/FilePreviewDialog';
 import { contractIssues } from './contractValidation';
 import { ContractReviewDialog } from './ContractReviewDialog';
@@ -150,9 +151,9 @@ export function ContractView() {
       {/* Search & filter */}
       <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
         <TextField size="small" placeholder="Tìm số HĐ, tên tour, khách hàng..."
-          value={search} onChange={(e) => setSearch(e.target.value)} sx={{ flex: 1, minWidth: 220 }} />
+          value={search} onChange={(e) => setSearch(e.target.value)} sx={{ flex: 1, minWidth: 220, maxWidth: 360, ...filterFieldSx }} />
         <Select size="small" value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)} sx={{ minWidth: 180 }}>
+          onChange={(e) => setFilterStatus(e.target.value)} sx={{ minWidth: 180, ...filterSelectSx }}>
           <MenuItem value="">Tất cả trạng thái</MenuItem>
           {Object.entries(CONTRACT_STATUS).map(([k, s]) => (
             <MenuItem key={k} value={k}>{s.icon} {s.label}</MenuItem>

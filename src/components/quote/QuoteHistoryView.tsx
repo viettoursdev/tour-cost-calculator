@@ -25,6 +25,7 @@ import AttachFile from '@mui/icons-material/AttachFile';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 
 type TemplateFilter = 'all' | Template;
 
@@ -414,17 +415,17 @@ export function QuoteHistoryView() {
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <TextField
           size="small"
-          label="Tìm kiếm"
-          placeholder="Mã / tên / khách hàng"
+          placeholder="Tìm mã / tên / khách hàng…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: 240 }}
+          sx={{ minWidth: 240, flex: 1, maxWidth: 360, ...filterFieldSx }}
         />
         {!isDMC && (
           <Select
             size="small"
             value={templateFilter}
             onChange={(e) => setTemplateFilter(e.target.value as TemplateFilter)}
+            sx={{ minWidth: 140, ...filterSelectSx }}
           >
             <MenuItem value="all">Tất cả loại</MenuItem>
             <MenuItem value="domestic">Nội địa</MenuItem>

@@ -1,5 +1,6 @@
 import { MenuItem, Stack, TextField } from '@mui/material';
 import { DATE_RANGE_OPTIONS, type DateRangeKey } from '@/lib/listFilters';
+import { filterFieldSx } from './filterStyles';
 
 type Props = {
   dateRange: DateRangeKey;
@@ -22,22 +23,24 @@ export function ListFilterBar({
   return (
     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
       <TextField
-        select size="small" label={dateLabel} value={dateRange}
-        onChange={(e) => onDateRange(e.target.value as DateRangeKey)} sx={{ minWidth: 150 }}
+        select size="small" value={dateRange}
+        onChange={(e) => onDateRange(e.target.value as DateRangeKey)} sx={{ minWidth: 148, ...filterFieldSx }}
+        slotProps={{ select: { displayEmpty: true, renderValue: (v) => `📅 ${DATE_RANGE_OPTIONS.find((o) => o.key === v)?.label ?? dateLabel}` } }}
       >
         {DATE_RANGE_OPTIONS.map((o) => <MenuItem key={o.key} value={o.key}>{o.label}</MenuItem>)}
       </TextField>
       {dateRange === 'custom' && (
         <>
           <TextField size="small" type="date" label="Từ" value={from} onChange={(e) => onFrom(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150 }} />
+            slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150, ...filterFieldSx }} />
           <TextField size="small" type="date" label="Đến" value={to} onChange={(e) => onTo(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150 }} />
+            slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150, ...filterFieldSx }} />
         </>
       )}
       {owners && onOwner && (
-        <TextField select size="small" label="Người tạo" value={owner ?? ''} onChange={(e) => onOwner(e.target.value)} sx={{ minWidth: 160 }}>
-          <MenuItem value="">Tất cả</MenuItem>
+        <TextField select size="small" value={owner ?? ''} onChange={(e) => onOwner(e.target.value)} sx={{ minWidth: 150, ...filterFieldSx }}
+          slotProps={{ select: { displayEmpty: true, renderValue: (v) => (v ? `👤 ${v}` : 'Người tạo') } }}>
+          <MenuItem value="">Tất cả người tạo</MenuItem>
           {owners.map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
         </TextField>
       )}
