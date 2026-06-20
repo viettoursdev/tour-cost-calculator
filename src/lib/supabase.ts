@@ -3485,6 +3485,101 @@ export async function sbSendChatMessage(
   }
 }
 
+/**
+ * Edit the text of an existing message.
+ * Mirrors fbEditChatMessage (firebase.ts:712):
+ * - Sets text and edited_at on the row matching (chat_id, legacy_id).
+ * - Note: the firebase version also updates lastText when the edited message is
+ *   the last in the chat; that preview field is a convenience and is not
+ *   required to be kept in sync here (the subscriber assembles it from messages).
+ */
+export async function sbEditChatMessage(
+  id: string,
+  msgId: string,
+  text: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('chat_messages')
+    .update({ text, edited_at: new Date().toISOString() })
+    .eq('chat_id', id)
+    .eq('legacy_id', msgId);
+  if (error) throw new Error('sbEditChatMessage: ' + error.message);
+}
+
+/**
+ * Soft-delete a message (revoke / thu hồi).
+ * Mirrors fbDeleteChatMessage (firebase.ts:722):
+ * - Sets deleted=true, clears text and file on the row.
+ * - Keeps id/by/byName/at intact so the UI can render a tombstone.
+ */
+export async function sbDeleteChatMessage(
+  id: string,
+  msgId: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('chat_messages')
+    .update({ deleted: true, text: null, file: null })
+    .eq('chat_id', id)
+    .eq('legacy_id', msgId);
+  if (error) throw new Error('sbDeleteChatMessage: ' + error.message);
+}
+
+/**
+ * Toggle a reaction emoji for a user on a message.
+ * Mirrors fbToggleChatReaction (firebase.ts:732):
+ * - Reads the current reactions jsonb for the row.
+ * - Adds username to reactions[emoji] if absent; removes if present.
+ * - Drops the emoji key entirely when its array becomes empty.
+ * - Writes the updated reactions back.
+ */
+export async function sbToggleChatReaction(
+  id: string,
+  msgId: string,
+  emoji: string,
+  username: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { data, error: selErr } = await client.from('chat_messages')
+    .select('reactions')
+    .eq('chat_id', id)
+    .eq('legacy_id', msgId)
+    .maybeSingle();
+  if (selErr) throw new Error('sbToggleChatReaction select: ' + selErr.message);
+  if (!data) return;
+
+  const reactions: Record<string, string[]> = { ...((data as unknown as Record<string, unknown>).reactions as Record<string, string[]> ?? {}) };
+  const arr = reactions[emoji] ?? [];
+  const next = arr.includes(username) ? arr.filter((u) => u !== username) : [...arr, username];
+  if (next.length) {
+    reactions[emoji] = next;
+  } else {
+    delete reactions[emoji];
+  }
+
+  const { error: upErr } = await client.from('chat_messages')
+    .update({ reactions: reactions as unknown as Record<string, unknown> })
+    .eq('chat_id', id)
+    .eq('legacy_id', msgId);
+  if (upErr) throw new Error('sbToggleChatReaction update: ' + upErr.message);
+}
+
+/**
+ * Mark a user as having read a chat up to the current moment.
+ * Mirrors fbMarkChatRead (firebase.ts:748):
+ * - Updates chat_members.last_read = now() for (chat_id, username).
+ */
+export async function sbMarkChatRead(
+  id: string,
+  username: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('chat_members')
+    .update({ last_read: new Date().toISOString() })
+    .eq('chat_id', id)
+    .eq('username', username);
+  if (error) throw new Error('sbMarkChatRead: ' + error.message);
+}
+
 // ── Phase 2 Task 7 — Quote cross-links + status ──────────────────────────────
 // Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
 // Parity: firebase.ts:405-413 (fbSetEntryLink), firebase.ts:462-473 (fbSetEntryStatus)

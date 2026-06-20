@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { getViettoursClient, truncate } from './_setup';
 import {
   sbSubscribeChats, sbSubscribeChat, sbEnsureChat, sbSendChatMessage,
+  sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbMarkChatRead,
 } from '../../src/lib/supabase';
 import type { Chat, ChatMessage } from '@/types/chat';
 
@@ -126,6 +127,103 @@ describe('chat gateway', () => {
     expect(result).not.toBeNull();
     expect(result!.members.filter((m) => m === 'tester')).toHaveLength(1);
     expect(result!.members.filter((m) => m === 'alpha')).toHaveLength(1);
+  });
+
+  it('sbEditChatMessage — text changes and editedAt is set', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_edit__tester';
+    await sbEnsureChat({
+      id: chatId, members: ['tester', 'edit'], isGroup: false,
+      createdBy: 'tester', createdAt: new Date().toISOString(), messages: [],
+    }, c);
+
+    const before = new Date().toISOString();
+    await sbSendChatMessage(chatId, {
+      id: 'msg-edit-001', by: 'tester', byName: 'QA Tester',
+      at: before, text: 'original text',
+    }, c);
+
+    await sbEditChatMessage(chatId, 'msg-edit-001', 'edited text', c);
+
+    const result = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(result).not.toBeNull();
+    const m = result!.messages.find((msg) => msg.id === 'msg-edit-001');
+    expect(m).toBeDefined();
+    expect(m!.text).toBe('edited text');
+    expect(m!.editedAt).toBeTruthy();
+    expect(new Date(m!.editedAt!).getTime()).toBeGreaterThanOrEqual(new Date(before).getTime());
+  });
+
+  it('sbDeleteChatMessage — soft delete sets deleted=true, clears text+file', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_delete__tester';
+    await sbEnsureChat({
+      id: chatId, members: ['tester', 'delete'], isGroup: false,
+      createdBy: 'tester', createdAt: new Date().toISOString(), messages: [],
+    }, c);
+
+    await sbSendChatMessage(chatId, {
+      id: 'msg-del-001', by: 'tester', byName: 'QA Tester',
+      at: new Date().toISOString(), text: 'to be deleted',
+      file: { key: 'r2/x.pdf', name: 'x.pdf', size: 1 },
+    }, c);
+
+    await sbDeleteChatMessage(chatId, 'msg-del-001', c);
+
+    const result = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(result).not.toBeNull();
+    const m = result!.messages.find((msg) => msg.id === 'msg-del-001');
+    expect(m).toBeDefined();
+    expect(m!.deleted).toBe(true);
+    expect(m!.text).toBeUndefined();
+    expect(m!.file).toBeUndefined();
+  });
+
+  it('sbToggleChatReaction — adds then removes; emoji key dropped when array empties', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_react__tester';
+    await sbEnsureChat({
+      id: chatId, members: ['tester', 'react'], isGroup: false,
+      createdBy: 'tester', createdAt: new Date().toISOString(), messages: [],
+    }, c);
+
+    await sbSendChatMessage(chatId, {
+      id: 'msg-react-001', by: 'tester', byName: 'QA Tester',
+      at: new Date().toISOString(), text: 'react me',
+    }, c);
+
+    // Toggle ON
+    await sbToggleChatReaction(chatId, 'msg-react-001', '👍', 'tester', c);
+    const after1 = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    const m1 = after1!.messages.find((msg) => msg.id === 'msg-react-001');
+    expect(m1!.reactions).toEqual({ '👍': ['tester'] });
+
+    // Toggle OFF — emoji key must be dropped when array is empty
+    await sbToggleChatReaction(chatId, 'msg-react-001', '👍', 'tester', c);
+    const after2 = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    const m2 = after2!.messages.find((msg) => msg.id === 'msg-react-001');
+    expect(m2!.reactions).not.toHaveProperty('👍');
+  });
+
+  it('sbMarkChatRead — last_read for that member advances', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_read__tester';
+    await sbEnsureChat({
+      id: chatId, members: ['tester', 'read'], isGroup: false,
+      createdBy: 'tester', createdAt: new Date().toISOString(), messages: [],
+    }, c);
+
+    const snap1 = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    const readBefore = snap1!.reads?.['read'];
+
+    await sbMarkChatRead(chatId, 'read', c);
+
+    const snap2 = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    const readAfter = snap2!.reads?.['read'];
+    expect(readAfter).toBeTruthy();
+    if (readBefore) {
+      expect(new Date(readAfter!).getTime()).toBeGreaterThanOrEqual(new Date(readBefore).getTime());
+    }
   });
 
   it('file-only message preview uses 📎 filename', async () => {
