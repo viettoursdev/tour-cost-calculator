@@ -132,6 +132,8 @@ export interface ItineraryIndexEntry {
   days: number;
   nights: number;
   customerName?: string;
+  /** Mã quốc gia (TQ, NB…) — cho lọc theo quốc gia ở danh sách. */
+  country?: string;
   linkedQuoteId?: string | null;
   linkedQuoteName: string;
   createdAt?: string;

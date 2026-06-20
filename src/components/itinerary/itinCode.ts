@@ -33,6 +33,10 @@ export const ITIN_COUNTRY: Record<string, Record<string, string>> = {
   VN: { MB: 'Miền Bắc', MT: 'Miền Trung', MN: 'Miền Nam' },
 };
 
+/** Bản đồ phẳng mã quốc gia → tên (gộp mọi châu lục) — cho lọc theo quốc gia. */
+export const ITIN_COUNTRY_LABEL: Record<string, string> = Object.values(ITIN_COUNTRY)
+  .reduce<Record<string, string>>((acc, m) => { Object.assign(acc, m); return acc; }, {});
+
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 /** Phần ngày DD.MM.YY của mã (mặc định hôm nay). */

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, InputAdornment, Paper, Stack, TextField, Typography,
+  Box, Button, Checkbox, Chip, IconButton, InputAdornment, ListItemText, MenuItem,
+  OutlinedInput, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SearchIcon from '@mui/icons-material/Search';
+import AutoStoriesIcon from '@mui/icons-material/AutoStories';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -13,6 +16,7 @@ import { canViewAll } from '@/auth/ROLES';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
+import { ITIN_COUNTRY_LABEL } from './itinCode';
 
 async function openLinkedQuote(cloudId: string): Promise<void> {
   if (!window.confirm('Rời phần chương trình để mở báo giá liên kết? Thay đổi chưa lưu có thể mất.')) return;
@@ -51,44 +55,57 @@ export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Pr
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
+  const [customer, setCustomer] = useState('');
+  const [countries, setCountries] = useState<string[]>([]);
   const [delId, setDelId] = useState<string | null>(null);
 
   const owners = [...new Set(list.map((x) => x.createdBy).filter((v): v is string => !!v))].sort();
+  const customers = [...new Set(list.map((x) => x.customerName).filter((v): v is string => !!v))].sort();
+  const countryOptions = [...new Set(list.map((x) => x.country).filter((v): v is string => !!v))]
+    .sort((a, b) => (ITIN_COUNTRY_LABEL[a] ?? a).localeCompare(ITIN_COUNTRY_LABEL[b] ?? b, 'vi'));
+
   const base = list.filter((x) =>
     (viewAll || x.createdBy === currentUser?.name)
     && (!owner || x.createdBy === owner)
+    && (!customer || x.customerName === customer)
+    && (countries.length === 0 || (!!x.country && countries.includes(x.country)))
     && inDateRange(x.updatedAt ?? x.createdAt, dateRange, dateFrom, dateTo));
-  const filtered = filterRank(base, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.destination ?? ''} ${x.linkedQuoteName ?? ''}`);
+  const filtered = filterRank(base, search, (x) => `${x.code ?? ''} ${x.title ?? ''} ${x.destination ?? ''} ${x.customerName ?? ''} ${x.linkedQuoteName ?? ''}`);
 
   const handleDelete = async (id: string) => {
     await useItineraryStore.getState().delete(id);
     setDelId(null);
   };
 
+  const headBtnSx = {
+    color: '#fff', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 1.5,
+    '&:hover': { background: 'rgba(255,255,255,0.18)' },
+  } as const;
+
   return (
     <Box sx={{ minHeight: '100%' }}>
-      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 3, py: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
-          <Box>
-            <Typography variant="h6" fontWeight={900}>🗺️ Chương trình tour</Typography>
+      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 2.5, py: 1.25 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" fontWeight={900} noWrap>🗺️ Chương trình tour</Typography>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
               {loading ? 'Đang tải...' : `${list.length} chương trình · đồng bộ Cloud`}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Button variant="outlined" color="inherit" startIcon={<span>📚</span>} onClick={onLibrary}>
-              Thuyết minh
-            </Button>
-            <Button variant="outlined" color="inherit" startIcon={<span>📥</span>} onClick={onImport}>
-              Phân tích từ file
-            </Button>
-            <Button variant="contained" color="inherit" startIcon={<AddIcon />} onClick={onNew}
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Tooltip title="Thư viện thuyết minh">
+              <IconButton size="small" sx={headBtnSx} onClick={onLibrary}><AutoStoriesIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Phân tích từ file (AI)">
+              <IconButton size="small" sx={headBtnSx} onClick={onImport}><UploadFileIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Button size="small" variant="contained" color="inherit" startIcon={<AddIcon />} onClick={onNew}
               sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, '&:hover': { bgcolor: '#f4fefa' } }}>
               Tạo chương trình
             </Button>
-            <Button variant="outlined" color="inherit" startIcon={<ArrowBackIcon />} onClick={onBack}>
-              Quay lại
-            </Button>
+            <Tooltip title="Quay lại">
+              <IconButton size="small" sx={headBtnSx} onClick={onBack}><ArrowBackIcon fontSize="small" /></IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
       </Box>
@@ -107,6 +124,28 @@ export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Pr
               ),
             }}
           />
+          <Select
+            size="small" displayEmpty value={customer} onChange={(e) => setCustomer(e.target.value)}
+            sx={{ minWidth: 150 }} renderValue={(v) => (v ? `👤 ${v}` : 'Mọi khách hàng')}
+          >
+            <MenuItem value="">Mọi khách hàng</MenuItem>
+            {customers.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+          </Select>
+          <Select
+            size="small" multiple displayEmpty value={countries}
+            onChange={(e) => setCountries(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+            input={<OutlinedInput />}
+            renderValue={(sel) => (sel.length === 0 ? 'Mọi quốc gia' : `🌍 ${sel.length} quốc gia`)}
+            sx={{ minWidth: 150 }}
+          >
+            {countryOptions.length === 0 && <MenuItem disabled value="">— Chưa có dữ liệu quốc gia —</MenuItem>}
+            {countryOptions.map((c) => (
+              <MenuItem key={c} value={c}>
+                <Checkbox size="small" checked={countries.includes(c)} />
+                <ListItemText primary={ITIN_COUNTRY_LABEL[c] ?? c} />
+              </MenuItem>
+            ))}
+          </Select>
           <ListFilterBar
             dateRange={dateRange} onDateRange={setDateRange}
             from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
@@ -163,8 +202,13 @@ export function ItineraryHome({ onNew, onOpen, onImport, onLibrary, onBack }: Pr
                   {x.destination || x.title || '(Chưa đặt tên)'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {x.days}N{x.nights}Đ
+                  {x.days}N{x.nights}Đ{x.country ? ` · ${ITIN_COUNTRY_LABEL[x.country] ?? x.country}` : ''}
                 </Typography>
+                {x.customerName && (
+                  <Typography variant="caption" sx={{ display: 'block', color: '#0d7a6a', fontWeight: 600 }}>
+                    👤 {x.customerName}
+                  </Typography>
+                )}
                 {x.linkedQuoteId && (
                   <Box sx={{ mt: 0.5 }}>
                     <Chip
