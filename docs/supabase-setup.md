@@ -401,3 +401,38 @@ Run these checks with `VITE_AUTH_BACKEND=supabase` against a dev Supabase projec
 - [ ] **DEV password panel** — in a DEV build (`import.meta.env.DEV = true`), expand the password accordion and sign in with a test user. `sbSignInWithPassword` should authenticate and resolve `currentUser` from `profiles`.
 
 **Cross-device limitation (known, deferred):** PKCE stores the code-verifier in the browser that requested the link. Opening the magic-link email on a different device (e.g. phone → desktop) will fail with an exchange error. This is parity with the existing Firebase behaviour ("different device → re-enter email") and is tracked for a post-cutover UX improvement.
+
+---
+
+## Phase 4 — Store/component wiring + realtime (2026-06-20)
+
+The data layer now follows the **same `VITE_AUTH_BACKEND` flag** as auth. One flag flips both — this closes the Phase-3 gotcha where the Supabase flag swapped auth only and left every Firestore read/write denied.
+
+### The data-gateway selector
+
+`src/lib/dataBackend.ts` is a flag-gated barrel that re-exports all **75 data `fb*` functions** (plus the two pure helpers `generateQuoteCode`/`dmChatId`) under their **same names**, choosing the `sb*` implementation when `VITE_AUTH_BACKEND === 'supabase'` and the `fb*` implementation otherwise (selector mirrors `src/auth/backend.ts`). Each export casts the Supabase side to the Firebase type (`sb.sbX as typeof fb.fbX`), which collapses the conditional to the production signature and **fails typecheck if any `sb*` signature diverges** from its `fb*` twin.
+
+All **37 non-test consumers** (18 stores + 16 components + 3 lib modules: `assistant/tools.ts`, `audit.ts`, `notifications.ts`) import from `@/lib/dataBackend` instead of `@/lib/firebase` — import path only; call sites are unchanged. After Phase 4, no non-test source outside `firebase.ts`/`firebaseBackend.ts` imports the Firestore gateway directly.
+
+### Realtime ships inside the gateway
+
+There is **no separate realtime wiring**. The `sb*` subscribe functions already implement Supabase Realtime (Postgres Changes via `subscribeTable` in `src/lib/supabase/helpers.ts`, built in Phase 1/1.5). Flipping the import activates it; the shredded child tables stay reassembled-on-open exactly as today.
+
+### Test infrastructure
+
+The barrel eagerly re-exports the entire gateway surface at module load, so any test that mocks `@/lib/firebase` must expose every name. `src/test/firebaseStub.ts` was completed to the full surface (added the chat / notif-thread / fx / quote-status / dmc-link functions + `dmChatId`); the one inline firebase mock (`assistant/tools.test.ts`) now spreads the stub. `vitest.config.ts` gained dummy `VITE_FIREBASE_*` defines so `dataBackend.test.ts` can import the real `firebase.ts`. Store/component tests otherwise required **no changes** — with the flag unset (test default) the barrel re-exports the mocked Firebase refs.
+
+### Production stays on Firebase
+
+`VITE_AUTH_BACKEND` is unset in prod, so the barrel selects `fb*` and the app runs on Firestore exactly as before. **Do not flip `VITE_AUTH_BACKEND=supabase` in production** until Phase 5 (Worker JWT) and Phase 6 ETL ship. (See also the Phase-4 hotfix: `src/lib/supabase.ts` no longer throws at module load when Supabase is dormant — it only hard-fails when Supabase is the active backend — because the gateway is imported eagerly at startup.)
+
+### Manual browser smoke (deferred to pre-cutover)
+
+The function-level gateway + realtime are covered by the integration suite (`npm run test:integration`, 116 tests against the local stack). An end-to-end browser smoke under the flag still needs the local Supabase stack + a seeded `@viettours.com.vn` profile + a DEV build:
+
+- [ ] `VITE_AUTH_BACKEND=supabase npm run dev`; sign in via the DEV password panel with a seeded `@viettours.com.vn` user → `currentUser` resolves.
+- [ ] A synced list (NCC suppliers / customers) loads from Postgres — previously empty/denied under the flag.
+- [ ] Create/edit a record, reload → it persists.
+- [ ] **Realtime:** create a supplier in a second tab → it appears in the first without reload.
+- [ ] Open a quote, save, reopen → reassembles correctly (`save_quote_state` RPC + `assemble*`/`decompose*`).
+- [ ] Flag off (`npm run dev`) → behaves exactly as today on Firebase.
