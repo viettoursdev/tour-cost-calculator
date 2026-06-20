@@ -133,13 +133,33 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     else await import('@/lib/exports/exportItineraryExecutionDocx').then((m) => m.exportItineraryExecutionDocx(withCode, menu, restaurants));
   };
 
-  const addFlight = () => setIt((p) => ({
-    ...p,
-    flights: [...p.flights, { id: 'f' + Date.now(), group: 'Nhóm', leg: '', flightNo: '', dep: '', arr: '' }],
-  }));
+  const groupOf = (f: Flight) => f.group?.trim() || 'Nhóm 1';
+  const newFlight = (group: string): Flight => ({ id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), group, leg: '', flightNo: '', dep: '', arr: '' });
+  const addFlightToGroup = (group: string) => setIt((p) => ({ ...p, flights: [...p.flights, newFlight(group)] }));
+  const addGroup = () => setIt((p) => {
+    const n = new Set(p.flights.map(groupOf)).size + 1;
+    return { ...p, flights: [...p.flights, newFlight(`Nhóm ${n}`)] };
+  });
+  const renameGroup = (oldName: string, newName: string) =>
+    setIt((p) => ({ ...p, flights: p.flights.map((f) => (groupOf(f) === oldName ? { ...f, group: newName } : f)) }));
+  const delGroup = (group: string) =>
+    setIt((p) => ({ ...p, flights: p.flights.filter((f) => groupOf(f) !== group) }));
   const delFlight = (id: string) => setIt((p) => ({ ...p, flights: p.flights.filter((f) => f.id !== id) }));
   const updFlight = (id: string, patch: Partial<Flight>) =>
     setIt((p) => ({ ...p, flights: p.flights.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
+  // Gom chuyến bay theo nhóm/booking (tên nhóm đặt 1 lần cho cả nhóm).
+  const flightGroups = useMemo(() => {
+    const order: string[] = [];
+    const map = new Map<string, Flight[]>();
+    it.flights.forEach((f) => {
+      const g = f.group?.trim() || 'Nhóm 1';
+      if (!map.has(g)) { map.set(g, []); order.push(g); }
+      map.get(g)!.push(f);
+    });
+    return order.map((g) => ({ group: g, flights: map.get(g)! }));
+  }, [it.flights]);
+  // Ô nhập compact cho bảng chuyến bay.
+  const flx = { '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 }, '& .MuiOutlinedInput-input': { py: 0.5 } } as const;
 
   const doParseFlights = () => {
     const parsed = parseFlights(flightPaste);
@@ -592,8 +612,8 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
         <Paper sx={{ p: 3, mb: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="subtitle1" fontWeight={800}>✈️ Thông tin chuyến bay</Typography>
-            <Button size="small" startIcon={<AddIcon />} onClick={addFlight} variant="outlined">
-              Thêm chuyến
+            <Button size="small" startIcon={<AddIcon />} onClick={addGroup} variant="outlined">
+              Thêm nhóm
             </Button>
           </Stack>
 
@@ -626,42 +646,50 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             </Stack>
           </Paper>
 
-          <Stack spacing={1}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 0.9fr 0.8fr 0.8fr 0.8fr 0.8fr 36px', gap: 1, px: 0.25 }}>
-              {['Nhóm', 'Chặng', 'Số hiệu', 'Sân bay đi', 'Giờ bay', 'Sân bay đến', 'Giờ đáp', ''].map((h, i) => (
-                <Typography key={i} variant="caption" fontWeight={700} color="text.secondary">{h}</Typography>
-              ))}
-            </Box>
-            {it.flights.map((f) => (
-              <Box key={f.id} sx={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 0.9fr 0.8fr 0.8fr 0.8fr 0.8fr 36px', gap: 1, alignItems: 'center' }}>
-                <TextField size="small" value={f.group}
-                  onChange={(e) => updFlight(f.id, { group: e.target.value })}
-                  placeholder="Nhóm" />
-                <TextField size="small" value={f.leg}
-                  onChange={(e) => updFlight(f.id, { leg: e.target.value })}
-                  placeholder="Đi · Ngày 1" />
-                <TextField size="small" value={f.flightNo}
-                  onChange={(e) => updFlight(f.id, { flightNo: e.target.value })}
-                  placeholder="CA904" />
-                <TextField size="small" value={flightDep(f).airport}
-                  onChange={(e) => updFlight(f.id, { depAirport: e.target.value.toUpperCase() })}
-                  placeholder="TSN" />
-                <TextField size="small" value={flightDep(f).time}
-                  onChange={(e) => updFlight(f.id, { depTime: e.target.value })}
-                  placeholder="05:40"
-                  InputProps={flightDep(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightDep(f).offset}</Typography> } : undefined} />
-                <TextField size="small" value={flightArr(f).airport}
-                  onChange={(e) => updFlight(f.id, { arrAirport: e.target.value.toUpperCase() })}
-                  placeholder="PEK" />
-                <TextField size="small" value={flightArr(f).time}
-                  onChange={(e) => updFlight(f.id, { arrTime: e.target.value })}
-                  placeholder="11:35"
-                  InputProps={flightArr(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightArr(f).offset}</Typography> } : undefined} />
-                <IconButton size="small" color="error" onClick={() => delFlight(f.id)}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            ))}
+          <Stack spacing={1.5}>
+            {flightGroups.map((g) => {
+              const COLS = '1.3fr 0.9fr 1fr 0.7fr 1fr 0.7fr 32px';
+              return (
+                <Box key={g.flights[0].id} sx={{ border: '1px solid rgba(41,128,185,0.2)', borderRadius: 1.5, p: 1, bgcolor: 'rgba(41,128,185,0.03)' }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+                    <Box component="span" sx={{ fontSize: 14 }}>🧳</Box>
+                    <TextField size="small" value={g.group} sx={{ flex: 1, maxWidth: 320, ...flx, '& .MuiOutlinedInput-input': { fontWeight: 700, color: '#2980b9' } }}
+                      onChange={(e) => renameGroup(g.group, e.target.value)} placeholder="Tên nhóm / booking" />
+                    <Button size="small" startIcon={<AddIcon />} onClick={() => addFlightToGroup(g.group)} sx={{ fontSize: 12, color: '#2980b9' }}>chặng</Button>
+                    <Tooltip title="Xoá nhóm này">
+                      <IconButton size="small" color="error" onClick={() => delGroup(g.group)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                    </Tooltip>
+                  </Stack>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: COLS, gap: 0.75, px: 0.25, mb: 0.25 }}>
+                    {['Chặng', 'Số hiệu', 'Sân bay đi', 'Giờ bay', 'Sân bay đến', 'Giờ đáp', ''].map((h, i) => (
+                      <Typography key={i} variant="caption" fontWeight={700} color="text.secondary">{h}</Typography>
+                    ))}
+                  </Box>
+                  <Stack spacing={0.6}>
+                    {g.flights.map((f) => (
+                      <Box key={f.id} sx={{ display: 'grid', gridTemplateColumns: COLS, gap: 0.75, alignItems: 'center' }}>
+                        <TextField size="small" sx={flx} value={f.leg} onChange={(e) => updFlight(f.id, { leg: e.target.value })} placeholder="Đi · Ngày 1" />
+                        <TextField size="small" sx={flx} value={f.flightNo} onChange={(e) => updFlight(f.id, { flightNo: e.target.value })} placeholder="CA904" />
+                        <TextField size="small" sx={flx} value={flightDep(f).airport} onChange={(e) => updFlight(f.id, { depAirport: e.target.value.toUpperCase() })} placeholder="TSN" />
+                        <TextField size="small" sx={flx} value={flightDep(f).time} onChange={(e) => updFlight(f.id, { depTime: e.target.value })} placeholder="05:40"
+                          InputProps={flightDep(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightDep(f).offset}</Typography> } : undefined} />
+                        <TextField size="small" sx={flx} value={flightArr(f).airport} onChange={(e) => updFlight(f.id, { arrAirport: e.target.value.toUpperCase() })} placeholder="PEK" />
+                        <TextField size="small" sx={flx} value={flightArr(f).time} onChange={(e) => updFlight(f.id, { arrTime: e.target.value })} placeholder="11:35"
+                          InputProps={flightArr(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightArr(f).offset}</Typography> } : undefined} />
+                        <IconButton size="small" color="error" onClick={() => delFlight(f.id)} sx={{ p: 0.25 }}>
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              );
+            })}
+            {flightGroups.length === 0 && (
+              <Typography variant="body2" color="text.disabled" sx={{ textAlign: 'center', py: 2 }}>
+                Chưa có chuyến bay — bấm "Thêm nhóm" hoặc dán code/ảnh để AI nhận diện.
+              </Typography>
+            )}
           </Stack>
         </Paper>
 
@@ -686,11 +714,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             </Stack>
             <TextField size="small" type="date" label="Ngày khởi hành" InputLabelProps={{ shrink: true }}
               value={it.startDate ?? ''} onChange={(e) => fillDates(e.target.value)}
-              sx={{ width: 168 }} title="Chọn ngày khởi hành → tự điền ngày cho từng Ngày" />
-            <AiButton onClick={() => setAiSchedOpen(true)}>
-              AI lịch trình
-            </AiButton>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
+              sx={{ width: 150, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+              title="Chọn ngày khởi hành → tự điền ngày cho từng Ngày" />
+            <AiButton size="small" onClick={() => setAiSchedOpen(true)}>AI lịch trình</AiButton>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={addDay}
               sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
               Thêm ngày
             </Button>
