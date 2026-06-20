@@ -2,10 +2,10 @@
 export type SortMode = 'oldest' | 'newest' | 'az' | 'za';
 
 export const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'oldest', label: '⬆️ Nhập trước → sau' },
-  { value: 'newest', label: '⬇️ Mới nhập nhất' },
-  { value: 'az', label: '🔤 Tên A → Z' },
-  { value: 'za', label: '🔤 Tên Z → A' },
+  { value: 'oldest', label: 'Nhập trước → sau' },
+  { value: 'newest', label: 'Mới nhập nhất' },
+  { value: 'az', label: 'Tên A → Z' },
+  { value: 'za', label: 'Tên Z → A' },
 ];
 
 /** Sort by entry order (createdAt) or name. Returns a new array. */

@@ -26,6 +26,8 @@ import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
+import { iconValue } from '@/components/common/iconValue';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 
 type TemplateFilter = 'all' | Template;
 
@@ -440,7 +442,7 @@ export function QuoteHistoryView() {
         )}
         <Select
           size="small" displayEmpty value={customer} onChange={(e) => setCustomer(e.target.value)}
-          sx={{ minWidth: 150, ...filterSelectSx }} renderValue={(v) => (v ? `👤 ${v}` : 'Mọi khách hàng')}
+          sx={{ minWidth: 150, ...filterSelectSx }} renderValue={(v) => (v ? iconValue(<PersonOutlineIcon />, String(v)) : 'Mọi khách hàng')}
         >
           <MenuItem value="">Mọi khách hàng</MenuItem>
           {customerNames.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}

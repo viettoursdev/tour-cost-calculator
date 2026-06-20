@@ -23,6 +23,8 @@ import { toast } from '@/stores/toastStore';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
+import { iconValue } from '@/components/common/iconValue';
+import SwapVertOutlinedIcon from '@mui/icons-material/SwapVertOutlined';
 
 type FilterType = '' | 'company' | 'individual';
 type ModalState = { customer: Customer | null } | null;
@@ -156,6 +158,7 @@ export function CustomerView() {
           value={sort}
           onChange={(e) => setSort(e.target.value as SortMode)}
           sx={{ minWidth: 180, ...filterSelectSx }}
+          renderValue={(v) => iconValue(<SwapVertOutlinedIcon />, SORT_OPTIONS.find((o) => o.value === v)?.label ?? '')}
         >
           {SORT_OPTIONS.map((o) => (
             <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
