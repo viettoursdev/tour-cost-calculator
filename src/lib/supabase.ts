@@ -3394,12 +3394,14 @@ export async function sbEnsureChat(chat: Chat, client: SupabaseClient = sb): Pro
       if (memErr) throw new Error('sbEnsureChat members: ' + memErr.message);
     }
   } else if (chat.isGroup) {
-    // Group re-ensure: merge new members; update title if needed (mirror fb*: chat.title || ex.title)
+    // Group re-ensure: merge new members; update title only when it actually changes (mirrors fbEnsureChat)
     const newTitle = chat.title || (existing.title as string) || null;
-    const { error: upErr } = await client.from('chats')
-      .update({ title: newTitle })
-      .eq('id', chat.id);
-    if (upErr) throw new Error('sbEnsureChat update title: ' + upErr.message);
+    if (newTitle !== (existing.title ?? null)) {
+      const { error: upErr } = await client.from('chats')
+        .update({ title: newTitle })
+        .eq('id', chat.id);
+      if (upErr) throw new Error('sbEnsureChat update title: ' + upErr.message);
+    }
 
     // Merge members (upsert by PK (chat_id, username); preserve last_read for existing members)
     const idMap = await usernamesToIds(client, chat.members);
@@ -3473,7 +3475,7 @@ export async function sbSendChatMessage(
   // Enforce 500-message cap: delete oldest messages beyond the cap
   const { data: countData } = await client
     .from('chat_messages')
-    .select('id', { count: 'exact' })
+    .select('id')
     .eq('chat_id', id)
     .order('sort_order', { ascending: false })
     .range(CHAT_MSG_CAP, CHAT_MSG_CAP + 999);
