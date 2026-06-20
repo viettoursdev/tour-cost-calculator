@@ -3152,6 +3152,337 @@ export async function sbUpdateDMCCollaborators(
   return sbUpdateCollaborators(id, cloudId, collaborators, client);
 }
 
+// ── Chat gateway (Phase 1.5 Task 7) ──────────────────────────────────────────
+// Mirrors firebase.ts:661–753 fbSubscribeChats/fbSubscribeChat/fbEnsureChat/fbSendChatMessage
+// Tables: chats (text PK), chat_members (chat_id, username), chat_messages (uuid PK)
+
+import type { Chat, ChatMessage } from '@/types/chat';
+
+const CHAT_MSG_CAP = 500;
+
+/** ID for a 1-1 DM (stable, sorted). Mirrors firebase.ts:665 dmChatId. */
+export const dmChatId = (a: string, b: string): string => 'dm_' + [a, b].sort().join('__');
+
+// Assemble a Chat value from db rows (used by both subscribe fns).
+function rowToChat(
+  chatRow: Record<string, unknown>,
+  members: string[],
+  reads: Record<string, string>,
+  messages: ChatMessage[],
+): Chat {
+  return {
+    id: chatRow.id as string,
+    isGroup: (chatRow.is_group as boolean) ?? false,
+    title: (chatRow.title as string) ?? undefined,
+    createdBy: (chatRow.created_by_name as string) ?? '',
+    createdAt: chatRow.created_at ? new Date(chatRow.created_at as string).toISOString() : '',
+    lastAt: chatRow.last_at ? new Date(chatRow.last_at as string).toISOString() : undefined,
+    lastText: (chatRow.last_text as string) ?? undefined,
+    lastByName: (chatRow.last_by_name as string) ?? undefined,
+    members,
+    reads: Object.keys(reads).length ? reads : undefined,
+    messages,
+  };
+}
+
+// Assemble a ChatMessage from a chat_messages row.
+function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
+  return {
+    id: (r.legacy_id as string) || (r.id as string),
+    by: r.by_username as string,
+    byName: r.by_name as string,
+    at: r.at ? new Date(r.at as string).toISOString() : '',
+    text: (r.text as string) ?? undefined,
+    file: (r.file as ChatMessage['file']) ?? undefined,
+    replyTo: (r.reply_to as ChatMessage['replyTo']) ?? undefined,
+    editedAt: r.edited_at ? new Date(r.edited_at as string).toISOString() : undefined,
+    deleted: (r.deleted as boolean) ?? undefined,
+    reactions: (r.reactions as ChatMessage['reactions']) ?? undefined,
+  };
+}
+
+/**
+ * Assemble a single chat with its messages from the DB.
+ * Used by sbSubscribeChat and internally.
+ */
+async function assembleChat(
+  client: SupabaseClient,
+  chatId: string,
+): Promise<Chat | null> {
+  const { data: chatRow, error: cErr } = await client
+    .from('chats')
+    .select('*')
+    .eq('id', chatId)
+    .maybeSingle();
+  if (cErr) throw new Error('assembleChat chats: ' + cErr.message);
+  if (!chatRow) return null;
+
+  const [
+    { data: memberRows, error: mErr },
+    { data: msgRows, error: msgErr },
+  ] = await Promise.all([
+    client.from('chat_members').select('username, last_read').eq('chat_id', chatId),
+    client.from('chat_messages')
+      .select('id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions')
+      .eq('chat_id', chatId)
+      .order('sort_order', { ascending: true }),
+  ]);
+  if (mErr) throw new Error('assembleChat members: ' + mErr.message);
+  if (msgErr) throw new Error('assembleChat messages: ' + msgErr.message);
+
+  const members = (memberRows ?? []).map((r) => r.username as string).filter(Boolean);
+  const reads: Record<string, string> = {};
+  for (const r of memberRows ?? []) {
+    if (r.last_read) reads[r.username as string] = new Date(r.last_read as string).toISOString();
+  }
+  const messages = (msgRows ?? []).map((r) => rowToChatMessage(r as unknown as Record<string, unknown>));
+
+  return rowToChat(chatRow as unknown as Record<string, unknown>, members, reads, messages);
+}
+
+/**
+ * Assemble the chat list for a user.
+ * Used by sbSubscribeChats.
+ * Returns chats where the user is a member, newest-active first, messages=[].
+ */
+async function assembleChats(
+  client: SupabaseClient,
+  username: string,
+): Promise<Chat[]> {
+  // Find chats this user belongs to
+  const { data: memberOf, error: mErr } = await client
+    .from('chat_members')
+    .select('chat_id')
+    .eq('username', username);
+  if (mErr) throw new Error('assembleChats members: ' + mErr.message);
+
+  const chatIds = (memberOf ?? []).map((r) => r.chat_id as string).filter(Boolean);
+  if (!chatIds.length) return [];
+
+  const [
+    { data: chatRows, error: cErr },
+    { data: allMembers, error: amErr },
+  ] = await Promise.all([
+    client.from('chats').select('*').in('id', chatIds),
+    client.from('chat_members').select('chat_id, username, last_read').in('chat_id', chatIds),
+  ]);
+  if (cErr) throw new Error('assembleChats chats: ' + cErr.message);
+  if (amErr) throw new Error('assembleChats allMembers: ' + amErr.message);
+
+  // Group members and reads by chat_id
+  const membersByChat = new Map<string, string[]>();
+  const readsByChat = new Map<string, Record<string, string>>();
+  for (const r of allMembers ?? []) {
+    const cid = r.chat_id as string;
+    const arr = membersByChat.get(cid) ?? [];
+    arr.push(r.username as string);
+    membersByChat.set(cid, arr);
+    if (r.last_read) {
+      const reads = readsByChat.get(cid) ?? {};
+      reads[r.username as string] = new Date(r.last_read as string).toISOString();
+      readsByChat.set(cid, reads);
+    }
+  }
+
+  const chats = (chatRows ?? []).map((r) => {
+    const row = r as unknown as Record<string, unknown>;
+    return rowToChat(
+      row,
+      membersByChat.get(row.id as string) ?? [],
+      readsByChat.get(row.id as string) ?? {},
+      [], // messages not loaded in list view (matches fbSubscribeChats which stores messages in the doc but we skip here)
+    );
+  });
+
+  // Sort newest-active first by lastAt ?? createdAt (mirrors firebase.ts:672)
+  chats.sort((a, b) =>
+    (b.lastAt ?? b.createdAt).localeCompare(a.lastAt ?? a.createdAt),
+  );
+  return chats;
+}
+
+/**
+ * Realtime subscribe to all chats where `username` is a member.
+ * Mirrors fbSubscribeChats (firebase.ts:668).
+ * Messages are empty in the list view (only loaded in sbSubscribeChat).
+ */
+export function sbSubscribeChats(
+  username: string,
+  cb: (list: Chat[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  let active = true;
+  const reload = () =>
+    assembleChats(client, username)
+      .then((v) => { if (active) cb(v); })
+      .catch((e) => { console.warn('sbSubscribeChats load error:', (e as Error).message); });
+
+  reload();
+
+  const channelId = `chat_list:${username}:${Math.random().toString(36).slice(2)}`;
+  const channel = client
+    .channel(channelId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members' }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => reload())
+    .subscribe();
+
+  return () => { active = false; client.removeChannel(channel); };
+}
+
+/**
+ * Realtime subscribe to a single chat (with its messages).
+ * Mirrors fbSubscribeChat (firebase.ts:677).
+ */
+export function sbSubscribeChat(
+  id: string,
+  cb: (chat: Chat | null) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  let active = true;
+  const reload = () =>
+    assembleChat(client, id)
+      .then((v) => { if (active) cb(v); })
+      .catch((e) => { console.warn('sbSubscribeChat load error:', (e as Error).message); });
+
+  reload();
+
+  const channelId = `chat:${id}:${Math.random().toString(36).slice(2)}`;
+  const channel = client
+    .channel(channelId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${id}` }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members', filter: `chat_id=eq.${id}` }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${id}` }, () => reload())
+    .subscribe();
+
+  return () => { active = false; client.removeChannel(channel); };
+}
+
+/**
+ * Create a chat if not yet present, or merge members for group chats.
+ * Mirrors fbEnsureChat (firebase.ts:682).
+ * - DM (isGroup=false): if exists, no-op (members are fixed by PK).
+ * - Group (isGroup=true): if exists, merge in new members; preserve existing title.
+ * Resolves username → user_id for created_by and each member.
+ */
+export async function sbEnsureChat(chat: Chat, client: SupabaseClient = sb): Promise<void> {
+  // Check existing
+  const { data: existing } = await client.from('chats').select('id, title, is_group').eq('id', chat.id).maybeSingle();
+
+  if (!existing) {
+    // Insert the chats row
+    const allUsernames = [chat.createdBy, ...chat.members];
+    const idMap = await usernamesToIds(client, allUsernames);
+    const { error: insErr } = await client.from('chats').insert({
+      id: chat.id,
+      is_group: chat.isGroup ?? false,
+      title: chat.title ?? null,
+      created_by: idMap.get(chat.createdBy) ?? null,
+      created_by_name: chat.createdBy,
+      created_at: chat.createdAt,
+    });
+    if (insErr) throw new Error('sbEnsureChat insert: ' + insErr.message);
+
+    // Insert all members
+    const memberRows = chat.members.map((uname) => ({
+      chat_id: chat.id,
+      user_id: idMap.get(uname) ?? null,
+      username: uname,
+    }));
+    if (memberRows.length) {
+      const { error: memErr } = await client.from('chat_members').insert(memberRows);
+      if (memErr) throw new Error('sbEnsureChat members: ' + memErr.message);
+    }
+  } else if (chat.isGroup) {
+    // Group re-ensure: merge new members; update title if needed (mirror fb*: chat.title || ex.title)
+    const newTitle = chat.title || (existing.title as string) || null;
+    const { error: upErr } = await client.from('chats')
+      .update({ title: newTitle })
+      .eq('id', chat.id);
+    if (upErr) throw new Error('sbEnsureChat update title: ' + upErr.message);
+
+    // Merge members (upsert by PK (chat_id, username); preserve last_read for existing members)
+    const idMap = await usernamesToIds(client, chat.members);
+    const memberRows = chat.members.map((uname) => ({
+      chat_id: chat.id,
+      user_id: idMap.get(uname) ?? null,
+      username: uname,
+    }));
+    if (memberRows.length) {
+      const { error: memErr } = await client.from('chat_members')
+        .upsert(memberRows, { onConflict: 'chat_id,username', ignoreDuplicates: true });
+      if (memErr) throw new Error('sbEnsureChat merge members: ' + memErr.message);
+    }
+  }
+  // DM already exists → no-op (mirrors fb*)
+}
+
+/**
+ * Send a message to a chat.
+ * Mirrors fbSendChatMessage (firebase.ts:696):
+ * - Inserts into chat_messages (legacy_id=msg.id, by_username, file/reply_to jsonb, reactions)
+ * - Updates chats.last_at/last_text/last_by_name
+ * - Updates sender's chat_members.last_read = msg.at
+ * - Enforces CHAT_MSG_CAP (500) by deleting oldest messages when exceeded
+ */
+export async function sbSendChatMessage(
+  id: string,
+  msg: ChatMessage,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  // Guard: chat must exist (mirrors fb*: if (!snap.exists()) return)
+  const { data: chatExists } = await client.from('chats').select('id').eq('id', id).maybeSingle();
+  if (!chatExists) return;
+
+  // Resolve sender username → user_id
+  const idMap = await usernamesToIds(client, [msg.by]);
+
+  // Insert the message
+  const lastText = msg.text || (msg.file ? `📎 ${msg.file.name}` : '');
+  const { error: insErr } = await client.from('chat_messages').insert({
+    chat_id: id,
+    legacy_id: msg.id,
+    by_user_id: idMap.get(msg.by) ?? null,
+    by_username: msg.by,
+    by_name: msg.byName,
+    at: msg.at,
+    text: msg.text ?? null,
+    file: msg.file ?? null,
+    reply_to: msg.replyTo ?? null,
+    edited_at: msg.editedAt ?? null,
+    deleted: msg.deleted ?? false,
+    reactions: msg.reactions ?? {},
+  });
+  if (insErr) throw new Error('sbSendChatMessage insert: ' + insErr.message);
+
+  // Update chats.last_at/last_text/last_by_name
+  const { error: upErr } = await client.from('chats').update({
+    last_at: msg.at,
+    last_text: lastText,
+    last_by_name: msg.byName,
+  }).eq('id', id);
+  if (upErr) throw new Error('sbSendChatMessage update chats: ' + upErr.message);
+
+  // Update sender's chat_members.last_read
+  const { error: readErr } = await client.from('chat_members')
+    .update({ last_read: msg.at })
+    .eq('chat_id', id)
+    .eq('username', msg.by);
+  if (readErr) throw new Error('sbSendChatMessage update last_read: ' + readErr.message);
+
+  // Enforce 500-message cap: delete oldest messages beyond the cap
+  const { data: countData } = await client
+    .from('chat_messages')
+    .select('id', { count: 'exact' })
+    .eq('chat_id', id)
+    .order('sort_order', { ascending: false })
+    .range(CHAT_MSG_CAP, CHAT_MSG_CAP + 999);
+  const toDelete = (countData ?? []).map((r) => (r as unknown as Record<string, unknown>).id as string);
+  if (toDelete.length) {
+    await client.from('chat_messages').delete().in('id', toDelete);
+  }
+}
+
 // ── Phase 2 Task 7 — Quote cross-links + status ──────────────────────────────
 // Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
 // Parity: firebase.ts:405-413 (fbSetEntryLink), firebase.ts:462-473 (fbSetEntryStatus)
