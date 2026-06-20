@@ -26,6 +26,8 @@ import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useQuoteStore } from '@/stores/quoteStore';
+import { tagForContext } from '@/components/shell/guideSteps';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { LEGACY } from '@/theme';
 
@@ -55,6 +57,9 @@ export function AppShell() {
 
   const onboardKey = currentUser ? `vte_onboarded_${currentUser.u}` : '';
   const [onboardOpen, setOnboardOpen] = useState(false);
+  const [onboardContext, setOnboardContext] = useState<string | undefined>(undefined);
+  const tplForGuide = useQuoteStore((s) => s.draft.template);
+  const viewForGuide = useQuoteStore((s) => s.view);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [whatsNewEntries, setWhatsNewEntries] = useState<WhatsNewEntry[] | undefined>(undefined);
   const [unseenNew, setUnseenNew] = useState(0);
@@ -151,7 +156,12 @@ export function AppShell() {
                 </IconButton>
               </Tooltip>
               <Menu anchorEl={helpAnchor} open={!!helpAnchor} onClose={() => setHelpAnchor(null)}>
-                <MenuItem onClick={() => { setOnboardOpen(true); setHelpAnchor(null); }}>📖 Hướng dẫn nhanh</MenuItem>
+                <MenuItem onClick={() => { setOnboardContext(tagForContext(tplForGuide, viewForGuide)); setOnboardOpen(true); setHelpAnchor(null); }}>
+                  🧭 Hướng dẫn màn hình này
+                </MenuItem>
+                <MenuItem onClick={() => { setOnboardContext(undefined); setOnboardOpen(true); setHelpAnchor(null); }}>
+                  📚 Toàn bộ hướng dẫn
+                </MenuItem>
                 <MenuItem onClick={() => { openWhatsNew(); setHelpAnchor(null); }}>
                   ✨ Có gì mới{unseenNew > 0 ? ` (${unseenNew})` : ''}
                 </MenuItem>
@@ -192,7 +202,7 @@ export function AppShell() {
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
-      <OnboardingDialog open={onboardOpen} onClose={closeOnboard} />
+      <OnboardingDialog open={onboardOpen} onClose={closeOnboard} contextTag={onboardContext} />
       <WhatsNewDialog open={whatsNewOpen} onClose={closeWhatsNew} entries={whatsNewEntries} />
       <FilePreviewHost />
     </Box>
