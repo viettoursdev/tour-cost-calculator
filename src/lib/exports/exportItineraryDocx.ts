@@ -110,9 +110,11 @@ interface CellOpts {
   fill?: string;
   mt?: number; mb?: number; ml?: number; mr?: number;
   valign?: ITableCellOptions['verticalAlign'];
+  columnSpan?: number;
 }
 const cell = (ch: Paragraph | Paragraph[], o: CellOpts = {}): TableCell => new TableCell({
   children: Array.isArray(ch) ? ch : [ch],
+  columnSpan: o.columnSpan,
   width: o.width ? { size: o.width, type: WidthType.DXA } : undefined,
   shading: o.fill ? { fill: o.fill, type: ShadingType.CLEAR, color: 'auto' } : undefined,
   margins: {
@@ -181,18 +183,31 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
         before: 120, after: 50,
         border: { bottom: { style: BorderStyle.SINGLE, size: 5, color: TEAL, space: 2 } },
       }));
-    const fw = [1900, 2500, 1900, 2003, 2003];
-    const fhead = ['Đoàn', 'Chặng', 'Chuyến bay', 'Khởi hành', 'Hạ cánh'];
+    const fw = [1500, 2400, 3100, 3100];
+    const fwTotal = fw.reduce((a, b) => a + b, 0);
+    const fhead = ['Chặng', 'Chuyến bay', 'Khởi hành', 'Hạ cánh'];
+    const depCell = (f: typeof fl[number]) => flightDepStr(f) + (f.depDate ? ` (${f.depDate})` : '');
+    const arrCell = (f: typeof fl[number]) => flightArrStr(f) + (f.arrDate ? ` (${f.arrDate})` : '');
+    // Gom theo nhóm/booking, giữ thứ tự xuất hiện.
+    const order: string[] = [];
+    const gmap = new Map<string, typeof fl>();
+    fl.forEach((f) => { const g = f.group?.trim() || 'Nhóm 1'; if (!gmap.has(g)) { gmap.set(g, []); order.push(g); } gmap.get(g)!.push(f); });
     const rows: TableRow[] = [new TableRow({
       children: fhead.map((h, i) =>
         cell([P(tr(h, { size: 16, bold: true, color: WHITE }), { align: AlignmentType.CENTER, after: 0 })],
           { width: fw[i], fill: NAVY, mt: 30, mb: 30 })),
     })];
-    fl.forEach((f, ri) => rows.push(new TableRow({
-      children: [f.group, f.leg, f.flightNo, flightDepStr(f), flightArrStr(f)].map((v, ci) =>
-        cell([P(tr(v, { size: 16, bold: ci === 0, color: ci === 0 ? GRPC : INK }), { after: 0 })],
-          { width: fw[ci], fill: ri % 2 ? ZEBRA : WHITE, mt: 24, mb: 24 })),
-    })));
+    order.forEach((g) => {
+      rows.push(new TableRow({
+        children: [cell([P(tr(`🧳  ${g}`, { size: 16, bold: true, color: GRPC }), { after: 0 })],
+          { columnSpan: 4, width: fwTotal, fill: 'EAF3F1', mt: 22, mb: 22 })],
+      }));
+      gmap.get(g)!.forEach((f, ri) => rows.push(new TableRow({
+        children: [f.leg, f.flightNo, depCell(f), arrCell(f)].map((v, ci) =>
+          cell([P(tr(v, { size: 16, color: INK }), { after: 0 })],
+            { width: fw[ci], fill: ri % 2 ? ZEBRA : WHITE, mt: 24, mb: 24 })),
+      })));
+    });
     C.push(tbl(rows, fw));
     C.push(P(tr('', {}), { after: 40 }));
   }

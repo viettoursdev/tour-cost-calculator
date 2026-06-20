@@ -22,7 +22,7 @@ import {
 } from './constants';
 import { parseFlights } from './parseFlights';
 import { parseFlights as parseFlightsAI } from '@/lib/flightParse';
-import { flightDep, flightArr, normalizeFlight } from './flightFields';
+import { flightDep, flightArr, normalizeFlight, parseAirportCell } from './flightFields';
 import { SortableList } from './SortableList';
 import { AISettingsModal } from './AISettingsModal';
 import { ItineraryCheckDialog } from './ItineraryCheckDialog';
@@ -648,7 +648,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
 
           <Stack spacing={1.5}>
             {flightGroups.map((g) => {
-              const COLS = '1.3fr 0.9fr 1fr 0.7fr 1fr 0.7fr 32px';
+              const COLS = '0.6fr 0.9fr 0.9fr 0.8fr 0.9fr 0.8fr 32px';
               return (
                 <Box key={g.flights[0].id} sx={{ border: '1px solid rgba(41,128,185,0.2)', borderRadius: 1.5, p: 1, bgcolor: 'rgba(41,128,185,0.03)' }}>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
@@ -666,21 +666,40 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                     ))}
                   </Box>
                   <Stack spacing={0.6}>
-                    {g.flights.map((f) => (
+                    {g.flights.map((f) => {
+                      const arrDiff = !!f.arrDate && (f.arrDate !== f.depDate || flightArr(f).offset > 0);
+                      return (
                       <Box key={f.id} sx={{ display: 'grid', gridTemplateColumns: COLS, gap: 0.75, alignItems: 'center' }}>
                         <TextField size="small" sx={flx} value={f.leg} onChange={(e) => updFlight(f.id, { leg: e.target.value })} placeholder="Đi · Ngày 1" />
                         <TextField size="small" sx={flx} value={f.flightNo} onChange={(e) => updFlight(f.id, { flightNo: e.target.value })} placeholder="CA904" />
-                        <TextField size="small" sx={flx} value={flightDep(f).airport} onChange={(e) => updFlight(f.id, { depAirport: e.target.value.toUpperCase() })} placeholder="TSN" />
+                        <TextField size="small" sx={flx} value={flightDep(f).airport}
+                          onChange={(e) => updFlight(f.id, { depAirport: e.target.value.toUpperCase() })}
+                          onBlur={() => { const p = parseAirportCell(f.depAirport ?? ''); if (p.time || p.date) updFlight(f.id, { depAirport: p.airport, depTime: f.depTime || p.time, ...(p.offset ? { depDayOffset: p.offset } : {}), ...(p.date ? { depDate: p.date } : {}) }); }}
+                          placeholder="TSN" />
                         <TextField size="small" sx={flx} value={flightDep(f).time} onChange={(e) => updFlight(f.id, { depTime: e.target.value })} placeholder="05:40"
-                          InputProps={flightDep(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightDep(f).offset}</Typography> } : undefined} />
-                        <TextField size="small" sx={flx} value={flightArr(f).airport} onChange={(e) => updFlight(f.id, { arrAirport: e.target.value.toUpperCase() })} placeholder="PEK" />
+                          InputProps={{ endAdornment: (flightDep(f).offset > 0 || f.depDate) ? (
+                            <Stack direction="row" spacing={0.25} alignItems="center">
+                              {flightDep(f).offset > 0 && <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightDep(f).offset}</Typography>}
+                              {f.depDate && <Typography sx={{ fontSize: 10.5, color: 'rgba(15,58,74,0.45)', whiteSpace: 'nowrap' }}>{f.depDate}</Typography>}
+                            </Stack>
+                          ) : undefined }} />
+                        <TextField size="small" sx={flx} value={flightArr(f).airport}
+                          onChange={(e) => updFlight(f.id, { arrAirport: e.target.value.toUpperCase() })}
+                          onBlur={() => { const p = parseAirportCell(f.arrAirport ?? ''); if (p.time || p.date) updFlight(f.id, { arrAirport: p.airport, arrTime: f.arrTime || p.time, ...(p.offset ? { arrDayOffset: p.offset } : {}), ...(p.date ? { arrDate: p.date } : {}) }); }}
+                          placeholder="PEK" />
                         <TextField size="small" sx={flx} value={flightArr(f).time} onChange={(e) => updFlight(f.id, { arrTime: e.target.value })} placeholder="11:35"
-                          InputProps={flightArr(f).offset > 0 ? { endAdornment: <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightArr(f).offset}</Typography> } : undefined} />
+                          InputProps={{ endAdornment: (flightArr(f).offset > 0 || f.arrDate) ? (
+                            <Stack direction="row" spacing={0.25} alignItems="center">
+                              {flightArr(f).offset > 0 && <Typography component="sup" sx={{ color: '#dc3250', fontWeight: 800, fontSize: 11 }}>+{flightArr(f).offset}</Typography>}
+                              {f.arrDate && <Typography sx={{ fontSize: 10.5, fontWeight: arrDiff ? 700 : 400, color: arrDiff ? '#c2410c' : 'rgba(15,58,74,0.45)', whiteSpace: 'nowrap' }}>{f.arrDate}</Typography>}
+                            </Stack>
+                          ) : undefined }} />
                         <IconButton size="small" color="error" onClick={() => delFlight(f.id)} sx={{ p: 0.25 }}>
                           <DeleteOutlineIcon fontSize="small" />
                         </IconButton>
                       </Box>
-                    ))}
+                      );
+                    })}
                   </Stack>
                 </Box>
               );

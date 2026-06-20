@@ -20,6 +20,22 @@ export function splitAirportTime(s: string): AirportTime {
   return { airport: str, time: '', offset: 0 };
 }
 
+/**
+ * Tách ô sân bay gộp kiểu "HAN 23:20 (26.06)" / "NRT 06:30+1 (27.06)" thành
+ * { airport, time, offset, date } để chuẩn hoá khi AI/người dùng dán cả cụm.
+ */
+export function parseAirportCell(s: string): AirportTime & { date: string } {
+  let str = (s || '').trim();
+  let date = '';
+  const dm = str.match(/\(?\b(\d{1,2})[./-](\d{1,2})\b\)?/);
+  // Chỉ lấy ngày nếu nằm trong ngoặc (tránh nhầm với giờ).
+  const paren = str.match(/\((\d{1,2})[./-](\d{1,2})\)/);
+  if (paren) { date = `${paren[1].padStart(2, '0')}.${paren[2].padStart(2, '0')}`; str = str.replace(paren[0], '').trim(); }
+  else if (dm && /\(/.test(str)) { date = `${dm[1].padStart(2, '0')}.${dm[2].padStart(2, '0')}`; str = str.replace(dm[0], '').trim(); }
+  const at = splitAirportTime(str);
+  return { ...at, date };
+}
+
 export function flightDep(f: Flight): AirportTime {
   if (f.depAirport != null || f.depTime != null) return { airport: f.depAirport ?? '', time: f.depTime ?? '', offset: f.depDayOffset ?? 0 };
   return splitAirportTime(f.dep ?? '');

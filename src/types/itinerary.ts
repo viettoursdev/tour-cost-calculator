@@ -34,6 +34,8 @@ export interface Flight {
   arrTime?: string;     // Giờ đáp (vd 11:35)
   depDayOffset?: number; // +N ngày trên giờ bay (qua đêm)
   arrDayOffset?: number; // +N ngày trên giờ đáp
+  depDate?: string;      // Ngày bay đi dạng "dd.mm" (tuỳ chọn)
+  arrDate?: string;      // Ngày bay đến dạng "dd.mm" — note khi khác ngày đi
 }
 
 export type ItineraryType = 'NN' | 'ND';
