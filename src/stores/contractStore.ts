@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeContracts, fbPushContracts } from '@/lib/firebase';
+import { fbSubscribeContracts, fbPushContracts } from '@/lib/dataBackend';
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import type { Contract, ContractPayment } from '@/types';

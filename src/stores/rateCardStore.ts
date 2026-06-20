@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
-import { fbPullMasterRC, fbPushMasterRC, fbSubscribeMasterRC } from '@/lib/firebase';
+import { fbPullMasterRC, fbPushMasterRC, fbSubscribeMasterRC } from '@/lib/dataBackend';
 import { migrateLegacyRateCard } from '@/lib/storage';
 import { debounce } from '@/lib/util';
 import { useAuthStore } from './authStore';

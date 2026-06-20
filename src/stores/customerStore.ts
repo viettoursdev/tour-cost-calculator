@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeCustomers, fbPushCustomers } from '@/lib/firebase';
+import { fbSubscribeCustomers, fbPushCustomers } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { Customer, CustomerInteraction, CustomerInteractionType } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

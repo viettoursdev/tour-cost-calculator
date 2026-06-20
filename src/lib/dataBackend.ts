@@ -8,6 +8,11 @@ import * as sb from './supabase';
 
 const sbActive = import.meta.env.VITE_AUTH_BACKEND === 'supabase';
 
+// Pure, backend-agnostic helpers exported identically by both gateways. Re-exported
+// here so consumers that import them alongside fb* functions keep a single import.
+export const generateQuoteCode = sbActive ? (sb.generateQuoteCode as typeof fb.generateQuoteCode) : fb.generateQuoteCode;
+export const dmChatId = sbActive ? (sb.dmChatId as typeof fb.dmChatId) : fb.dmChatId;
+
 export const fbAddThreadComment = sbActive ? (sb.sbAddThreadComment as typeof fb.fbAddThreadComment) : fb.fbAddThreadComment;
 export const fbBackfillPaymentIndex = sbActive ? (sb.sbBackfillPaymentIndex as typeof fb.fbBackfillPaymentIndex) : fb.fbBackfillPaymentIndex;
 export const fbBackfillWorkflowIndex = sbActive ? (sb.sbBackfillWorkflowIndex as typeof fb.fbBackfillWorkflowIndex) : fb.fbBackfillWorkflowIndex;

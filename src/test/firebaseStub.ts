@@ -92,6 +92,33 @@ export const fbPushPois = vi.fn(async () => {});
 export const fbSubscribeNccProducts = vi.fn(() => () => {});
 export const fbPushNccProducts = vi.fn(async () => {});
 
+// ── FX rates ──
+export const fbSubscribeFxRates = vi.fn(() => () => {});
+export const fbPushFxRates = vi.fn(async () => {});
+
+// ── Quote status / entry links ──
+export const fbSetQuoteStatus = vi.fn(async () => {});
+export const fbSetDMCQuoteStatus = vi.fn(async () => {});
+export const fbSetRegularEntryLink = vi.fn(async () => {});
+export const fbSetDMCEntryLink = vi.fn(async () => {});
+
+// ── Notification threads ──
+export const fbEnsureNotifThread = vi.fn(async () => 'stub-thread-id');
+export const fbSubscribeNotifThread = vi.fn(() => () => {});
+export const fbAddThreadComment = vi.fn(async () => {});
+export const fbSetThreadStatus = vi.fn(async () => {});
+export const fbSendNotificationMany = vi.fn(async () => {});
+
+// ── Chat ──
+export const dmChatId = vi.fn((a: string, b: string) => 'dm_' + [a, b].sort().join('__'));
+export const fbSubscribeChats = vi.fn(() => () => {});
+export const fbEnsureChat = vi.fn(async () => 'stub-chat-id');
+export const fbSendChatMessage = vi.fn(async () => {});
+export const fbMarkChatRead = vi.fn(async () => {});
+export const fbEditChatMessage = vi.fn(async () => {});
+export const fbDeleteChatMessage = vi.fn(async () => {});
+export const fbToggleChatReaction = vi.fn(async () => {});
+
 // ── Auth ──
 export const auth = {};
 export const fbSendSignInLink = vi.fn(async (_email: string) => {});

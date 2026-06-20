@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeVisaProjects, fbPushVisaProjects } from '@/lib/firebase';
+import { fbSubscribeVisaProjects, fbPushVisaProjects } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { VisaProjectDoc } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

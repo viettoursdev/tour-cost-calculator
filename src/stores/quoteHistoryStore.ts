@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeQuoteHistory, fbSubscribeDMCQuoteHistory } from '@/lib/firebase';
+import { fbSubscribeQuoteHistory, fbSubscribeDMCQuoteHistory } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { CloudQuoteEntry, Template, User } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

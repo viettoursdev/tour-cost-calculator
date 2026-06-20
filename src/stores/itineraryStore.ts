@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
   fbDeleteItinerary, fbGetItinerary, fbSaveItinerary, fbSubscribeItineraries,
-} from '@/lib/firebase';
+} from '@/lib/dataBackend';
 import type { Itinerary, ItineraryIndexEntry } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 

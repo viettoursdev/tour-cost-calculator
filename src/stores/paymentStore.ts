@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSaveTourPayments, fbSubscribeTourPayments } from '@/lib/firebase';
+import { fbSaveTourPayments, fbSubscribeTourPayments } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { CustomCostItem, PaymentRecord, TourPayments } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

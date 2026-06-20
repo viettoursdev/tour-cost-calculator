@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeNccProducts, fbPushNccProducts } from '@/lib/firebase';
+import { fbSubscribeNccProducts, fbPushNccProducts } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { NccProduct } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

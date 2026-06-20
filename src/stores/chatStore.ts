@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fbSubscribeChats } from '@/lib/firebase';
+import { fbSubscribeChats } from '@/lib/dataBackend';
 import type { Chat } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 

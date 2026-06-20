@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {
   fbSubscribeNotifications, fbPushNotifications,
-} from '@/lib/firebase';
+} from '@/lib/dataBackend';
 import type { Notification } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 

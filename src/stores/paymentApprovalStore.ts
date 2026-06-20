@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fbSubscribePaymentApprovals } from '@/lib/firebase';
+import { fbSubscribePaymentApprovals } from '@/lib/dataBackend';
 import type { PaymentApprovalDoc } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 

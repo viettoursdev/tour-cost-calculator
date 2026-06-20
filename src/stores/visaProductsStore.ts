@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fbSaveVisaProducts, fbSubscribeVisaProducts } from '@/lib/firebase';
+import { fbSaveVisaProducts, fbSubscribeVisaProducts } from '@/lib/dataBackend';
 import { RATES_INIT } from '@/components/quote/constants';
 import type { VisaProduct, VisaProductVersion } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

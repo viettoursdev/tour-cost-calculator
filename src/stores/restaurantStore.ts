@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fbSaveRestaurants, fbSubscribeRestaurants } from '@/lib/firebase';
+import { fbSaveRestaurants, fbSubscribeRestaurants } from '@/lib/dataBackend';
 import type { Restaurant } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 

@@ -11,7 +11,7 @@ import {
   fbSetQuoteStatus, fbSetDMCQuoteStatus,
   fbPushFxRates,
   generateQuoteCode,
-} from '@/lib/firebase';
+} from '@/lib/dataBackend';
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
 import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/workflowConstants';

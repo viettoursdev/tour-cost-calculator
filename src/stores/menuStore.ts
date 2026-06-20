@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
   fbDeleteMenu, fbGetMenu, fbSaveMenu, fbSubscribeMenus,
-} from '@/lib/firebase';
+} from '@/lib/dataBackend';
 import type { Menu, MenuIndexEntry } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 

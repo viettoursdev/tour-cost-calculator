@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribePois, fbPushPois } from '@/lib/firebase';
+import { fbSubscribePois, fbPushPois } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { PoiEntry } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';

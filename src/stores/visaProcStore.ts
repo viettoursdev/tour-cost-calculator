@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
   fbDeleteVisaProc, fbGetVisaProc, fbSaveVisaProc, fbSubscribeVisaProcs,
-} from '@/lib/firebase';
+} from '@/lib/dataBackend';
 import type { VisaProcDoc, VisaProcIndexEntry } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 
