@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Box, Button, Chip, FormControlLabel, IconButton, MenuItem, Paper, Select, Stack, Switch, TextField, Typography,
+  Box, Button, Chip, FormControlLabel, IconButton, ListItemIcon, ListItemText, Menu as MuiMenu, MenuItem, Paper, Select, Stack, Switch, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DescriptionIcon from '@mui/icons-material/Description';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SaveIcon from '@mui/icons-material/Save';
 import { useMenuStore } from '@/stores/menuStore';
 import { useRestaurantStore } from '@/stores/restaurantStore';
@@ -43,6 +45,7 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
   useUndoRedoShortcuts(undo, redo);
   const [saving, setSaving] = useState(false);
   const [includePrices, setIncludePrices] = useState(true);
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const restaurants = useRestaurantStore((s) => s.list);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const itins = useItineraryStore((s) => s.list);
@@ -162,18 +165,28 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
     }));
   };
 
+  // Nút icon trắng mờ trên thanh header (gọn như thanh báo giá).
+  const headBtnSx = {
+    color: '#fff', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 1.5,
+    '&:hover': { background: 'rgba(255,255,255,0.18)' },
+  } as const;
+  const headBtnOutlineSx = {
+    color: '#fff', textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)',
+    '&:hover': { borderColor: '#fff', background: 'rgba(255,255,255,0.14)' },
+  } as const;
+
   return (
     <Box sx={{ minHeight: '100%', bgcolor: '#f4fefa' }}>
-      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 3, py: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
-          <Box>
-            <Typography variant="h6" fontWeight={900}>🍽️ Trình tạo Thực đơn</Typography>
+      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 2.5, py: 1.25 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" fontWeight={900} noWrap>🍽️ Trình tạo Thực đơn</Typography>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
               Mã: <strong style={{ fontFamily: 'monospace' }}>{code}</strong>
               <span style={{ marginLeft: 8, opacity: 0.7 }}>· tự lưu</span>
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center">
             <FormControlLabel
               control={
                 <Switch
@@ -184,28 +197,28 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
                 />
               }
               label="Kèm giá"
-              sx={{ color: '#fff', mr: 0.5, '& .MuiFormControlLabel-label': { fontSize: 13, fontWeight: 600 } }}
+              sx={{ color: '#fff', mr: 0.25, '& .MuiFormControlLabel-label': { fontSize: 13, fontWeight: 600 } }}
             />
-            <Button color="inherit" variant="contained"
-              startIcon={<DescriptionIcon />}
-              onClick={() => void import('@/lib/exports/exportMenuDocx').then((m) => m.exportMenuDocx(it, code, includePrices))}
-              sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
-              Word
+            <Button size="small" variant="contained" startIcon={<SaveIcon />} onClick={() => void handleSave()} disabled={saving}
+              sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, '&:hover': { bgcolor: '#eef6f4' } }}>
+              {saving ? 'Đang lưu…' : 'Lưu'}
             </Button>
-            <Button color="inherit" variant="contained"
-              startIcon={<PictureAsPdfIcon />}
-              onClick={() => void import('@/lib/exports/exportMenuPDF').then((m) => m.exportMenuPDF(it, code, includePrices))}
-              sx={{ bgcolor: '#fff', color: '#c0392b' }}>
-              PDF
+            <Button size="small" variant="outlined" color="inherit" startIcon={<FileDownloadIcon />} endIcon={<ArrowDropDownIcon />}
+              onClick={(e) => setExportAnchor(e.currentTarget)} sx={headBtnOutlineSx}>
+              Xuất
             </Button>
-            <Button color="inherit" variant="outlined" startIcon={<SaveIcon />}
-              onClick={() => void handleSave()} disabled={saving}>
-              {saving ? '⏳ Lưu...' : 'Lưu'}
-            </Button>
+            <MuiMenu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)}>
+              <MenuItem onClick={() => { void import('@/lib/exports/exportMenuDocx').then((m) => m.exportMenuDocx(it, code, includePrices)); setExportAnchor(null); }}>
+                <ListItemIcon><DescriptionIcon fontSize="small" /></ListItemIcon><ListItemText>Xuất Word</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { void import('@/lib/exports/exportMenuPDF').then((m) => m.exportMenuPDF(it, code, includePrices)); setExportAnchor(null); }}>
+                <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon><ListItemText>Xuất PDF</ListItemText>
+              </MenuItem>
+            </MuiMenu>
             <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} color="#fff" />
-            <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onBack}>
-              Quay lại
-            </Button>
+            <Tooltip title="Quay lại">
+              <IconButton size="small" sx={headBtnSx} onClick={onBack}><ArrowBackIcon fontSize="small" /></IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
       </Box>

@@ -55,15 +55,16 @@ export function VisaApp({ onExit }: Props) {
 
   return (
     <Box sx={{ minHeight: '100%' }}>
-      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 3, pt: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
-          <Box>
-            <Typography variant="h6" fontWeight={900}>🛂 Quản lý Visa</Typography>
+      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 2.5, pt: 1.25 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" fontWeight={900} noWrap>🛂 Quản lý Visa</Typography>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
               Bảng giá visa &amp; hồ sơ thủ tục · đồng bộ Cloud
             </Typography>
           </Box>
-          <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onExit}>
+          <Button size="small" color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onExit}
+            sx={{ textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)' }}>
             Quay lại
           </Button>
         </Stack>

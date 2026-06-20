@@ -97,15 +97,16 @@ export function DocTranslateApp({ onExit }: Props) {
 
   return (
     <Box sx={{ minHeight: '100%' }}>
-      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 3, py: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
-          <Box>
-            <Typography variant="h6" fontWeight={900}>📑 Dịch hồ sơ (Việt → Anh)</Typography>
+      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 2.5, py: 1.25 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" fontWeight={900} noWrap>📑 Dịch hồ sơ (Việt → Anh)</Typography>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
               OCR scan + dịch sạch · Word/PDF
             </Typography>
           </Box>
-          <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onExit}>
+          <Button size="small" color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onExit}
+            sx={{ textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)' }}>
             Quay lại
           </Button>
         </Stack>

@@ -1,11 +1,16 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Autocomplete, Box, Button, IconButton, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Autocomplete, Box, Button, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import SaveIcon from '@mui/icons-material/Save';
 import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import ExploreIcon from '@mui/icons-material/Explore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode, nextItinSeqToday, dayLabel, vnDateToISO, weekdayVN } from './itinCode';
@@ -88,6 +93,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [checkOpen, setCheckOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [aiSchedOpen, setAiSchedOpen] = useState(false);
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const applyAISchedule = (days: Day[], mode: 'replace' | 'append') => setIt((p) => {
     const merged = mode === 'append' ? [...p.schedule, ...days] : days;
     return { ...p, schedule: merged.map((d, i) => ({ ...d, dayNum: i + 1 })) };
@@ -400,52 +406,59 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     }));
   };
 
+  // Nút icon trắng mờ trên thanh header (gọn như thanh báo giá).
+  const headBtnSx = {
+    color: '#fff', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 1.5,
+    '&:hover': { background: 'rgba(255,255,255,0.18)' },
+  } as const;
+  const headBtnOutlineSx = {
+    color: '#fff', textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)',
+    '&:hover': { borderColor: '#fff', background: 'rgba(255,255,255,0.14)' },
+  } as const;
+
   return (
     <Box sx={{ minHeight: '100%', bgcolor: '#f4fefa' }}>
-      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 3, py: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
-          <Box>
-            <Typography variant="h6" fontWeight={900}>🗺️ Trình tạo Chương trình tour</Typography>
+      <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 2.5, py: 1.25 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" fontWeight={900} noWrap>🗺️ Trình tạo Chương trình tour</Typography>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
               Mã: <strong style={{ fontFamily: 'monospace' }}>{code}</strong>
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <Button color="inherit" variant="outlined" startIcon={<SettingsIcon />}
-              onClick={(e) => { e.currentTarget.blur(); setAiSettingsOpen(true); }}>
-              AI
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Button size="small" variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}
+              sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, '&:hover': { bgcolor: '#eef6f4' } }}>
+              {saving ? 'Đang lưu…' : 'Lưu'}
             </Button>
-            <Button color="inherit" variant="outlined" startIcon={<SaveIcon />}
-              onClick={handleSave} disabled={saving}>
-              {saving ? 'Đang lưu...' : 'Lưu'}
+            <Tooltip title="Kiểm tra">
+              <IconButton size="small" sx={headBtnSx} onClick={() => setCheckOpen(true)}><CheckCircleOutlineIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Xem trước">
+              <IconButton size="small" sx={headBtnSx} onClick={() => setPreviewOpen(true)}><VisibilityOutlinedIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Button size="small" variant="outlined" color="inherit" startIcon={<FileDownloadIcon />} endIcon={<ArrowDropDownIcon />}
+              onClick={(e) => setExportAnchor(e.currentTarget)} sx={headBtnOutlineSx}>
+              Xuất
             </Button>
-            <Button color="inherit" variant="outlined" startIcon={<span>✅</span>}
-              onClick={() => setCheckOpen(true)}>
-              Kiểm tra
-            </Button>
-            <Button color="inherit" variant="outlined" startIcon={<span>👁</span>}
-              onClick={() => setPreviewOpen(true)}>
-              Xem trước
-            </Button>
-            <Button color="inherit" variant="contained"
-              startIcon={<DescriptionIcon />}
-              onClick={doExportWord}
-              sx={{ bgcolor: '#fff', color: '#0d7a6a' }}>
-              Xuất Word
-            </Button>
-            <Button color="inherit" variant="contained" startIcon={<span>🧭</span>}
-              onClick={() => void handleExec('pdf')}
-              sx={{ bgcolor: '#0f3a4a', color: '#fff' }}>
-              Execution PDF
-            </Button>
-            <Button color="inherit" variant="outlined" startIcon={<span>🧭</span>}
-              onClick={() => void handleExec('docx')}>
-              Execution Word
-            </Button>
+            <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)}>
+              <MenuItem onClick={() => { doExportWord(); setExportAnchor(null); }}>
+                <ListItemIcon><DescriptionIcon fontSize="small" /></ListItemIcon><ListItemText>Xuất Word</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { void handleExec('pdf'); setExportAnchor(null); }}>
+                <ListItemIcon><ExploreIcon fontSize="small" /></ListItemIcon><ListItemText>Execution PDF (HDV)</ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => { void handleExec('docx'); setExportAnchor(null); }}>
+                <ListItemIcon><ExploreIcon fontSize="small" /></ListItemIcon><ListItemText>Execution Word (HDV)</ListItemText>
+              </MenuItem>
+            </Menu>
+            <Tooltip title="Cài đặt AI">
+              <IconButton size="small" sx={headBtnSx} onClick={(e) => { e.currentTarget.blur(); setAiSettingsOpen(true); }}><SettingsIcon fontSize="small" /></IconButton>
+            </Tooltip>
             <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} color="#fff" />
-            <Button color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onBack}>
-              Quay lại
-            </Button>
+            <Tooltip title="Quay lại">
+              <IconButton size="small" sx={headBtnSx} onClick={onBack}><ArrowBackIcon fontSize="small" /></IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
       </Box>
