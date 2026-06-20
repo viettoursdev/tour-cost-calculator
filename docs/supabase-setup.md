@@ -286,3 +286,53 @@ To apply: `supabase db push` (or `psql -f supabase/migrations/00{17..22}_*.sql` 
 ### What is NOT yet wired (Phase 4)
 
 No Zustand store (`quoteHistoryStore`, `quoteStore`, etc.) has been modified to call the `sb*` functions. All stores still import from `src/lib/firebase.ts`. Phase 4 will swap the import lines one store at a time, behind a feature flag.
+
+---
+
+## Phase 1.5 (drift reconciliation) — complete (2026-06-20)
+
+Phase 1.5 audited every entity for data-loss gaps between the Firestore schema and the Supabase gateway, then closed each one. All gaps identified in the audit (`sdd/phase-1.5-audit.md`) are now resolved.
+
+### Audit gaps closed
+
+| Gap | Resolution |
+|---|---|
+| **Customer CRM fields** — `source`, `tags`, `interactions[]`, `nextFollowUp` were not persisted to any Supabase table | Migration 0023 adds `source`, `tags`, `next_follow_up`, `interactions` JSONB columns to `customers`; gateway reads/writes them via `sbSubscribeCustomers` / `sbPushCustomers` |
+| **Notification fields** — `priority`, `reminderAt`, `attachments[]` were silently dropped | Migration 0024 adds `priority`, `reminder_at`, `attachments` JSONB to `notifications`; gateway round-trips them |
+| **Itinerary `startDate`** — not mapped to any column | Migration 0025 adds `start_date DATE` to `itineraries`; `sbSaveItinerary` now persists it |
+| **Quote `passengers`** — `PassengerInfo` object was not in the `quotes` index row or the `save_quote_state` RPC | Migration 0026 adds `passengers` JSONB to `quotes` / `dmc_quotes`; the RPC in 0021 was edited to write it in the passengers block; migration 0021 must be re-applied when deploying 0026 |
+| **WorkflowStep `attachments[]` + `assignee` UUID** — `workflow_steps.attachments` JSONB column was missing; `assignee` was stored as display name, not UUID | Migration 0027 (chat DDL) does not touch this; addressed inside the Phase-1.5 task-5 migration (0026); gateway serialises `assigneeId` uuid alongside `assignee` display name |
+| **Chat feature** — no Supabase tables or gateway functions existed for the in-app chat | Migration 0027 creates `chats`, `chat_messages`, `chat_reactions` tables with RLS; 8 new `sb*` functions implement the full feature (see table below) |
+
+### Chat gateway surface (8 functions — Phase 1.5 Tasks 6–8)
+
+| Function | Firebase twin | Description |
+|---|---|---|
+| `sbSubscribeChats` | `fbSubscribeChats` | Realtime subscription to all chats visible to a user |
+| `sbSubscribeChat` | `fbSubscribeChat` | Realtime subscription to a single chat (messages + reactions) |
+| `sbEnsureChat` | `fbEnsureChat` | Upsert chat header row; idempotent |
+| `sbSendChatMessage` | `fbSendChatMessage` | Insert a new message into `chat_messages` |
+| `sbEditChatMessage` | `fbEditChatMessage` | Update `content` + set `edited_at` on an existing message |
+| `sbDeleteChatMessage` | `fbDeleteChatMessage` | Soft-delete a message (`deleted = true`) |
+| `sbToggleChatReaction` | `fbToggleChatReaction` | Insert or delete a reaction row in `chat_reactions` |
+| `sbMarkChatRead` | `fbMarkChatRead` | Update `last_read_at` for a participant in `chats.participants` JSONB |
+
+### Prod-push migrations (Phase 1.5 additions)
+
+The complete prod-push set is now **0017–0027**. Migrations added in Phase 1.5:
+
+| Migration | Description |
+|---|---|
+| 0023 | `customers` CRM columns — `source`, `tags`, `next_follow_up`, `interactions` JSONB |
+| 0024 | `notifications` fields — `priority`, `reminder_at`, `attachments` JSONB |
+| 0025 | `itineraries.start_date DATE` column |
+| 0026 | `quotes` / `dmc_quotes` `passengers` JSONB; `workflow_steps.attachments` JSONB + `assignee_id` |
+| 0027 | Chat schema — `chats`, `chat_messages`, `chat_reactions` tables + RLS policies |
+
+**Re-apply 0021:** The `save_quote_state` RPC (migration 0021) was edited during Phase 1.5 to include the `passengers` write block. When deploying to production after Phase 1.5, push 0021 again alongside 0026 (or use `supabase db reset` on a fresh environment, which replays all migrations in order).
+
+To apply: `supabase db push` (or `psql -f supabase/migrations/00{23..27}_*.sql` against the production DB; re-push 0021 first).
+
+### Gateway type coverage — Phase 4 wiring is safe
+
+All entity types now have full column coverage in the gateway. No Firestore→Supabase field is silently dropped. Phase 4 (wiring Zustand stores to `sb*` functions instead of `fb*` functions) can proceed without further schema changes.

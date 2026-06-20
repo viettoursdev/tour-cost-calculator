@@ -40,3 +40,22 @@ describe('Phase-2 gateway surface (quotes)', () => {
     for (const name of PHASE2) expect(typeof (gw as Record<string, unknown>)[name], name).toBe('function');
   });
 });
+
+// Phase 1.5 — chat feature (Tasks 6–8). All 8 names verified against
+// `grep -nE 'export (async )?function sb' src/lib/supabase.ts` on 2026-06-20.
+const PHASE1_5_CHAT = [
+  'sbSubscribeChats',
+  'sbSubscribeChat',
+  'sbEnsureChat',
+  'sbSendChatMessage',
+  'sbEditChatMessage',
+  'sbDeleteChatMessage',
+  'sbToggleChatReaction',
+  'sbMarkChatRead',
+];
+
+describe('Phase-1.5 gateway surface (chat)', () => {
+  it('exports every Phase-1.5 chat sb* function', () => {
+    for (const name of PHASE1_5_CHAT) expect(typeof (gw as Record<string, unknown>)[name], name).toBe('function');
+  });
+});
