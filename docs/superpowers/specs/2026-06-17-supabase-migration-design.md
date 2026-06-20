@@ -189,6 +189,15 @@ All phases built and tested against a **staging Supabase**, then cut over atomic
 - Pushing role logic into RLS (parity-only RLS now; can tighten later).
 - Live row-level collaborative editing (editing stays in-memory).
 
+## Phase 6 execution decisions (locked 2026-06-20)
+
+- **Dry-run target:** local Supabase Docker stack (the same env as the `tests/supabase/` integration suite). The real cloud ETL run happens at cutover (Phase 7), not in Phase 6.
+- **ETL approach:** a standalone, self-contained `scripts/supabase-etl.mjs` that maps the `firestore-dump.json` JSON directly to inserts via the service-role `supabase-js` client — decoupled from `src/lib` (not the `fb*`-parse + `sb*`-gateway path), explicit about every column.
+- **Idempotency:** truncate-and-reload — before loading, truncate app tables and delete the `@viettours.com.vn` `auth.users` so dry-run and real-run share one code path and re-runs don't collide on existing auth emails.
+- **Auth users:** created via `auth.admin.createUser` with email pre-confirmed and **no password** (parity with magic-link prod; the verification harness uses the service-role client and never logs in as them).
+- **Test input:** a committed synthetic fixture dump covering every entity shape (reproducible, secret-free, CI-safe) drives the verification harness; the script also accepts a real export path (`DUMP_PATH`) for a true full-data dry-run from a prod export the operator generates.
+- **Verification harness:** lives alongside `tests/supabase/`, runs the ETL against the synthetic fixture into local Supabase, then asserts per-table row counts + checksums (`count(quotes)`, `sum(total_cost)`, notifications-per-user, profiles count, full username→UUID coverage) against the fixture's known expected values.
+
 ## Open items to confirm during Phase 0
 
 - Exact column lists per table, validated against each `src/types/*.ts`.
