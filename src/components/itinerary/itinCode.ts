@@ -33,15 +33,38 @@ export const ITIN_COUNTRY: Record<string, Record<string, string>> = {
   VN: { MB: 'Miền Bắc', MT: 'Miền Trung', MN: 'Miền Nam' },
 };
 
-// Source: public/legacy.html:1680-1683.
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** Phần ngày DD.MM.YY của mã (mặc định hôm nay). */
+function dateTag(date: Date): string {
+  return `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}.${String(date.getFullYear()).slice(-2)}`;
+}
+
+/**
+ * Mã chương trình tour — cùng nguyên tắc với mã báo giá:
+ *   NN(Loại) . MY(Châu lục) . STT(2 chữ số trong ngày) . DD.MM.YY (ngày tạo)
+ * VD: NN.MY.01.20.06.26
+ */
 export function generateItinCode(
   type: ItineraryType | string,
   continent: string,
-  country: string,
   seq: number,
+  date: Date = new Date(),
 ): string {
   const t = type || 'NN';
   const c = continent || 'CA';
-  const ct = country || 'TQ';
-  return `${t}-${c}-${ct}-${String(seq || 1).padStart(3, '0')}`;
+  return `${t}.${c}.${pad2(seq || 1)}.${dateTag(date)}`;
+}
+
+/** STT kế tiếp trong ngày cho cặp (type, continent): đếm mã đã tạo hôm nay + 1. */
+export function nextItinSeqToday(
+  codes: (string | undefined)[],
+  type: string,
+  continent: string,
+  date: Date = new Date(),
+): number {
+  const prefix = `${type || 'NN'}.${continent || 'CA'}.`;
+  const suffix = `.${dateTag(date)}`;
+  const todayCount = codes.filter((c) => c && c.startsWith(prefix) && c.endsWith(suffix)).length;
+  return todayCount + 1;
 }

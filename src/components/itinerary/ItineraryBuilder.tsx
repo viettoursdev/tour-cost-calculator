@@ -8,7 +8,10 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
-import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode } from './itinCode';
+import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, generateItinCode, nextItinSeqToday } from './itinCode';
+import { useCustomerStore } from '@/stores/customerStore';
+import { AiButton } from '@/components/common/AiButton';
+import type { Customer } from '@/types';
 import {
   ITIN_DEFAULT_INC, ITIN_DEFAULT_EXC, cloneDay, newActivity, newDay, newSegment, TRANSPORT_PRESETS,
 } from './constants';
@@ -66,9 +69,14 @@ function freshItinerary(): Itinerary {
 }
 
 export function ItineraryBuilder({ initial, user, onBack }: Props) {
+  const itinList = useItineraryStore((s) => s.list);
+  const customers = useCustomerStore((s) => s.customers);
   const initialIt = useMemo(() => {
     const base = initial ?? freshItinerary();
-    return { ...base, flights: (base.flights ?? []).map(normalizeFlight) };
+    // Báo giá mới: STT tự đánh số 2 chữ số theo (loại + châu lục) trong ngày.
+    const seq = initial ? base.seq : nextItinSeqToday(itinList.map((x) => x.code), base.type, base.continent);
+    return { ...base, seq, flights: (base.flights ?? []).map(normalizeFlight) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
   const { state: it, set: setIt, undo, redo, canUndo, canRedo } = useHistoryState<Itinerary>(initialIt);
   useUndoRedoShortcuts(undo, redo);
@@ -88,9 +96,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const pois = usePoiStore((s) => s.pois);
 
+  // Giữ mã đã lưu cho chương trình cũ; chương trình mới sinh mã NN.MY.STT.DD.MM.YY.
   const code = useMemo(
-    () => generateItinCode(it.type, it.continent, it.country, it.seq),
-    [it.type, it.continent, it.country, it.seq],
+    () => initial?.code || generateItinCode(it.type, it.continent, it.seq),
+    [initial, it.type, it.continent, it.seq],
   );
 
   const set = <K extends keyof Itinerary>(k: K, v: Itinerary[K]) =>
@@ -251,7 +260,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     setAiBusy('intro');
     try {
       const d = await callAIWorker('/ai', {
-        prompt: `Viết đoạn giới thiệu 3-4 câu súc tích, chuyên nghiệp về điểm đến "${it.destination}" cho chương trình tour đoàn doanh nghiệp. Văn phong sang trọng, gợi cảm hứng. Chỉ trả về đoạn văn, không tiêu đề.`,
+        prompt: [
+          `Bạn là chuyên gia biên tập nội dung du lịch. Viết đoạn GIỚI THIỆU điểm đến "${it.destination}" cho chương trình tour ${ITIN_TYPE[it.type] ?? ''} dành cho khách đoàn doanh nghiệp.`,
+          'Yêu cầu:',
+          '- 3–4 câu, văn phong sang trọng, chuyên nghiệp, gợi cảm hứng nhưng CHÍNH XÁC: không bịa số liệu, không phóng đại sai sự thật.',
+          '- Nêu đúng nét đặc trưng thật của điểm đến (văn hoá / cảnh quan / ẩm thực / khí hậu tiêu biểu).',
+          '- Tiếng Việt tự nhiên, KHÔNG tiêu đề, KHÔNG markdown. Chỉ trả về đoạn văn.',
+        ].join('\n'),
       });
       if (d.text) set('intro', d.text.trim());
     } catch (e) {
@@ -269,7 +284,14 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     setAiBusy(actId);
     try {
       const d = await callAIWorker('/ai', {
-        prompt: `Viết 1-2 câu thuyết minh ngắn gọn, súc tích, chuyên nghiệp về địa điểm/hoạt động: "${placeText}" tại ${it.destination || 'điểm đến'}. Dành cho khách đoàn doanh nghiệp. Chỉ trả về câu thuyết minh, giữ lại tên địa điểm ở đầu nếu có.`,
+        prompt: [
+          `Bạn là hướng dẫn viên du lịch chuyên nghiệp. Viết nội dung THUYẾT MINH cho địa điểm/hoạt động: "${placeText}"${it.destination ? ` tại ${it.destination}` : ''}.`,
+          'Yêu cầu:',
+          '- 2–3 câu, súc tích, chuyên nghiệp, phù hợp khách đoàn doanh nghiệp.',
+          '- CHÍNH XÁC về thông tin (lịch sử / đặc điểm / điểm nhấn nổi bật CÓ THẬT); KHÔNG bịa chi tiết, KHÔNG phóng đại.',
+          '- Nếu là hoạt động (ăn uống, di chuyển, nghỉ ngơi, mua sắm) thì mô tả trải nghiệm gọn gàng, hấp dẫn.',
+          '- Giữ nguyên tên địa điểm ở đầu nếu phù hợp. Tiếng Việt, KHÔNG markdown. Chỉ trả về phần thuyết minh.',
+        ].join('\n'),
       });
       if (d.text) {
         const commentary = d.text.trim();
@@ -437,15 +459,47 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               <Typography variant="caption" fontWeight={700} color="text.secondary">
                 Giới thiệu điểm đến (3-4 câu)
               </Typography>
-              <Button size="small" variant="outlined" onClick={genIntro}
-                disabled={aiBusy === 'intro'}
-                sx={{ color: '#8e44ad', borderColor: 'rgba(142,68,173,0.3)' }}>
-                {aiBusy === 'intro' ? '⏳ Đang tạo...' : '✨ Tạo bằng AI'}
-              </Button>
+              <AiButton size="small" onClick={genIntro} disabled={aiBusy === 'intro'}>
+                {aiBusy === 'intro' ? 'Đang tạo…' : 'Tạo bằng AI'}
+              </AiButton>
             </Stack>
             <TextField fullWidth multiline minRows={3} size="small"
               value={it.intro} onChange={(e) => set('intro', e.target.value)}
               placeholder="Đoạn thuyết minh ngắn về điểm đến..." />
+          </Box>
+
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              👤 Khách hàng (tuỳ chọn)
+            </Typography>
+            <Autocomplete
+              freeSolo size="small" options={customers}
+              value={it.customerId ? customers.find((c) => c.id === it.customerId) ?? null : null}
+              inputValue={it.customerName ?? ''}
+              onInputChange={(_, v, reason) => {
+                if (reason === 'reset') return; // bỏ qua reset khi chọn (onChange xử lý)
+                setIt((p) => ({ ...p, customerName: v, customerId: undefined }));
+              }}
+              onChange={(_, v) => {
+                if (v && typeof v !== 'string') setIt((p) => ({ ...p, customerId: v.id, customerName: v.name }));
+                else setIt((p) => ({ ...p, customerId: undefined, customerName: typeof v === 'string' ? v : '' }));
+              }}
+              getOptionLabel={(c: string | Customer) => (typeof c === 'string' ? c : c.name)}
+              isOptionEqualToValue={(a, b) => typeof a !== 'string' && typeof b !== 'string' && a.id === b.id}
+              renderOption={(props, c) => (
+                <li {...props} key={typeof c === 'string' ? c : c.id}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={600}>{typeof c === 'string' ? c : c.name}</Typography>
+                    {typeof c !== 'string' && c.contacts?.[0]?.name && (
+                      <Typography variant="caption" color="text.secondary">
+                        {c.contacts[0].name}{c.contacts[0].phone ? ` · ${c.contacts[0].phone}` : ''}
+                      </Typography>
+                    )}
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => <TextField {...params} placeholder="Chọn hoặc gõ tên khách hàng" />}
+            />
           </Box>
 
           <Box>
@@ -497,7 +551,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                 </Button>
                 <Button variant="outlined" size="small" startIcon={<AutoAwesomeIcon />} disabled={flightAiBusy || !flightPaste.trim()}
                   onClick={() => void runFlightAI({ text: flightPaste.trim() })} sx={{ whiteSpace: 'nowrap' }}>
-                  {flightAiBusy ? 'Đang…' : '✨ AI'}
+                  {flightAiBusy ? 'Đang…' : 'AI'}
                 </Button>
                 <Button component="label" variant="outlined" size="small" startIcon={<ImageIcon />} disabled={flightAiBusy} sx={{ whiteSpace: 'nowrap' }}>
                   Ảnh
@@ -557,10 +611,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
             <TextField size="small" type="date" label="Ngày khởi hành" InputLabelProps={{ shrink: true }}
               value={it.startDate ?? ''} onChange={(e) => fillDates(e.target.value)}
               sx={{ width: 168 }} title="Chọn ngày khởi hành → tự điền ngày cho từng Ngày" />
-            <Button variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => setAiSchedOpen(true)}
-              sx={{ borderColor: '#7c3aed', color: '#7c3aed' }}>
+            <AiButton onClick={() => setAiSchedOpen(true)}>
               AI lịch trình
-            </Button>
+            </AiButton>
             <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
               sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
               Thêm ngày
@@ -688,8 +741,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                             disabled={aiBusy === a.id}
                             onClick={() => void genActivity(d.id, seg.id, a.id, a.text)}
                             title="AI tạo thuyết minh cho địa điểm này"
-                            sx={{ color: '#8e44ad', borderColor: 'rgba(142,68,173,0.3)', minWidth: 0, px: 1, flexShrink: 0 }}>
-                            {aiBusy === a.id ? '⏳' : '✨'}
+                            sx={{ color: '#6366f1', borderColor: 'rgba(99,102,241,0.4)', minWidth: 0, px: 1, flexShrink: 0,
+                              '&:hover': { borderColor: '#6366f1', background: 'rgba(99,102,241,0.06)' } }}>
+                            {aiBusy === a.id ? '⏳' : <AutoAwesomeIcon fontSize="small" />}
                           </Button>
                           <IconButton size="small" color="error" onClick={() => delAct(d.id, seg.id, a.id)}>
                             <DeleteOutlineIcon fontSize="small" />

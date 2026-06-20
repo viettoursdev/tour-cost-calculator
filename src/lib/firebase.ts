@@ -956,6 +956,7 @@ export async function fbSaveItinerary(itin: Itinerary, savedBy: string): Promise
     destination: itin.destination ?? '',
     days: itin.days ?? 0,
     nights: itin.nights ?? 0,
+    ...(itin.customerName ? { customerName: itin.customerName } : {}),
     linkedQuoteId: itin.linkedQuoteId ?? null,
     linkedQuoteName: itin.linkedQuoteName ?? '',
     updatedAt: now,

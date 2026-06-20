@@ -4,7 +4,7 @@ import {
   Menu, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import ImageIcon from '@mui/icons-material/Image';
@@ -137,7 +137,7 @@ export function FlightView() {
           {airlineCodes.map((a) => <MenuItem key={a} value={a}>{a} — {deriveAirline(a + '0').name || a}</MenuItem>)}
         </Select>
         <Box sx={{ flex: 1 }} />
-        <Button variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => { setAiErr(''); setAiOpen(true); }} sx={{ fontWeight: 700, borderColor: 'rgba(20,150,140,0.5)', color: '#0d7a6a' }}>Phân tích AI</Button>
+        <AiButton onClick={() => { setAiErr(''); setAiOpen(true); }}>Phân tích AI</AiButton>
         <Button variant="contained" startIcon={<AddIcon />} onClick={add} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Thêm chuyến bay</Button>
       </Stack>
 

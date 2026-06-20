@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField, Typography,
 } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import { AiButton } from '@/components/common/AiButton';
 import { generateSchedule, genToDays, type GenDay } from './aiSchedule';
 import type { Day } from '@/types';
 
@@ -45,10 +45,9 @@ export function AIScheduleDialog({ open, onClose, defaultDestination, defaultDay
         </Stack>
         <TextField label="Phong cách (tuỳ chọn)" size="small" fullWidth value={style} onChange={(e) => setStyle(e.target.value)}
           placeholder="VD: nghỉ dưỡng / khám phá / MICE / ẩm thực…" sx={{ mb: 1.5 }} />
-        <Button onClick={run} disabled={busy || !destination.trim()} variant="contained" startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
-          sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}>
+        <AiButton onClick={run} disabled={busy || !destination.trim()} startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
           {busy ? 'Đang dựng…' : result ? 'Dựng lại' : 'Dựng khung lịch trình'}
-        </Button>
+        </AiButton>
 
         {error && !busy && <Alert severity="error" sx={{ mt: 1.5 }} action={<Button size="small" onClick={run}>Thử lại</Button>}>{error}</Alert>}
 
