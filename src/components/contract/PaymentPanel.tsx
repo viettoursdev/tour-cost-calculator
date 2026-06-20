@@ -10,7 +10,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
 import { fmtVND } from '@/components/quote/calc';
-import { fbSendNotification } from '@/lib/firebase';
+import { fbSendNotification } from '@/lib/dataBackend';
 import { isApprover } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import type { Contract, ContractPayment, User } from '@/types';

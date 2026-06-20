@@ -20,7 +20,7 @@ import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, Workfl
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
-import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
+import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
 import AttachFile from '@mui/icons-material/AttachFile';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';

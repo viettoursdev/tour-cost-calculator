@@ -5,7 +5,7 @@
 import { filterRank, normalizeVN } from '@/lib/search';
 import { callAIWorker } from '@/lib/aiWorker';
 import { computeTotals, fmtVND } from '@/components/quote/calc';
-import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
+import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
 import { useAuthStore } from '@/stores/authStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';

@@ -6,7 +6,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { fbSetQuotePaymentSummary } from '@/lib/firebase';
+import { fbSetQuotePaymentSummary } from '@/lib/dataBackend';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';

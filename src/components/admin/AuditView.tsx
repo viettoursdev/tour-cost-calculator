@@ -3,7 +3,7 @@ import {
   Box, Chip, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography,
 } from '@mui/material';
-import { fbSubscribeAuditLog } from '@/lib/firebase';
+import { fbSubscribeAuditLog } from '@/lib/dataBackend';
 import { filterRank } from '@/lib/search';
 import type { AuditEntry, AuditAction } from '@/types';
 

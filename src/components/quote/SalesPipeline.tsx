@@ -3,7 +3,7 @@ import { Box, Chip, MenuItem, Paper, Select, Stack, TextField, Typography } from
 import Sortable from 'sortablejs';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { fbSetQuoteStatus } from '@/lib/firebase';
+import { fbSetQuoteStatus } from '@/lib/dataBackend';
 import { logAudit } from '@/lib/audit';
 import { filterRank } from '@/lib/search';
 import { fmtVND } from './calc';

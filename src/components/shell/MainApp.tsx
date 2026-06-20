@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { syncsSharedData } from '@/auth/ROLES';
 import { getSignInMethod, startActivityTracker } from '@/auth/sessionTimeout';
-import { fbSubscribeFxRates } from '@/lib/firebase';
+import { fbSubscribeFxRates } from '@/lib/dataBackend';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';

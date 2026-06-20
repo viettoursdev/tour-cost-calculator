@@ -6,7 +6,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import RestoreIcon from '@mui/icons-material/Restore';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/firebase';
+import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
 import { toast } from '@/stores/toastStore';
 import { computeTotals, fmtVND } from './calc';
 import { LEGACY } from '@/theme';

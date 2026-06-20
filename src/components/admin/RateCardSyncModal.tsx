@@ -8,7 +8,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
-import { fbPullMasterRC, fbPushMasterRC, fbSubscribeMasterRC } from '@/lib/firebase';
+import { fbPullMasterRC, fbPushMasterRC, fbSubscribeMasterRC } from '@/lib/dataBackend';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import type { RateCard, RateCardDoc, User } from '@/types';

@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
-import { fbSendNotification, fbSendNotificationMany, fbEnsureNotifThread } from '@/lib/firebase';
+import { fbSendNotification, fbSendNotificationMany, fbEnsureNotifThread } from '@/lib/dataBackend';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';

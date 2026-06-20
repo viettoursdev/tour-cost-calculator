@@ -2,7 +2,7 @@
  * Ghi nhật ký hoạt động cấp hệ thống (audit log) — không chặn UI, lỗi bỏ qua.
  * Gọi tại các thao tác quan trọng: tạo/sửa/xoá báo giá, hợp đồng, rate card…
  */
-import { fbLogAudit } from '@/lib/firebase';
+import { fbLogAudit } from '@/lib/dataBackend';
 import { useAuthStore } from '@/stores/authStore';
 import type { AuditAction } from '@/types';
 

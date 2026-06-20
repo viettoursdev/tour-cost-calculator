@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/firebase';
+import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/dataBackend';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';

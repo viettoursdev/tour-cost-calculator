@@ -15,7 +15,7 @@ import { fmtVND } from './calc';
 import { advanceTotals, emptyAdvance, lineAmount, newAdvanceLine } from './advanceCalc';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { RateCardModal } from '@/components/rates/RateCardModal';
-import { fbEnsureNotifThread, fbSendNotification, fbSubscribeNotifThread } from '@/lib/firebase';
+import { fbEnsureNotifThread, fbSendNotification, fbSubscribeNotifThread } from '@/lib/dataBackend';
 import { InlineNumberField } from '@/components/common/InlineNumberField';
 import { FxRatesPanel } from './FxRatesPanel';
 import { LEGACY } from '@/theme';

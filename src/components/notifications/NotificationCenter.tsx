@@ -18,7 +18,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import {
   fbSubscribeNotifThread, fbAddThreadComment, fbEnsureNotifThread, fbSendNotificationMany,
-} from '@/lib/firebase';
+} from '@/lib/dataBackend';
 import { LEGACY } from '@/theme';
 import type { FileAttachment, NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
 import { NOTIF_TEMPLATES } from './notifCompose';

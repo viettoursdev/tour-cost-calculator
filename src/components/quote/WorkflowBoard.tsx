@@ -11,7 +11,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { deadlineMeta } from '@/components/visa/constants';
 import { filterRank } from '@/lib/search';
 import { ROLE_RANK } from '@/auth/ROLES';
-import { fbGetQuoteProject, fbBackfillWorkflowIndex } from '@/lib/firebase';
+import { fbGetQuoteProject, fbBackfillWorkflowIndex } from '@/lib/dataBackend';
 import { workflowBoardSummary, workflowDueSummary } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
 import type { CloudQuoteEntry } from '@/types';

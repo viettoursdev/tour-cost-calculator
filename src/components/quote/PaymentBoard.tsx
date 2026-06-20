@@ -12,7 +12,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { filterRank } from '@/lib/search';
 import { ROLE_RANK } from '@/auth/ROLES';
-import { fbGetQuoteProject, fbGetTourPayments, fbBackfillPaymentIndex } from '@/lib/firebase';
+import { fbGetQuoteProject, fbGetTourPayments, fbBackfillPaymentIndex } from '@/lib/dataBackend';
 import { fmtVND } from './calc';
 import { getCATS } from './constants';
 import { computePaymentSummary, slugifyTourKey } from './paymentUtils';

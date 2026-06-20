@@ -15,7 +15,7 @@ export function showBrowserNotif(title: string, body: string): void {
   }
 }
 
-import { fbGetContracts, fbSendNotification } from '@/lib/firebase';
+import { fbGetContracts, fbSendNotification } from '@/lib/dataBackend';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';

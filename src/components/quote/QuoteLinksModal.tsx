@@ -14,7 +14,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
-import { fbSetDMCEntryLink } from '@/lib/firebase';
+import { fbSetDMCEntryLink } from '@/lib/dataBackend';
 import { LEGACY } from '@/theme';
 import type { Template } from '@/types';
 

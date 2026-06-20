@@ -15,7 +15,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
-import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage, fbToggleChatReaction } from '@/lib/firebase';
+import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage, fbToggleChatReaction } from '@/lib/dataBackend';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
 import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
