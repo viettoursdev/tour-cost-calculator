@@ -23,7 +23,7 @@ import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { usePoiStore } from '@/stores/poiStore';
-import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkQuoteDeadlines, checkNccPayments, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers } from '@/lib/notifications';
+import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers } from '@/lib/notifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
 import { AppShell } from './AppShell';
 import { ToastHost } from '@/components/common/ToastHost';
@@ -100,6 +100,7 @@ export function MainApp() {
     setTimeout(() => { void checkWorkflowDeadlines(currentUser); }, 5000);
     setTimeout(() => { void checkQuoteDeadlines(currentUser); }, 5500);
     setTimeout(() => { void checkNccPayments(currentUser); }, 5800);
+    setTimeout(() => { void checkQuoteAcceptances(currentUser); }, 6200);
     setTimeout(() => { void checkSalesFollowups(currentUser); }, 6000);
     setTimeout(() => { void checkCustomerFollowups(currentUser); }, 7000);
     setTimeout(() => { void checkDormantCustomers(currentUser); }, 8000);

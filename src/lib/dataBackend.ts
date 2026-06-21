@@ -36,6 +36,12 @@ export const fbPushGuideSchedule = fb.fbPushGuideSchedule;
 // Liên kết email Outlook (Firestore-backed, độc lập backend auth).
 export const fbSubscribeEmailLinks = fb.fbSubscribeEmailLinks;
 export const fbPushEmailLinks = fb.fbPushEmailLinks;
+// Báo giá chia sẻ công khai cho khách (Firestore-backed).
+export const fbPublishQuote = fb.fbPublishQuote;
+export const fbGetPublicQuote = fb.fbGetPublicQuote;
+export const fbAcceptPublicQuote = fb.fbAcceptPublicQuote;
+export const fbUnpublishQuote = fb.fbUnpublishQuote;
+export const fbSetQuoteShare = fb.fbSetQuoteShare;
 export const fbGetTourPayments = sbActive ? (sb.sbGetTourPayments as typeof fb.fbGetTourPayments) : fb.fbGetTourPayments;
 export const fbGetVisaProc = sbActive ? (sb.sbGetVisaProc as typeof fb.fbGetVisaProc) : fb.fbGetVisaProc;
 export const fbLogAudit = sbActive ? (sb.sbLogAudit as typeof fb.fbLogAudit) : fb.fbLogAudit;

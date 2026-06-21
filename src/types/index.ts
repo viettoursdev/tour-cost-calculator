@@ -13,3 +13,4 @@ export * from './audit';
 export * from './chat';
 export * from './guide';
 export * from './email';
+export * from './publicQuote';

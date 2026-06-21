@@ -339,6 +339,8 @@ export type CloudQuoteEntry = {
   attachment?: FileAttachment;
   /** Nhiều file đính kèm cho báo giá (lưu trên R2 qua AI Worker). */
   attachments?: FileAttachment[];
+  /** Chia sẻ công khai cho khách (link): token + thời điểm xuất bản. */
+  share?: { token: string; publishedAt: string };
   /** Liên kết chéo DMC ↔ báo giá nước ngoài: cloudId của bản ghi đối ứng. */
   linkedQuoteId?: string;
   linkedQuoteName?: string;

@@ -13,7 +13,7 @@ import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   EmailLink, FileAttachment, GuideScheduleDoc, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
-  QuoteDraft, QuoteRequestKind, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
+  PublicQuoteDoc, QuoteDraft, QuoteRequestKind, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
 } from '@/types';
 
@@ -465,6 +465,18 @@ function makeQuoteHistoryApi(
       return n;
     },
 
+    /** Gắn/gỡ thông tin chia sẻ công khai (token) lên bản ghi index. */
+    async fbSetEntryShare(cloudId: string, share: CloudQuoteEntry['share'] | null): Promise<void> {
+      const snap = await getDoc(historyDoc);
+      if (!snap.exists()) return;
+      const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
+      const i = quotes.findIndex((q) => q.cloudId === cloudId);
+      if (i < 0) return;
+      if (share) quotes[i] = { ...quotes[i], share };
+      else { const rest = { ...quotes[i] }; delete rest.share; quotes[i] = rest; }
+      await setDoc(historyDoc, { quotes });
+    },
+
     /** Cập nhật nhanh trạng thái (và lý do thua) báo giá lên lịch sử (theo cloudId). */
     async fbSetEntryStatus(cloudId: string, status: QuoteStatus, lossReason?: string): Promise<void> {
       const snap = await getDoc(historyDoc);
@@ -491,6 +503,7 @@ export const fbSetRegularEntryLink   = _regular.fbSetEntryLink;
 export const fbSetQuoteStatus        = _regular.fbSetEntryStatus;
 export const fbBackfillWorkflowIndex = _regular.fbBackfillWorkflowIndex;
 export const fbSetQuotePaymentSummary = _regular.fbSetEntryPaymentSummary;
+export const fbSetQuoteShare         = _regular.fbSetEntryShare;
 export const fbBackfillPaymentIndex  = _regular.fbBackfillPaymentIndex;
 
 const _dmc = makeQuoteHistoryApi(DMC_QUOTE_HISTORY_DOC, dmcQuoteProjectDoc);
@@ -1268,6 +1281,30 @@ export async function fbPushGuideSchedule(
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });
+}
+
+// ── Báo giá chia sẻ công khai cho khách (public_quotes/{token}) ──
+const publicQuoteDoc = (token: string) => doc(db, 'public_quotes', token);
+
+/** Xuất bản (ghi đè) bản báo giá hướng khách. */
+export async function fbPublishQuote(d: PublicQuoteDoc): Promise<void> {
+  await setDoc(publicQuoteDoc(d.token), d);
+}
+
+/** Đọc bản công khai — KHÔNG cần đăng nhập (rules cho phép read công khai). */
+export async function fbGetPublicQuote(token: string): Promise<PublicQuoteDoc | null> {
+  const s = await getDoc(publicQuoteDoc(token));
+  return s.exists() ? (s.data() as PublicQuoteDoc) : null;
+}
+
+/** Khách bấm "Đồng ý" — chỉ ghi trường `acceptance` (rules giới hạn). */
+export async function fbAcceptPublicQuote(token: string, acceptance: PublicQuoteDoc['acceptance']): Promise<void> {
+  await setDoc(publicQuoteDoc(token), { acceptance }, { merge: true });
+}
+
+/** Gỡ chia sẻ. */
+export async function fbUnpublishQuote(token: string): Promise<void> {
+  await deleteDoc(publicQuoteDoc(token));
 }
 
 // ── Liên kết email Outlook ↔ khách hàng/báo giá (single-doc, dùng chung) ──

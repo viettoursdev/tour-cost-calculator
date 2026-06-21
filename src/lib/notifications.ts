@@ -15,7 +15,7 @@ export function showBrowserNotif(title: string, body: string): void {
   }
 }
 
-import { fbGetContracts, fbSendNotification } from '@/lib/dataBackend';
+import { fbGetContracts, fbSendNotification, fbGetPublicQuote } from '@/lib/dataBackend';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -250,6 +250,43 @@ export async function checkNccPayments(user: User): Promise<void> {
     try { localStorage.setItem(NCC_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkNccPayments failed:', (e as Error).message);
+  }
+}
+
+const SHARE_ACCEPT_KEY = 'vte_share_accept_notified';
+
+/**
+ * Nhắc khi KHÁCH đồng ý báo giá đã chia sẻ (link). Quét index báo giá có `share`
+ * của người tạo, đọc bản công khai; nếu khách đã `acceptance` mà chưa nhắc → báo
+ * người tạo. Dedup theo token (localStorage). Không tự đổi trạng thái báo giá.
+ */
+export async function checkQuoteAcceptances(user: User): Promise<void> {
+  try {
+    const quotes = useQuoteHistoryStore.getState().quotes.filter(
+      (q) => q.share?.token && q.createdByUsername === user.u,
+    );
+    if (!quotes.length) return;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(SHARE_ACCEPT_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const q of quotes) {
+      const token = q.share!.token;
+      const pub = await fbGetPublicQuote(token);
+      if (!pub?.acceptance) continue;
+      const key = `${token}:${pub.acceptance.at}`;
+      if (set.has(key)) continue;
+      set.add(key);
+      await fbSendNotification(user.u, {
+        type: 'task',
+        title: '🎉 Khách đã đồng ý báo giá',
+        message: `Báo giá "${q.name}"${pub.acceptance.name ? ` — ${pub.acceptance.name}` : ''} đã đồng ý chốt${pub.acceptance.note ? `: “${pub.acceptance.note}”` : ''}. Liên hệ xác nhận & chuyển trạng thái Thắng.`,
+        createdBy: 'Hệ thống',
+        data: { cloudId: q.cloudId },
+      });
+    }
+    try { localStorage.setItem(SHARE_ACCEPT_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkQuoteAcceptances failed:', (e as Error).message);
   }
 }
 

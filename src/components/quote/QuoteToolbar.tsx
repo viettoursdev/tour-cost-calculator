@@ -7,6 +7,7 @@ import { toast } from '@/stores/toastStore';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import TableChartIcon from '@mui/icons-material/TableChart';
@@ -53,6 +54,7 @@ import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import { computeTotals, fmtVND } from './calc';
 import { blockingIssues } from './lineValidation';
 import { InvoiceModal } from './InvoiceModal';
+import { SharePublicQuoteModal } from './SharePublicQuoteModal';
 import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
@@ -173,6 +175,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const [rateAnchor, setRateAnchor] = useState<HTMLElement | null>(null);
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
@@ -532,6 +535,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
             <AddCircleOutlineIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+        {/* Share to customer (regular quotes only) */}
+        {canExport && (
+          <Tooltip title="Chia sẻ báo giá cho khách (link)">
+            <IconButton size="small" onClick={() => setShareOpen(true)}
+              sx={{ border: '1px solid rgba(3,105,161,0.4)', borderRadius: 1.5, color: '#0369a1' }}>
+              <ShareOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         {/* Export dropdown */}
         <Tooltip title="Xuất (PDF / Word / Excel…)">
           <IconButton size="small" onClick={(e) => setExportAnchor(e.currentTarget)}
@@ -712,6 +724,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           user={currentUser}
         />
       )}
+      {shareOpen && <SharePublicQuoteModal open={shareOpen} onClose={() => setShareOpen(false)} />}
 
       {/* Rate Card management modals (opened from the Rate Card dropdown) */}
       <HotelModal

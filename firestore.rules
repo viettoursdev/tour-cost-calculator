@@ -23,6 +23,15 @@ service cloud.firestore {
     // (notification_threads, tour_payments, …), which broke notifications,
     // payment sync, itineraries and menus. Phase 4 may re-introduce granular
     // per-collection rules — but they must cover EVERY collection the app uses.
+    // Báo giá chia sẻ công khai cho khách: ai có link (token) cũng ĐỌC được.
+    // Khách (chưa đăng nhập) chỉ được ghi MỘT LẦN trường `acceptance` và không
+    // đổi trường nào khác. Nhân viên @viettours xuất bản/sửa/gỡ qua catch-all bên dưới.
+    match /public_quotes/{token} {
+      allow read: if true;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acceptance'])
+                      && !('acceptance' in resource.data);
+    }
+
     match /{document=**} { allow read, write: if isEmployee(); }
   }
 }

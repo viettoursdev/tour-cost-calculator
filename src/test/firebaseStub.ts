@@ -93,6 +93,11 @@ export const fbSubscribeGuideSchedule = vi.fn(() => () => {});
 export const fbPushGuideSchedule = vi.fn(async () => {});
 export const fbSubscribeEmailLinks = vi.fn(() => () => {});
 export const fbPushEmailLinks = vi.fn(async () => {});
+export const fbPublishQuote = vi.fn(async () => {});
+export const fbGetPublicQuote = vi.fn(async () => null);
+export const fbAcceptPublicQuote = vi.fn(async () => {});
+export const fbUnpublishQuote = vi.fn(async () => {});
+export const fbSetQuoteShare = vi.fn(async () => {});
 export const fbSubscribeNccProducts = vi.fn(() => () => {});
 export const fbPushNccProducts = vi.fn(async () => {});
 
