@@ -290,6 +290,55 @@ export async function checkQuoteAcceptances(user: User): Promise<void> {
   }
 }
 
+const DOC_EXP_KEY = 'vte_doc_expiry_notified';
+/** Các mốc nhắc TRƯỚC khi hộ chiếu/visa hết hạn (ngày). */
+const DOC_EXP_MILESTONES = [90, 30];
+
+/**
+ * Nhắc hộ chiếu/visa của khách sắp hết hạn. Quét khách hàng (đã subscribe); với mỗi
+ * hồ sơ có ngày hết hạn ≤ mốc nhắc → báo cho người TẠO khách / phòng Visa / Operations.
+ * Mỗi (khách, người, loại giấy, hạn, mốc) nhắc 1 lần (dedup localStorage).
+ */
+export async function checkDocExpiry(user: User): Promise<void> {
+  try {
+    const customers = useCustomerStore.getState().customers;
+    const relevantAll = user.department === 'visa' || user.role === 'Operations';
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(DOC_EXP_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const c of customers) {
+      // Người nhận: phòng Visa/Operations (mọi khách) hoặc người tạo khách.
+      if (!relevantAll && c.createdBy !== user.name) continue;
+      for (const t of c.travelers ?? []) {
+        for (const [kind, label, iso] of [
+          ['hc', 'Hộ chiếu', t.passportExpiry] as const,
+          ['visa', `Visa${t.visaCountry ? ' ' + t.visaCountry : ''}`, t.visaExpiry] as const,
+        ]) {
+          if (!iso) continue;
+          const d = daysUntil(iso);
+          if (d == null) continue;
+          const milestone = DOC_EXP_MILESTONES.find((m) => d <= m && d >= -1); // gồm vừa hết hạn
+          if (milestone == null) continue;
+          const key = `${c.id}:${t.id}:${kind}:${iso}:${milestone}`;
+          if (set.has(key)) continue;
+          // Đánh dấu cả mốc lớn hơn để không nhắc lùi.
+          for (const m of DOC_EXP_MILESTONES) if (m >= milestone) set.add(`${c.id}:${t.id}:${kind}:${iso}:${m}`);
+          const when = d < 0 ? 'ĐÃ HẾT HẠN' : `còn ${d} ngày`;
+          await fbSendNotification(user.u, {
+            type: 'task',
+            title: d < 0 ? '🔴 Giấy tờ khách đã hết hạn' : '⏰ Giấy tờ khách sắp hết hạn',
+            message: `${c.name} — ${t.fullName}: ${label} ${when} (${new Date(iso).toLocaleDateString('vi-VN')})`,
+            createdBy: 'Hệ thống',
+          });
+        }
+      }
+    }
+    try { localStorage.setItem(DOC_EXP_KEY, JSON.stringify([...set].slice(-800))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkDocExpiry failed:', (e as Error).message);
+  }
+}
+
 const SALES_KEY = 'vte_sales_followup_notified';
 /** Số ngày KHÔNG cập nhật trước khi nhắc follow-up, theo trạng thái deal. */
 const FOLLOWUP_DAYS: Partial<Record<string, number>> = { sent: 4, negotiating: 3 };

@@ -1,3 +1,34 @@
+import type { FileAttachment } from './quote';
+
+/** Hồ sơ giấy tờ của MỘT người thuộc khách hàng (hộ chiếu + visa + file scan).
+ *  Dữ liệu nhạy cảm (PII) — chỉ hiển thị cho người tạo khách + quản lý + phòng Visa/
+ *  Operations (xem `canViewTravelerDocs`). */
+export type TravelerDoc = {
+  id: string;
+  fullName: string;
+  gender?: 'M' | 'F' | '';
+  dob?: string;                 // ngày sinh (ISO yyyy-mm-dd)
+  nationality?: string;
+  // Hộ chiếu
+  passportNo?: string;
+  passportIssueDate?: string;   // ngày cấp (ISO)
+  passportExpiry?: string;      // ngày hết hạn (ISO)
+  passportIssuePlace?: string;  // nơi cấp
+  passportFiles?: FileAttachment[];
+  // Visa
+  visaType?: string;
+  visaCountry?: string;
+  visaNo?: string;
+  visaIssueDate?: string;
+  visaExpiry?: string;
+  visaEntries?: string;         // số lần nhập cảnh (1 / nhiều lần)
+  visaStatus?: string;          // trạng thái (đang xử lý / đã cấp / từ chối…)
+  visaFiles?: FileAttachment[];
+  note?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 export type CustomerContact = {
   name: string;
   phone: string;
@@ -32,6 +63,8 @@ export type Customer = {
   interactions?: CustomerInteraction[];
   /** Lịch hẹn liên hệ lại đang chờ (next action). */
   nextFollowUp?: { date: string; note: string; byU: string; byName: string };
+  /** Hồ sơ hộ chiếu/visa của khách (PII — quyền xem siết chặt). */
+  travelers?: TravelerDoc[];
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

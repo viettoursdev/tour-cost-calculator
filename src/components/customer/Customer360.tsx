@@ -11,9 +11,13 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useCustomerStore } from '@/stores/customerStore';
+import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
+import { canViewTravelerDocs } from '@/auth/customerDocs';
 import { fmtVND } from '@/components/quote/calc';
 import { QUOTE_STATUS_META } from '@/components/quote/constants';
 import { EmailLinksPanel } from '@/components/email/EmailLinksPanel';
+import { TravelerDocsPanel } from './TravelerDocs';
 import type { Customer, CustomerInteractionType } from '@/types';
 
 const ITYPE_META: Record<CustomerInteractionType, { label: string; icon: string }> = {
@@ -45,6 +49,9 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
   const setFollowUp = useCustomerStore((s) => s.setFollowUp);
   const clearFollowUp = useCustomerStore((s) => s.clearFollowUp);
   const cust = live ?? customer;
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const canDocs = canViewTravelerDocs(currentUser, cust);
+  const canEditDocs = canDocs && hasPerm(currentUser, 'manageCustomers');
   const interactions = [...(cust.interactions ?? [])].reverse(); // mới nhất lên đầu
   const fu = cust.nextFollowUp;
   const fuOverdue = !!fu && fu.date < new Date().toISOString().slice(0, 10);
@@ -159,6 +166,13 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
           targetType="customer" targetId={customer.id} targetName={customer.name}
           searchHint={contact?.email || customer.name}
         />
+
+        {canDocs && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <TravelerDocsPanel customer={cust} canEdit={canEditDocs} />
+          </>
+        )}
 
         <Divider sx={{ my: 2 }} />
         <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Lịch hẹn liên hệ lại</Typography>
