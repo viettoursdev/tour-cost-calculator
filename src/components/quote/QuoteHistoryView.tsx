@@ -20,7 +20,9 @@ import { attMeta } from '@/lib/util';
 import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, WorkflowStep } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import ContentCopy from '@mui/icons-material/ContentCopy';
+import HistoryIcon from '@mui/icons-material/History';
 import Delete from '@mui/icons-material/Delete';
+import { VersionHistoryModal } from './VersionHistoryModal';
 import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
 import AttachFile from '@mui/icons-material/AttachFile';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
@@ -191,6 +193,7 @@ export function QuoteHistoryView() {
     el: HTMLElement;
     row: CloudQuoteEntry;
   } | null>(null);
+  const [versionsRow, setVersionsRow] = useState<CloudQuoteEntry | null>(null);
 
   const allQuotes = isDMC ? dmcQuotes : quotes;
 
@@ -460,6 +463,11 @@ export function QuoteHistoryView() {
       filterable: false,
       renderCell: (p) => (
         <Stack direction="row">
+          <Tooltip title="Lịch sử phiên bản (tối đa 20 bản)">
+            <IconButton size="small" onClick={() => setVersionsRow(p.row)}>
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Tải báo giá">
             <IconButton size="small" onClick={() => handleLoad(p.row)}>
               <CloudDownload fontSize="small" />
@@ -573,6 +581,15 @@ export function QuoteHistoryView() {
               window.alert('❌ Lỗi cập nhật: ' + (e as Error).message);
             }
           }}
+        />
+      )}
+
+      {versionsRow && (
+        <VersionHistoryModal
+          open
+          cloudId={versionsRow.cloudId}
+          isDmc={isDMC}
+          onClose={() => setVersionsRow(null)}
         />
       )}
     </Box>

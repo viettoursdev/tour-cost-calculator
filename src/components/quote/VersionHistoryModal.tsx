@@ -12,16 +12,19 @@ import { computeTotals, fmtVND } from './calc';
 import { LEGACY } from '@/theme';
 import type { QuoteVersion } from '@/types';
 
-type Props = { open: boolean; onClose: () => void };
+type Props = { open: boolean; onClose: () => void; cloudId?: string; isDmc?: boolean };
 
 /**
- * Lịch sử phiên bản của báo giá đang mở (mỗi lần Lưu cloud = 1 phiên bản, giữ tối
- * đa 20 bản gần nhất). Cho phép xem & KHÔI PHỤC một phiên bản cũ vào draft hiện
- * tại — lưu lại sẽ tạo thành phiên bản mới (không ghi đè lịch sử).
+ * Lịch sử phiên bản của báo giá (mỗi lần Lưu cloud = 1 phiên bản, giữ tối đa 20 bản
+ * gần nhất). Cho phép xem & KHÔI PHỤC một phiên bản cũ — lưu lại sẽ tạo thành phiên
+ * bản mới (không ghi đè lịch sử). Mặc định dùng báo giá ĐANG MỞ; truyền `cloudId`
+ * để mở cho một báo giá BẤT KỲ (vd từ dòng Lịch sử báo giá).
  */
-export function VersionHistoryModal({ open, onClose }: Props) {
-  const cloudId = useQuoteStore((s) => s.draft.currentQuoteId);
-  const isDmc = useQuoteStore((s) => s.draft.template === 'dmc');
+export function VersionHistoryModal({ open, onClose, cloudId: propCloudId, isDmc: propIsDmc }: Props) {
+  const draftCloudId = useQuoteStore((s) => s.draft.currentQuoteId);
+  const draftIsDmc = useQuoteStore((s) => s.draft.template === 'dmc');
+  const cloudId = propCloudId ?? draftCloudId;
+  const isDmc = propIsDmc ?? draftIsDmc;
   const restoreVersionState = useQuoteStore((s) => s.restoreVersionState);
 
   const [loading, setLoading] = useState(false);

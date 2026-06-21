@@ -858,8 +858,11 @@ export const useQuoteStore = create<QuoteState>()(
         },
 
         restoreVersionState: (state) => {
+          // Bản snapshot mang theo currentQuoteId của chính báo giá đó → khôi phục
+          // đúng báo giá kể cả khi mở từ một dòng Lịch sử báo giá khác (fallback bản
+          // cũ thiếu id thì giữ id đang mở).
           muted(() => set((s) => ({
-            draft: { ...state, currentQuoteId: s.draft.currentQuoteId, rates: keepSavedRates(state.rates) },
+            draft: { ...state, currentQuoteId: state.currentQuoteId ?? s.draft.currentQuoteId, rates: keepSavedRates(state.rates) },
             view: 'cost', cloudDirty: true,
             ...CLEAR_HIST,
           })));
