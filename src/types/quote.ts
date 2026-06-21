@@ -107,6 +107,10 @@ export type NewQuoteMeta = {
   startDate?: string | null;
   deadline?: string;
   collaborators?: Collaborator[];
+  /** File Excel báo giá đã upload (option "Upload Excel" / "Upload Excel + AI"). */
+  excelFile?: FileAttachment;
+  /** Khoá trang báo giá (chỉ xem file Excel, không nhập trên app). */
+  locked?: boolean;
 };
 
 /** Một hạng giá tạm tính của chuyến bay (đa tiền tệ). */
@@ -217,6 +221,8 @@ export type QuoteDraft = {
   customerId?: string;
   customerName?: string;
   pendingCollaborators?: Collaborator[];
+  excelFile?: FileAttachment; // File Excel báo giá đã upload (option upload / upload+AI)
+  locked?: boolean;        // Khoá trang báo giá (chỉ xem file Excel)
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
   passengers?: Passenger[]; // Danh sách khách đoàn (manifest + rooming)
@@ -339,6 +345,8 @@ export type CloudQuoteEntry = {
   attachment?: FileAttachment;
   /** Nhiều file đính kèm cho báo giá (lưu trên R2 qua AI Worker). */
   attachments?: FileAttachment[];
+  /** File Excel báo giá gốc (option upload / upload+AI) — cột "Báo giá Excel". */
+  excelFile?: FileAttachment;
   /** Chia sẻ công khai cho khách (link): token + thời điểm xuất bản. */
   share?: { token: string; publishedAt: string };
   /** Liên kết chéo DMC ↔ báo giá nước ngoài: cloudId của bản ghi đối ứng. */

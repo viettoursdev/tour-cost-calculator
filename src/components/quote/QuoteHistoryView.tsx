@@ -23,6 +23,7 @@ import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
 import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
 import AttachFile from '@mui/icons-material/AttachFile';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
@@ -385,6 +386,22 @@ export function QuoteHistoryView() {
           </Tooltip>
         );
       },
+    },
+    {
+      field: 'excelFile',
+      headerName: 'Báo giá Excel',
+      width: 110,
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (p) => (p.row.excelFile ? (
+        <Tooltip title={`Mở: ${p.row.excelFile.name}`}>
+          <IconButton size="small" onClick={() => openFilePreview({ key: p.row.excelFile!.key, name: p.row.excelFile!.name })}>
+            <DescriptionOutlinedIcon fontSize="small" sx={{ color: '#1d8348' }} />
+          </IconButton>
+        </Tooltip>
+      ) : null),
     },
     {
       field: 'attachment',

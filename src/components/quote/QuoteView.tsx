@@ -27,6 +27,8 @@ const PaymentBoard = lazy(() => import('./PaymentBoard').then((m) => ({ default:
 const SalesPipeline = lazy(() => import('./SalesPipeline').then((m) => ({ default: m.SalesPipeline })));
 const SalesAnalytics = lazy(() => import('./SalesAnalytics').then((m) => ({ default: m.SalesAnalytics })));
 const ExecBoard = lazy(() => import('./ExecBoard').then((m) => ({ default: m.ExecBoard })));
+const LockedQuoteView = lazy(() => import('./LockedQuoteView').then((m) => ({ default: m.LockedQuoteView })));
+const AIQuoteImportDialog = lazy(() => import('./AIQuoteImportDialog').then((m) => ({ default: m.AIQuoteImportDialog })));
 const AuditView = lazy(() => import('@/components/admin/AuditView').then((m) => ({ default: m.AuditView })));
 const ContractView = lazy(() => import('@/components/contract/ContractView').then((m) => ({ default: m.ContractView })));
 const CustomerView = lazy(() => import('@/components/customer/CustomerView').then((m) => ({ default: m.CustomerView })));
@@ -62,10 +64,12 @@ export function QuoteView() {
   // opacity 0, visibility hidden) covering the whole page and eating clicks.
   const hydrated = useQuoteStore((s) => s.currentUsername !== null);
   const cloudDirty = useQuoteStore((s) => s.cloudDirty);
+  const locked = useQuoteStore((s) => s.draft.locked);
   const newDraft = useQuoteStore((s) => s.newDraft);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [newQuoteOpen, setNewQuoteOpen] = useState(false);
   const [saveCloudOpen, setSaveCloudOpen] = useState(false);
+  const [aiImportFile, setAiImportFile] = useState<File | null>(null);
 
   // If no template, show the gate non-dismissably.
   const gateOpen = hydrated && (template === null || selectorOpen);
@@ -103,7 +107,7 @@ export function QuoteView() {
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
            <Suspense fallback={<ViewFallback />}>
             {view === 'home' && <HomeView />}
-            {view === 'cost' && <CostView />}
+            {view === 'cost' && (locked ? <LockedQuoteView /> : <CostView />)}
             {view === 'summary' && <SummaryView />}
             {view === 'dashboard' && <DashboardView />}
             {view === 'advance' && <AdvanceView />}
@@ -133,12 +137,20 @@ export function QuoteView() {
               open
               initialTemplate={template}
               onClose={() => setNewQuoteOpen(false)}
-              onConfirm={(tpl, meta) => {
+              onConfirm={(tpl, meta, opts) => {
                 if (cloudDirty && !window.confirm('Báo giá hiện tại có thay đổi chưa lưu sẽ bị thay thế. Tiếp tục?')) return;
                 newDraft(tpl, meta);
                 setNewQuoteOpen(false);
+                // Upload Excel + AI → tự mở hộp thoại AI với file vừa upload.
+                if (opts.mode === 'ai' && opts.file) setAiImportFile(opts.file);
               }}
             />
+          )}
+
+          {aiImportFile && (
+            <Suspense fallback={null}>
+              <AIQuoteImportDialog open initialFile={aiImportFile} onClose={() => setAiImportFile(null)} />
+            </Suspense>
           )}
 
           <SaveCloudQuoteModal

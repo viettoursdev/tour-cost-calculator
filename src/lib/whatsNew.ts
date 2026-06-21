@@ -9,6 +9,13 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-06-21c', date: '21/06/2026', title: '3 cách tạo báo giá + cột Excel',
+    items: [
+      { icon: '📝', title: '3 cách tạo báo giá mới', desc: 'Khi tạo báo giá mới chọn: (1) Tạo trên app như cũ; (2) Upload Excel — chỉ xem file, trang nhập liệu bị khoá; (3) Upload Excel + AI — AI tự phân tích file và điền vào bảng giá.' },
+      { icon: '📊', title: 'Cột "Báo giá Excel" ở lịch sử', desc: 'Lịch sử báo giá có thêm cột Báo giá Excel — bấm để mở file gốc đã upload (từ cách 2 & 3).' },
+    ],
+  },
+  {
     id: '2026-06-21b', date: '21/06/2026', title: 'Lịch đi tour HDV',
     items: [
       { icon: '🧭', title: 'Lịch đi tour Hướng dẫn viên', desc: 'Thẻ mới trên Trang chủ (và menu Vận hành): xếp lịch HDV theo tour hoặc theo từng HDV, mỗi tour/HDV một màu riêng. Lịch bay tự lấy từ chuyến bay của báo giá, chỉnh tay được theo thực tế.' },

@@ -305,6 +305,8 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(meta.customerId ? { customerId: meta.customerId } : {}),
                 ...(meta.customerName ? { customerName: meta.customerName } : {}),
                 ...(meta.collaborators?.length ? { pendingCollaborators: meta.collaborators } : {}),
+                ...(meta.excelFile ? { excelFile: meta.excelFile } : {}),
+                ...(meta.locked ? { locked: true } : {}),
               }
             : {};
           // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
@@ -761,6 +763,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(draft.info.days ? { days: draft.info.days } : {}),
               ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow), workflowSummary: workflowBoardSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
+              ...(draft.excelFile ? { excelFile: draft.excelFile } : {}),
               ...(attachments ? { attachments } : {}),
               ...(linkedForeign
                 ? { linkedQuoteId: linkedForeign.id, linkedQuoteName: linkedForeign.name, linkedQuoteTemplate: linkedForeign.template }

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
   IconButton, MenuItem, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
@@ -18,7 +18,7 @@ const QTY_LABEL: Record<QtyMode, string> = {
 };
 
 /** Upload file báo giá → AI phân tích → xem trước → thêm vào bảng giá. */
-export function AIQuoteImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AIQuoteImportDialog({ open, onClose, initialFile }: { open: boolean; onClose: () => void; initialFile?: File | null }) {
   const template = useQuoteStore((s) => s.draft.template) as Template;
   const catEnabled = useQuoteStore((s) => s.draft.catEnabled);
   const addItems = useQuoteStore((s) => s.addItems);
@@ -41,15 +41,21 @@ export function AIQuoteImportDialog({ open, onClose }: { open: boolean; onClose:
   const onDrop = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files[0]); };
   const onInput = (e: ChangeEvent<HTMLInputElement>) => { pick(e.target.files?.[0]); e.target.value = ''; };
 
-  const run = () => {
-    if (!file) return;
+  const run = (f: File | null = file) => {
+    if (!f) return;
     setBusy(true); setError(null); setResult(null); setProgress('Đang đọc file…');
-    extractFileContent(file, setProgress)
+    extractFileContent(f, setProgress)
       .then((c) => { setProgress('AI đang phân tích…'); return parseQuoteAI({ text: c.text, imageB64: c.imageB64 }, cats); })
       .then((lines) => { setResult(lines); if (!lines.length) setError('AI không tìm được dòng chi phí nào trong file.'); })
       .catch((e) => setError((e as Error).message))
       .finally(() => { setBusy(false); setProgress(''); });
   };
+
+  // Mở kèm file có sẵn (option "Upload Excel + AI") → tự đọc & phân tích ngay.
+  useEffect(() => {
+    if (open && initialFile) { setFile(initialFile); run(initialFile); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFile]);
 
   const grouped = useMemo(() => {
     const m = new Map<CategoryId, ParsedQuoteLine[]>();
@@ -106,13 +112,13 @@ export function AIQuoteImportDialog({ open, onClose }: { open: boolean; onClose:
         </Box>
 
         <Stack direction="row" justifyContent="flex-end" sx={{ mt: 1.25 }}>
-          <AiButton onClick={run} disabled={!file || busy}
+          <AiButton onClick={() => run()} disabled={!file || busy}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
             {busy ? (progress || 'Đang xử lý…') : result ? 'Phân tích lại' : 'Phân tích'}
           </AiButton>
         </Stack>
 
-        {error && !busy && <Alert severity="error" sx={{ mt: 1.5 }} action={<Button size="small" onClick={run}>Thử lại</Button>}>{error}</Alert>}
+        {error && !busy && <Alert severity="error" sx={{ mt: 1.5 }} action={<Button size="small" onClick={() => run()}>Thử lại</Button>}>{error}</Alert>}
 
         {result && result.length > 0 && !busy && (
           <Box sx={{ mt: 2 }}>

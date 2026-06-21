@@ -7,20 +7,32 @@ import PlaceIcon from '@mui/icons-material/Place';
 import PublicIcon from '@mui/icons-material/Public';
 import EventIcon from '@mui/icons-material/Event';
 import AlarmIcon from '@mui/icons-material/Alarm';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { useAuthStore } from '@/stores/authStore';
 import { useCustomerStore } from '@/stores/customerStore';
+import { uploadFileToWorker } from '@/lib/aiWorker';
 import { TPL_ACCENT } from './templateStyle';
 import { LEGACY } from '@/theme';
 import type { Customer, NewQuoteMeta, QuoteRequestKind, User } from '@/types';
+
+export type NewQuoteMode = 'app' | 'excel' | 'ai';
 
 type Props = {
   open: boolean;
   /** Loại báo giá người dùng vừa chọn từ thẻ (nội địa / nước ngoài). */
   initialTemplate: 'domestic' | 'intl';
   onClose: () => void;
-  /** Tạo báo giá với template + metadata đã nhập. */
-  onConfirm: (template: 'domestic' | 'intl', meta: NewQuoteMeta) => void;
+  /** Tạo báo giá với template + metadata + cách tạo (app / excel / excel+AI). */
+  onConfirm: (template: 'domestic' | 'intl', meta: NewQuoteMeta, opts: { mode: NewQuoteMode; file?: File | null }) => void;
 };
+
+const MODE_OPTS: { key: NewQuoteMode; label: string; desc: string; Icon: typeof EditNoteIcon }[] = [
+  { key: 'app', label: 'Tạo trên app', desc: 'Nhập bảng giá trực tiếp', Icon: EditNoteIcon },
+  { key: 'excel', label: 'Upload Excel', desc: 'Chỉ xem file, khoá trang', Icon: UploadFileIcon },
+  { key: 'ai', label: 'Upload Excel + AI', desc: 'AI phân tích & điền', Icon: AutoAwesomeIcon },
+];
 
 const REQUEST_LABEL: Record<QuoteRequestKind, string> = {
   request: 'Request tour',
@@ -49,6 +61,8 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
   const [collabUsers, setCollabUsers] = useState<User[]>([]);
+  const [mode, setMode] = useState<NewQuoteMode>('app');
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Mở mới → reset về mặc định theo thẻ vừa chọn.
@@ -65,6 +79,8 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setStartDate('');
     setDeadline('');
     setCollabUsers([]);
+    setMode('app');
+    setFile(null);
     setBusy(false);
   }, [open, initialTemplate]);
 
@@ -102,6 +118,17 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
           custId = newCust.id; custName = typed;
         }
       }
+      // Upload file Excel cho 2 chế độ upload (lưu R2 qua AI Worker).
+      let excelFile;
+      if (mode !== 'app' && file) {
+        try {
+          const up = await uploadFileToWorker(file);
+          excelFile = { ...up, uploadedBy: currentUser?.name, uploadedAt: new Date().toISOString() };
+        } catch (e) {
+          window.alert('❌ Tải file lên lỗi: ' + (e as Error).message);
+          return;
+        }
+      }
       const meta: NewQuoteMeta = {
         request,
         name: name.trim(),
@@ -113,8 +140,10 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
         startDate: startDate || null,
         deadline: deadline || undefined,
         collaborators: collabUsers.map((u) => ({ u: u.u, name: u.name })),
+        ...(excelFile ? { excelFile } : {}),
+        ...(mode === 'excel' ? { locked: true } : {}),
       };
-      onConfirm(template, meta);
+      onConfirm(template, meta, { mode, file });
     } finally {
       setBusy(false);
     }
@@ -145,6 +174,45 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2.25} sx={{ mt: 0.5 }}>
+          {/* Cách tạo báo giá: app / upload Excel / upload Excel + AI */}
+          <Box>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Cách tạo báo giá
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 1 }}>
+              {MODE_OPTS.map((m) => {
+                const on = mode === m.key;
+                return (
+                  <Box key={m.key} role="button" tabIndex={0}
+                    onClick={() => setMode(m.key)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMode(m.key); } }}
+                    sx={{
+                      p: 1.25, borderRadius: 2, cursor: 'pointer', textAlign: 'center',
+                      border: `1.5px solid ${on ? ac.accent : 'rgba(15,58,74,0.15)'}`,
+                      bgcolor: on ? `${ac.accent}10` : 'transparent', transition: 'all .15s',
+                      '&:hover': { borderColor: ac.accent },
+                    }}>
+                    <m.Icon sx={{ color: on ? ac.accent : 'text.disabled', fontSize: 22 }} />
+                    <Typography sx={{ fontWeight: 800, fontSize: 12.5, color: on ? ac.accent : LEGACY.navy, mt: 0.25 }}>{m.label}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.3 }}>{m.desc}</Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+            {mode !== 'app' && (
+              <Box sx={{ mt: 1.25, p: 1.25, borderRadius: 2, border: '1.5px dashed rgba(124,58,237,0.4)', textAlign: 'center' }}>
+                <Button component="label" size="small" variant="outlined" startIcon={<UploadFileIcon />}>
+                  {file ? 'Đổi file' : 'Chọn file Excel'}
+                  <input type="file" hidden accept=".xlsx,.xls,.csv,.tsv" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+                </Button>
+                {file && <Typography variant="caption" sx={{ display: 'block', mt: 0.5, fontWeight: 700, color: ac.accent }}>{file.name}</Typography>}
+                <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+                  {mode === 'excel' ? 'Báo giá chỉ xem file Excel, trang nhập liệu bị khoá.' : 'AI sẽ phân tích file và điền vào bảng giá.'}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+
           {/* Báo giá: Nội địa / Nước ngoài */}
           <Box>
             <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
@@ -271,10 +339,10 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} color="inherit" disabled={busy}>Huỷ</Button>
         <Button
-          variant="contained" disabled={!name.trim() || busy} onClick={() => void submit()}
+          variant="contained" disabled={!name.trim() || busy || (mode !== 'app' && !file)} onClick={() => void submit()}
           sx={{ background: LEGACY.headerGradient, fontWeight: 800, px: 3 }}
         >
-          {busy ? 'Đang tạo…' : 'Tạo báo giá'}
+          {busy ? (mode === 'app' ? 'Đang tạo…' : 'Đang tải lên…') : mode === 'ai' ? 'Tạo & phân tích AI' : 'Tạo báo giá'}
         </Button>
       </DialogActions>
     </Dialog>
