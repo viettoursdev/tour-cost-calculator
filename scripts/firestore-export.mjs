@@ -52,6 +52,7 @@ const DYNAMIC_COLLECTIONS = [
   'tour_itineraries',
   'tour_menus',
   'visa_procedures',
+  'chats',
 ];
 
 function loadKey() {
