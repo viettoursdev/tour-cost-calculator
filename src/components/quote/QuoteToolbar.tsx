@@ -39,6 +39,7 @@ import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
 import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
+import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
@@ -305,8 +306,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const hidePrice = !canSeePrices(currentUser);
   const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
   // Mở app Chương trình tour / Thực đơn (template riêng) từ dropdown Vận hành.
-  const gotoApp = (tpl: 'itinerary' | 'menu') => {
-    const what = tpl === 'itinerary' ? 'Chương trình tour' : 'Thực đơn';
+  const gotoApp = (tpl: 'itinerary' | 'menu' | 'guideschedule') => {
+    const what = tpl === 'itinerary' ? 'Chương trình tour' : tpl === 'menu' ? 'Thực đơn' : 'Lịch đi tour HDV';
     if (!window.confirm(`Rời báo giá để mở ${what}? Thay đổi chưa lưu của báo giá có thể mất.`)) return;
     useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: tpl }, view: 'cost' }));
   };
@@ -335,6 +336,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           ...(isMgr ? [item('audit', 'Nhật ký')] : []),
           { label: 'Chương trình tour', icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') },
           { label: 'Thực đơn', icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') },
+          { label: 'Lịch đi tour HDV', icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') },
         ] },
         { group: 'Danh mục', icon: <CategoryOutlinedIcon />, items: [
           item('advance', 'Đề nghị tạm ứng'),

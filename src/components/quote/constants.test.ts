@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { TEMPLATES, CATS, DMC_CAT_IDS, mkItem, QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
 
 describe('TEMPLATES', () => {
-  it('declares the 7 documented templates', () => {
+  it('declares the documented templates', () => {
     expect(Object.keys(TEMPLATES).sort()).toEqual(
-      ['dmc', 'doctranslate', 'domestic', 'intl', 'itinerary', 'menu', 'visa'].sort(),
+      ['dmc', 'doctranslate', 'domestic', 'guideschedule', 'intl', 'itinerary', 'menu', 'visa'].sort(),
     );
   });
 

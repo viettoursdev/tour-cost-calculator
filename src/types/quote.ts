@@ -3,7 +3,7 @@ export type CategoryId =
   | 'teambuild' | 'gala' | 'logistics' | 'staff' | 'insurance'
   | 'visa' | 'dmc' | 'service_fee' | 'event' | 'other';
 
-export type Template = 'domestic' | 'intl' | 'dmc' | 'itinerary' | 'menu' | 'visa' | 'doctranslate';
+export type Template = 'domestic' | 'intl' | 'dmc' | 'itinerary' | 'menu' | 'visa' | 'doctranslate' | 'guideschedule';
 
 /** File đính kèm lưu trên R2 (qua AI Worker). `uploadedBy`/`uploadedAt` ghi
  *  lại tài khoản và thời điểm thao tác lưu file (dữ liệu cũ có thể thiếu). */

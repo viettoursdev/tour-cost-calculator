@@ -35,6 +35,7 @@ const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').th
 const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
 const VisaApp = lazy(() => import('@/components/visa/VisaApp').then((m) => ({ default: m.VisaApp })));
 const DocTranslateApp = lazy(() => import('@/components/doctranslate/DocTranslateApp').then((m) => ({ default: m.DocTranslateApp })));
+const GuideScheduleApp = lazy(() => import('@/components/guide/GuideScheduleApp').then((m) => ({ default: m.GuideScheduleApp })));
 
 const ViewFallback = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 240 }}>
@@ -69,7 +70,7 @@ export function QuoteView() {
   const gateOpen = hydrated && (template === null || selectorOpen);
   const gateDismissable = template !== null;
 
-  if (template === 'itinerary' || template === 'menu' || template === 'visa' || template === 'doctranslate') {
+  if (template === 'itinerary' || template === 'menu' || template === 'visa' || template === 'doctranslate' || template === 'guideschedule') {
     const exit = () => useQuoteStore.getState().abandon();
     return (
       <Suspense fallback={<ViewFallback />}>
@@ -77,6 +78,7 @@ export function QuoteView() {
         {template === 'menu' && <MenuApp onExit={exit} />}
         {template === 'visa' && <VisaApp onExit={exit} />}
         {template === 'doctranslate' && <DocTranslateApp onExit={exit} />}
+        {template === 'guideschedule' && <GuideScheduleApp onExit={exit} />}
       </Suspense>
     );
   }

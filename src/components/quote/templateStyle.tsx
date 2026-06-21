@@ -6,6 +6,7 @@ import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import TranslateOutlinedIcon from '@mui/icons-material/TranslateOutlined';
+import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import type { Template } from '@/types';
 
 /** Màu nhấn + gradient + icon hiện đại riêng cho từng loại hồ sơ (dùng chung
@@ -18,4 +19,5 @@ export const TPL_ACCENT: Record<Template, { accent: string; grad: string; Icon: 
   menu:        { accent: '#ea580c', grad: 'linear-gradient(135deg,#fdba74,#f97316 55%,#ea580c)', Icon: RestaurantMenuOutlinedIcon },
   visa:        { accent: '#0891b2', grad: 'linear-gradient(135deg,#67e8f9,#22d3ee 50%,#0891b2)', Icon: BadgeOutlinedIcon },
   doctranslate:{ accent: '#475569', grad: 'linear-gradient(135deg,#94a3b8,#64748b 55%,#475569)', Icon: TranslateOutlinedIcon },
+  guideschedule:{ accent: '#0369a1', grad: 'linear-gradient(135deg,#38bdf8,#0ea5e9 55%,#0369a1)', Icon: ConnectingAirportsOutlinedIcon },
 };

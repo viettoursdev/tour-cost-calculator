@@ -185,4 +185,5 @@ export const TEMPLATES: Record<Template, TemplateDef> = {
   menu:      { key: 'menu',      label: 'Thư viện thực đơn',        icon: '🍽️', desc: 'Quản lý thực đơn theo nhà hàng, xuất Word/PDF', kind: 'alt' },
   visa:         { key: 'visa',         label: 'Quản lý Visa',  icon: '🛂', desc: 'Bảng giá visa & hồ sơ thủ tục', kind: 'alt' },
   doctranslate: { key: 'doctranslate', label: 'Dịch hồ sơ',    icon: '📑', desc: 'Dịch Word/PDF/scan Việt → Anh, giữ bố cục sạch', kind: 'alt' },
+  guideschedule:{ key: 'guideschedule', label: 'Lịch đi tour HDV', icon: '🧭', desc: 'Lịch bay & điều phối Hướng dẫn viên, bắt trùng lịch', kind: 'alt' },
 };
