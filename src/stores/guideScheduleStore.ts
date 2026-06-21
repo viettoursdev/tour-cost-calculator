@@ -28,6 +28,8 @@ type State = {
    * leg vừa seed.
    */
   seedLegsFromQuote: (tourCloudId: string, guideIds: string[], meta: { tourName: string; departDate?: string }) => Promise<number>;
+  /** Đọc các chặng bay của báo giá (đã quy đổi giờ) để CHỌN — guideId để trống. */
+  loadTourFlightCandidates: (tourCloudId: string, departDate?: string) => Promise<GuideFlightLeg[]>;
 };
 
 export const useGuideScheduleStore = create<State>()(
@@ -126,6 +128,14 @@ export const useGuideScheduleStore = create<State>()(
         const kept = existing.filter((l) => l.source === 'manual' || l.edited);
         await writeAssignment(tourCloudId, { ...meta, legs: [...kept, ...fresh] });
         return fresh.length;
+      },
+
+      loadTourFlightCandidates: async (tourCloudId, departDate) => {
+        const proj = await fbGetQuoteProject(tourCloudId);
+        const flights = proj?.currentState?.flights;
+        const departISO = departDate ?? proj?.currentState?.info?.startDate ?? undefined;
+        return buildLegsFromFlights(flights, '', tourCloudId, departISO,
+          (i, seg) => `${tourCloudId}::${seg.flightNo || 'seg'}:${i}`);
       },
     };
   }),
