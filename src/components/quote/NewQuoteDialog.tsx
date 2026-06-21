@@ -42,6 +42,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const [name, setName] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerInput, setCustomerInput] = useState('');
+  const [pax, setPax] = useState(20);
   const [days, setDays] = useState(1);
   const [nights, setNights] = useState(0);
   const [startDate, setStartDate] = useState('');
@@ -56,6 +57,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setName('');
     setCustomer(null);
     setCustomerInput('');
+    setPax(20);
     setDays(1);
     setNights(0);
     setStartDate('');
@@ -85,6 +87,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
       customerId: matched?.id,
       // Tên mới (chưa có trong danh sách) vẫn mang theo để hộp thoại Lưu cloud tự tạo.
       customerName: matched?.name ?? (typed || undefined),
+      pax,
       days,
       nights,
       startDate: startDate || null,
@@ -169,6 +172,19 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
               <TextField {...params} label="Khách hàng" placeholder="Chọn hoặc gõ tên khách mới" />
             )}
           />
+
+          {/* Số lượng khách */}
+          <Box>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Số lượng khách
+            </Typography>
+            <TextField
+              type="number" size="small" value={pax} fullWidth
+              onChange={(e) => setPax(Math.max(1, Number(e.target.value) || 1))}
+              inputProps={{ min: 1 }}
+              InputProps={{ endAdornment: <InputAdornment position="end">khách</InputAdornment> }}
+            />
+          </Box>
 
           {/* Ngày tour: ... ngày ... đêm */}
           <Box>

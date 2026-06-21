@@ -101,6 +101,7 @@ export type NewQuoteMeta = {
   name: string;
   customerId?: string;
   customerName?: string;
+  pax?: number;
   days: number;
   nights: number;
   startDate?: string | null;

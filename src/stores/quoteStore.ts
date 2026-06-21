@@ -316,7 +316,9 @@ export const useQuoteStore = create<QuoteState>()(
             })));
             return;
           }
-          const items = tpl.init(EMPTY_DRAFT.pax);
+          // Số lượng khách nhập ở bảng tạo mới (seed số phòng theo pax cho đúng).
+          const pax = meta?.pax && meta.pax > 0 ? meta.pax : EMPTY_DRAFT.pax;
+          const items = tpl.init(pax);
           const catEnabled = Object.fromEntries(
             CATS.map((c) => [
               c.id,
@@ -339,6 +341,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...EMPTY_DRAFT,
               template,
               info,
+              pax,
               items,
               catEnabled,
               currentQuoteId: null,
