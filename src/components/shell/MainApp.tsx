@@ -17,6 +17,7 @@ import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { useRestaurantStore } from '@/stores/restaurantStore';
+import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
@@ -90,6 +91,7 @@ export function MainApp() {
     const itinUnsub = sync ? useItineraryStore.getState().init() : undefined;
     const menuUnsub = sync ? useMenuStore.getState().init() : undefined;
     const restUnsub = sync ? useRestaurantStore.getState().init() : undefined;
+    const guideUnsub = sync ? useGuideScheduleStore.getState().init() : undefined;
 
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     setTimeout(() => { void checkVisaDeadlines(currentUser); }, 4000);
@@ -118,6 +120,7 @@ export function MainApp() {
       itinUnsub?.();
       menuUnsub?.();
       restUnsub?.();
+      guideUnsub?.();
       vpUnsub?.();
       vprocUnsub?.();
       vprojUnsub?.();

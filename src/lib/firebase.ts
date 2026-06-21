@@ -11,7 +11,7 @@ import {
 import type {
   AuditEntry, Chat, ChatMessage,
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
-  FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
+  FileAttachment, GuideScheduleDoc, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, QuoteRequestKind, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
@@ -1238,6 +1238,33 @@ export async function fbPushPois(
 ): Promise<void> {
   await setDoc(POI_LIBRARY_DOC, {
     pois: list,
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── Lịch đi tour HDV (single-doc, dùng chung) ──
+const GUIDE_SCHEDULE_DOC = doc(db, 'viettours', 'guide_schedule');
+
+export function fbSubscribeGuideSchedule(cb: (d: GuideScheduleDoc) => void): Unsubscribe {
+  return subDoc(GUIDE_SCHEDULE_DOC, (s) => {
+    const data = s.exists() ? (s.data() as Partial<GuideScheduleDoc>) : undefined;
+    cb({
+      freelancers: data?.freelancers ?? [],
+      assignments: data?.assignments ?? {},
+      updatedAt: data?.updatedAt,
+      updatedBy: data?.updatedBy,
+    });
+  });
+}
+
+export async function fbPushGuideSchedule(
+  d: GuideScheduleDoc,
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(GUIDE_SCHEDULE_DOC, {
+    freelancers: d.freelancers ?? [],
+    assignments: d.assignments ?? {},
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });

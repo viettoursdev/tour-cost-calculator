@@ -30,6 +30,9 @@ export const fbGetDMCQuoteProject = sbActive ? (sb.sbGetDMCQuoteProject as typeo
 export const fbGetItinerary = sbActive ? (sb.sbGetItinerary as typeof fb.fbGetItinerary) : fb.fbGetItinerary;
 export const fbGetMenu = sbActive ? (sb.sbGetMenu as typeof fb.fbGetMenu) : fb.fbGetMenu;
 export const fbGetQuoteProject = sbActive ? (sb.sbGetQuoteProject as typeof fb.fbGetQuoteProject) : fb.fbGetQuoteProject;
+// Lịch đi tour HDV — chỉ Firebase (Supabase chưa triển khai).
+export const fbSubscribeGuideSchedule = fb.fbSubscribeGuideSchedule;
+export const fbPushGuideSchedule = fb.fbPushGuideSchedule;
 export const fbGetTourPayments = sbActive ? (sb.sbGetTourPayments as typeof fb.fbGetTourPayments) : fb.fbGetTourPayments;
 export const fbGetVisaProc = sbActive ? (sb.sbGetVisaProc as typeof fb.fbGetVisaProc) : fb.fbGetVisaProc;
 export const fbLogAudit = sbActive ? (sb.sbLogAudit as typeof fb.fbLogAudit) : fb.fbLogAudit;
