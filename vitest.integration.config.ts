@@ -17,7 +17,7 @@ export default defineConfig({
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(LOCAL_SUPABASE_ANON_KEY),
   },
   test: {
-    include: ['tests/supabase/**/*.test.ts'],
+    include: ['tests/supabase/**/*.test.ts', 'tests/etl/**/*.test.ts'],
     environment: 'node',
     hookTimeout: 30_000,
     testTimeout: 30_000,

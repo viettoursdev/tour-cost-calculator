@@ -16,7 +16,9 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "etl": "node scripts/supabase-etl.mjs",
+    "test:etl": "vitest run --config vitest.integration.config.ts tests/etl"
   },
   "keywords": [],
   "author": "",
