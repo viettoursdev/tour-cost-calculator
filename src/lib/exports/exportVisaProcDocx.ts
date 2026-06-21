@@ -86,7 +86,7 @@ export async function exportVisaProcDocx(it: VisaProcDoc): Promise<void> {
           children: [new ImageRun({
             type: 'png',
             data: b64ToU8(VTE_LOGO),
-            transformation: { width: 81, height: 46 },
+            transformation: { width: 90, height: 24 },
           })],
           spacing: { after: 0 },
         }),

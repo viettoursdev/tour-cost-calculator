@@ -59,7 +59,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
 
   // Logo + company name. Company block is width-capped on the left so it can
   // never run into the salesperson block on the right.
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 20, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 9.07, undefined, 'FAST'); } catch { /* ignore */ }
   const brandX = mX + 37;
   const brandMaxW = 95; // keeps clear of the right-side contact column
   pdf.setFontSize(12); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');

@@ -43,7 +43,7 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
 
   // Header band + logo + salesperson
   pdf.setFillColor(...navy); pdf.rect(0, 0, pageW, 8, 'F');
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 20, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 9.07, undefined, 'FAST'); } catch { /* ignore */ }
   pdf.setFontSize(12); pdf.setTextColor(...navy); pdf.setFont(FONT, 'bold');
   pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 37, y + 8, { maxWidth: 95 });
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');

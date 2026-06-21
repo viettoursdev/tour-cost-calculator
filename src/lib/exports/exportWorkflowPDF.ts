@@ -33,7 +33,7 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
 
   // Header
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 17, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 8, undefined, 'FAST'); } catch { /* ignore */ }
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
   const prog = workflowProgress(steps);

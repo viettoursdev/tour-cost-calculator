@@ -34,7 +34,7 @@ export function exportManifestPDF(info: QuoteInfo, pax: Passenger[]): void {
   let y = M;
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
 
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 26, 15, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 26, 6.93, undefined, 'FAST'); } catch { /* ignore */ }
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 30, y + 7);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);

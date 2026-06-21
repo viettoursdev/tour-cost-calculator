@@ -52,7 +52,7 @@ export function exportPaymentRequestPDF(
 
   // Top teal stripe + logo
   pdf.setFillColor(...TEAL); pdf.rect(0, 0, pageW, 4, 'F');
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 21, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 9.6, undefined, 'FAST'); } catch { /* ignore */ }
 
   // Header (right of logo)
   pdf.setFontSize(13); pdf.setTextColor(...TEAL); setFont('bold');

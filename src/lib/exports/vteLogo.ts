@@ -1,6 +1,9 @@
 /**
  * Inline Viettours logo — teal "Viettours®" wordmark (721×194, transparent).
  * Source: Logo Viettours-03.png. Used in PDF/DOCX exports and UI.
+ *
+ * KHI ĐẶT LOGO TRONG FILE XUẤT (PDF/DOCX): luôn giữ tỉ lệ ngang:cao = 15:4
+ * (height = width × 4/15). UI dùng `height` cố định + `width: auto` (tự đúng tỉ lệ).
  * For a white version on dark backgrounds, apply CSS filter
  * `brightness(0) invert(1)` at the usage site.
  */

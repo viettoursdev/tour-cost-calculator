@@ -35,7 +35,7 @@ export function exportAdvancePDF({
   const showActual = adv.status !== 'draft';
 
   // ── Header ──
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 28, 16, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 28, 7.47, undefined, 'FAST'); } catch { /* ignore */ }
   setF('bold'); pdf.setFontSize(12); pdf.setTextColor(...TEAL);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 32, y + 7);
   setF('normal'); pdf.setFontSize(8.5); pdf.setTextColor(...MUTE);

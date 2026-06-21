@@ -31,7 +31,7 @@ export function exportAcceptanceCertPDF(
   pdf.setFont(FONT);
 
   // ── Logo + Header (state header) ──
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 38, 22, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 38, 10.13, undefined, 'FAST'); } catch { /* ignore */ }
   pdf.setFontSize(11); pdf.setFont(FONT, 'bold');
   atX('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', pageW / 2, { align: 'center' }); ln(6);
   pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);

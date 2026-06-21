@@ -65,7 +65,7 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   pdf.setFillColor(...TEAL); pdf.rect(0, 0, pageW, 4, 'F');
 
   // Logo + Company block (left). Falls back to text-only if logo fails.
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 42, 24, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 42, 11.2, undefined, 'FAST'); } catch { /* ignore */ }
   const cx = mX + 46;
   // Brand name: shrink-to-fit so it never overlaps the right-aligned "HÓA ĐƠN" title.
   setF('bold');

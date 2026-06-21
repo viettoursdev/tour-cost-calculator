@@ -39,7 +39,7 @@ export function exportItineraryExecutionPDF(
   const wrap = (t: string, w: number) => pdf.splitTextToSize(String(t ?? ''), w) as string[];
 
   // ── Header ──
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 17, undefined, 'FAST'); } catch { /* ignore */ }
+  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 8, undefined, 'FAST'); } catch { /* ignore */ }
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);

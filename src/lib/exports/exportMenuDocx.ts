@@ -95,7 +95,7 @@ export async function exportMenuDocx(it: Menu, code: string, includePrices = tru
           children: [new ImageRun({
             type: 'png',
             data: b64ToU8(VTE_LOGO),
-            transformation: { width: 81, height: 46 },
+            transformation: { width: 90, height: 24 },
           })],
           spacing: { after: 0 },
         }),
