@@ -53,6 +53,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const [template, setTemplate] = useState<'domestic' | 'intl'>(initialTemplate);
   const [request, setRequest] = useState<QuoteRequestKind>('request');
   const [name, setName] = useState('');
+  const [dest, setDest] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerInput, setCustomerInput] = useState('');
   const [pax, setPax] = useState(20);
@@ -71,6 +72,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setTemplate(initialTemplate);
     setRequest('request');
     setName('');
+    setDest('');
     setCustomer(null);
     setCustomerInput('');
     setPax(20);
@@ -132,6 +134,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
       const meta: NewQuoteMeta = {
         request,
         name: name.trim(),
+        dest: dest.trim() || undefined,
         customerId: custId,
         customerName: custName,
         pax,
@@ -247,6 +250,12 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
             label="Tên tour" required value={name} autoFocus
             onChange={(e) => setName(e.target.value)}
             placeholder="VD: Đà Lạt 3N2Đ – Đoàn ABC"
+          />
+
+          <TextField
+            label="Điểm đến" value={dest}
+            onChange={(e) => setDest(e.target.value)}
+            placeholder="VD: Nhật Bản + Hawaii"
           />
 
           {/* Khách hàng — freeSolo: cho nhập khách chưa có (tự lưu khi lưu cloud). */}

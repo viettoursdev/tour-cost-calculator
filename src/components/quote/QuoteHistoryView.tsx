@@ -222,7 +222,7 @@ export function QuoteHistoryView() {
       const contacts = (cust?.contacts ?? [])
         .map((c) => [c.name, c.phone, c.email].filter(Boolean).join(' '))
         .join(' ');
-      return [q.name, q.quoteCode, q.customerName, cust?.name, cust?.taxCode, contacts]
+      return [q.name, q.dest, q.quoteCode, q.customerName, cust?.name, cust?.taxCode, contacts]
         .filter(Boolean).join(' ');
     });
   }, [visible, search, templateFilter, isDMC, owner, customer, dateRange, dateFrom, dateTo, custById]);
@@ -283,6 +283,13 @@ export function QuoteHistoryView() {
   const columns: GridColDef<CloudQuoteEntry>[] = [
     { field: 'quoteCode', headerName: 'Mã', width: 140 },
     { field: 'name', headerName: 'Tên báo giá', flex: 1, minWidth: 180 },
+    {
+      field: 'dest',
+      headerName: 'Điểm đến',
+      width: 150,
+      renderCell: (p: GridRenderCellParams<CloudQuoteEntry, string>) =>
+        (p.value ? <Typography variant="body2" noWrap>{p.value}</Typography> : <Typography variant="caption" color="text.disabled">—</Typography>),
+    },
     {
       field: 'customerName',
       headerName: 'Khách hàng',

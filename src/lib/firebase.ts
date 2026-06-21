@@ -227,6 +227,7 @@ type SaveEntry = {
   totalCost: number;
   customerId?: string;
   customerName?: string;
+  dest?: string;
   status?: QuoteStatus;
   request?: QuoteRequestKind;
   deadline?: string;
@@ -271,6 +272,7 @@ function makeQuoteHistoryApi(
 
       const optionalFields: Partial<CloudQuoteEntry> = {};
       if (entry.status !== undefined) optionalFields.status = entry.status;
+      if (entry.dest !== undefined) optionalFields.dest = entry.dest;
       if (entry.request !== undefined) optionalFields.request = entry.request;
       if (entry.deadline !== undefined) optionalFields.deadline = entry.deadline;
       if (entry.lossReason !== undefined) optionalFields.lossReason = entry.lossReason;

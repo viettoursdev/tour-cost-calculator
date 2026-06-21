@@ -334,7 +334,7 @@ export const useQuoteStore = create<QuoteState>()(
             ? {
                 ...EMPTY_DRAFT.info,
                 name: meta.name || (tpl.sample?.name ?? ''),
-                dest: tpl.sample?.dest ?? EMPTY_DRAFT.info.dest,
+                dest: meta.dest || tpl.sample?.dest || EMPTY_DRAFT.info.dest,
                 days: meta.days || EMPTY_DRAFT.info.days,
                 nights: meta.nights || EMPTY_DRAFT.info.nights,
                 startDate: meta.startDate ?? null,
@@ -764,6 +764,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              ...(draft.info.dest ? { dest: draft.info.dest } : {}),
               ...(draft.request ? { request: draft.request } : {}),
               ...(draft.deadline ? { deadline: draft.deadline } : {}),
               ...(draft.lossReason ? { lossReason: draft.lossReason } : {}),

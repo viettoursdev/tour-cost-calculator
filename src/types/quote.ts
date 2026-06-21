@@ -99,6 +99,7 @@ export type QuoteRequestKind = 'request' | 'thau';
 export type NewQuoteMeta = {
   request?: QuoteRequestKind;
   name: string;
+  dest?: string;
   customerId?: string;
   customerName?: string;
   pax?: number;
@@ -318,6 +319,8 @@ export type CloudQuoteEntry = {
   totalCost: number;
   customerId?: string;
   customerName?: string;
+  /** Điểm đến của tour (info.dest) — index cho lịch sử báo giá. */
+  dest?: string;
   status?: QuoteStatus;
   /** Loại yêu cầu (Request tour / Thầu) — index cho lọc & thống kê. */
   request?: QuoteRequestKind;
