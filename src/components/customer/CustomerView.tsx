@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   IconButton, LinearProgress, MenuItem, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,6 +16,7 @@ import { canViewAll } from '@/auth/ROLES';
 import { CustomerModal } from './CustomerModal';
 import { Customer360 } from './Customer360';
 import { ImportListModal } from '@/components/common/ImportListModal';
+import { MergeDialog } from '@/components/common/MergeDialog';
 import { customerToNcc } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import type { Customer } from '@/types';
@@ -35,6 +37,7 @@ export function CustomerView() {
   const syncing = useCustomerStore((s) => s.syncing);
   const save = useCustomerStore((s) => s.save);
   const del = useCustomerStore((s) => s.delete);
+  const merge = useCustomerStore((s) => s.merge);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageCustomers') && canManageArea(currentUser, 'customers');
   // Sales trở lên xem toàn bộ; dưới ngưỡng chỉ thấy khách hàng do mình tạo.
@@ -58,6 +61,20 @@ export function CustomerView() {
   const [convertTarget, setConvertTarget] = useState<Customer | null>(null);
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('vte_cust_compact') === '1'; } catch { return false; } });
   const toggleCompact = () => setCompact((v) => { const nv = !v; try { localStorage.setItem('vte_cust_compact', nv ? '1' : '0'); } catch { /* quota */ } return nv; });
+  // Gộp khách trùng: bật chế độ chọn → tích ≥2 bản → Gộp.
+  const [selMode, setSelMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const selectedCustomers = useMemo(() => customers.filter((c) => selected.has(c.id)), [customers, selected]);
+  const toggleSel = (id: string) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const exitSelMode = () => { setSelMode(false); setSelected(new Set()); };
+  const handleMerge = async (primaryId: string) => {
+    const n = selected.size;
+    await merge([...selected], primaryId);
+    setMergeOpen(false);
+    exitSelMode();
+    toast(`✅ Đã gộp ${n} khách hàng thành 1.`);
+  };
 
   const owners = useMemo(
     () => [...new Set(customers.map((c) => c.createdBy).filter(Boolean))].sort(),
@@ -118,6 +135,14 @@ export function CustomerView() {
         </Box>
         {canEdit && (
           <Stack direction="row" spacing={1}>
+            <Button
+              variant={selMode ? 'contained' : 'outlined'}
+              color="secondary"
+              startIcon={<MergeTypeIcon />}
+              onClick={() => (selMode ? exitSelMode() : setSelMode(true))}
+            >
+              {selMode ? 'Thoát gộp' : 'Gộp trùng'}
+            </Button>
             <Button variant="outlined" startIcon={<span>📥</span>} onClick={() => setImportOpen(true)}>
               Nhập danh sách
             </Button>
@@ -200,6 +225,25 @@ export function CustomerView() {
         </Box>
       )}
 
+      {/* Thanh gộp trùng */}
+      {selMode && (
+        <Stack
+          direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap
+          sx={{ mb: 2, p: 1.25, borderRadius: 2, bgcolor: 'action.hover', border: '1px dashed', borderColor: 'divider' }}
+        >
+          <Typography variant="body2" fontWeight={700}>🔗 Đã chọn {selected.size} khách hàng</Typography>
+          <Typography variant="caption" color="text.secondary">Tích chọn ≥2 bản trùng rồi bấm Gộp.</Typography>
+          <Box sx={{ flex: 1 }} />
+          {selected.size > 0 && <Button size="small" onClick={() => setSelected(new Set())}>Bỏ chọn</Button>}
+          <Button
+            size="small" variant="contained" startIcon={<MergeTypeIcon />}
+            disabled={selected.size < 2} onClick={() => setMergeOpen(true)}
+          >
+            Gộp ({selected.size})
+          </Button>
+        </Stack>
+      )}
+
       {/* Card grid (Thu gọn = ẩn preview contact) */}
       {!loading && filtered.length > 0 && (
         <Box
@@ -216,6 +260,9 @@ export function CustomerView() {
               canEdit={canEdit}
               canConvert={canConvert}
               compact={compact}
+              selectable={selMode}
+              selected={selected.has(c.id)}
+              onToggleSelect={() => toggleSel(c.id)}
               onEdit={() => setModal({ customer: c })}
               onDelete={() => handleDeleteNow(c)}
               onConvert={() => setConvertTarget(c)}
@@ -226,6 +273,22 @@ export function CustomerView() {
       )}
 
       {view360 && <Customer360 customer={view360} onClose={() => setView360(null)} />}
+
+      {mergeOpen && selectedCustomers.length >= 2 && (
+        <MergeDialog
+          open
+          title="🔗 Gộp khách hàng trùng"
+          kindLabel="khách hàng"
+          items={selectedCustomers.map((c) => ({
+            id: c.id,
+            name: c.name,
+            detail: `${(c.contacts ?? []).filter((ct) => ct.name || ct.phone || ct.email).length} liên hệ · ${(c.interactions ?? []).length} lần chăm sóc${c.taxCode ? ` · MST ${c.taxCode}` : ''}`,
+            meta: `Tạo bởi ${c.createdBy || '—'}`,
+          }))}
+          onClose={() => setMergeOpen(false)}
+          onConfirm={(pid) => void handleMerge(pid)}
+        />
+      )}
 
       {/* Modal */}
       {modal !== null && (
@@ -296,6 +359,9 @@ function CustomerCard({
   canEdit,
   canConvert,
   compact,
+  selectable,
+  selected,
+  onToggleSelect,
   onEdit,
   onDelete,
   onConvert,
@@ -305,6 +371,9 @@ function CustomerCard({
   canEdit: boolean;
   canConvert: boolean;
   compact?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onConvert: () => void;
@@ -313,11 +382,11 @@ function CustomerCard({
   const isCompany = c.type === 'company';
   return (
     <Box
-      onClick={onClick}
+      onClick={selectable ? onToggleSelect : onClick}
       sx={{
-        bgcolor: 'background.paper',
+        bgcolor: selected ? 'action.selected' : 'background.paper',
         border: '1px solid',
-        borderColor: 'divider',
+        borderColor: selected ? 'primary.main' : 'divider',
         borderRadius: 2,
         p: 2,
         cursor: 'pointer',
@@ -328,12 +397,15 @@ function CustomerCard({
       {/* Name row */}
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1, mr: 1 }}>
+          {selectable && (
+            <Checkbox size="small" checked={!!selected} tabIndex={-1} disableRipple sx={{ p: 0, pointerEvents: 'none' }} />
+          )}
           <Typography fontSize={20}>{isCompany ? '🏢' : '👤'}</Typography>
           <Typography fontWeight={800} variant="body1" sx={{ lineHeight: 1.3 }}>
             {c.name}
           </Typography>
         </Stack>
-        {canEdit && (
+        {canEdit && !selectable && (
           <Stack direction="row" onClick={(e) => e.stopPropagation()}>
             <Tooltip title="Sửa">
               <IconButton size="small" onClick={onEdit}>

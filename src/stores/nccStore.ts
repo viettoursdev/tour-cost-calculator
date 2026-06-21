@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { fbSubscribeNcc, fbPushNcc } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
-import type { Ncc } from '@/types';
+import type { Ncc, NccContact } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 
 type NccState = {
@@ -13,6 +13,8 @@ type NccState = {
   save: (form: Ncc) => Promise<void>;
   importMany: (rows: Ncc[]) => Promise<number>;
   delete: (id: string) => Promise<void>;
+  /** Gộp nhiều NCC trùng thành 1 (giữ `primaryId` làm bản chính), xoá các bản còn lại. */
+  merge: (ids: string[], primaryId: string) => Promise<void>;
 };
 
 export const useNccStore = create<NccState>()(
@@ -97,6 +99,55 @@ export const useNccStore = create<NccState>()(
         await fbPushNcc(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
+      } finally {
+        set({ syncing: false });
+      }
+    },
+
+    merge: async (ids, primaryId) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u || ids.length < 2) return;
+      const { suppliers } = get();
+      const idSet = new Set(ids);
+      const sel = suppliers.filter((s) => idSet.has(s.id));
+      if (sel.length < 2) return;
+      const primary = sel.find((s) => s.id === primaryId) ?? sel[0];
+      const rest = sel.filter((s) => s.id !== primary.id);
+      const all = [primary, ...rest];
+      const now = new Date().toISOString();
+      const fill = (...vals: (string | undefined)[]) => vals.find((v) => v && v.trim()) ?? '';
+      // Gộp contacts, khử trùng theo tên + SĐT.
+      const seen = new Set<string>();
+      const contacts: NccContact[] = [];
+      for (const ct of all.flatMap((s) => s.contacts ?? [])) {
+        const key = `${(ct.name ?? '').trim().toLowerCase()}|${(ct.phone ?? '').trim()}`;
+        if (key === '|' || seen.has(key)) continue;
+        seen.add(key);
+        contacts.push(ct);
+      }
+      const merged: Ncc = {
+        ...primary,
+        sectors: [...new Set(all.flatMap((s) => s.sectors ?? []))],
+        continent: primary.continent || rest.map((s) => s.continent).find((x) => x && x.trim()),
+        country: primary.country || rest.map((s) => s.country).find((x) => x && x.trim()),
+        location: fill(primary.location, ...rest.map((s) => s.location)),
+        tours: [...new Set(all.flatMap((s) => s.tours ?? []))],
+        contacts,
+        note: all.map((s) => s.note?.trim()).filter(Boolean).join('\n— '),
+        aiAnalysis: primary.aiAnalysis || rest.map((s) => s.aiAnalysis).find((x) => x && x.trim()),
+        ratings: all.flatMap((s) => s.ratings ?? []),
+        updatedAt: now,
+        updatedBy: u.name,
+      };
+      const removeIds = new Set(rest.map((s) => s.id));
+      const next = suppliers
+        .filter((s) => !removeIds.has(s.id))
+        .map((s) => (s.id === primary.id ? merged : s));
+      set({ suppliers: next, syncing: true });
+      try {
+        await fbPushNcc(next, { name: u.name, role: u.role });
+      } catch (e) {
+        window.alert('❌ Lỗi gộp: ' + (e as Error).message);
       } finally {
         set({ syncing: false });
       }

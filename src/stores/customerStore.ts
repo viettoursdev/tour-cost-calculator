@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { fbSubscribeCustomers, fbPushCustomers } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
-import type { Customer, CustomerInteraction, CustomerInteractionType } from '@/types';
+import type { Customer, CustomerContact, CustomerInteraction, CustomerInteractionType } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
 
 type CustomerState = {
@@ -21,6 +21,8 @@ type CustomerState = {
   setFollowUp: (customerId: string, date: string, note: string) => Promise<void>;
   /** Hoàn tất / xoá lịch hẹn liên hệ lại. */
   clearFollowUp: (customerId: string) => Promise<void>;
+  /** Gộp nhiều khách trùng thành 1 (giữ `primaryId` làm bản chính), xoá các bản còn lại. */
+  merge: (ids: string[], primaryId: string) => Promise<void>;
 };
 
 let iseq = 0;
@@ -156,6 +158,50 @@ export const useCustomerStore = create<CustomerState>()(
       set({ customers: next, syncing: true });
       try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
+    },
+
+    merge: async (ids, primaryId) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u || ids.length < 2) return;
+      const { customers } = get();
+      const idSet = new Set(ids);
+      const sel = customers.filter((c) => idSet.has(c.id));
+      if (sel.length < 2) return;
+      const primary = sel.find((c) => c.id === primaryId) ?? sel[0];
+      const rest = sel.filter((c) => c.id !== primary.id);
+      const all = [primary, ...rest];
+      const now = new Date().toISOString();
+      const fill = (...vals: (string | undefined)[]) => vals.find((v) => v && v.trim()) ?? '';
+      // Gộp contacts, khử trùng theo tên + SĐT.
+      const seen = new Set<string>();
+      const contacts: CustomerContact[] = [];
+      for (const ct of all.flatMap((c) => c.contacts ?? [])) {
+        const key = `${(ct.name ?? '').trim().toLowerCase()}|${(ct.phone ?? '').trim()}`;
+        if (key === '|' || seen.has(key)) continue;
+        seen.add(key);
+        contacts.push(ct);
+      }
+      const merged: Customer = {
+        ...primary,
+        address: fill(primary.address, ...rest.map((c) => c.address)),
+        taxCode: fill(primary.taxCode, ...rest.map((c) => c.taxCode)),
+        source: primary.source || rest.map((c) => c.source).find((s) => s && s.trim()),
+        contacts,
+        tags: [...new Set(all.flatMap((c) => c.tags ?? []))],
+        note: all.map((c) => c.note?.trim()).filter(Boolean).join('\n— '),
+        interactions: all.flatMap((c) => c.interactions ?? []).sort((a, b) => a.at.localeCompare(b.at)),
+        nextFollowUp: primary.nextFollowUp ?? rest.map((c) => c.nextFollowUp).find(Boolean),
+        updatedAt: now,
+        updatedBy: u.name,
+      };
+      const removeIds = new Set(rest.map((c) => c.id));
+      const next = customers
+        .filter((c) => !removeIds.has(c.id))
+        .map((c) => (c.id === primary.id ? merged : c));
+      set({ customers: next, syncing: true });
+      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      catch (e) { window.alert('❌ Lỗi gộp: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
   })),

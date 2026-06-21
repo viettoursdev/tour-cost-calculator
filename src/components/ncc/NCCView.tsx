@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   IconButton, LinearProgress, MenuItem, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useNccStore } from '@/stores/nccStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,6 +15,7 @@ import { canManageArea } from '@/auth/departments';
 import { canViewAll } from '@/auth/ROLES';
 import { NCCModal } from './NCCModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
+import { MergeDialog } from '@/components/common/MergeDialog';
 import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
@@ -34,6 +36,7 @@ export function NCCView() {
   const syncing = useNccStore((s) => s.syncing);
   const save = useNccStore((s) => s.save);
   const del = useNccStore((s) => s.delete);
+  const merge = useNccStore((s) => s.merge);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageNCC') && canManageArea(currentUser, 'ncc');
   // Operations trở lên xem toàn bộ; dưới ngưỡng chỉ thấy NCC do mình tạo.
@@ -59,6 +62,20 @@ export function NCCView() {
   const [convertTarget, setConvertTarget] = useState<Ncc | null>(null);
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('vte_ncc_compact') === '1'; } catch { return false; } });
   const toggleCompact = () => setCompact((v) => { const nv = !v; try { localStorage.setItem('vte_ncc_compact', nv ? '1' : '0'); } catch { /* quota */ } return nv; });
+  // Gộp NCC trùng: bật chế độ chọn → tích ≥2 bản → Gộp.
+  const [selMode, setSelMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const selectedNccs = useMemo(() => suppliers.filter((s) => selected.has(s.id)), [suppliers, selected]);
+  const toggleSel = (id: string) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const exitSelMode = () => { setSelMode(false); setSelected(new Set()); };
+  const handleMultiMerge = async (primaryId: string) => {
+    const n = selected.size;
+    await merge([...selected], primaryId);
+    setMergeOpen(false);
+    exitSelMode();
+    toast(`✅ Đã gộp ${n} nhà cung cấp thành 1.`);
+  };
 
   const owners = useMemo(
     () => [...new Set(suppliers.map((s) => s.createdBy).filter(Boolean))].sort(),
@@ -146,6 +163,14 @@ export function NCCView() {
         </Box>
         {canEdit && (
           <Stack direction="row" spacing={1}>
+            <Button
+              variant={selMode ? 'contained' : 'outlined'}
+              color="secondary"
+              startIcon={<MergeTypeIcon />}
+              onClick={() => (selMode ? exitSelMode() : setSelMode(true))}
+            >
+              {selMode ? 'Thoát gộp' : 'Gộp trùng'}
+            </Button>
             <Button variant="outlined" onClick={() => setImportOpen(true)}>📥 Nhập danh sách</Button>
             <Button variant="contained" onClick={() => setModal({ ncc: null })}>➕ Thêm NCC</Button>
           </Stack>
@@ -238,6 +263,25 @@ export function NCCView() {
         </Box>
       )}
 
+      {/* Thanh gộp trùng */}
+      {selMode && (
+        <Stack
+          direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap
+          sx={{ mb: 2, p: 1.25, borderRadius: 2, bgcolor: 'action.hover', border: '1px dashed', borderColor: 'divider' }}
+        >
+          <Typography variant="body2" fontWeight={700}>🔗 Đã chọn {selected.size} nhà cung cấp</Typography>
+          <Typography variant="caption" color="text.secondary">Tích chọn ≥2 bản trùng rồi bấm Gộp.</Typography>
+          <Box sx={{ flex: 1 }} />
+          {selected.size > 0 && <Button size="small" onClick={() => setSelected(new Set())}>Bỏ chọn</Button>}
+          <Button
+            size="small" variant="contained" startIcon={<MergeTypeIcon />}
+            disabled={selected.size < 2} onClick={() => setMergeOpen(true)}
+          >
+            Gộp ({selected.size})
+          </Button>
+        </Stack>
+      )}
+
       {/* Card grid (Thu gọn = ẩn preview contact) */}
       {!loading && filtered.length > 0 && (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
@@ -248,6 +292,9 @@ export function NCCView() {
               canEdit={canEdit}
               canConvert={canConvert}
               compact={compact}
+              selectable={selMode}
+              selected={selected.has(s.id)}
+              onToggleSelect={() => toggleSel(s.id)}
               onEdit={() => setModal({ ncc: s })}
               onDelete={() => handleDeleteNow(s)}
               onConvert={() => setConvertTarget(s)}
@@ -255,6 +302,22 @@ export function NCCView() {
             />
           ))}
         </Box>
+      )}
+
+      {mergeOpen && selectedNccs.length >= 2 && (
+        <MergeDialog
+          open
+          title="🔗 Gộp nhà cung cấp trùng"
+          kindLabel="nhà cung cấp"
+          items={selectedNccs.map((s) => ({
+            id: s.id,
+            name: s.name,
+            detail: `${(s.contacts ?? []).filter((ct) => ct.name || ct.phone || ct.email).length} liên hệ · ${(s.sectors ?? []).length} lĩnh vực${s.location ? ` · ${s.location}` : ''}`,
+            meta: `Tạo bởi ${s.createdBy || '—'}`,
+          }))}
+          onClose={() => setMergeOpen(false)}
+          onConfirm={(pid) => void handleMultiMerge(pid)}
+        />
       )}
 
       {/* Modal */}
@@ -329,6 +392,9 @@ function NccCard({
   canEdit,
   canConvert,
   compact,
+  selectable,
+  selected,
+  onToggleSelect,
   onEdit,
   onDelete,
   onConvert,
@@ -338,6 +404,9 @@ function NccCard({
   canEdit: boolean;
   canConvert: boolean;
   compact?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onConvert: () => void;
@@ -345,11 +414,11 @@ function NccCard({
 }) {
   return (
     <Box
-      onClick={onClick}
+      onClick={selectable ? onToggleSelect : onClick}
       sx={{
-        bgcolor: 'background.paper',
+        bgcolor: selected ? 'action.selected' : 'background.paper',
         border: '1px solid',
-        borderColor: 'divider',
+        borderColor: selected ? 'primary.main' : 'divider',
         borderRadius: 2,
         p: 2,
         cursor: 'pointer',
@@ -359,10 +428,15 @@ function NccCard({
     >
       {/* Name row */}
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1 }}>
-        <Typography fontWeight={800} variant="body1" sx={{ flex: 1, mr: 1, lineHeight: 1.3 }}>
-          🏢 {s.name}
-        </Typography>
-        {canEdit && (
+        <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flex: 1, mr: 1 }}>
+          {selectable && (
+            <Checkbox size="small" checked={!!selected} tabIndex={-1} disableRipple sx={{ p: 0, pointerEvents: 'none' }} />
+          )}
+          <Typography fontWeight={800} variant="body1" sx={{ lineHeight: 1.3 }}>
+            🏢 {s.name}
+          </Typography>
+        </Stack>
+        {canEdit && !selectable && (
           <Stack direction="row" onClick={(e) => e.stopPropagation()}>
             <Tooltip title="Sửa">
               <IconButton size="small" onClick={onEdit}>
