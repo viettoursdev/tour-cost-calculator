@@ -22,6 +22,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   // keystroke in the cost view.
   const hasDraft = useQuoteStore((s) => s.draft.template !== null);
   const hasItems = useQuoteStore((s) => Object.keys(s.draft.items).length > 0);
+  const cloudDirty = useQuoteStore((s) => s.cloudDirty);
   const newDraft = useQuoteStore((s) => s.newDraft);
   const currentUser = useAuthStore((s) => s.currentUser);
   const signOut = useAuthStore((s) => s.signOut);
@@ -41,7 +42,12 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   };
 
   const handlePick = (key: Template) => {
-    if (hasDraft && hasItems) {
+    // Báo giá nội địa/nước ngoài: LUÔN mở bảng nhập thông tin trước (xác nhận thay
+    // thế báo giá đang dở sẽ hỏi khi bấm "Tạo báo giá"). Các loại khác giữ cảnh báo
+    // thay thế như cũ.
+    if (isMetaTemplate(key)) {
+      setMetaTemplate(key);
+    } else if (hasDraft && hasItems) {
       setPendingConfirm(key);
     } else {
       proceed(key);
@@ -57,12 +63,15 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   };
 
   const handleMetaConfirm = (template: 'domestic' | 'intl', meta: NewQuoteMeta) => {
+    // Chỉ hỏi khi báo giá đang mở có thay đổi chưa lưu (tránh mất dữ liệu).
+    if (hasItems && cloudDirty && !window.confirm('Báo giá hiện tại có thay đổi chưa lưu sẽ bị thay thế. Tiếp tục?')) return;
     newDraft(template, meta);
     setMetaTemplate(null);
     onClose?.();
   };
 
   return (
+   <>
     <Dialog open={open} onClose={canCancel ? onClose : undefined} fullScreen>
       <DialogTitle
         sx={{
@@ -227,15 +236,17 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           </Alert>
         )}
       </DialogContent>
-
-      {metaTemplate && (
-        <NewQuoteDialog
-          open
-          initialTemplate={metaTemplate}
-          onClose={() => setMetaTemplate(null)}
-          onConfirm={handleMetaConfirm}
-        />
-      )}
     </Dialog>
+
+    {/* Render NGOÀI modal toàn màn hình để không bị lồng dialog (kẹt focus). */}
+    {metaTemplate && (
+      <NewQuoteDialog
+        open
+        initialTemplate={metaTemplate}
+        onClose={() => setMetaTemplate(null)}
+        onConfirm={handleMetaConfirm}
+      />
+    )}
+   </>
   );
 }
