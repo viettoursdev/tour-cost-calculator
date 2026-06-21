@@ -48,6 +48,15 @@ type Engagement = {
   start: number; end: number; legs: GuideFlightLeg[]; conflicted: boolean;
 };
 
+/** Thanh trên Gantt — dùng chung cho chế độ "gộp" (engagement) & "từng chặng" (leg). */
+type GanttBar = {
+  key: string; start: number; end: number; color: string;
+  label: string; tooltip: string; conflicted: boolean;
+  /** Có → kéo-thả dời lịch được (chỉ chế độ từng chặng + quyền quản lý). */
+  drag?: { tourCloudId: string; legId: string };
+};
+type GanttRow = { id: string; label: string; placed: { item: GanttBar; lane: number }[]; laneCount: number };
+
 /** Xếp các thanh không chồng nhau vào cùng một lane; chồng nhau → lane mới. */
 function packLanes<T extends { start: number; end: number }>(items: T[]): { placed: { item: T; lane: number }[]; laneCount: number } {
   const sorted = [...items].sort((a, b) => a.start - b.start);
@@ -75,6 +84,7 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
 
   const [tab, setTab] = useState<'gantt' | 'list'>('gantt');
   const [groupBy, setGroupBy] = useState<'tour' | 'guide'>('guide');
+  const [barMode, setBarMode] = useState<'engagement' | 'leg'>('engagement');
   const [ym, setYm] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [bufferMins, setBufferMins] = useState(DEFAULT_BUFFER_MINS);
   const [onlyMine, setOnlyMine] = useState(false);
@@ -164,19 +174,56 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
   const goToday = () => { const d = new Date(); setYm({ y: d.getFullYear(), m: d.getMonth() }); };
   const nowPct = Date.now() >= monthStart && Date.now() < monthEnd ? pct(Date.now()) : null;
 
-  // Hàng Gantt: gom engagement theo HDV hoặc theo tour, chỉ giữ cái giao tháng.
-  const ganttRows = useMemo(() => {
-    const inMonth = engagements.filter((e) => e.start < monthEnd && e.end > monthStart);
-    const m = new Map<string, Engagement[]>();
-    for (const e of inMonth) {
-      const k = groupBy === 'guide' ? e.guideId : e.tourCloudId;
-      (m.get(k) ?? m.set(k, []).get(k)!).push(e);
+  // Hàng Gantt: gom thanh theo HDV/tour, chỉ giữ cái giao tháng. Chế độ "gộp"
+  // (engagement = một HDV trên một tour) hoặc "từng chặng" (mỗi chặng bay 1 thanh).
+  const ganttRows = useMemo((): GanttRow[] => {
+    const bars: { rowId: string; bar: GanttBar }[] = [];
+    if (barMode === 'engagement') {
+      for (const e of engagements) {
+        if (!(e.start < monthEnd && e.end > monthStart)) continue;
+        const rowId = groupBy === 'guide' ? e.guideId : e.tourCloudId;
+        const sub = groupBy === 'guide' ? e.tourName : guideNameOf(e.guideId);
+        bars.push({ rowId, bar: {
+          key: e.key, start: e.start, end: e.end, conflicted: e.conflicted,
+          color: colorFor(groupBy === 'guide' ? e.tourCloudId : e.guideId),
+          label: sub,
+          tooltip: `${e.tourName} · ${sub} · ${new Date(e.start).toLocaleDateString('vi-VN')}–${new Date(e.end).toLocaleDateString('vi-VN')}${e.conflicted ? ' · ⚠ TRÙNG' : ''}`,
+        } });
+      }
+    } else {
+      for (const l of allLegs) {
+        const start = ms(l.startISO); const end = ms(l.endISO);
+        if (!(start < monthEnd && end > monthStart)) continue;
+        const rowId = groupBy === 'guide' ? l.guideId : l.tourCloudId;
+        const route = `${l.depAirport || '—'}→${l.arrAirport || '—'}`;
+        const ctx = groupBy === 'guide' ? tourNameOf(l.tourCloudId) : guideNameOf(l.guideId);
+        const conflicted = conflictIds.has(l.id);
+        bars.push({ rowId, bar: {
+          key: l.id, start, end, conflicted,
+          color: colorFor(groupBy === 'guide' ? l.tourCloudId : l.guideId),
+          label: `${l.flightNo || '✈'} ${route}`,
+          tooltip: `${l.flightNo || 'Chặng'} · ${route} · ${fmtRange(l)} · ${ctx}${conflicted ? ' · ⚠ TRÙNG' : ''}`,
+          drag: canManage ? { tourCloudId: l.tourCloudId, legId: l.id } : undefined,
+        } });
+      }
     }
+    const m = new Map<string, GanttBar[]>();
+    for (const { rowId, bar } of bars) (m.get(rowId) ?? m.set(rowId, []).get(rowId)!).push(bar);
     return [...m.entries()]
       .map(([id, items]) => ({ id, label: groupBy === 'guide' ? guideNameOf(id) : tourNameOf(id), ...packLanes(items) }))
       .sort((a, b) => a.label.localeCompare(b.label));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engagements, groupBy, monthStart, monthEnd]);
+  }, [engagements, allLegs, barMode, groupBy, monthStart, monthEnd, conflictIds, canManage]);
+
+  const shiftLeg = async (tourCloudId: string, legId: string, deltaDays: number) => {
+    if (!deltaDays) return;
+    const a = assignments[tourCloudId];
+    if (!a) return;
+    const delta = deltaDays * 86400000;
+    await setLegs(tourCloudId, a.legs.map((l) => (l.id === legId
+      ? { ...l, startISO: new Date(ms(l.startISO) + delta).toISOString(), endISO: new Date(ms(l.endISO) + delta).toISOString(), edited: true }
+      : l)));
+  };
 
   const reseed = async (cloudId: string) => {
     const a = assignments[cloudId];
@@ -253,6 +300,14 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
               <Typography fontWeight={800} sx={{ minWidth: 130, textAlign: 'center', textTransform: 'capitalize' }}>{monthLabel}</Typography>
               <IconButton size="small" onClick={() => stepMonth(1)}><ChevronRightIcon /></IconButton>
               <Button size="small" startIcon={<TodayIcon />} onClick={goToday} sx={{ textTransform: 'none' }}>Hôm nay</Button>
+              <ToggleButtonGroup exclusive size="small" value={barMode} onChange={(_, v: 'engagement' | 'leg' | null) => v && setBarMode(v)}
+                sx={{ ml: 0.5, '& .MuiToggleButton-root': { textTransform: 'none', fontWeight: 700, px: 1.25, py: 0.25 } }}>
+                <ToggleButton value="engagement">Gộp tour</ToggleButton>
+                <ToggleButton value="leg">Từng chặng</ToggleButton>
+              </ToggleButtonGroup>
+              {barMode === 'leg' && canManage && (
+                <Typography variant="caption" color="text.disabled" sx={{ ml: 0.5 }}>Kéo thanh để dời ngày</Typography>
+              )}
             </Stack>
           )}
           <Autocomplete
@@ -291,10 +346,8 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
             </Paper>
           ) : tab === 'gantt' ? (
             <GanttChart
-              rows={ganttRows} groupBy={groupBy} daysInMonth={daysInMonth} ym={ym}
-              pct={pct} nowPct={nowPct} colorOf={(e) => colorFor(groupBy === 'guide' ? e.tourCloudId : e.guideId)}
-              subLabel={(e) => (groupBy === 'guide' ? e.tourName : guideNameOf(e.guideId))}
-              onBarClick={() => setTab('list')}
+              rows={ganttRows} daysInMonth={daysInMonth} ym={ym} pct={pct} nowPct={nowPct}
+              onBarClick={() => setTab('list')} onShiftLeg={(t, l, d) => void shiftLeg(t, l, d)}
             />
           ) : (
             <ListView
@@ -364,16 +417,18 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
 }
 
 // ── Gantt chart ──
-type GanttRow = { id: string; label: string; placed: { item: Engagement; lane: number }[]; laneCount: number };
-function GanttChart({ rows, daysInMonth, ym, pct, nowPct, colorOf, subLabel, onBarClick }: {
-  rows: GanttRow[]; groupBy: 'tour' | 'guide'; daysInMonth: number; ym: { y: number; m: number };
+type DragState = { key: string; startX: number; dx: number; pxPerDay: number; tourCloudId: string; legId: string };
+function GanttChart({ rows, daysInMonth, ym, pct, nowPct, onBarClick, onShiftLeg }: {
+  rows: GanttRow[]; daysInMonth: number; ym: { y: number; m: number };
   pct: (t: number) => number; nowPct: number | null;
-  colorOf: (e: Engagement) => string; subLabel: (e: Engagement) => string; onBarClick: (e: Engagement) => void;
+  onBarClick: (bar: GanttBar) => void;
+  onShiftLeg: (tourCloudId: string, legId: string, deltaDays: number) => void;
 }) {
   const barH = 22, gap = 4;
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const isWeekend = (d: number) => { const w = new Date(ym.y, ym.m, d).getDay(); return w === 0 || w === 6; };
   const LABEL_W = 150;
+  const [drag, setDrag] = useState<DragState | null>(null);
   if (rows.length === 0) return <Typography variant="caption" color="text.disabled">Không có lịch trong tháng này (theo bộ lọc hiện tại).</Typography>;
   return (
     <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
@@ -402,16 +457,36 @@ function GanttChart({ rows, daysInMonth, ym, pct, nowPct, colorOf, subLabel, onB
             {row.placed.map(({ item, lane }) => {
               const left = pct(item.start);
               const width = Math.max(pct(item.end) - left, 1.4);
-              const col = colorOf(item);
+              const dragging = drag?.key === item.key;
+              const snapDays = dragging ? Math.round(drag.dx / drag.pxPerDay) : 0;
               return (
-                <Tooltip key={item.key} title={`${item.tourName} · ${subLabel(item)} · ${new Date(item.start).toLocaleDateString('vi-VN')}–${new Date(item.end).toLocaleDateString('vi-VN')}${item.conflicted ? ' · ⚠ TRÙNG' : ''}`}>
-                  <Box onClick={() => onBarClick(item)}
+                <Tooltip key={item.key} title={dragging && snapDays ? `Dời ${snapDays > 0 ? '+' : ''}${snapDays} ngày` : item.tooltip}>
+                  <Box
+                    onPointerDown={(e) => {
+                      if (!item.drag) return;
+                      const track = e.currentTarget.parentElement as HTMLElement;
+                      const w = track.getBoundingClientRect().width;
+                      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                      setDrag({ key: item.key, startX: e.clientX, dx: 0, pxPerDay: w / daysInMonth, tourCloudId: item.drag.tourCloudId, legId: item.drag.legId });
+                    }}
+                    onPointerMove={(e) => { if (dragging) setDrag((s) => (s ? { ...s, dx: e.clientX - s.startX } : s)); }}
+                    onPointerUp={(e) => {
+                      if (!dragging) { onBarClick(item); return; }
+                      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+                      const moved = Math.abs(drag.dx) > 3;
+                      const dd = snapDays;
+                      setDrag(null);
+                      if (dd !== 0) onShiftLeg(drag.tourCloudId, drag.legId, dd);
+                      else if (!moved) onBarClick(item);
+                    }}
                     sx={{ position: 'absolute', top: gap + lane * (barH + gap), left: `${left}%`, width: `${width}%`, height: barH,
-                      bgcolor: col, borderRadius: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', px: 0.6, overflow: 'hidden',
+                      transform: dragging ? `translateX(${drag.dx}px)` : undefined, touchAction: 'none',
+                      bgcolor: item.color, borderRadius: 1, cursor: item.drag ? 'grab' : 'pointer', display: 'flex', alignItems: 'center', px: 0.6, overflow: 'hidden',
                       border: item.conflicted ? '2px solid #dc3250' : '1px solid rgba(0,0,0,0.15)',
-                      boxShadow: item.conflicted ? '0 0 0 1px #dc3250 inset' : undefined, zIndex: 1, '&:hover': { filter: 'brightness(1.08)' } }}>
+                      boxShadow: dragging ? '0 4px 12px rgba(0,0,0,0.3)' : item.conflicted ? '0 0 0 1px #dc3250 inset' : undefined,
+                      zIndex: dragging ? 4 : 1, '&:hover': { filter: 'brightness(1.08)' } }}>
                     <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', textShadow: '0 1px 1px rgba(0,0,0,0.3)' }} noWrap>
-                      {item.conflicted ? '⚠ ' : ''}{subLabel(item)}
+                      {item.conflicted ? '⚠ ' : ''}{item.label}
                     </Typography>
                   </Box>
                 </Tooltip>
