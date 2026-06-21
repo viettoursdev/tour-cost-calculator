@@ -24,6 +24,8 @@ type State = {
   add: (t: Partial<Todo> & { title: string }) => Promise<Todo | null>;
   update: (id: string, patch: Partial<Todo>) => Promise<void>;
   setStatus: (id: string, status: TodoStatus) => Promise<void>;
+  /** Người được giao phản hồi việc (xác nhận/từ chối + comment) → báo người tạo. */
+  respond: (id: string, accepted: boolean, comment?: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
 };
 
@@ -50,7 +52,7 @@ export const useTodoStore = create<State>()(
         link: t.link, checklist: t.checklist, recurring: t.recurring ?? 'none', tags: t.tags,
       };
       await persist([todo, ...get().todos], u);
-      notifyAssign(todo, todo.assignees.filter((a) => a !== u.u), u.name);
+      notifyAssign(todo, todo.assignees.filter((a) => a !== u.u), u.u, u.name);
       return todo;
     },
 
@@ -64,7 +66,7 @@ export const useTodoStore = create<State>()(
       if (patch.assignees && old) {
         const had = new Set(old.assignees);
         const added = patch.assignees.filter((a) => !had.has(a) && a !== u.u);
-        if (added.length) notifyAssign({ ...old, ...patch } as Todo, added, u.name);
+        if (added.length) notifyAssign({ ...old, ...patch } as Todo, added, u.u, u.name);
       }
     },
 
@@ -89,6 +91,26 @@ export const useTodoStore = create<State>()(
       await persist(next, u);
     },
 
+    respond: async (id, accepted, comment) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return;
+      const t = get().todos.find((x) => x.id === id);
+      if (!t) return;
+      const resp = { u: u.u, name: u.name, accepted, comment: comment?.trim() || undefined, at: new Date().toISOString() };
+      const responses = [...(t.responses ?? []).filter((r) => r.u !== u.u), resp];
+      await persist(get().todos.map((x) => (x.id === id ? { ...x, responses } : x)), u);
+      // Báo người tạo việc.
+      if (t.createdBy && t.createdBy !== u.u) {
+        void fbSendNotification(t.createdBy, {
+          type: 'task',
+          title: accepted ? '✅ Đã xác nhận việc' : '❌ Đã từ chối việc',
+          message: `${u.name} ${accepted ? 'xác nhận' : 'từ chối'}: "${t.title}"${resp.comment ? ` — “${resp.comment}”` : ''}`,
+          createdBy: u.name,
+          ...(t.link ? { link: t.link } : {}),
+        }).catch(() => { /* không chặn UI */ });
+      }
+    },
+
     remove: async (id) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
@@ -97,8 +119,8 @@ export const useTodoStore = create<State>()(
   })),
 );
 
-/** Gửi thông báo "Bạn được giao việc" tới các assignee. */
-function notifyAssign(todo: Todo, recipients: string[], byName: string): void {
+/** Gửi thông báo "Bạn được giao việc" (kèm nút xác nhận/từ chối) tới assignee. */
+function notifyAssign(todo: Todo, recipients: string[], byU: string, byName: string): void {
   for (const r of recipients) {
     void fbSendNotification(r, {
       type: 'task',
@@ -106,6 +128,7 @@ function notifyAssign(todo: Todo, recipients: string[], byName: string): void {
       message: `${todo.title}${todo.dueDate ? ` · hạn ${new Date(todo.dueDate).toLocaleString('vi-VN')}` : ''}`,
       createdBy: byName,
       ...(todo.link ? { link: todo.link } : {}),
+      data: { todoAssign: true, todoId: todo.id, byU, byName },
     }).catch(() => { /* không chặn UI */ });
   }
 }

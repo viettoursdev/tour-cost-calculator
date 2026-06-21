@@ -83,6 +83,18 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
       <DialogTitle>{todo ? 'Sửa công việc' : 'Việc mới'}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
+          {(todo?.responses ?? []).length > 0 && (
+            <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: 'rgba(0,0,0,0.03)' }}>
+              <Typography variant="caption" fontWeight={800} color="text.secondary">PHẢN HỒI NGƯỜI ĐƯỢC GIAO</Typography>
+              <Stack spacing={0.25} sx={{ mt: 0.5 }}>
+                {(todo?.responses ?? []).map((r) => (
+                  <Typography key={r.u} variant="caption" sx={{ color: r.accepted ? '#27ae60' : '#dc3250' }}>
+                    {r.accepted ? '✅' : '❌'} {r.name}{r.comment ? `: “${r.comment}”` : ''} · {new Date(r.at).toLocaleString('vi-VN')}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+          )}
           <TextField label="Tiêu đề việc" required value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
           <TextField label="Mô tả (tuỳ chọn)" value={note} onChange={(e) => setNote(e.target.value)} multiline rows={2} />
 

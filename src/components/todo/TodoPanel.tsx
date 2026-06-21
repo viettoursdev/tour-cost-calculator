@@ -91,6 +91,11 @@ export function TodoPanel({ onEdit }: { onEdit: (t: Todo | null) => void }) {
               {t.status === 'doing' && <Chip size="small" label="Đang làm" sx={{ height: 18, bgcolor: 'rgba(37,99,235,0.12)', color: '#2563eb', fontWeight: 700 }} />}
               {t.recurring && t.recurring !== 'none' && <Chip size="small" variant="outlined" label="🔁" sx={{ height: 18 }} />}
               {checks.length > 0 && <Chip size="small" variant="outlined" label={`☑ ${doneChecks}/${checks.length}`} sx={{ height: 18 }} />}
+              {(t.responses ?? []).length > 0 && (() => {
+                const acc = t.responses!.filter((r) => r.accepted).length;
+                const rej = t.responses!.length - acc;
+                return <Chip size="small" variant="outlined" label={`${acc ? `✓${acc}` : ''}${rej ? ` ✗${rej}` : ''}`.trim()} sx={{ height: 18, color: rej ? '#dc3250' : '#27ae60' }} />;
+              })()}
               {t.link && (
                 <Chip size="small" icon={<OpenInNewIcon sx={{ fontSize: 12 }} />} label={t.link.label} clickable
                   onClick={(e) => { e.stopPropagation(); void openLink(t.link!); }}

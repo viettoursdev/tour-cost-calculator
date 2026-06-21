@@ -7,6 +7,15 @@ export type TodoRecurring = 'none' | 'daily' | 'weekly' | 'monthly';
 
 export type TodoChecklistItem = { id: string; text: string; done: boolean };
 
+/** Phản hồi của người được giao việc (xác nhận / từ chối + comment). */
+export type TodoResponse = {
+  u: string;        // username người phản hồi
+  name: string;
+  accepted: boolean;
+  comment?: string;
+  at: string;       // ISO
+};
+
 /**
  * Một công việc (To-Do). Kho dùng chung `viettours/todos`. Tái dùng `NotifLink` để
  * liên kết tới báo giá/thanh toán/hợp đồng… và pipeline thông báo để nhắc (Đợt 2).
@@ -31,6 +40,8 @@ export type Todo = {
   checklist?: TodoChecklistItem[];
   recurring?: TodoRecurring;
   tags?: string[];
+  /** Phản hồi của những người được giao (xác nhận/từ chối + comment). */
+  responses?: TodoResponse[];
   completedAt?: string;
   completedBy?: string;
   updatedAt?: string;

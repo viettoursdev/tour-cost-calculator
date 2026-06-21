@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Badge, Box, Button, Chip, Divider, IconButton, Popover, Stack, Tooltip, Typography,
+  Badge, Box, Button, Chip, Divider, IconButton, Popover, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -9,6 +9,7 @@ import { isApprover } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
+import { useTodoStore } from '@/stores/todoStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/dataBackend';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -158,6 +159,27 @@ function NotificationItem({
   const updatePayments = useContractStore((s) => s.updatePayments);
   const [acting, setActing] = useState(false);
   const [acted, setActed] = useState(false);
+  const [todoComment, setTodoComment] = useState('');
+
+  // Giao việc To-Do: hiện nút Xác nhận/Từ chối + comment cho người được giao,
+  // chừng nào người này CHƯA phản hồi việc đó.
+  const todoData = notif.data as { todoAssign?: boolean; todoId?: string; byU?: string } | undefined;
+  const myTodoResponse = useTodoStore((s) =>
+    todoData?.todoId ? s.todos.find((t) => t.id === todoData.todoId)?.responses?.some((r) => r.u === username) : false);
+  const isTodoAssign = notif.type === 'task' && todoData?.todoAssign === true && !!todoData.todoId
+    && todoData.byU !== username && !acted && !myTodoResponse;
+
+  const handleTodoResponse = async (accepted: boolean) => {
+    if (acting || !todoData?.todoId) return;
+    setActing(true);
+    try {
+      await useTodoStore.getState().respond(todoData.todoId, accepted, todoComment);
+      setActed(true);
+      onRead();
+    } catch (e) {
+      window.alert('❌ Lỗi: ' + (e as Error).message);
+    } finally { setActing(false); }
+  };
 
   // Live status from the shared activity thread (if any) — lets every member's
   // bell hide the action buttons once the request is resolved by anyone.
@@ -511,6 +533,18 @@ function NotificationItem({
             ❌ Từ chối
           </Button>
         </Stack>
+      )}
+      {isTodoAssign && (
+        <Box sx={{ mt: 1 }} onClick={(e) => e.stopPropagation()}>
+          <TextField size="small" fullWidth value={todoComment} onChange={(e) => setTodoComment(e.target.value)}
+            placeholder="Phản hồi (tuỳ chọn)…" multiline maxRows={3} sx={{ mb: 1 }} />
+          <Stack direction="row" spacing={1}>
+            <Button size="small" color="success" variant="outlined" disabled={acting}
+              onClick={() => void handleTodoResponse(true)}>✅ Xác nhận</Button>
+            <Button size="small" color="error" variant="outlined" disabled={acting}
+              onClick={() => void handleTodoResponse(false)}>❌ Từ chối</Button>
+          </Stack>
+        </Box>
       )}
       {acted && (
         <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
