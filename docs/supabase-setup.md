@@ -602,4 +602,68 @@ The following are **Phase 7 (cutover)**, not Phase 6:
 - Deploying the updated Cloudflare Worker with `SUPABASE_PROJECT_REF` set.
 - Pushing migrations 0017–0027 to the production cloud project.
 - Flipping `VITE_AUTH_BACKEND=supabase` in the production environment.
-- Removing Firebase dependencies.
+
+## Phase 7 — Cutover (operator runbook)
+
+A one-time hard cutover. Firebase is left **read-only as the fallback** (no data is deleted, `backup.yml` keeps running). Run every step in one maintenance window. **Prerequisite committed (this phase):** migration `0028` (config-table bootstrap CEO) and the `deploy.yml` Supabase env wiring.
+
+### Pre-flight (do once, before the window)
+
+1. **Add GitHub repo secrets** (Settings → Secrets and variables → Actions → Secrets):
+   - `VITE_SUPABASE_URL` = `https://zkzrvctqwnhzklvsoahk.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = the project's anon/public key (Supabase dashboard → Project Settings → API).
+2. **Do NOT yet create** the `VITE_AUTH_BACKEND` repo variable — that flip is the go-live switch (step 6).
+3. **Supabase dashboard config** (Authentication settings):
+   - Enable **asymmetric JWT signing keys (ES256)** — required by the Phase 5 Worker (`verifySupabaseToken` defaults to ES256/EC-P256). Copy the JWKS URL.
+   - Set the **allowed email domain** to `viettours.com.vn`.
+4. **Push migrations `0017`–`0028` to prod** (the prod schema has `0000`–`0016`; everything since must land). The re-edited `0021` (passengers/save-quote RPC) must be included:
+   ```bash
+   gh auth switch --user viettoursdev   # org push access; see "Push gotcha"
+   supabase db push --linked            # project linked to zkzrvctqwnhzklvsoahk
+   supabase migration list              # confirm Local == Remote through 0028
+   ```
+5. **Full-data ETL dry-run** against a throwaway/local stack first, using a **real prod export**, and verify counts/totals before touching prod:
+   ```bash
+   SA_PATH=prod-sa.json node scripts/firestore-export.mjs   # → firestore-dump.json
+   DUMP_PATH=firestore-dump.json npm run etl                # local stack
+   ```
+   Resolve any unmapped-username failures (deleted users) by confirming they should null their `created_by` FK, then re-run with `ALLOW_UNMAPPED=1`.
+
+### Cutover window (atomic)
+
+1. **Announce a write freeze.** Users stop editing in the live (Firebase) app.
+2. **Final Firestore export** from production:
+   ```bash
+   SA_PATH=prod-sa.json node scripts/firestore-export.mjs   # → firestore-dump.json
+   ```
+3. **Run the ETL into prod Supabase** (idempotent truncate-and-reload):
+   ```bash
+   SUPABASE_URL=https://zkzrvctqwnhzklvsoahk.supabase.co \
+   SUPABASE_SERVICE_ROLE_KEY=<prod-service-role-key> \
+   DUMP_PATH=firestore-dump.json \
+   npm run etl
+   ```
+   Add `ALLOW_UNMAPPED=1` only if the unmapped list was reviewed in pre-flight.
+4. **Verify** prod counts + financial checksums against the export (same assertions the `tests/etl/` harness runs: per-table row counts, `sum(total_cost)`, notifications-per-user, full username→UUID coverage). Numbers must match before proceeding.
+5. **Redeploy the Cloudflare Worker** with Supabase verification (manual — CI never deploys it):
+   - Set Worker var `SUPABASE_PROJECT_REF=zkzrvctqwnhzklvsoahk`.
+   - Deploy `cloudflare-worker/viettours-ai-worker.js`. A stale Worker rejects every Supabase token, so this must land before the frontend flip.
+6. **Flip the frontend** — set GitHub repo **variable** `VITE_AUTH_BACKEND=supabase`, then re-run the **Deploy** workflow (`workflow_dispatch`). The build now selects Supabase for both auth and data.
+7. **Smoke test on the live URL:** magic-link login → open a quote → save (shred/reassemble round-trip) → realtime update in a second tab → file upload → AI endpoint. Cross-reference the Phase 3/4 browser smoke checklists above.
+
+### Rollback
+
+If smoke test fails: **blank the `VITE_AUTH_BACKEND` repo variable** and re-run Deploy. The bundle reverts to Firebase (still authoritative — Firestore was never written during cutover). Optionally revert the Worker `SUPABASE_PROJECT_REF`. No data restore needed; the freeze + read-only Firebase guarantee no lost writes.
+
+### Bootstrap CEO on prod
+
+Migration `0028` seeds `app_config.bootstrap_ceo_email = developer@viettours.com.vn`. To change it, `update public.app_config set value = '<email>' where key = 'bootstrap_ceo_email';` (service-role / SQL editor). The ETL sets every **migrated** user's real role from Firestore, so this seed only governs a genuinely-new first sign-in.
+
+### Phase 8 — deferred cleanup (NOT in Phase 7)
+
+Run only **after Supabase is verified stable in production** (Firebase stays the read-only fallback until then):
+
+- Remove the `firebase` dependency and all `VITE_FIREBASE_*` from `deploy.yml` + repo secrets.
+- Delete the dual-backend seams now that one backend remains: `src/auth/backend.ts` indirection, `src/lib/dataBackend.ts` barrel, `firebaseBackend`, and the `fb*` gateway in `src/lib/firebase.ts`.
+- Retire `.github/workflows/backup.yml` (Firestore mirror) — Supabase provides daily backups / PITR.
+- Make `VITE_AUTH_BACKEND=supabase` the build default and drop the variable indirection.
