@@ -6,6 +6,7 @@ import {
 import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
 import GroupIcon from '@mui/icons-material/Group';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -608,6 +609,7 @@ function CollaboratorPopover({
   onSave: (collabs: Collaborator[]) => Promise<void>;
 }) {
   const currentUserU = useAuthStore((s) => s.currentUser?.u);
+  const viewer = useAuthStore((s) => s.currentUser);
   const initial = useMemo(() => {
     const set = new Set((row.collaborators ?? []).map((c) => c.u));
     return users.filter((u) => set.has(u.u));
@@ -643,7 +645,7 @@ function CollaboratorPopover({
           options={otherUsers}
           value={picked}
           onChange={(_, v) => setPicked(v)}
-          getOptionLabel={(u) => `${u.name} (${u.role})`}
+          getOptionLabel={(u) => userLabel(u, viewer)}
           isOptionEqualToValue={(a, b) => a.u === b.u}
           renderInput={(params) => <TextField {...params} placeholder="Thêm cộng tác viên" />}
         />

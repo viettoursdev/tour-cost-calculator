@@ -12,6 +12,8 @@ import { TPL_ACCENT } from './templateStyle';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canViewStaffRole } from '@/auth/ROLES';
+import { DEPT_LABEL } from '@/auth/departments';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Template } from '@/types';
@@ -111,7 +113,11 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
                 </Avatar>
                 <Box sx={{ lineHeight: 1.1 }}>
                   <Typography sx={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{currentUser.name}</Typography>
-                  <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{currentUser.role}</Typography>
+                  {canViewStaffRole(currentUser) && (
+                    <Typography sx={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>
+                      {currentUser.role}{currentUser.department ? ` · ${DEPT_LABEL[currentUser.department]}` : ''}
+                    </Typography>
+                  )}
                 </Box>
               </Stack>
               {/* Notifications */}

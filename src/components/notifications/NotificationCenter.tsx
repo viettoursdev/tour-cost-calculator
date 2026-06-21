@@ -14,6 +14,7 @@ import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import {
@@ -505,7 +506,7 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
           <Autocomplete
             multiple size="small" options={otherUsers} value={recipients}
             onChange={(_, v) => setRecipients(v)}
-            getOptionLabel={(u) => `${u.name} (${u.role})`}
+            getOptionLabel={(u) => userLabel(u, currentUser)}
             isOptionEqualToValue={(a, b) => a.u === b.u}
             renderInput={(params) => <TextField {...params} label="Người nhận / nhóm cộng tác" placeholder="Chọn người…" />}
           />

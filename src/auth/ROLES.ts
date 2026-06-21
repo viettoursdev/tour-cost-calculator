@@ -18,6 +18,13 @@ export const APPROVER_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trư
 /** True if the role can approve payment / cost requests. */
 export const isApprover = (role: Role): boolean => APPROVER_ROLES.includes(role);
 
+/** Chỉ CEO được xem chức vụ + phòng ban của nhân sự (ẩn với mọi người khác). */
+export const canViewStaffRole = (viewer: User | null | undefined): boolean => viewer?.role === 'CEO';
+
+/** Nhãn người dùng cho dropdown/hiển thị — ẩn (chức vụ) trừ khi người xem là CEO. */
+export const userLabel = (u: { name: string; role: Role }, viewer: User | null | undefined): string =>
+  canViewStaffRole(viewer) ? `${u.name} (${u.role})` : u.name;
+
 /** Seniority rank (higher = more senior). Used for "from level X upward" rules. */
 export const ROLE_RANK: Record<Role, number> = {
   CEO: 8,

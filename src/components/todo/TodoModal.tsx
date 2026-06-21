@@ -6,6 +6,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useTodoStore } from '@/stores/todoStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import type { CloudQuoteEntry, Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
@@ -111,7 +112,7 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
 
           <Autocomplete
             multiple options={users.filter((u) => u.u !== me?.u)} value={assignees} onChange={(_, v) => setAssignees(v)}
-            getOptionLabel={(u) => `${u.name} (${u.role})`} isOptionEqualToValue={(a, b) => a.u === b.u}
+            getOptionLabel={(u) => userLabel(u, me)} isOptionEqualToValue={(a, b) => a.u === b.u}
             renderTags={(value, getTagProps) => value.map((u, i) => { const { key, ...p } = getTagProps({ index: i }); return <Chip key={key} {...p} label={u.name} size="small" />; })}
             renderInput={(p) => <TextField {...p} label="Giao cho (đội nhóm)" placeholder="Chọn người… (để trống = việc của tôi)" />}
           />

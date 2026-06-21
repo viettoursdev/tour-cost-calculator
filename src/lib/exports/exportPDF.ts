@@ -354,7 +354,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setFontSize(8); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
   const contactBits = [savedBy.phone, savedBy.email].filter(Boolean).join(' · ');
   pdf.text(
-    `Báo giá có hiệu lực 07 ngày · Phụ trách: ${savedBy.name} (${savedBy.role})${contactBits ? ' · ' + contactBits : ''} · ${new Date().toLocaleDateString('vi-VN')}`,
+    `Báo giá có hiệu lực 07 ngày · Phụ trách: ${savedBy.name}${contactBits ? ' · ' + contactBits : ''} · ${new Date().toLocaleDateString('vi-VN')}`,
     pageW / 2, y, { align: 'center' },
   );
 

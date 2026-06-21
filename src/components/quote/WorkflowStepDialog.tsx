@@ -8,7 +8,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs } from './workflowConstants';
-import { ROLE_RANK } from '@/auth/ROLES';
+import { ROLE_RANK, canViewStaffRole } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -84,7 +84,7 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               {matched.length > 0 && <ListSubheader sx={{ lineHeight: 2.2 }}>🏢 {deptRole}</ListSubheader>}
               {matched.map((u) => <MenuItem key={u.u} value={u.u}>{u.name}</MenuItem>)}
               {matched.length > 0 && others.length > 0 && <ListSubheader sx={{ lineHeight: 2.2 }}>Khác</ListSubheader>}
-              {others.map((u) => <MenuItem key={u.u} value={u.u}>{u.name} <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.disabled' }}>· {u.role}</Typography></MenuItem>)}
+              {others.map((u) => <MenuItem key={u.u} value={u.u}>{u.name}{canViewStaffRole(me) && <Typography component="span" variant="caption" sx={{ ml: 0.5, color: "text.disabled" }}>· {u.role}</Typography>}</MenuItem>)}
             </TextField>
             <TextField type="date" label="Ngày bắt đầu" value={s.startDate ?? ''} onChange={(e) => set({ startDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true } }} />
             <TextField type="date" label="Hạn hoàn thành" value={s.dueDate ?? ''} onChange={(e) => set({ dueDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true } }} />

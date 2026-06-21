@@ -110,7 +110,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
     ['Điểm đến:', info.dest || ''],
     ['Số khách:', pax],
     ['Thời gian:', `${info.days}N${info.nights}Đ`],
-    ['Phụ trách:', `${savedBy.name} (${savedBy.role})`],
+    ['Phụ trách:', `${savedBy.name}`],
     ['Ngày xuất:', new Date().toLocaleDateString('vi-VN')],
   ];
   let rr = 5;
