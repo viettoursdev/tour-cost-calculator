@@ -7,12 +7,11 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
-import { NewQuoteDialog } from './NewQuoteDialog';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
-import type { NewQuoteMeta, Template } from '@/types';
+import type { Template } from '@/types';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
 
@@ -22,32 +21,20 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   // keystroke in the cost view.
   const hasDraft = useQuoteStore((s) => s.draft.template !== null);
   const hasItems = useQuoteStore((s) => Object.keys(s.draft.items).length > 0);
-  const cloudDirty = useQuoteStore((s) => s.cloudDirty);
   const newDraft = useQuoteStore((s) => s.newDraft);
   const currentUser = useAuthStore((s) => s.currentUser);
   const signOut = useAuthStore((s) => s.signOut);
   const [pendingConfirm, setPendingConfirm] = useState<Template | null>(null);
-  // Báo giá nội địa/nước ngoài → mở bảng nhập thông tin trước khi tạo draft.
-  const [metaTemplate, setMetaTemplate] = useState<'domestic' | 'intl' | null>(null);
 
-  const isMetaTemplate = (k: Template): k is 'domestic' | 'intl' => k === 'domestic' || k === 'intl';
-
+  // Bấm thẻ Trang chủ → tạo báo giá & vào thẳng sheet. Popup "Tạo báo giá mới" CHỈ
+  // bật từ nút ＋ trong sheet (QuoteView), không từ màn chọn loại hồ sơ này.
   const proceed = (key: Template) => {
-    if (isMetaTemplate(key)) {
-      setMetaTemplate(key);
-    } else {
-      newDraft(key);
-      onClose?.();
-    }
+    newDraft(key);
+    onClose?.();
   };
 
   const handlePick = (key: Template) => {
-    // Báo giá nội địa/nước ngoài: LUÔN mở bảng nhập thông tin trước (xác nhận thay
-    // thế báo giá đang dở sẽ hỏi khi bấm "Tạo báo giá"). Các loại khác giữ cảnh báo
-    // thay thế như cũ.
-    if (isMetaTemplate(key)) {
-      setMetaTemplate(key);
-    } else if (hasDraft && hasItems) {
+    if (hasDraft && hasItems) {
       setPendingConfirm(key);
     } else {
       proceed(key);
@@ -62,16 +49,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
     }
   };
 
-  const handleMetaConfirm = (template: 'domestic' | 'intl', meta: NewQuoteMeta) => {
-    // Chỉ hỏi khi báo giá đang mở có thay đổi chưa lưu (tránh mất dữ liệu).
-    if (hasItems && cloudDirty && !window.confirm('Báo giá hiện tại có thay đổi chưa lưu sẽ bị thay thế. Tiếp tục?')) return;
-    newDraft(template, meta);
-    setMetaTemplate(null);
-    onClose?.();
-  };
-
   return (
-   <>
     <Dialog open={open} onClose={canCancel ? onClose : undefined} fullScreen>
       <DialogTitle
         sx={{
@@ -237,16 +215,5 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
         )}
       </DialogContent>
     </Dialog>
-
-    {/* Render NGOÀI modal toàn màn hình để không bị lồng dialog (kẹt focus). */}
-    {metaTemplate && (
-      <NewQuoteDialog
-        open
-        initialTemplate={metaTemplate}
-        onClose={() => setMetaTemplate(null)}
-        onConfirm={handleMetaConfirm}
-      />
-    )}
-   </>
   );
 }
