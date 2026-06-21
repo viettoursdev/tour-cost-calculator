@@ -19,7 +19,7 @@ import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
-  CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
+  CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, FileAttachment, Item, OutputCurrency,
   NewQuoteMeta, Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, TourAdvance, User, WorkflowStep,
 } from '@/types';
 
@@ -93,6 +93,8 @@ type QuoteState = {
   setSvcBasis: (n: number) => void;
   setRounding: (n: number) => void;
   setInclusions: (v: string[]) => void;
+  /** Thêm 1 file Excel báo giá vào lịch sử (báo giá khoá — upload thêm). */
+  addExcelFile: (f: FileAttachment) => void;
   setFlights: (v: QuoteFlight[]) => void;
   setWorkflow: (v: WorkflowStep[]) => void;
   setAdvance: (v: TourAdvance) => void;
@@ -305,7 +307,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(meta.customerId ? { customerId: meta.customerId } : {}),
                 ...(meta.customerName ? { customerName: meta.customerName } : {}),
                 ...(meta.collaborators?.length ? { pendingCollaborators: meta.collaborators } : {}),
-                ...(meta.excelFile ? { excelFile: meta.excelFile } : {}),
+                ...(meta.excelFile ? { excelFiles: [meta.excelFile] } : {}),
                 ...(meta.locked ? { locked: true } : {}),
               }
             : {};
@@ -435,6 +437,10 @@ export const useQuoteStore = create<QuoteState>()(
         setRounding: (n) => set((s) => ({ draft: { ...s.draft, rounding: Math.max(1, n) } })),
         setRateBase: (cur) => set((s) => ({ draft: { ...s.draft, rateBase: cur } })),
         setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
+        addExcelFile: (f) => set((s) => {
+          const prev = s.draft.excelFiles ?? (s.draft.excelFile ? [s.draft.excelFile] : []);
+          return { draft: { ...s.draft, excelFiles: [...prev, f] } };
+        }),
         setFlights: (v) => set((s) => ({ draft: { ...s.draft, flights: v } })),
         setWorkflow: (v) => set((s) => ({ draft: { ...s.draft, workflow: v } })),
         setAdvance: (v) => set((s) => ({ draft: { ...s.draft, advance: v } })),
@@ -728,6 +734,8 @@ export const useQuoteStore = create<QuoteState>()(
           const _save  = isDmc ? fbSaveDMCQuote      : fbSaveQuote;
           const _saveS = isDmc ? fbSaveDMCQuoteState : fbSaveQuoteState;
           const totalCost = computeTotals(draft).totalCost;
+          // Lịch sử file Excel báo giá (tương thích dữ liệu cũ chỉ có excelFile đơn).
+          const excelHistory = draft.excelFiles ?? (draft.excelFile ? [draft.excelFile] : []);
           const existing = isDmc
             ? useQuoteHistoryStore.getState().dmcQuotes
             : useQuoteHistoryStore.getState().quotes;
@@ -763,7 +771,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(draft.info.days ? { days: draft.info.days } : {}),
               ...(draft.workflow?.length ? { workflowDue: workflowDueSummary(draft.workflow), workflowSummary: workflowBoardSummary(draft.workflow) } : {}),
               ...(customer ? { customerId: customer.id, customerName: customer.name } : {}),
-              ...(draft.excelFile ? { excelFile: draft.excelFile } : {}),
+              ...(excelHistory.length ? { excelFiles: excelHistory, excelFile: excelHistory[excelHistory.length - 1] } : {}),
               ...(attachments ? { attachments } : {}),
               ...(linkedForeign
                 ? { linkedQuoteId: linkedForeign.id, linkedQuoteName: linkedForeign.name, linkedQuoteTemplate: linkedForeign.template }

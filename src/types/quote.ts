@@ -107,7 +107,7 @@ export type NewQuoteMeta = {
   startDate?: string | null;
   deadline?: string;
   collaborators?: Collaborator[];
-  /** File Excel báo giá đã upload (option "Upload Excel" / "Upload Excel + AI"). */
+  /** File Excel báo giá lúc tạo (option "Upload Excel" / "Upload Excel + AI"). */
   excelFile?: FileAttachment;
   /** Khoá trang báo giá (chỉ xem file Excel, không nhập trên app). */
   locked?: boolean;
@@ -221,7 +221,9 @@ export type QuoteDraft = {
   customerId?: string;
   customerName?: string;
   pendingCollaborators?: Collaborator[];
-  excelFile?: FileAttachment; // File Excel báo giá đã upload (option upload / upload+AI)
+  /** @deprecated Dùng `excelFiles`. File Excel báo giá đơn (dữ liệu cũ). */
+  excelFile?: FileAttachment;
+  excelFiles?: FileAttachment[]; // Lịch sử file Excel báo giá đã upload (cũ → mới)
   locked?: boolean;        // Khoá trang báo giá (chỉ xem file Excel)
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
@@ -345,8 +347,10 @@ export type CloudQuoteEntry = {
   attachment?: FileAttachment;
   /** Nhiều file đính kèm cho báo giá (lưu trên R2 qua AI Worker). */
   attachments?: FileAttachment[];
-  /** File Excel báo giá gốc (option upload / upload+AI) — cột "Báo giá Excel". */
+  /** @deprecated Dùng `excelFiles`. File Excel báo giá đơn (dữ liệu cũ). */
   excelFile?: FileAttachment;
+  /** Lịch sử file Excel báo giá đã upload — cột "Báo giá Excel". */
+  excelFiles?: FileAttachment[];
   /** Chia sẻ công khai cho khách (link): token + thời điểm xuất bản. */
   share?: { token: string; publishedAt: string };
   /** Liên kết chéo DMC ↔ báo giá nước ngoài: cloudId của bản ghi đối ứng. */

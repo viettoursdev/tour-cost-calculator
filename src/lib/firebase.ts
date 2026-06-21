@@ -239,6 +239,7 @@ type SaveEntry = {
   attachment?: FileAttachment;
   attachments?: FileAttachment[];
   excelFile?: FileAttachment;
+  excelFiles?: FileAttachment[];
   linkedQuoteId?: string;
   linkedQuoteName?: string;
   linkedQuoteTemplate?: Template;
@@ -282,6 +283,7 @@ function makeQuoteHistoryApi(
       if (entry.attachment !== undefined) optionalFields.attachment = entry.attachment;
       if (entry.attachments !== undefined) optionalFields.attachments = entry.attachments;
       if (entry.excelFile !== undefined) optionalFields.excelFile = entry.excelFile;
+      if (entry.excelFiles !== undefined) optionalFields.excelFiles = entry.excelFiles;
       if (entry.linkedQuoteId !== undefined) optionalFields.linkedQuoteId = entry.linkedQuoteId;
       if (entry.linkedQuoteName !== undefined) optionalFields.linkedQuoteName = entry.linkedQuoteName;
       if (entry.linkedQuoteTemplate !== undefined) optionalFields.linkedQuoteTemplate = entry.linkedQuoteTemplate;

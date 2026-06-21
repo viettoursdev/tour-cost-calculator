@@ -107,6 +107,44 @@ function AttachmentsCell({ row }: { row: CloudQuoteEntry }) {
   );
 }
 
+/** Cột "Báo giá Excel": lịch sử file Excel đã upload (mới nhất lên đầu). */
+function ExcelCell({ row }: { row: CloudQuoteEntry }) {
+  const files = (row.excelFiles ?? (row.excelFile ? [row.excelFile] : [])).slice().reverse();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  if (files.length === 0) return null;
+  if (files.length === 1) {
+    return (
+      <Tooltip title={`Mở: ${files[0].name}`}>
+        <IconButton size="small" onClick={() => openFilePreview({ key: files[0].key, name: files[0].name })}>
+          <DescriptionOutlinedIcon fontSize="small" sx={{ color: '#1d8348' }} />
+        </IconButton>
+      </Tooltip>
+    );
+  }
+  return (
+    <>
+      <Tooltip title={`${files.length} file báo giá Excel`}>
+        <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)}>
+          <Badge badgeContent={files.length} color="success"><DescriptionOutlinedIcon fontSize="small" sx={{ color: '#1d8348' }} /></Badge>
+        </IconButton>
+      </Tooltip>
+      <Popover open={!!anchorEl} anchorEl={anchorEl} onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} transformOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        <Stack sx={{ py: 0.5, minWidth: 220, maxWidth: 360 }}>
+          {files.map((f, i) => (
+            <MenuItem key={f.key} onClick={() => { setAnchorEl(null); openFilePreview({ key: f.key, name: f.name }); }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" noWrap>{f.name}{i === 0 ? ' · mới nhất' : ''}</Typography>
+                {attMeta(f) && <Typography variant="caption" color="text.secondary">{attMeta(f)}</Typography>}
+              </Box>
+            </MenuItem>
+          ))}
+        </Stack>
+      </Popover>
+    </>
+  );
+}
+
 export function QuoteHistoryView() {
   const template = useQuoteStore((s) => s.draft.template);
   const isDMC = template === 'dmc';
@@ -395,13 +433,7 @@ export function QuoteHistoryView() {
       filterable: false,
       align: 'center',
       headerAlign: 'center',
-      renderCell: (p) => (p.row.excelFile ? (
-        <Tooltip title={`Mở: ${p.row.excelFile.name}`}>
-          <IconButton size="small" onClick={() => openFilePreview({ key: p.row.excelFile!.key, name: p.row.excelFile!.name })}>
-            <DescriptionOutlinedIcon fontSize="small" sx={{ color: '#1d8348' }} />
-          </IconButton>
-        </Tooltip>
-      ) : null),
+      renderCell: (p) => <ExcelCell row={p.row} />,
     },
     {
       field: 'attachment',
