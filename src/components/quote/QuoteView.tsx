@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { TemplateSelectorModal } from './TemplateSelectorModal';
+import { NewQuoteDialog } from './NewQuoteDialog';
 import { QuoteToolbar } from './QuoteToolbar';
 import { HomeView } from './HomeView';
 import { CostView } from './CostView';
@@ -58,7 +59,10 @@ export function QuoteView() {
   // leaves MUI's Dialog wrapper stuck mounted at z-index 1300 (backdrop
   // opacity 0, visibility hidden) covering the whole page and eating clicks.
   const hydrated = useQuoteStore((s) => s.currentUsername !== null);
+  const cloudDirty = useQuoteStore((s) => s.cloudDirty);
+  const newDraft = useQuoteStore((s) => s.newDraft);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [newQuoteOpen, setNewQuoteOpen] = useState(false);
   const [saveCloudOpen, setSaveCloudOpen] = useState(false);
 
   // If no template, show the gate non-dismissably.
@@ -89,6 +93,7 @@ export function QuoteView() {
         <>
           <QuoteToolbar
             onOpenSelector={() => setSelectorOpen(true)}
+            onOpenNewQuote={() => setNewQuoteOpen(true)}
             onOpenSaveCloud={() => setSaveCloudOpen(true)}
           />
 
@@ -116,6 +121,21 @@ export function QuoteView() {
             {view === 'nccProducts' && <NccProductView />}
            </Suspense>
           </Box>
+
+          {/* "Báo giá mới" trong sheet nội địa/nước ngoài → mở thẳng bảng nhập
+              thông tin (không quay về màn chọn loại hồ sơ). */}
+          {newQuoteOpen && (template === 'domestic' || template === 'intl') && (
+            <NewQuoteDialog
+              open
+              initialTemplate={template}
+              onClose={() => setNewQuoteOpen(false)}
+              onConfirm={(tpl, meta) => {
+                if (cloudDirty && !window.confirm('Báo giá hiện tại có thay đổi chưa lưu sẽ bị thay thế. Tiếp tục?')) return;
+                newDraft(tpl, meta);
+                setNewQuoteOpen(false);
+              }}
+            />
+          )}
 
           <SaveCloudQuoteModal
             open={saveCloudOpen}

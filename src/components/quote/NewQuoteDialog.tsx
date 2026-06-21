@@ -36,6 +36,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const users = useAuthStore((s) => s.users);
   const currentUser = useAuthStore((s) => s.currentUser);
   const customers = useCustomerStore((s) => s.customers);
+  const saveCustomer = useCustomerStore((s) => s.save);
 
   const [template, setTemplate] = useState<'domestic' | 'intl'>(initialTemplate);
   const [request, setRequest] = useState<QuoteRequestKind>('request');
@@ -48,6 +49,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
   const [collabUsers, setCollabUsers] = useState<User[]>([]);
+  const [busy, setBusy] = useState(false);
 
   // Mở mới → reset về mặc định theo thẻ vừa chọn.
   useEffect(() => {
@@ -63,6 +65,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setStartDate('');
     setDeadline('');
     setCollabUsers([]);
+    setBusy(false);
   }, [open, initialTemplate]);
 
   const otherUsers = useMemo(
@@ -77,24 +80,44 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setNights(Math.max(0, d - 1));
   };
 
-  const submit = () => {
-    const typed = customerInput.trim();
-    const matched = customer
-      ?? (typed ? customers.find((c) => c.name.trim().toLowerCase() === typed.toLowerCase()) ?? null : null);
-    const meta: NewQuoteMeta = {
-      request,
-      name: name.trim(),
-      customerId: matched?.id,
-      // Tên mới (chưa có trong danh sách) vẫn mang theo để hộp thoại Lưu cloud tự tạo.
-      customerName: matched?.name ?? (typed || undefined),
-      pax,
-      days,
-      nights,
-      startDate: startDate || null,
-      deadline: deadline || undefined,
-      collaborators: collabUsers.map((u) => ({ u: u.u, name: u.name })),
-    };
-    onConfirm(template, meta);
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const typed = customerInput.trim();
+      let custId = customer?.id;
+      let custName = customer?.name ?? (typed || undefined);
+      if (!customer && typed) {
+        const found = customers.find((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
+        if (found) {
+          custId = found.id; custName = found.name;
+        } else {
+          // Khách mới → tạo & lưu ngay vào danh sách khách hàng.
+          const newCust: Customer = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: typed, type: 'company', contacts: [],
+            note: 'Tự tạo khi tạo báo giá', createdAt: '', createdBy: currentUser?.name ?? '',
+          };
+          try { await saveCustomer(newCust); } catch { /* vẫn tạo báo giá; tên khách mang theo */ }
+          custId = newCust.id; custName = typed;
+        }
+      }
+      const meta: NewQuoteMeta = {
+        request,
+        name: name.trim(),
+        customerId: custId,
+        customerName: custName,
+        pax,
+        days,
+        nights,
+        startDate: startDate || null,
+        deadline: deadline || undefined,
+        collaborators: collabUsers.map((u) => ({ u: u.u, name: u.name })),
+      };
+      onConfirm(template, meta);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const ac = TPL_ACCENT[template];
@@ -169,7 +192,10 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
             getOptionLabel={(c) => (typeof c === 'string' ? c : c.name)}
             isOptionEqualToValue={(a, b) => typeof a !== 'string' && typeof b !== 'string' && a.id === b.id}
             renderInput={(params) => (
-              <TextField {...params} label="Khách hàng" placeholder="Chọn hoặc gõ tên khách mới" />
+              <TextField
+                {...params} label="Khách hàng" placeholder="Chọn hoặc gõ tên khách mới"
+                helperText="Gõ tên khách chưa có → tự thêm vào danh sách khách hàng khi tạo báo giá."
+              />
             )}
           />
 
@@ -243,12 +269,12 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} color="inherit">Huỷ</Button>
+        <Button onClick={onClose} color="inherit" disabled={busy}>Huỷ</Button>
         <Button
-          variant="contained" disabled={!name.trim()} onClick={submit}
+          variant="contained" disabled={!name.trim() || busy} onClick={() => void submit()}
           sx={{ background: LEGACY.headerGradient, fontWeight: 800, px: 3 }}
         >
-          Tạo báo giá
+          {busy ? 'Đang tạo…' : 'Tạo báo giá'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -69,6 +69,7 @@ type RateModalState =
 
 type Props = {
   onOpenSelector: () => void;
+  onOpenNewQuote: () => void;
   onOpenSaveCloud: () => void;
 };
 
@@ -141,7 +142,7 @@ function WhiteNum({ value, min, onChange }: { value: number; min: number; onChan
   );
 }
 
-export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
+export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }: Props) {
   const info = useQuoteStore((s) => s.draft.info);
   const pax = useQuoteStore((s) => s.draft.pax);
   const rates = useQuoteStore((s) => s.draft.rates);
@@ -522,7 +523,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenSaveCloud }: Props) {
         </Menu>
 
         <Tooltip title="Báo giá mới">
-          <IconButton size="small" onClick={onOpenSelector}
+          <IconButton size="small"
+            onClick={template === 'domestic' || template === 'intl' ? onOpenNewQuote : onOpenSelector}
             sx={{ border: '1px solid rgba(20,150,140,0.4)', borderRadius: 1.5, color: '#0d7a6a' }}>
             <AddCircleOutlineIcon fontSize="small" />
           </IconButton>
