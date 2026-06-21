@@ -180,7 +180,7 @@ export type TemplateDef = {
 export const TEMPLATES: Record<Template, TemplateDef> = {
   domestic:  { key: 'domestic',  label: 'Báo giá tour nội địa',     icon: '🇻🇳', desc: 'Tour trong nước Việt Nam', init: TPL_DOMESTIC, sample: { name: 'Tour Đà Nẵng', dest: 'Đà Nẵng', days: 3, nights: 2 } },
   intl:      { key: 'intl',      label: 'Báo giá tour nước ngoài',  icon: '🌏', desc: 'Outbound tour quốc tế',   init: TPL_INTL,     sample: { name: 'Tour Nhật Bản', dest: 'Nhật Bản', days: 5, nights: 4 } },
-  dmc:       { key: 'dmc',       label: 'Breakdown báo giá DMC',    icon: '📋', desc: 'Phân tích chi phí & so sánh với giá DMC', init: TPL_DMC, sample: { name: 'DMC Package', dest: '', days: 5, nights: 4 } },
+  dmc:       { key: 'dmc',       label: 'Breakdown giá DMC',        icon: '📋', desc: 'Phân tích chi phí & so sánh với giá DMC', init: TPL_DMC, sample: { name: 'DMC Package', dest: '', days: 5, nights: 4 } },
   itinerary: { key: 'itinerary', label: 'Chương trình tour',        icon: '🗺️', desc: 'Tạo lịch trình tour theo ngày, xuất Word', kind: 'alt' },
   menu:      { key: 'menu',      label: 'Thư viện thực đơn',        icon: '🍽️', desc: 'Quản lý thực đơn theo nhà hàng, xuất Word/PDF', kind: 'alt' },
   visa:         { key: 'visa',         label: 'Quản lý Visa',  icon: '🛂', desc: 'Bảng giá visa & hồ sơ thủ tục', kind: 'alt' },
