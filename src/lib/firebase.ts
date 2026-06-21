@@ -11,7 +11,7 @@ import {
 import type {
   AuditEntry, Chat, ChatMessage,
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
-  FileAttachment, GuideScheduleDoc, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
+  EmailLink, FileAttachment, GuideScheduleDoc, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   QuoteDraft, QuoteRequestKind, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
@@ -1265,6 +1265,26 @@ export async function fbPushGuideSchedule(
   await setDoc(GUIDE_SCHEDULE_DOC, {
     freelancers: d.freelancers ?? [],
     assignments: d.assignments ?? {},
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── Liên kết email Outlook ↔ khách hàng/báo giá (single-doc, dùng chung) ──
+const EMAIL_LINKS_DOC = doc(db, 'viettours', 'email_links');
+
+export function fbSubscribeEmailLinks(cb: (list: EmailLink[]) => void): Unsubscribe {
+  return subDoc(EMAIL_LINKS_DOC, (s) => {
+    cb(s.exists() ? ((s.data().links as EmailLink[]) ?? []) : []);
+  });
+}
+
+export async function fbPushEmailLinks(
+  list: EmailLink[],
+  pushedBy: { name: string; role: string },
+): Promise<void> {
+  await setDoc(EMAIL_LINKS_DOC, {
+    links: list,
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });

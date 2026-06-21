@@ -13,6 +13,7 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { fmtVND } from '@/components/quote/calc';
 import { QUOTE_STATUS_META } from '@/components/quote/constants';
+import { EmailLinksPanel } from '@/components/email/EmailLinksPanel';
 import type { Customer, CustomerInteractionType } from '@/types';
 
 const ITYPE_META: Record<CustomerInteractionType, { label: string; icon: string }> = {
@@ -152,6 +153,12 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
             </Stack>
           </Box>
         )}
+
+        <Divider sx={{ my: 2 }} />
+        <EmailLinksPanel
+          targetType="customer" targetId={customer.id} targetName={customer.name}
+          searchHint={contact?.email || customer.name}
+        />
 
         <Divider sx={{ my: 2 }} />
         <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Lịch hẹn liên hệ lại</Typography>

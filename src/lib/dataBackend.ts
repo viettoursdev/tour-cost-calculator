@@ -33,6 +33,9 @@ export const fbGetQuoteProject = sbActive ? (sb.sbGetQuoteProject as typeof fb.f
 // Lịch đi tour HDV — chỉ Firebase (Supabase chưa triển khai).
 export const fbSubscribeGuideSchedule = fb.fbSubscribeGuideSchedule;
 export const fbPushGuideSchedule = fb.fbPushGuideSchedule;
+// Liên kết email Outlook (Firestore-backed, độc lập backend auth).
+export const fbSubscribeEmailLinks = fb.fbSubscribeEmailLinks;
+export const fbPushEmailLinks = fb.fbPushEmailLinks;
 export const fbGetTourPayments = sbActive ? (sb.sbGetTourPayments as typeof fb.fbGetTourPayments) : fb.fbGetTourPayments;
 export const fbGetVisaProc = sbActive ? (sb.sbGetVisaProc as typeof fb.fbGetVisaProc) : fb.fbGetVisaProc;
 export const fbLogAudit = sbActive ? (sb.sbLogAudit as typeof fb.fbLogAudit) : fb.fbLogAudit;
