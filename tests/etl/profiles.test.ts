@@ -15,7 +15,7 @@ describe('etl profiles', () => {
   });
 
   it('creates one profile per user with the real role/name', async () => {
-    expect(map.size).toBe(3);
+    expect(new Set(map.values()).size).toBe(3); // 3 distinct profiles (map also holds display-name aliases)
     const { data } = await c.from('profiles').select('username, role, name').order('username');
     expect(data).toEqual([
       { username: 'linh', role: 'Operations', name: 'Linh' },
@@ -27,6 +27,8 @@ describe('etl profiles', () => {
   it('resolver returns UUIDs for known users and null for unmapped, recording them', () => {
     const r = makeResolver(map);
     expect(r.resolve('tony')).toBe(map.get('tony'));
+    expect(r.resolve('Tony')).toBe(map.get('tony'));         // display name (actor fields store this, not username)
+    expect(r.resolve('Tony (CEO)')).toBe(map.get('tony'));   // display name + trailing '(role)' suffix
     expect(r.resolve('ghost')).toBeNull();
     expect(r.resolve('')).toBeNull();
     expect([...r.unmapped]).toEqual(['ghost']);

@@ -18,16 +18,29 @@ export async function loadProfiles(client, dump) {
     if (upErr) throw new Error(`profile update ${u.u}: ${upErr.message}`);
     if (!upData || upData.length === 0) throw new Error(`profile update ${u.u}: no profiles row for ${id} (provisioning trigger did not fire)`);
     map.set(u.u, id);
+    // Actor fields in prod store the display name (e.g. createdBy: 'Hoàng Anh Tuấn'),
+    // not the username (u). Register the display name as an alias so attribution
+    // resolves; makeResolver additionally normalizes case + trailing '(role)'.
+    if (u.name) map.set(u.name, id);
   }
   return map;
 }
 
-/** Resolver: username -> UUID, null for falsy/unmapped (unmapped non-empty names recorded). */
+/** Resolver: username/display-name -> UUID, null for falsy/unmapped (unmapped non-empty names recorded). */
 export function makeResolver(usernameToId) {
   const unmapped = new Set();
+  // Normalize for tolerant matching: NFC, trim, lowercase, strip a trailing
+  // " (Role)" suffix (e.g. 'Hoàng Anh Tuấn (CEO)' -> 'hoàng anh tuấn').
+  const norm = (s) => s.normalize('NFC').trim().toLowerCase().replace(/\s*\([^)]*\)\s*$/, '');
+  const normIndex = new Map();
+  for (const [key, id] of usernameToId) {
+    if (key) normIndex.set(norm(key), id);
+  }
   const resolve = (u) => {
     if (!u) return null;
-    const id = usernameToId.get(u);
+    const direct = usernameToId.get(u);
+    if (direct !== undefined) return direct;
+    const id = normIndex.get(norm(u));
     if (id !== undefined) return id;
     unmapped.add(u);
     return null;

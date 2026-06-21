@@ -12,6 +12,8 @@ vite-after-mo-click.png
 # These contain credentials and Firestore data. Never commit.
 old-service-account.json
 new-service-account.json
+prod-sa.json
+*-sa.json
 firestore-dump.json
 
 # Local env files — keep .env.example committed as the template.
@@ -25,3 +27,5 @@ MIGRATION_NOTES.md
 # Supabase local dev — transient dirs, never commit.
 supabase/.branches
 supabase/.temp
+.supabase_db_password
+prod-sa.json

@@ -134,10 +134,23 @@ export async function loadQuotes(client, dump, r, customerMap) {
     ['viettours/quote_history', dump.collections.quote_projects ?? {}],
     ['viettours/dmc_quote_history', dump.collections.dmc_quote_projects ?? {}],
   ];
+  // quotes.cloud_id is globally unique, but prod history can hold >1 entry per
+  // cloudId when a cloudId was reused (the older entry's project doc was
+  // overwritten). Dedupe by cloudId keeping the most recent (max numeric id);
+  // log each dropped stub so the loss is visible, never silent.
+  const byCloudId = new Map(); // cloudId -> { entry, projects }
   for (const [indexKey, projects] of pairs) {
     const entries = dump.singles[indexKey]?.quotes ?? [];
     for (const entry of entries) {
-      await loadOne(client, entry, projects[entry.cloudId], r, customerMap);
+      const prev = byCloudId.get(entry.cloudId);
+      if (!prev) { byCloudId.set(entry.cloudId, { entry, projects }); continue; }
+      const keep = (entry.id ?? 0) >= (prev.entry.id ?? 0) ? entry : prev.entry;
+      const drop = keep === entry ? prev.entry : entry;
+      console.warn(`[quotes] duplicate cloudId ${entry.cloudId}: keeping id=${keep.id} (${keep.quoteCode ?? keep.name ?? '?'}), dropping id=${drop.id} (${drop.quoteCode ?? drop.name ?? '?'})`);
+      byCloudId.set(entry.cloudId, keep === entry ? { entry, projects } : prev);
     }
+  }
+  for (const { entry, projects } of byCloudId.values()) {
+    await loadOne(client, entry, projects[entry.cloudId], r, customerMap);
   }
 }
