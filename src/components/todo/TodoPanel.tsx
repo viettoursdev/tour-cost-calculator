@@ -5,10 +5,12 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useAuthStore } from '@/stores/authStore';
 import { useTodoStore, isMyTodo } from '@/stores/todoStore';
+import { useQuoteStore } from '@/stores/quoteStore';
 import { NOTIF_PRIORITY } from '@/types';
-import type { Todo } from '@/types';
+import type { NotifLink, Todo } from '@/types';
 
 const fmtDue = (iso?: string): { text: string; color: 'error' | 'warning' | 'default' } | null => {
   if (!iso) return null;
@@ -32,6 +34,16 @@ export function TodoPanel({ onEdit }: { onEdit: (t: Todo | null) => void }) {
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [quick, setQuick] = useState('');
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
+
+  const openLink = async (link: NotifLink) => {
+    if (link.kind !== 'quote' && link.kind !== 'payment' && link.kind !== 'dmc') return;
+    const st = useQuoteStore.getState();
+    if (st.draft.currentQuoteId !== link.id) {
+      const r = await st.loadCloud(link.id, { dmc: link.kind === 'dmc' });
+      if (!r.ok) { window.alert('⚠ ' + r.error); return; }
+    }
+    st.setView(link.kind === 'payment' ? 'payment' : 'cost');
+  };
 
   const groups = useMemo(() => {
     const mine = me ? todos.filter((t) => (scope === 'mine' ? isMyTodo(t, me.u) : true)) : [];
@@ -79,6 +91,11 @@ export function TodoPanel({ onEdit }: { onEdit: (t: Todo | null) => void }) {
               {t.status === 'doing' && <Chip size="small" label="Đang làm" sx={{ height: 18, bgcolor: 'rgba(37,99,235,0.12)', color: '#2563eb', fontWeight: 700 }} />}
               {t.recurring && t.recurring !== 'none' && <Chip size="small" variant="outlined" label="🔁" sx={{ height: 18 }} />}
               {checks.length > 0 && <Chip size="small" variant="outlined" label={`☑ ${doneChecks}/${checks.length}`} sx={{ height: 18 }} />}
+              {t.link && (
+                <Chip size="small" icon={<OpenInNewIcon sx={{ fontSize: 12 }} />} label={t.link.label} clickable
+                  onClick={(e) => { e.stopPropagation(); void openLink(t.link!); }}
+                  sx={{ height: 18, maxWidth: 160, bgcolor: 'rgba(3,105,161,0.1)', color: '#0369a1', fontWeight: 600 }} />
+              )}
             </Stack>
             {(due || t.assignees.length > 0) && (
               <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mt: 0.25 }}>

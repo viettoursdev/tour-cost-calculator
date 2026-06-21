@@ -7,7 +7,8 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useTodoStore } from '@/stores/todoStore';
-import type { Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
+import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import type { CloudQuoteEntry, Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toLocal = (iso?: string) => {
@@ -29,6 +30,7 @@ const STATUS_OPTS: { v: TodoStatus; label: string }[] = [
 export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () => void }) {
   const me = useAuthStore((s) => s.currentUser);
   const users = useAuthStore((s) => s.users);
+  const quotes = useQuoteHistoryStore((s) => s.quotes);
   const add = useTodoStore((s) => s.add);
   const update = useTodoStore((s) => s.update);
 
@@ -42,6 +44,10 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
   const [remindAt, setRemindAt] = useState<string[]>(todo?.remindAt ?? []);
   const [recurring, setRecurring] = useState<TodoRecurring>(todo?.recurring ?? 'none');
   const [checklist, setChecklist] = useState<TodoChecklistItem[]>(todo?.checklist ?? []);
+  const [linkQuote, setLinkQuote] = useState<CloudQuoteEntry | null>(
+    () => (todo?.link?.kind === 'quote' || todo?.link?.kind === 'payment' ? quotes.find((q) => q.cloudId === todo.link!.id) ?? null : null),
+  );
+  const [linkKind, setLinkKind] = useState<'quote' | 'payment'>(todo?.link?.kind === 'payment' ? 'payment' : 'quote');
   const [busy, setBusy] = useState(false);
 
   const toggleLead = (m: number) => setLead((p) => (p.includes(m) ? p.filter((x) => x !== m) : [...p, m]));
@@ -64,6 +70,7 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
         remindAt: remindAt.map(fromLocal).filter(Boolean) as string[],
         recurring,
         checklist: checklist.filter((c) => c.text.trim()).map((c) => ({ ...c, text: c.text.trim() })),
+        link: linkQuote ? { kind: linkKind, id: linkQuote.cloudId, label: linkQuote.name } : undefined,
       };
       if (todo) await update(todo.id, payload);
       else await add(payload);
@@ -126,6 +133,22 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
           <TextField select label="Lặp lại" value={recurring} onChange={(e) => setRecurring(e.target.value as TodoRecurring)}>
             {RECUR_OPTS.map((o) => <MenuItem key={o.v} value={o.v}>{o.label}</MenuItem>)}
           </TextField>
+
+          {/* Liên kết tới báo giá (mở 1 chạm từ việc) */}
+          <Stack direction="row" spacing={1.5}>
+            <Autocomplete
+              sx={{ flex: 1 }} options={quotes} value={linkQuote} onChange={(_, v) => setLinkQuote(v)}
+              getOptionLabel={(q) => `${q.quoteCode ? q.quoteCode + ' · ' : ''}${q.name}`}
+              isOptionEqualToValue={(a, b) => a.cloudId === b.cloudId}
+              renderInput={(p) => <TextField {...p} label="Liên kết báo giá (tuỳ chọn)" placeholder="Chọn báo giá…" />}
+            />
+            {linkQuote && (
+              <TextField select label="Mở tới" value={linkKind} onChange={(e) => setLinkKind(e.target.value as 'quote' | 'payment')} sx={{ width: 150 }}>
+                <MenuItem value="quote">Báo giá</MenuItem>
+                <MenuItem value="payment">Thanh toán</MenuItem>
+              </TextField>
+            )}
+          </Stack>
 
           <Divider>Việc con (checklist)</Divider>
           <Stack spacing={0.5}>

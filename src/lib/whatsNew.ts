@@ -9,6 +9,14 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-06-21e', date: '21/06/2026', title: 'Việc cần làm (To-Do) trên Trang Hôm nay',
+    items: [
+      { icon: '📋', title: 'Quản lý công việc ngay ở Hôm nay', desc: 'Thẻ "Việc cần làm": thêm nhanh, đặt ưu tiên/deadline, giao cho đội nhóm, việc con (checklist), lặp lại (ngày/tuần/tháng); nhóm theo Quá hạn/Hôm nay/Sắp tới và lọc của tôi/tất cả.' },
+      { icon: '⏰', title: 'Nhắc việc theo giờ', desc: 'Nhắc trước hạn (1 ngày/1 giờ…) và theo khung giờ cố định; thông báo hiện ở chuông. Giao việc cho ai sẽ tự gửi thông báo "Bạn được giao việc".' },
+      { icon: '🔗', title: 'Liên kết báo giá', desc: 'Gắn việc với một báo giá (mở thẳng tab Báo giá hoặc Thanh toán chỉ với 1 chạm từ thẻ việc).' },
+    ],
+  },
+  {
     id: '2026-06-21d', date: '21/06/2026', title: 'Bổ sung hồ sơ NCC & Khách hàng',
     items: [
       { icon: '🏦', title: 'NCC: thanh toán, điều khoản, file', desc: 'Hồ sơ NCC thêm: tài khoản ngân hàng (kèm SWIFT/IBAN), MST, điều khoản thanh toán/cọc, hoa hồng, hạn mức công nợ, trạng thái hợp tác, website/địa chỉ và file đính kèm (hợp đồng nguyên tắc, bảng giá năm…).' },
