@@ -475,26 +475,29 @@ The exporter produces a single JSON file with this shape:
 ```json
 {
   "singles": {
-    "master_rate_card": { … },
-    "fx_rates": { … },
-    "ncc_master": { … },
-    "ncc_products": { … },
-    "contracts_master": { … },
-    "quote_history": { … },
-    "dmc_quote_history": { … }
+    "viettours/user_accounts": { … },
+    "viettours/master_rate_card": { … },
+    "viettours/ncc_master": { … },
+    "viettours/fx_rates": { … },
+    "viettours/customer_list": { … },
+    "viettours/quote_history": { … },
+    "viettours/dmc_quote_history": { … }
   },
   "collections": {
-    "user_accounts": [ … ],
-    "quote_projects": [ … ],
-    "dmc_quote_projects": [ … ],
-    "user_notifications": [ … ],
-    "notification_threads": [ … ],
-    "chats": [ … ]
+    "quote_projects": { … },
+    "dmc_quote_projects": { … },
+    "user_notifications": { … },
+    "notification_threads": { … },
+    "tour_payments": { … },
+    "tour_itineraries": { … },
+    "tour_menus": { … },
+    "visa_procedures": { … },
+    "chats": { … }
   }
 }
 ```
 
-`singles` are single-document Firestore docs; `collections` are arrays of all docs in each collection. The exporter (`scripts/firestore-export.mjs`) now includes `chats` (added in Phase 6, covers `chats`/`chat_messages`/`chat_reactions`).
+`singles` are keyed `"viettours/<docId>"` — each value is the raw Firestore document data. `user_accounts` is a **single doc** (not a collection) whose top-level keys are usernames. `collections` are objects keyed by document ID. The exporter (`scripts/firestore-export.mjs`) includes `chats`, whose documents each contain an embedded `messages[]` array and a `reads{}` map; the ETL loads them into the `chats`, `chat_members`, and `chat_messages` tables (reactions are stored as a JSONB column on `chat_messages`).
 
 To produce a real export from the production project:
 
@@ -526,7 +529,7 @@ DUMP_PATH=firestore-dump.json npm run etl
 
 The ETL is idempotent. On every run it first calls `resetAll()` which:
 
-1. **Truncates all app tables** (`profiles`, `customers`, `suppliers`, `ncc_products`, `contracts`, `rate_card`, `fx_rates`, `pois`, `visa_products`, `visa_procs`, `visa_projects`, `itineraries`, `restaurants`, `menus`, `quotes`, `dmc_quotes`, `quote_projects`, `dmc_quote_projects`, `tour_payments`, `payment_approvals`, `payment_approval_stages`, `payment_records`, `notifications`, `notification_threads`, `workflow_steps`, `chats`, `chat_messages`, `chat_reactions`) via `TRUNCATE … RESTART IDENTITY CASCADE`.
+1. **Deletes all rows** from every app table (children before parents, per the `CHILD_FIRST_TABLES` array in `scripts/etl/db.mjs` — covers all ~50 normalized tables) using the service-role client (`.delete().not(col, 'is', null)` per table).
 2. **Deletes all `@viettours.com.vn` auth users** from `auth.users` via the Admin API, so re-runs never accumulate duplicate users.
 
 This means a dry-run and the real run share one code path and can be repeated safely.
@@ -553,30 +556,32 @@ ALLOW_UNMAPPED=1 DUMP_PATH=firestore-dump.json npm run etl
 
 ```
 scripts/
-  supabase-etl.mjs          # orchestrator: resetAll → loaders in order
+  supabase-etl.mjs          # orchestrator: resetAll → loaders in spec order
   firestore-export.mjs      # Firestore → firestore-dump.json
   etl/
-    reset.mjs               # truncate tables + delete auth users
-    users.mjs               # auth.admin.createUser → username→UUID map
-    fx.mjs                  # fx_rates
-    pois.mjs                # points of interest (supplier/customer geo)
-    customers.mjs           # customers → customerName→UUID map
-    suppliers.mjs           # ncc_master → supplierName→UUID map
-    ncc-products.mjs        # ncc_products (refs supplier map)
-    rate-card.mjs           # master_rate_card
-    contracts.mjs           # contracts_master
-    visa-products.mjs       # visa products
-    visa-procs.mjs          # visa procs
-    visa-projects.mjs       # visa projects
-    itineraries.mjs         # itineraries
-    restaurants.mjs         # restaurants + menus
-    quotes.mjs              # quotes + dmc_quotes + versions (uses username map)
-    payments.mjs            # tour_payments + approval records
-    notifications.mjs       # notifications + notification_threads
-    chats.mjs               # chats + messages + reactions
+    db.mjs                  # service-role client, CHILD_FIRST_TABLES, resetAll, insert helper
+    util.mjs                # pure helpers (chunk, slug, date coercions, …)
+    profiles.mjs            # auth users + username→UUID map (loadProfiles, makeResolver)
+    customers.mjs           # customers, suppliers, ncc_products (loadCustomers, loadSuppliers, loadNccProducts)
+    suppliers.mjs           # barrel re-export of supplier helpers
+    misc.mjs                # contracts, rate-card, fx_rates, restaurants, pois, visa-products
+    quotes.mjs              # regular + DMC quotes unified (loadQuotes)
+    itineraries.mjs         # itineraries + menus (loadItineraries, loadMenus)
+    visa.mjs                # visa procedures + projects (loadVisaProcedures, loadVisaProjects)
+    payments.mjs            # tour_payments + payment approvals (loadTourPayments, loadPaymentApprovals)
+    notifications.mjs       # notifications, threads, chats/members/messages (loadNotifications, loadThreads, loadChats)
 ```
 
-Loader call order: `users → fx → pois → customers → suppliers → ncc-products → rate-card → contracts → visa-products → visa-procs → visa-projects → itineraries → restaurants → quotes → payments → notifications → chats`. This order satisfies all FK dependencies (profiles before everything; customers/suppliers before ncc-products and quotes; quotes before payments).
+Loader call order (from `runEtl` in `scripts/supabase-etl.mjs`):
+
+1. `loadProfiles` — keystone; builds the `username → UUID` map.
+2. `loadCustomers`, `loadSuppliers`, `loadNccProducts` — independent entities.
+3. `loadContracts`, `loadRateCard`, `loadFxRates`, `loadRestaurants`, `loadPois`, `loadVisaProducts` — independent entities.
+4. `loadQuotes` — regular + DMC (uses customer and username maps).
+5. `loadItineraries`, `loadMenus`, `loadVisaProcedures`, `loadVisaProjects`.
+6. `loadTourPayments`, `loadPaymentApprovals`, `loadNotifications`, `loadThreads`, `loadChats`.
+
+This order satisfies all FK dependencies (profiles before everything; customers/suppliers before ncc-products and quotes; quotes before payments).
 
 ### Verification harness
 
@@ -584,7 +589,7 @@ Loader call order: `users → fx → pois → customers → suppliers → ncc-pr
 npm run test:etl
 ```
 
-Runs the ETL against the **local Docker stack only** using the synthetic fixture `tests/etl/fixtures/firestore-dump.sample.json`. The fixture covers all entity types and edge cases (deleted users → null FK, duplicate re-run idempotency, ghost username gate). The harness verifies row counts and spot-checks data integrity after each loader.
+Runs the **full ETL once** against the local Docker stack using the synthetic fixture `tests/etl/fixtures/firestore-dump.sample.json`, then asserts **per-table row counts + financial checksums + the unmapped-username list** against the expected values in `tests/etl/fixtures/expected.mjs`.
 
 > The test harness requires the local Supabase stack to be running (`npx supabase start`). It does NOT run against production.
 
