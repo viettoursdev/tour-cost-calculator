@@ -26,6 +26,7 @@ const DepartureCalendar = lazy(() => import('./DepartureCalendar').then((m) => (
 const PaymentBoard = lazy(() => import('./PaymentBoard').then((m) => ({ default: m.PaymentBoard })));
 const SalesPipeline = lazy(() => import('./SalesPipeline').then((m) => ({ default: m.SalesPipeline })));
 const SalesAnalytics = lazy(() => import('./SalesAnalytics').then((m) => ({ default: m.SalesAnalytics })));
+const ExecBoard = lazy(() => import('./ExecBoard').then((m) => ({ default: m.ExecBoard })));
 const AuditView = lazy(() => import('@/components/admin/AuditView').then((m) => ({ default: m.AuditView })));
 const ContractView = lazy(() => import('@/components/contract/ContractView').then((m) => ({ default: m.ContractView })));
 const CustomerView = lazy(() => import('@/components/customer/CustomerView').then((m) => ({ default: m.CustomerView })));
@@ -115,6 +116,7 @@ export function QuoteView() {
             {view === 'payboard' && <PaymentBoard />}
             {view === 'pipeline' && <SalesPipeline />}
             {view === 'salesanalytics' && <SalesAnalytics />}
+            {view === 'execboard' && <ExecBoard />}
             {view === 'audit' && <AuditView />}
             {view === 'history' && <QuoteHistoryView />}
             {view === 'contract' && <ContractView />}

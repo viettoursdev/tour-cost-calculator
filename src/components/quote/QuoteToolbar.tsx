@@ -320,6 +320,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),
+          ...(isMgr ? [item('execboard', 'Tổng quan điều hành')] : []),
           item('pipeline', 'Pipeline bán hàng'),
           item('salesanalytics', 'Phân tích bán hàng'),
           item('history', 'Lịch sử báo giá'),
