@@ -14,7 +14,7 @@ import type {
   EmailLink, FileAttachment, GuideScheduleDoc, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
   PublicQuoteDoc, QuoteDraft, QuoteRequestKind, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
-  VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
+  Todo, VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
 } from '@/types';
 
 const env = import.meta.env;
@@ -1284,6 +1284,23 @@ export async function fbPushGuideSchedule(
   await setDoc(GUIDE_SCHEDULE_DOC, {
     freelancers: d.freelancers ?? [],
     assignments: d.assignments ?? {},
+    updatedAt: new Date().toISOString(),
+    updatedBy: `${pushedBy.name} (${pushedBy.role})`,
+  });
+}
+
+// ── Công việc (To-Do) — single-doc dùng chung ──
+const TODOS_DOC = doc(db, 'viettours', 'todos');
+
+export function fbSubscribeTodos(cb: (list: Todo[]) => void): Unsubscribe {
+  return subDoc(TODOS_DOC, (s) => {
+    cb(s.exists() ? ((s.data().todos as Todo[]) ?? []) : []);
+  });
+}
+
+export async function fbPushTodos(list: Todo[], pushedBy: { name: string; role: string }): Promise<void> {
+  await setDoc(TODOS_DOC, {
+    todos: list,
     updatedAt: new Date().toISOString(),
     updatedBy: `${pushedBy.name} (${pushedBy.role})`,
   });

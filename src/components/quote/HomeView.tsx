@@ -6,7 +6,9 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useQuoteStore, type QuoteViewKey } from '@/stores/quoteStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { fmtVND } from './calc';
-import type { CloudQuoteEntry } from '@/types';
+import { TodoPanel } from '@/components/todo/TodoPanel';
+import { TodoModal } from '@/components/todo/TodoModal';
+import type { CloudQuoteEntry, Todo } from '@/types';
 
 function Section({ icon, title, count, color, onAll, children }: {
   icon: string; title: string; count: number; color: string; onAll?: () => void; children: React.ReactNode;
@@ -56,6 +58,8 @@ export function HomeView() {
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setView = useQuoteStore((s) => s.setView);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
+  const [todoOpen, setTodoOpen] = useState(false);
+  const [editTodo, setEditTodo] = useState<Todo | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
   // Đồng hồ đếm ngược: nhịp lại mỗi phút để nhãn "còn … giờ" tự cập nhật.
@@ -118,6 +122,12 @@ export function HomeView() {
       <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
         {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} · việc cần để ý hôm nay
       </Typography>
+
+      <Box sx={{ mb: 1.5 }}>
+        <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />
+      </Box>
+
+      {todoOpen && <TodoModal todo={editTodo} onClose={() => setTodoOpen(false)} />}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
         <Box sx={{ gridColumn: { md: '1 / -1' } }}>

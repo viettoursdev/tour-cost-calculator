@@ -36,6 +36,9 @@ export const fbPushGuideSchedule = fb.fbPushGuideSchedule;
 // Liên kết email Outlook (Firestore-backed, độc lập backend auth).
 export const fbSubscribeEmailLinks = fb.fbSubscribeEmailLinks;
 export const fbPushEmailLinks = fb.fbPushEmailLinks;
+// Công việc To-Do (Firestore-backed, dùng chung).
+export const fbSubscribeTodos = fb.fbSubscribeTodos;
+export const fbPushTodos = fb.fbPushTodos;
 // Báo giá chia sẻ công khai cho khách (Firestore-backed).
 export const fbPublishQuote = fb.fbPublishQuote;
 export const fbGetPublicQuote = fb.fbGetPublicQuote;

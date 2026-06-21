@@ -19,6 +19,7 @@ import { useMenuStore } from '@/stores/menuStore';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { useEmailStore } from '@/stores/emailStore';
+import { useTodoStore } from '@/stores/todoStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
@@ -76,6 +77,7 @@ export function MainApp() {
     };
     window.addEventListener('storage', onFxStorage);
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
+    const todoUnsub = useTodoStore.getState().init();
     const chatUnsub = useChatStore.getState().init(currentUser.u);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
@@ -120,6 +122,7 @@ export function MainApp() {
       nccProdUnsub?.();
       contractUnsub?.();
       notifUnsub?.();
+      todoUnsub?.();
       chatUnsub?.();
       paUnsub?.();
       itinUnsub?.();
