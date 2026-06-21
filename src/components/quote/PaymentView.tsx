@@ -16,7 +16,7 @@ import { PaymentRequestModal } from './PaymentRequestModal';
 import { getCATS } from './constants';
 import { fmtVND } from './calc';
 import {
-  buildAllItems, buildSourceItems, computePaymentTotals, slugifyTourKey,
+  buildAllItems, buildSourceItems, computeNccDue, computePaymentTotals, slugifyTourKey,
 } from './paymentUtils';
 import { TrackItemsModal } from './TrackItemsModal';
 import { AddCustomCostModal } from './AddCustomCostModal';
@@ -67,13 +67,15 @@ export function PaymentView() {
   // Index tóm tắt công nợ vào lịch sử báo giá (cho Bảng công nợ tổng) — debounce,
   // chỉ khi báo giá đã lưu cloud và số liệu thay đổi.
   const cloudId = draft.currentQuoteId;
-  const payKey = cloudId ? `${Math.round(totals.totalCost)}|${Math.round(totals.totalPaid)}` : '';
+  const nccDue = useMemo(() => computeNccDue(allItems, payments), [allItems, payments]);
+  const nccKey = nccDue.map((d) => `${d.dueDate}:${d.amount}`).join(',');
+  const payKey = cloudId ? `${Math.round(totals.totalCost)}|${Math.round(totals.totalPaid)}|${nccKey}` : '';
   useEffect(() => {
     if (!cloudId || !payKey) return;
     const t = window.setTimeout(() => {
       void fbSetQuotePaymentSummary(cloudId, {
         payable: Math.round(totals.totalCost), paid: Math.round(totals.totalPaid), remaining: Math.round(totals.totalRemaining),
-      }).catch(() => { /* index không chặn UI */ });
+      }, nccDue).catch(() => { /* index không chặn UI */ });
     }, 1200);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -441,13 +443,24 @@ export function PaymentView() {
                             >
                               {inst.status === 'paid' ? '✅ Đã TT' : '⏳ Chưa TT'}
                             </Button>
-                            {inst.status === 'paid' && (
+                            {inst.status === 'paid' ? (
                               <TextField
                                 type="date"
                                 value={inst.paidDate || ''}
                                 onChange={(e) => updInstallment(ci.key, idx, { paidDate: e.target.value })}
                                 size="small"
                                 variant="outlined"
+                                sx={{ '& .MuiInputBase-input': { fontSize: 12, py: 0.5 } }}
+                              />
+                            ) : (
+                              <TextField
+                                type="date"
+                                label="Hạn trả"
+                                value={inst.dueDate || ''}
+                                onChange={(e) => updInstallment(ci.key, idx, { dueDate: e.target.value })}
+                                size="small"
+                                variant="outlined"
+                                slotProps={{ inputLabel: { shrink: true } }}
                                 sx={{ '& .MuiInputBase-input': { fontSize: 12, py: 0.5 } }}
                               />
                             )}

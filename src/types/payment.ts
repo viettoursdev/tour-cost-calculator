@@ -7,6 +7,16 @@ export interface Installment {
   amount: number;
   status: InstallmentStatus;
   paidDate: string;
+  /** Hạn phải thanh toán NCC (ISO yyyy-mm-dd) — để nhắc đến hạn trả NCC. */
+  dueDate?: string;
+}
+
+/** Tóm tắt một đợt thanh toán NCC sắp/đã đến hạn — index vào lịch sử báo giá. */
+export interface NccDueItem {
+  supplier?: string;
+  label: string;
+  amount: number;
+  dueDate: string;
 }
 
 export interface PaymentRecord {

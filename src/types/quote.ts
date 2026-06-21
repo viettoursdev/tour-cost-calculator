@@ -327,6 +327,8 @@ export type CloudQuoteEntry = {
   workflowSummary?: { current?: string; currentAssignee?: string; donePct: number; total: number; overdue: number };
   /** Tóm tắt công nợ phải trả NCC (VND) — cho Bảng công nợ tổng. */
   paymentSummary?: { payable: number; paid: number; remaining: number };
+  /** Các đợt thanh toán NCC chưa trả & có hạn — để nhắc đến hạn trả NCC. */
+  nccDue?: { supplier?: string; label: string; amount: number; dueDate: string }[];
   createdByUsername: string;
   createdByName: string;
   collaborators: Collaborator[];

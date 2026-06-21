@@ -1,5 +1,5 @@
 import type {
-  CategoryId, CustomCostItem, Installment, PaymentItem, PaymentRecord, QuoteDraft,
+  CategoryId, CustomCostItem, Installment, NccDueItem, PaymentItem, PaymentRecord, QuoteDraft,
 } from '@/types';
 import { calcVND } from './calc';
 import type { CategoryDef } from './constants';
@@ -107,4 +107,26 @@ export function computePaymentSummary(
   const all = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems);
   const t = computePaymentTotals(all, payments);
   return { payable: t.totalCost, paid: t.totalPaid, remaining: t.totalRemaining };
+}
+
+/** Các đợt thanh toán NCC CHƯA trả & có hạn (để index → nhắc đến hạn trả NCC). */
+export function computeNccDue(
+  items: PaymentItem[],
+  payments: Record<string, PaymentRecord>,
+): NccDueItem[] {
+  const out: NccDueItem[] = [];
+  for (const ci of items) {
+    if (!ci.tracked) continue;
+    const rec = payments[ci.key];
+    for (const inst of rec?.installments ?? []) {
+      if (inst.status === 'paid' || !inst.dueDate) continue;
+      out.push({
+        supplier: rec?.supplier || undefined,
+        label: `${ci.name}${inst.label ? ` · ${inst.label}` : ''}`,
+        amount: +inst.amount || 0,
+        dueDate: inst.dueDate,
+      });
+    }
+  }
+  return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }

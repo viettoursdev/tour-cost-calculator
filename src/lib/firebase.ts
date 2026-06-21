@@ -440,13 +440,13 @@ function makeQuoteHistoryApi(
     },
 
     /** Cập nhật tóm tắt công nợ của 1 báo giá (theo cloudId). */
-    async fbSetEntryPaymentSummary(cloudId: string, paymentSummary: CloudQuoteEntry['paymentSummary']): Promise<void> {
+    async fbSetEntryPaymentSummary(cloudId: string, paymentSummary: CloudQuoteEntry['paymentSummary'], nccDue?: CloudQuoteEntry['nccDue']): Promise<void> {
       const snap = await getDoc(historyDoc);
       if (!snap.exists()) return;
       const quotes = ((snap.data().quotes as CloudQuoteEntry[]) ?? []).slice();
       const i = quotes.findIndex((q) => q.cloudId === cloudId);
       if (i < 0) return;
-      quotes[i] = { ...quotes[i], paymentSummary };
+      quotes[i] = { ...quotes[i], paymentSummary, ...(nccDue !== undefined ? { nccDue } : {}) };
       await setDoc(historyDoc, { quotes });
     },
 

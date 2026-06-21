@@ -212,6 +212,47 @@ export async function checkQuoteDeadlines(user: User): Promise<void> {
   }
 }
 
+const NCC_DDL_KEY = 'vte_ncc_due_notified';
+/** Số ngày trước hạn bắt đầu nhắc trả NCC. */
+const NCC_REMIND_WITHIN = 7;
+
+/**
+ * Nhắc hạn thanh toán NCC: mỗi đợt thanh toán NCC chưa trả & có hạn (index `nccDue`)
+ * sắp/đã đến hạn (≤7 ngày, gồm quá hạn) → nhắc người tạo & cộng tác viên báo giá.
+ * Mỗi (báo giá, đợt, hạn) nhắc 1 lần (dedup localStorage). Quét index đã subscribe.
+ */
+export async function checkNccPayments(user: User): Promise<void> {
+  try {
+    const quotes = useQuoteHistoryStore.getState().quotes;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(NCC_DDL_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const q of quotes) {
+      const involved = new Set<string>([q.createdByUsername, ...(q.collaborators ?? []).map((c) => c.u)]);
+      if (!involved.has(user.u)) continue;
+      for (const due of q.nccDue ?? []) {
+        const d = daysUntil(due.dueDate);
+        if (d == null || d > NCC_REMIND_WITHIN) continue; // gồm cả quá hạn (d < 0)
+        const key = `${q.cloudId}:${due.label}:${due.dueDate}`;
+        if (set.has(key)) continue;
+        set.add(key);
+        const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
+        const amount = (due.amount || 0).toLocaleString('vi-VN');
+        await fbSendNotification(user.u, {
+          type: 'payment_due',
+          title: d < 0 ? '🔴 Quá hạn thanh toán NCC' : '⏰ Sắp đến hạn thanh toán NCC',
+          message: `Báo giá "${q.name}" — ${due.supplier ? due.supplier + ' · ' : ''}${due.label}: ${amount} đ · ${when} (${new Date(due.dueDate).toLocaleDateString('vi-VN')})`,
+          createdBy: 'Hệ thống',
+          data: { cloudId: q.cloudId },
+        });
+      }
+    }
+    try { localStorage.setItem(NCC_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkNccPayments failed:', (e as Error).message);
+  }
+}
+
 const SALES_KEY = 'vte_sales_followup_notified';
 /** Số ngày KHÔNG cập nhật trước khi nhắc follow-up, theo trạng thái deal. */
 const FOLLOWUP_DAYS: Partial<Record<string, number>> = { sent: 4, negotiating: 3 };
