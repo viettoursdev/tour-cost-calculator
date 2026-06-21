@@ -9,6 +9,14 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-06-21b', date: '21/06/2026', title: 'Lịch đi tour HDV',
+    items: [
+      { icon: '🧭', title: 'Lịch đi tour Hướng dẫn viên', desc: 'Thẻ mới trên Trang chủ (và menu Vận hành): xếp lịch HDV theo tour hoặc theo từng HDV, mỗi tour/HDV một màu riêng. Lịch bay tự lấy từ chuyến bay của báo giá, chỉnh tay được theo thực tế.' },
+      { icon: '⚠️', title: 'Tự bắt trùng lịch HDV', desc: 'Hệ thống cảnh báo khi một HDV bị xếp 2 chuyến chồng giờ hoặc quá sát nhau (thời gian đệm cấu hình được), kể cả trùng giữa các tour khác nhau.' },
+      { icon: '🧑‍✈️', title: 'Thêm HDV freelance', desc: 'Thêm Hướng dẫn viên freelance ngoài danh sách nhân sự để xếp vào lịch.' },
+    ],
+  },
+  {
     id: '2026-06-21', date: '21/06/2026', title: 'Bảng nhập thông tin khi tạo báo giá',
     items: [
       { icon: '📝', title: 'Tạo báo giá mới có bảng thông tin', desc: 'Chọn báo giá Nội địa/Nước ngoài sẽ mở bảng nhập: loại yêu cầu (Request tour/Thầu), tên tour, khách hàng, số ngày/đêm, ngày khởi hành dự kiến, deadline và nhân sự collab — hệ thống tự điền sẵn khi Lưu cloud.' },
