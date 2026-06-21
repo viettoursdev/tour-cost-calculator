@@ -39,7 +39,7 @@ describe('etl notifications + threads + chat', () => {
     expect(ch![0].id).toBe('dm_mai__tony');
     const { data: mem } = await c.from('chat_members').select('username, user_id, last_read').order('username');
     expect(mem).toHaveLength(2);
-    expect(mem!.find((m) => m.username === 'tony')!.last_read).toBe('2026-06-01T01:00:00Z');
+    expect(new Date(mem!.find((m) => m.username === 'tony')!.last_read).toISOString()).toBe('2026-06-01T01:00:00.000Z');
     const { data: msg } = await c.from('chat_messages').select('legacy_id, by_user_id, by_username, text');
     expect(msg![0].by_user_id).toBe(r.resolve('tony'));
     expect(msg![0].text).toBe('hey');
