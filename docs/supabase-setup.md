@@ -461,3 +461,140 @@ No CI harness covers the Worker (plain JS, manually deployed). Validated by: `no
 ### ⚠️ Do NOT deploy until cutover
 
 Production runs Firebase Auth; this Worker no longer verifies Firebase ID tokens. Deploying it (with `SUPABASE_PROJECT_REF` set) before the frontend cutover would 401 every AI/translate/upload call. Keep the currently-deployed Firebase Worker live until the frontend is on Supabase, then (cutover runbook step 4): enable asymmetric **ES256** signing keys in the Supabase dashboard, paste the new Worker, and set `SUPABASE_PROJECT_REF=zkzrvctqwnhzklvsoahk`. Rollback = delete that variable.
+
+---
+
+## Phase 6 — ETL (Firestore → Supabase)
+
+**Status (2026-06-21):** ETL scripts + verification harness complete. Local Docker dry-run green. **This is NOT the production cutover** — that is Phase 7.
+
+### Dump shape and export
+
+The exporter produces a single JSON file with this shape:
+
+```json
+{
+  "singles": {
+    "master_rate_card": { … },
+    "fx_rates": { … },
+    "ncc_master": { … },
+    "ncc_products": { … },
+    "contracts_master": { … },
+    "quote_history": { … },
+    "dmc_quote_history": { … }
+  },
+  "collections": {
+    "user_accounts": [ … ],
+    "quote_projects": [ … ],
+    "dmc_quote_projects": [ … ],
+    "user_notifications": [ … ],
+    "notification_threads": [ … ],
+    "chats": [ … ]
+  }
+}
+```
+
+`singles` are single-document Firestore docs; `collections` are arrays of all docs in each collection. The exporter (`scripts/firestore-export.mjs`) now includes `chats` (added in Phase 6, covers `chats`/`chat_messages`/`chat_reactions`).
+
+To produce a real export from the production project:
+
+```bash
+SA_PATH=prod-sa.json node scripts/firestore-export.mjs
+# writes firestore-dump.json
+```
+
+`prod-sa.json` is the production service-account key (`tour-cost-calculator-4336c`). Keep it out of git.
+
+### Running the ETL
+
+Against a real dump (local Supabase stack or a remote project via env vars):
+
+```bash
+SUPABASE_URL=https://zkzrvctqwnhzklvsoahk.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
+DUMP_PATH=firestore-dump.json \
+npm run etl
+```
+
+Against the local Docker stack (uses `.env` defaults):
+
+```bash
+DUMP_PATH=firestore-dump.json npm run etl
+```
+
+### Idempotent truncate-and-reload
+
+The ETL is idempotent. On every run it first calls `resetAll()` which:
+
+1. **Truncates all app tables** (`profiles`, `customers`, `suppliers`, `ncc_products`, `contracts`, `rate_card`, `fx_rates`, `pois`, `visa_products`, `visa_procs`, `visa_projects`, `itineraries`, `restaurants`, `menus`, `quotes`, `dmc_quotes`, `quote_projects`, `dmc_quote_projects`, `tour_payments`, `payment_approvals`, `payment_approval_stages`, `payment_records`, `notifications`, `notification_threads`, `workflow_steps`, `chats`, `chat_messages`, `chat_reactions`) via `TRUNCATE … RESTART IDENTITY CASCADE`.
+2. **Deletes all `@viettours.com.vn` auth users** from `auth.users` via the Admin API, so re-runs never accumulate duplicate users.
+
+This means a dry-run and the real run share one code path and can be repeated safely.
+
+### Auth users — passwordless (magic-link parity)
+
+Auth users are created via `supabase.auth.admin.createUser({ email, email_confirm: true })` — no password is set. This matches the production magic-link-only auth model. The `profiles` row is then updated with the historical username, display name, role, and metadata backfilled from the Firestore `user_accounts` doc.
+
+### `ALLOW_UNMAPPED` gate
+
+The ETL builds a `username → UUID` map from the created auth users. Any `created_by` field that references a username not in that map is an **unmapped username** (the Firestore account was deleted or never existed).
+
+**Default behaviour:** the run **fails loudly**, listing all unmapped usernames. This prevents silent orphans — you know exactly which deleted users need a decision.
+
+**What unmapped means:** the user no longer exists. Their `created_by` FK is set to `null` in the Supabase row while the `*_name` display string (e.g. `created_by_name`) is preserved verbatim for UI display. No data is lost; only the FK link is severed.
+
+To accept unmapped usernames and proceed:
+
+```bash
+ALLOW_UNMAPPED=1 DUMP_PATH=firestore-dump.json npm run etl
+```
+
+### Module layout
+
+```
+scripts/
+  supabase-etl.mjs          # orchestrator: resetAll → loaders in order
+  firestore-export.mjs      # Firestore → firestore-dump.json
+  etl/
+    reset.mjs               # truncate tables + delete auth users
+    users.mjs               # auth.admin.createUser → username→UUID map
+    fx.mjs                  # fx_rates
+    pois.mjs                # points of interest (supplier/customer geo)
+    customers.mjs           # customers → customerName→UUID map
+    suppliers.mjs           # ncc_master → supplierName→UUID map
+    ncc-products.mjs        # ncc_products (refs supplier map)
+    rate-card.mjs           # master_rate_card
+    contracts.mjs           # contracts_master
+    visa-products.mjs       # visa products
+    visa-procs.mjs          # visa procs
+    visa-projects.mjs       # visa projects
+    itineraries.mjs         # itineraries
+    restaurants.mjs         # restaurants + menus
+    quotes.mjs              # quotes + dmc_quotes + versions (uses username map)
+    payments.mjs            # tour_payments + approval records
+    notifications.mjs       # notifications + notification_threads
+    chats.mjs               # chats + messages + reactions
+```
+
+Loader call order: `users → fx → pois → customers → suppliers → ncc-products → rate-card → contracts → visa-products → visa-procs → visa-projects → itineraries → restaurants → quotes → payments → notifications → chats`. This order satisfies all FK dependencies (profiles before everything; customers/suppliers before ncc-products and quotes; quotes before payments).
+
+### Verification harness
+
+```bash
+npm run test:etl
+```
+
+Runs the ETL against the **local Docker stack only** using the synthetic fixture `tests/etl/fixtures/firestore-dump.sample.json`. The fixture covers all entity types and edge cases (deleted users → null FK, duplicate re-run idempotency, ghost username gate). The harness verifies row counts and spot-checks data integrity after each loader.
+
+> The test harness requires the local Supabase stack to be running (`npx supabase start`). It does NOT run against production.
+
+### ⚠️ Phase 6 scope — what is NOT included
+
+The following are **Phase 7 (cutover)**, not Phase 6:
+
+- Running the ETL against the real production Firestore and live Supabase project.
+- Adding `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repo secrets and wiring them in `.github/workflows/deploy.yml`.
+- Deploying the updated Cloudflare Worker with `SUPABASE_PROJECT_REF` set.
+- Pushing migrations 0017–0027 to the production cloud project.
+- Flipping `VITE_AUTH_BACKEND=supabase` in the production environment.
+- Removing Firebase dependencies.
