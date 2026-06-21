@@ -9,8 +9,9 @@ export const EXPECTED = {
   visa_products: 1, visa_product_fees: 1, visa_products_meta: 1,
   pois: 1,
   quotes: 2,                 // 1 regular + 1 dmc
-  quote_line_items: 1, quote_groups: 0, quote_payments: 1, quote_passengers: 1,
-  quote_workflow_steps: 1, quote_workflow_logs: 1, quote_versions: 1,
+  quote_line_items: 1, quote_groups: 1, quote_group_items: 1, quote_payments: 1, quote_passengers: 1,
+  quote_flights: 1, quote_flight_segments: 1, quote_flight_fares: 1,
+  quote_workflow_steps: 1, quote_workflow_logs: 1, quote_versions: 1, quote_collaborators: 1,
   itineraries: 1, itinerary_days: 1, itinerary_flights: 1,
   menus: 1, menu_days: 1,
   visa_procedures: 1, visa_projects: 1,

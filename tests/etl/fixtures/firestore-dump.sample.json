@@ -337,7 +337,44 @@
               "log": [{ "at": "2026-05-01T00:00:00Z", "by": "Linh", "action": "created" }]
             }
           ],
-          "groups": []
+          "flights": [
+            {
+              "id": "fl1",
+              "note": "",
+              "segments": [
+                {
+                  "date": "2026-07-01",
+                  "flightNo": "VN1",
+                  "airlineCode": "VN",
+                  "airlineName": "Vietnam Airlines",
+                  "depAirport": "HAN",
+                  "arrAirport": "SGN",
+                  "depCity": "Hanoi",
+                  "arrCity": "HCMC",
+                  "depTime": "08:00",
+                  "arrTime": "10:00",
+                  "depDayOffset": 0,
+                  "arrDayOffset": 0
+                }
+              ],
+              "fares": [
+                { "id": "fa1", "label": "ADT", "amount": 1500000, "cur": "VND" }
+              ]
+            }
+          ],
+          "groups": [
+            {
+              "id": "g1",
+              "label": "Group A",
+              "pax": 5,
+              "catEnabled": { "hotel": true },
+              "items": {
+                "hotel": [
+                  { "id": 2, "name": "Twin room", "cur": "USD", "price": 80, "times": 1, "qtyMode": "per_pax", "enabled": true }
+                ]
+              }
+            }
+          ]
         },
         "versions": [
           {
