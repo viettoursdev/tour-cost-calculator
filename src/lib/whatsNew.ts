@@ -9,6 +9,13 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-06-21d', date: '21/06/2026', title: 'Bổ sung hồ sơ NCC & Khách hàng',
+    items: [
+      { icon: '🏦', title: 'NCC: thanh toán, điều khoản, file', desc: 'Hồ sơ NCC thêm: tài khoản ngân hàng (kèm SWIFT/IBAN), MST, điều khoản thanh toán/cọc, hoa hồng, hạn mức công nợ, trạng thái hợp tác, website/địa chỉ và file đính kèm (hợp đồng nguyên tắc, bảng giá năm…).' },
+      { icon: '👤', title: 'Khách hàng: file, công nợ, phụ trách', desc: 'Hồ sơ khách thêm: file đính kèm (hợp đồng, ĐKKD), điều khoản thanh toán & hạn mức công nợ, TK hoàn tiền, Sales phụ trách, sinh nhật & kênh liên lạc ưa thích.' },
+    ],
+  },
+  {
     id: '2026-06-21c', date: '21/06/2026', title: '3 cách tạo báo giá + cột Excel',
     items: [
       { icon: '📝', title: '3 cách tạo báo giá mới', desc: 'Khi tạo báo giá mới chọn: (1) Tạo trên app như cũ; (2) Upload Excel — chỉ xem file, trang nhập liệu bị khoá; (3) Upload Excel + AI — AI tự phân tích file và điền vào bảng giá.' },

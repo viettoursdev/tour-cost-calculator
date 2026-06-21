@@ -1,4 +1,5 @@
 import type { FileAttachment } from './quote';
+import type { BankInfo } from './ncc';
 
 /** Hồ sơ giấy tờ của MỘT người thuộc khách hàng (hộ chiếu + visa + file scan).
  *  Dữ liệu nhạy cảm (PII) — chỉ hiển thị cho người tạo khách + quản lý + phòng Visa/
@@ -34,6 +35,7 @@ export type CustomerContact = {
   phone: string;
   email: string;
   position: string;
+  birthday?: string;   // sinh nhật người liên hệ (ISO yyyy-mm-dd) — để chăm sóc
 };
 
 /** Một lần chăm sóc / tương tác với khách (gọi, email, gặp, ghi chú). */
@@ -65,6 +67,20 @@ export type Customer = {
   nextFollowUp?: { date: string; note: string; byU: string; byName: string };
   /** Hồ sơ hộ chiếu/visa của khách (PII — quyền xem siết chặt). */
   travelers?: TravelerDoc[];
+  /** Sales phụ trách khách (account owner). */
+  ownerU?: string;
+  ownerName?: string;
+  /** Kênh liên lạc ưa thích (Zalo / Email / Điện thoại…). */
+  preferredChannel?: string;
+  /** Sinh nhật khách cá nhân (ISO yyyy-mm-dd). */
+  birthday?: string;
+  /** Điều khoản thanh toán & hạn mức công nợ (khách B2B). */
+  paymentTerms?: string;
+  creditLimit?: number;
+  /** TK ngân hàng hoàn tiền (tuỳ chọn). */
+  refundBank?: BankInfo;
+  /** File đính kèm: hợp đồng, ĐKKD, giấy tờ doanh nghiệp… (R2). */
+  files?: FileAttachment[];
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

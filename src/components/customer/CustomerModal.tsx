@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import {
-  Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-  Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
+  Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
+  MenuItem, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
 import { AiButton } from '@/components/common/AiButton';
 import { CUSTOMER_SOURCES, CUSTOMER_TAGS } from './constants';
@@ -10,11 +10,16 @@ import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
 import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
+import { useAuthStore } from '@/stores/authStore';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
+import { attMeta } from '@/lib/util';
 import type { NameCardFields } from '@/lib/nameCard';
 import type { ParsedCustomer } from '@/lib/partyParse';
-import type { Customer, CustomerContact } from '@/types';
+import type { BankInfo, Customer, CustomerContact } from '@/types';
 
 const EMPTY_CONTACT: CustomerContact = { name: '', phone: '', email: '', position: '' };
 
@@ -61,6 +66,25 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
 
   const setF = <K extends keyof Customer>(k: K, v: Customer[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
+  const setRefundBank = (patch: Partial<BankInfo>) =>
+    setForm((p) => ({ ...p, refundBank: { ...(p.refundBank ?? {}), ...patch } }));
+
+  const users = useAuthStore((s) => s.users);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [fileBusy, setFileBusy] = useState(false);
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setFileBusy(true);
+    try {
+      const at = new Date().toISOString();
+      const up = (await Promise.all(files.map((f) => uploadFileToWorker(f)))).map((u) => ({ ...u, uploadedBy: currentUser?.name, uploadedAt: at }));
+      setForm((p) => ({ ...p, files: [...(p.files ?? []), ...up] }));
+    } catch (err) { window.alert('❌ Tải file lỗi: ' + (err as Error).message); }
+    finally { setFileBusy(false); }
+  };
+  const removeFile = (key: string) => setForm((p) => ({ ...p, files: (p.files ?? []).filter((f) => f.key !== key) }));
 
   const setContact = (i: number, k: keyof CustomerContact, v: string) =>
     setForm((p) => {
@@ -204,6 +228,18 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
             />
           </Box>
 
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+            <TextField select label="Sales phụ trách" value={form.ownerU ?? ''} disabled={!canEdit}
+              onChange={(e) => { const u = users.find((x) => x.u === e.target.value); setForm((p) => ({ ...p, ownerU: u?.u, ownerName: u?.name })); }}>
+              <MenuItem value=""><em>—</em></MenuItem>
+              {users.map((u) => <MenuItem key={u.u} value={u.u}>{u.name} ({u.role})</MenuItem>)}
+            </TextField>
+            <TextField label="Kênh ưa thích" value={form.preferredChannel ?? ''} onChange={(e) => setF('preferredChannel', e.target.value)} disabled={!canEdit} placeholder="Zalo / Email / Điện thoại" />
+            {form.type === 'individual' && (
+              <TextField label="Sinh nhật" type="date" value={form.birthday ?? ''} onChange={(e) => setF('birthday', e.target.value)} disabled={!canEdit} InputLabelProps={{ shrink: true }} />
+            )}
+          </Box>
+
           {/* Contacts */}
           <Box>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
@@ -249,10 +285,53 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
                     <TextField size="small" label="Email" value={c.email}
                       onChange={(e) => setContact(i, 'email', e.target.value)}
                       disabled={!canEdit} />
+                    <TextField size="small" label="Sinh nhật" type="date" value={c.birthday ?? ''}
+                      onChange={(e) => setContact(i, 'birthday', e.target.value)}
+                      disabled={!canEdit} InputLabelProps={{ shrink: true }} />
                   </Box>
                 </Paper>
               ))}
             </Stack>
+          </Box>
+
+          {/* Điều khoản thanh toán / công nợ */}
+          <Divider textAlign="left"><Typography variant="caption" fontWeight={800} color="text.secondary">THANH TOÁN / CÔNG NỢ (tuỳ chọn)</Typography></Divider>
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="Điều khoản thanh toán" value={form.paymentTerms ?? ''} onChange={(e) => setF('paymentTerms', e.target.value)} disabled={!canEdit} placeholder="VD: cọc 50%, còn lại trước khởi hành 7 ngày" />
+            <TextField label="Hạn mức công nợ (VND)" type="number" value={form.creditLimit ?? ''} onChange={(e) => setF('creditLimit', e.target.value ? Number(e.target.value) : undefined)} disabled={!canEdit} sx={{ width: 190 }} />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="TK hoàn tiền — Chủ TK" value={form.refundBank?.accountName ?? ''} onChange={(e) => setRefundBank({ accountName: e.target.value })} disabled={!canEdit} />
+            <TextField fullWidth label="Số TK" value={form.refundBank?.accountNo ?? ''} onChange={(e) => setRefundBank({ accountNo: e.target.value })} disabled={!canEdit} />
+            <TextField fullWidth label="Ngân hàng" value={form.refundBank?.bankName ?? ''} onChange={(e) => setRefundBank({ bankName: e.target.value })} disabled={!canEdit} />
+          </Stack>
+
+          {/* File đính kèm */}
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>File đính kèm</Typography>
+              {canEdit && (
+                <Button component="label" size="small" startIcon={<UploadFileIcon />} disabled={fileBusy}>
+                  {fileBusy ? 'Đang tải…' : 'Tải file'}
+                  <input type="file" hidden multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" onChange={(e) => void onPickFiles(e)} />
+                </Button>
+              )}
+            </Stack>
+            {(form.files ?? []).length === 0 ? (
+              <Typography variant="caption" color="text.disabled">Hợp đồng khách, ĐKKD, giấy tờ doanh nghiệp…</Typography>
+            ) : (
+              <Stack spacing={0.5}>
+                {(form.files ?? []).map((f) => (
+                  <Stack key={f.key} direction="row" alignItems="center" spacing={1}>
+                    <Box component="button" type="button" onClick={() => openFilePreview({ key: f.key, name: f.name })}
+                      sx={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0, fontSize: 13, fontWeight: 600, color: '#0d7a6a', fontFamily: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
+                      📎 {f.name}{attMeta(f) ? ` · ${attMeta(f)}` : ''}
+                    </Box>
+                    {canEdit && <Button size="small" color="error" onClick={() => removeFile(f.key)}>Gỡ</Button>}
+                  </Stack>
+                ))}
+              </Stack>
+            )}
           </Box>
 
           {/* Note */}
