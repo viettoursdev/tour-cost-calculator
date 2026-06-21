@@ -2,8 +2,35 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, MobileStepper, Stack, Typography } from '@mui/material';
 import KeyboardArrowLeft from '@mui/icons-material/KeyboardArrowLeft';
 import KeyboardArrowRight from '@mui/icons-material/KeyboardArrowRight';
+import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import { GUIDE_STEPS, CONTEXT_LABEL } from './guideSteps';
 import { LEGACY } from '@/theme';
+
+/** Khung ảnh minh hoạ: hiện ảnh trong public/guide/ nếu có, không thì placeholder. */
+function GuideImage({ src, fallbackIcon }: { src?: string; fallbackIcon: string }) {
+  const [errored, setErrored] = useState(false);
+  useEffect(() => { setErrored(false); }, [src]);
+  const url = src ? `${import.meta.env.BASE_URL}guide/${src}` : undefined;
+  if (url && !errored) {
+    return (
+      <Box component="img" src={url} alt="" onError={() => setErrored(true)}
+        sx={{ width: '100%', display: 'block', maxHeight: 200, objectFit: 'cover',
+          borderBottom: '1px solid rgba(15,58,74,0.08)' }} />
+    );
+  }
+  return (
+    <Box sx={{
+      height: 132, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 0.5, background: 'linear-gradient(135deg,#eef6f4,#f7fbfa)', borderBottom: '1px solid rgba(15,58,74,0.08)',
+    }}>
+      <Typography sx={{ fontSize: 40, lineHeight: 1, opacity: 0.7 }}>{fallbackIcon}</Typography>
+      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'rgba(15,58,74,0.4)' }}>
+        <ImageOutlinedIcon sx={{ fontSize: 14 }} />
+        <Typography variant="caption">Ảnh minh hoạ sẽ cập nhật</Typography>
+      </Stack>
+    </Box>
+  );
+}
 
 /**
  * Hướng dẫn nhanh. Truyền `contextTag` để mở guide NGỮ CẢNH (chỉ các bước liên
@@ -35,13 +62,14 @@ export function OnboardingDialog({ open, onClose, contextTag }: { open: boolean;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
-      <Box sx={{ pt: 1.5, textAlign: 'center' }}>
+      <Box sx={{ pt: 1.25, pb: 0.75, textAlign: 'center' }}>
         <Typography variant="caption" sx={{ color: LEGACY.teal, fontWeight: 800, letterSpacing: 0.5 }}>{heading.toUpperCase()}</Typography>
       </Box>
-      <Box sx={{ px: 3, pb: 1, textAlign: 'center' }}>
-        <Typography sx={{ fontSize: 52, lineHeight: 1 }}>{s.icon}</Typography>
-        <Typography fontWeight={900} fontSize={19} sx={{ mt: 1.25, color: LEGACY.navy }}>{s.title}</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1, minHeight: 120 }}>{s.body}</Typography>
+      <GuideImage src={s.image} fallbackIcon={s.icon} />
+      <Box sx={{ px: 3, pt: 1.5, pb: 1, textAlign: 'center' }}>
+        <Typography sx={{ fontSize: 30, lineHeight: 1 }}>{s.icon}</Typography>
+        <Typography fontWeight={900} fontSize={19} sx={{ mt: 0.75, color: LEGACY.navy }}>{s.title}</Typography>
+        <Typography color="text.secondary" sx={{ mt: 1, minHeight: 96 }}>{s.body}</Typography>
         <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1 }}>{i + 1}/{steps.length}</Typography>
       </Box>
       <MobileStepper variant="dots" steps={steps.length} position="static" activeStep={i}
