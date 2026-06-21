@@ -435,6 +435,11 @@ function NccCard({
           <Typography fontWeight={800} variant="body1" sx={{ lineHeight: 1.3 }}>
             🏢 {s.name}
           </Typography>
+          {s.status && s.status !== 'active' && (
+            <Chip size="small" label={s.status === 'paused' ? 'Ngừng' : 'Hạn chế'}
+              sx={{ height: 18, fontWeight: 700, bgcolor: s.status === 'paused' ? 'rgba(100,116,139,0.18)' : 'rgba(220,50,80,0.15)', color: s.status === 'paused' ? '#475569' : '#dc3250' }} />
+          )}
+          {(s.files ?? []).length > 0 && <Chip size="small" variant="outlined" label={`📎 ${(s.files ?? []).length}`} sx={{ height: 18 }} />}
         </Stack>
         {canEdit && !selectable && (
           <Stack direction="row" onClick={(e) => e.stopPropagation()}>

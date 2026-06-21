@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import {
   Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
   MenuItem, Paper, Rating, Stack, TextField, Typography,
@@ -10,14 +10,22 @@ import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
 import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
 import { AiButton } from '@/components/common/AiButton';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
+import { attMeta } from '@/lib/util';
 import type { ParsedNcc } from '@/lib/partyParse';
 import type { NameCardFields } from '@/lib/nameCard';
 import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES, deriveLocation } from './constants';
 import MergeOutlinedIcon from '@mui/icons-material/MergeOutlined';
-import type { Ncc, NccContact } from '@/types';
+import type { BankInfo, Ncc, NccContact, NccStatus } from '@/types';
+
+const NCC_STATUS_OPTS: { v: NccStatus; label: string }[] = [
+  { v: 'active', label: 'Đang hợp tác' }, { v: 'paused', label: 'Ngừng' }, { v: 'restricted', label: 'Hạn chế' },
+];
 
 const EMPTY_CONTACT: NccContact = { name: '', phone: '', email: '', position: '' };
 
@@ -66,6 +74,23 @@ export function NCCModal({ ncc, canEdit, onSave, onClose, allNccs = [], onMerge 
 
   const setF = <K extends keyof Ncc>(k: K, v: Ncc[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
+  const setBank = (patch: Partial<BankInfo>) =>
+    setForm((p) => ({ ...p, bank: { ...(p.bank ?? {}), ...patch } }));
+
+  const [fileBusy, setFileBusy] = useState(false);
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setFileBusy(true);
+    try {
+      const at = new Date().toISOString();
+      const up = (await Promise.all(files.map((f) => uploadFileToWorker(f)))).map((u) => ({ ...u, uploadedBy: currentUser?.name, uploadedAt: at }));
+      setForm((p) => ({ ...p, files: [...(p.files ?? []), ...up] }));
+    } catch (err) { window.alert('❌ Tải file lỗi: ' + (err as Error).message); }
+    finally { setFileBusy(false); }
+  };
+  const removeFile = (key: string) => setForm((p) => ({ ...p, files: (p.files ?? []).filter((f) => f.key !== key) }));
 
   const setContact = (i: number, k: keyof NccContact, v: string) =>
     setForm((p) => {
@@ -241,6 +266,63 @@ export function NCCModal({ ncc, canEdit, onSave, onClose, allNccs = [], onMerge 
               <TextField {...params} label="Tour đã phục vụ" placeholder="Gõ tên tour rồi Enter…" />
             )}
           />
+
+          {/* Website / Địa chỉ / Trạng thái / MST */}
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="Website" value={form.website ?? ''} onChange={(e) => setF('website', e.target.value)} disabled={!canEdit} placeholder="https://…" />
+            <TextField select fullWidth label="Trạng thái hợp tác" value={form.status ?? 'active'} onChange={(e) => setF('status', e.target.value as NccStatus)} disabled={!canEdit} sx={{ maxWidth: 200 }}>
+              {NCC_STATUS_OPTS.map((s) => <MenuItem key={s.v} value={s.v}>{s.label}</MenuItem>)}
+            </TextField>
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="Địa chỉ đầy đủ" value={form.address ?? ''} onChange={(e) => setF('address', e.target.value)} disabled={!canEdit} />
+            <TextField label="MST / Mã pháp nhân" value={form.taxCode ?? ''} onChange={(e) => setF('taxCode', e.target.value)} disabled={!canEdit} sx={{ width: 200 }} />
+          </Stack>
+
+          {/* Thanh toán / Ngân hàng */}
+          <Divider textAlign="left"><Typography variant="caption" fontWeight={800} color="text.secondary">THÔNG TIN THANH TOÁN</Typography></Divider>
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="Chủ tài khoản" value={form.bank?.accountName ?? ''} onChange={(e) => setBank({ accountName: e.target.value })} disabled={!canEdit} />
+            <TextField fullWidth label="Số tài khoản" value={form.bank?.accountNo ?? ''} onChange={(e) => setBank({ accountNo: e.target.value })} disabled={!canEdit} />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="Ngân hàng" value={form.bank?.bankName ?? ''} onChange={(e) => setBank({ bankName: e.target.value })} disabled={!canEdit} />
+            <TextField fullWidth label="Chi nhánh" value={form.bank?.branch ?? ''} onChange={(e) => setBank({ branch: e.target.value })} disabled={!canEdit} />
+            <TextField label="SWIFT/IBAN" value={form.bank?.swift ?? ''} onChange={(e) => setBank({ swift: e.target.value.toUpperCase() })} disabled={!canEdit} sx={{ width: 180 }} placeholder="NCC nước ngoài" />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField fullWidth label="Điều khoản thanh toán / cọc" value={form.paymentTerms ?? ''} onChange={(e) => setF('paymentTerms', e.target.value)} disabled={!canEdit} placeholder="VD: cọc 30%, còn lại trước 7 ngày" />
+            <TextField label="Hoa hồng" value={form.commission ?? ''} onChange={(e) => setF('commission', e.target.value)} disabled={!canEdit} sx={{ width: 140 }} placeholder="VD: 10%" />
+            <TextField label="Hạn mức công nợ (VND)" type="number" value={form.creditLimit ?? ''} onChange={(e) => setF('creditLimit', e.target.value ? Number(e.target.value) : undefined)} disabled={!canEdit} sx={{ width: 180 }} />
+          </Stack>
+
+          {/* File hồ sơ NCC */}
+          <Box>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Hồ sơ đính kèm</Typography>
+              {canEdit && (
+                <Button component="label" size="small" startIcon={<UploadFileIcon />} disabled={fileBusy}>
+                  {fileBusy ? 'Đang tải…' : 'Tải file'}
+                  <input type="file" hidden multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" onChange={(e) => void onPickFiles(e)} />
+                </Button>
+              )}
+            </Stack>
+            {(form.files ?? []).length === 0 ? (
+              <Typography variant="caption" color="text.disabled">Hợp đồng nguyên tắc, bảng giá năm, giấy phép…</Typography>
+            ) : (
+              <Stack spacing={0.5}>
+                {(form.files ?? []).map((f) => (
+                  <Stack key={f.key} direction="row" alignItems="center" spacing={1}>
+                    <Box component="button" type="button" onClick={() => openFilePreview({ key: f.key, name: f.name })}
+                      sx={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', bgcolor: 'transparent', cursor: 'pointer', p: 0, fontSize: 13, fontWeight: 600, color: '#0d7a6a', fontFamily: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', '&:hover': { textDecoration: 'underline' } }}>
+                      📎 {f.name}{attMeta(f) ? ` · ${attMeta(f)}` : ''}
+                    </Box>
+                    {canEdit && <Button size="small" color="error" onClick={() => removeFile(f.key)}>Gỡ</Button>}
+                  </Stack>
+                ))}
+              </Stack>
+            )}
+          </Box>
 
           {/* Contacts */}
           <Box>

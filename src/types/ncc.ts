@@ -46,6 +46,18 @@ export type NccRating = {
   comment: string;
 };
 
+/** Trạng thái hợp tác với NCC. */
+export type NccStatus = 'active' | 'paused' | 'restricted';
+
+/** Thông tin tài khoản ngân hàng (chuyển khoản NCC / hoàn tiền khách). */
+export type BankInfo = {
+  accountName?: string;  // chủ tài khoản
+  accountNo?: string;    // số tài khoản
+  bankName?: string;     // ngân hàng
+  branch?: string;       // chi nhánh
+  swift?: string;        // SWIFT/IBAN (NCC nước ngoài)
+};
+
 export type Ncc = {
   id: string;
   name: string;
@@ -53,6 +65,17 @@ export type Ncc = {
   continent?: string;   // châu lục (lọc)
   country?: string;     // quốc gia (lọc)
   location: string;     // địa điểm/thành phố cụ thể
+  address?: string;     // địa chỉ đầy đủ
+  website?: string;
+  taxCode?: string;     // MST / mã pháp nhân
+  status?: NccStatus;   // trạng thái hợp tác
+  /** Thông tin thanh toán / ngân hàng. */
+  bank?: BankInfo;
+  paymentTerms?: string; // điều khoản thanh toán / cọc
+  commission?: string;   // hoa hồng
+  creditLimit?: number;  // hạn mức công nợ (VND)
+  /** File hồ sơ NCC (hợp đồng nguyên tắc, bảng giá năm, giấy phép…) — R2. */
+  files?: FileAttachment[];
   /** Các tour NCC này từng phục vụ — để tìm NCC theo tour. */
   tours?: string[];
   contacts: NccContact[];
