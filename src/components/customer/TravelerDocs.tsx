@@ -9,9 +9,11 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { useAuthStore } from '@/stores/authStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
+import { scanTravelerDoc } from '@/lib/passportScan';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { toast } from '@/stores/toastStore';
@@ -133,8 +135,28 @@ function TravelerDocModal({ customer, traveler, onClose }: { customer: Customer;
   const [f, setF] = useState<TravelerDoc>(() => traveler ?? { id: newId(), fullName: customer.type === 'individual' ? customer.name : '' });
   const [pBusy, setPBusy] = useState(false);
   const [vBusy, setVBusy] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<TravelerDoc>) => setF((p) => ({ ...p, ...patch }));
+
+  // AI đọc ảnh hộ chiếu/visa → điền các trường tìm được (giữ giá trị đã nhập tay).
+  const onAiScan = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAiBusy(true);
+    try {
+      const d = await scanTravelerDoc(file);
+      const filled = Object.entries(d).filter(([, v]) => v);
+      setF((p) => {
+        const next: TravelerDoc = { ...p };
+        for (const [k, v] of filled) (next as Record<string, unknown>)[k] = v;
+        return next;
+      });
+      toast(filled.length ? `🤖 AI đã điền ${filled.length} trường — vui lòng kiểm tra lại.` : 'AI không đọc được thông tin rõ ràng. Thử ảnh nét hơn.');
+    } catch (err) { window.alert('❌ AI đọc ảnh lỗi: ' + (err as Error).message); }
+    finally { setAiBusy(false); }
+  };
 
   const uploadInto = async (e: ChangeEvent<HTMLInputElement>, key: 'passportFiles' | 'visaFiles', setLoading: (b: boolean) => void) => {
     const file = e.target.files?.[0];
@@ -175,6 +197,17 @@ function TravelerDocModal({ customer, traveler, onClose }: { customer: Customer;
       <DialogTitle>{traveler ? 'Sửa hồ sơ giấy tờ' : 'Thêm hồ sơ giấy tờ'}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
+          <Box sx={{ p: 1.25, borderRadius: 2, border: '1.5px dashed rgba(124,58,237,0.4)', textAlign: 'center', bgcolor: 'rgba(124,58,237,0.04)' }}>
+            <Button component="label" variant="contained" size="small" disabled={aiBusy} startIcon={<AutoAwesomeIcon />}
+              sx={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)', fontWeight: 800 }}>
+              {aiBusy ? 'AI đang đọc…' : 'AI đọc ảnh hộ chiếu / visa'}
+              <input type="file" hidden accept=".jpg,.jpeg,.png,.pdf,image/*" onChange={(e) => void onAiScan(e)} />
+            </Button>
+            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+              Tải ảnh/scan giấy tờ — AI tự điền các trường (nhớ kiểm tra lại trước khi lưu).
+            </Typography>
+          </Box>
+
           <Typography variant="caption" fontWeight={800} color="text.secondary">THÔNG TIN NGƯỜI</Typography>
           <TextField label="Họ tên (như hộ chiếu)" required size="small" value={f.fullName} onChange={(e) => set({ fullName: e.target.value })} autoFocus />
           <Stack direction="row" spacing={1.5}>
