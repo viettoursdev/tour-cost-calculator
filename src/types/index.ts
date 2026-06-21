@@ -11,3 +11,4 @@ export * from './menu';
 export * from './visa';
 export * from './audit';
 export * from './chat';
+export * from './guide';
