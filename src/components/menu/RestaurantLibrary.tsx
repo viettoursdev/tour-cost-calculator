@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Autocomplete, Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
 } from '@mui/material';
@@ -47,7 +47,14 @@ export function RestaurantLibrary({ onBack }: Props) {
     void useRestaurantStore.getState().save(next, savedBy);
   };
 
-  const addR = () => persist([...list, newRestaurant()]);
+  const topRef = useRef<HTMLDivElement>(null);
+  // Thêm nhà hàng mới → đưa lên ĐẦU danh sách + xoá lọc (để thẻ trống không bị
+  // ẩn) + cuộn lên đầu cho thấy ngay.
+  const addR = () => {
+    persist([newRestaurant(), ...list]);
+    setSearch(''); setFilterCont(''); setFilterCountry(''); setFilterCity(''); setFilterRating(0);
+    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
   const [aiOpen, setAiOpen] = useState(false);
   const addRestaurant = (r: Restaurant) => persist([...useRestaurantStore.getState().list, r]);
   const updR = (id: string, patch: Partial<Restaurant>) =>
@@ -124,7 +131,7 @@ export function RestaurantLibrary({ onBack }: Props) {
   const cityOpts = (country: string) => uniq(list.filter((r) => !country || r.country === country).map((r) => r.city));
 
   return (
-    <Box sx={{ minHeight: '100%' }}>
+    <Box ref={topRef} sx={{ minHeight: '100%' }}>
       <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 3, py: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
           <Typography variant="h6" fontWeight={900}>
