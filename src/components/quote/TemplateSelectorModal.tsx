@@ -5,10 +5,13 @@ import {
 } from '@mui/material';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
+import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Template } from '@/types';
@@ -22,9 +25,20 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const hasDraft = useQuoteStore((s) => s.draft.template !== null);
   const hasItems = useQuoteStore((s) => Object.keys(s.draft.items).length > 0);
   const newDraft = useQuoteStore((s) => s.newDraft);
+  const setView = useQuoteStore((s) => s.setView);
   const currentUser = useAuthStore((s) => s.currentUser);
   const signOut = useAuthStore((s) => s.signOut);
   const [pendingConfirm, setPendingConfirm] = useState<Template | null>(null);
+
+  const canCust = hasPerm(currentUser, 'manageCustomers');
+  const canNcc = hasPerm(currentUser, 'manageNCC');
+  // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC). Cần có draft để render —
+  // chưa có thì tạo nháp báo giá nội địa (dữ liệu KH/NCC độc lập với báo giá).
+  const gotoManage = (v: 'customer' | 'ncc') => {
+    if (!hasDraft) newDraft('domestic');
+    setView(v);
+    onClose?.();
+  };
 
   // Bấm thẻ Trang chủ → tạo báo giá & vào thẳng sheet. Popup "Tạo báo giá mới" CHỈ
   // bật từ nút ＋ trong sheet (QuoteView), không từ màn chọn loại hồ sơ này.
@@ -194,6 +208,32 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
             );
           })}
         </Box>
+
+        {(canCust || canNcc) && (
+          <Box sx={{ maxWidth: 1200, mx: 'auto', mb: 5 }}>
+            <Typography sx={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'rgba(15,58,74,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, mb: 1.5 }}>
+              Quản lý danh mục
+            </Typography>
+            <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap>
+              {canCust && (
+                <Button onClick={() => gotoManage('customer')} startIcon={<PeopleAltOutlinedIcon />}
+                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
+                    color: '#0d7a6a', border: '1.5px solid rgba(13,122,106,0.35)', bgcolor: '#fff',
+                    '&:hover': { bgcolor: 'rgba(13,122,106,0.06)', borderColor: '#0d7a6a' } }}>
+                  Thông tin khách hàng
+                </Button>
+              )}
+              {canNcc && (
+                <Button onClick={() => gotoManage('ncc')} startIcon={<StorefrontOutlinedIcon />}
+                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
+                    color: '#7c3aed', border: '1.5px solid rgba(124,58,237,0.35)', bgcolor: '#fff',
+                    '&:hover': { bgcolor: 'rgba(124,58,237,0.06)', borderColor: '#7c3aed' } }}>
+                  Quản lý NCC
+                </Button>
+              )}
+            </Stack>
+          </Box>
+        )}
 
         {pendingConfirm && (
           <Alert
