@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeTodos, fbPushTodos } from '@/lib/dataBackend';
+import { fbSubscribeTodos, fbPushTodos, fbSendNotification } from '@/lib/dataBackend';
 import { useAuthStore } from './authStore';
 import type { Todo, TodoRecurring, TodoStatus } from '@/types';
 import type { Unsubscribe } from 'firebase/firestore';
@@ -50,14 +50,22 @@ export const useTodoStore = create<State>()(
         link: t.link, checklist: t.checklist, recurring: t.recurring ?? 'none', tags: t.tags,
       };
       await persist([todo, ...get().todos], u);
+      notifyAssign(todo, todo.assignees.filter((a) => a !== u.u), u.name);
       return todo;
     },
 
     update: async (id, patch) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
+      const old = get().todos.find((x) => x.id === id);
       const next = get().todos.map((x) => (x.id === id ? { ...x, ...patch, updatedAt: new Date().toISOString(), updatedBy: u.name } : x));
       await persist(next, u);
+      // Người MỚI được giao → gửi thông báo "được giao việc".
+      if (patch.assignees && old) {
+        const had = new Set(old.assignees);
+        const added = patch.assignees.filter((a) => !had.has(a) && a !== u.u);
+        if (added.length) notifyAssign({ ...old, ...patch } as Todo, added, u.name);
+      }
     },
 
     setStatus: async (id, status) => {
@@ -88,6 +96,19 @@ export const useTodoStore = create<State>()(
     },
   })),
 );
+
+/** Gửi thông báo "Bạn được giao việc" tới các assignee. */
+function notifyAssign(todo: Todo, recipients: string[], byName: string): void {
+  for (const r of recipients) {
+    void fbSendNotification(r, {
+      type: 'task',
+      title: '📋 Bạn được giao việc',
+      message: `${todo.title}${todo.dueDate ? ` · hạn ${new Date(todo.dueDate).toLocaleString('vi-VN')}` : ''}`,
+      createdBy: byName,
+      ...(todo.link ? { link: todo.link } : {}),
+    }).catch(() => { /* không chặn UI */ });
+  }
+}
 
 async function persist(next: Todo[], u: { name: string; role: string }): Promise<void> {
   useTodoStore.setState({ todos: next });

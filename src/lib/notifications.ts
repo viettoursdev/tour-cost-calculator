@@ -19,6 +19,7 @@ import { fbGetContracts, fbSendNotification, fbGetPublicQuote } from '@/lib/data
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
+import { useTodoStore } from '@/stores/todoStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { daysUntil } from '@/lib/dateUtils';
@@ -336,6 +337,57 @@ export async function checkDocExpiry(user: User): Promise<void> {
     try { localStorage.setItem(DOC_EXP_KEY, JSON.stringify([...set].slice(-800))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkDocExpiry failed:', (e as Error).message);
+  }
+}
+
+const TODO_REMIND_KEY = 'vte_todo_remind_notified';
+const TODO_WINDOW = 7 * 86400000; // chỉ bắn mốc nhắc trong 7 ngày gần (tránh dồn cũ)
+
+/**
+ * Nhắc công việc (To-Do): với mỗi việc CHƯA xong mà người dùng phụ trách (người tạo
+ * hoặc được giao), bắn thông báo khi tới mốc "trước hạn N" hoặc "khung giờ tuyệt đối",
+ * và khi quá hạn. Mỗi (việc, mốc) nhắc 1 lần (dedup localStorage). Quét kho todos đã
+ * subscribe. Gọi lúc đăng nhập + mỗi 5 phút (cùng nhịp checkNotifReminders).
+ */
+export async function checkTodoReminders(user: User): Promise<void> {
+  try {
+    const todos = useTodoStore.getState().todos;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(TODO_REMIND_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    const now = Date.now();
+    const dt = (ms: number) => new Date(ms).toLocaleString('vi-VN');
+    for (const t of todos) {
+      if (t.status === 'done') continue;
+      if (t.createdBy !== user.u && !t.assignees.includes(user.u)) continue;
+      const fire = (key: string, when: number, label: string): Promise<void> | undefined => {
+        if (isNaN(when) || now < when || now - when > TODO_WINDOW) return;
+        const k = `${t.id}:${key}`;
+        if (set.has(k)) return;
+        set.add(k);
+        return fbSendNotification(user.u, {
+          type: 'task',
+          title: key === 'overdue' ? '🔴 Việc quá hạn' : '⏰ Nhắc việc',
+          message: `${t.title} — ${label}`,
+          createdBy: 'Hệ thống',
+          ...(t.link ? { link: t.link } : {}),
+        });
+      };
+      const proms: (Promise<void> | undefined)[] = [];
+      const due = t.dueDate ? new Date(t.dueDate).getTime() : NaN;
+      if (!isNaN(due)) {
+        for (const lead of t.remindLead ?? []) {
+          const lbl = lead >= 1440 ? `còn ${Math.round(lead / 1440)} ngày` : lead >= 60 ? `còn ${Math.round(lead / 60)} giờ` : `còn ${lead} phút`;
+          proms.push(fire(`lead${lead}`, due - lead * 60000, `${lbl} tới hạn (${dt(due)})`));
+        }
+        proms.push(fire('overdue', due, `đã quá hạn (${dt(due)})`));
+      }
+      for (const r of t.remindAt ?? []) proms.push(fire(`at:${r}`, new Date(r).getTime(), `nhắc lúc ${dt(new Date(r).getTime())}`));
+      await Promise.all(proms);
+    }
+    try { localStorage.setItem(TODO_REMIND_KEY, JSON.stringify([...set].slice(-1000))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkTodoReminders failed:', (e as Error).message);
   }
 }
 

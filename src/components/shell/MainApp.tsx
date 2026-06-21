@@ -24,7 +24,7 @@ import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { usePoiStore } from '@/stores/poiStore';
-import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry } from '@/lib/notifications';
+import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders } from '@/lib/notifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
 import { AppShell } from './AppShell';
 import { ToastHost } from '@/components/common/ToastHost';
@@ -107,8 +107,11 @@ export function MainApp() {
     setTimeout(() => { void checkCustomerFollowups(currentUser); }, 7000);
     setTimeout(() => { void checkDormantCustomers(currentUser); }, 8000);
     setTimeout(() => { void checkDocExpiry(currentUser); }, 8500);
-    // Nhắc lại lặp lại: kiểm tra ngay + mỗi 5 phút khi app mở.
-    const remindOnce = () => checkNotifReminders(useNotificationStore.getState().notifications, currentUser.u);
+    // Nhắc lại lặp lại: kiểm tra ngay + mỗi 5 phút khi app mở (gồm cả nhắc việc To-Do).
+    const remindOnce = () => {
+      checkNotifReminders(useNotificationStore.getState().notifications, currentUser.u);
+      void checkTodoReminders(currentUser);
+    };
     setTimeout(remindOnce, 9000);
     const remindTimer = setInterval(remindOnce, 5 * 60 * 1000);
     return () => {
