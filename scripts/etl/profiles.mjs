@@ -11,11 +11,12 @@ export async function loadProfiles(client, dump) {
     const id = data.user.id;
     // The on_auth_user_created trigger already inserted a profiles row (role Standard,
     // username/name = email prefix). Overwrite with the real values from the dump.
-    const { error: upErr } = await client.from('profiles').update({
+    const { data: upData, error: upErr } = await client.from('profiles').update({
       username: u.u, email, role: u.role ?? 'Standard',
       name: u.name ?? u.u, color: u.color ?? '#888888', phone: u.phone ?? null,
-    }).eq('id', id);
+    }).eq('id', id).select('id');
     if (upErr) throw new Error(`profile update ${u.u}: ${upErr.message}`);
+    if (!upData || upData.length === 0) throw new Error(`profile update ${u.u}: no profiles row for ${id} (provisioning trigger did not fire)`);
     map.set(u.u, id);
   }
   return map;
@@ -27,7 +28,7 @@ export function makeResolver(usernameToId) {
   const resolve = (u) => {
     if (!u) return null;
     const id = usernameToId.get(u);
-    if (id) return id;
+    if (id !== undefined) return id;
     unmapped.add(u);
     return null;
   };
