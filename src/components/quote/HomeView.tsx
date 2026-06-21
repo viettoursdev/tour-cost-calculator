@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -24,6 +24,18 @@ function Section({ icon, title, count, color, onAll, children }: {
   );
 }
 
+/** Đếm ngược tới mốc `target` (ms). Trả về nhãn "còn 2 ngày 5 giờ" / "QUÁ HẠN …". */
+function countdown(target: number, now: number): { text: string; overdue: boolean; urgent: boolean } {
+  const diff = target - now;
+  const overdue = diff < 0;
+  const abs = Math.abs(diff);
+  const days = Math.floor(abs / 86400000);
+  const hours = Math.floor((abs % 86400000) / 3600000);
+  const mins = Math.floor((abs % 3600000) / 60000);
+  const core = days > 0 ? `${days} ngày ${hours} giờ` : hours > 0 ? `${hours} giờ ${mins} phút` : `${mins} phút`;
+  return { text: overdue ? `QUÁ HẠN ${core}` : `còn ${core}`, overdue, urgent: !overdue && diff <= 86400000 };
+}
+
 const Row = ({ onClick, primary, secondary, right }: { onClick: () => void; primary: string; secondary?: string; right?: React.ReactNode }) => (
   <Paper variant="outlined" sx={{ p: 1, cursor: 'pointer', '&:hover': { boxShadow: 1 } }} onClick={onClick}>
     <Stack direction="row" alignItems="center" spacing={1}>
@@ -46,6 +58,12 @@ export function HomeView() {
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
 
   const today = new Date().toISOString().slice(0, 10);
+  // Đồng hồ đếm ngược: nhịp lại mỗi phút để nhãn "còn … giờ" tự cập nhật.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
   const go = (v: QuoteViewKey) => setView(v);
   const openQuote = async (q: CloudQuoteEntry, v: QuoteViewKey) => {
     if (currentQuoteId && currentQuoteId !== q.cloudId && !window.confirm('Mở báo giá này? Thay đổi cục bộ chưa lưu có thể mất.')) return;
@@ -66,7 +84,31 @@ export function HomeView() {
       .sort((a, b) => (b.paymentSummary!.remaining - a.paymentSummary!.remaining));
     const followups = customers.filter((c) => c.nextFollowUp && c.nextFollowUp.byU === me?.u && c.nextFollowUp.date <= today)
       .sort((a, b) => (a.nextFollowUp!.date).localeCompare(b.nextFollowUp!.date));
-    return { soon, myOverdue, owing, followups };
+
+    // Deadline công việc trong 2 tuần tới (đếm ngược ngày/giờ). Gồm deadline báo giá
+    // (datetime, người tạo + collab) và bước quy trình SẮP tới của tôi (bước quá hạn
+    // đã có mục riêng "Việc quá hạn của tôi").
+    const now = Date.now();
+    const horizon = now + 14 * 86400000;
+    const stepTarget = (d: string) => new Date(d.includes('T') ? d : d + 'T23:59:59').getTime();
+    const deadlines: { key: string; q: CloudQuoteEntry; label: string; target: number; view: QuoteViewKey }[] = [];
+    for (const q of list) {
+      const mine = q.createdByUsername === me?.u || (q.collaborators ?? []).some((c) => c.u === me?.u);
+      const closed = q.status === 'won' || q.status === 'not_selected' || q.status === 'cancelled';
+      if (q.deadline && mine && !closed) {
+        const t = new Date(q.deadline).getTime();
+        if (!isNaN(t) && t <= horizon) deadlines.push({ key: `${q.cloudId}:dl`, q, label: 'Deadline báo giá', target: t, view: 'cost' });
+      }
+      for (const w of q.workflowDue ?? []) {
+        const forMe = w.assignee ? w.assignee === me?.u : q.createdByUsername === me?.u;
+        if (!forMe) continue;
+        const t = stepTarget(w.dueDate);
+        if (isNaN(t) || t < now || t > horizon) continue; // chỉ bước sắp tới (chưa quá hạn)
+        deadlines.push({ key: `${q.cloudId}:${w.label}:${w.dueDate}`, q, label: w.label, target: t, view: 'workflow' });
+      }
+    }
+    deadlines.sort((a, b) => a.target - b.target);
+    return { soon, myOverdue, owing, followups, deadlines };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes, customers, me]);
 
@@ -78,6 +120,31 @@ export function HomeView() {
       </Typography>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+        <Box sx={{ gridColumn: { md: '1 / -1' } }}>
+          <Section icon="⏳" title="Deadline công việc (2 tuần)" count={data.deadlines.length} color="#7c3aed" onAll={() => go('workflow')}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.75 }}>
+              {data.deadlines.slice(0, 8).map((d) => {
+                const cd = countdown(d.target, nowMs);
+                const color = cd.overdue || cd.urgent ? 'error' : 'warning';
+                return (
+                  <Row key={d.key} onClick={() => void openQuote(d.q, d.view)}
+                    primary={d.label}
+                    secondary={`${d.q.name}${d.q.customerName ? ` · ${d.q.customerName}` : ''}`}
+                    right={
+                      <Stack alignItems="flex-end" spacing={0.25}>
+                        <Chip size="small" color={color} variant={cd.overdue ? 'filled' : 'outlined'}
+                          label={cd.text} sx={{ height: 20, fontWeight: 700 }} />
+                        <Typography variant="caption" color="text.disabled">
+                          {new Date(d.target).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </Typography>
+                      </Stack>
+                    } />
+                );
+              })}
+            </Box>
+          </Section>
+        </Box>
+
         <Section icon="🛫" title="Tour sắp khởi hành (7 ngày)" count={data.soon.length} color="#14a08c" onAll={() => go('departures')}>
           <Stack spacing={0.75}>
             {data.soon.slice(0, 5).map((q) => (
