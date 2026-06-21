@@ -20,7 +20,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, Item, OutputCurrency,
-  Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, TourAdvance, User, WorkflowStep,
+  NewQuoteMeta, Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, TourAdvance, User, WorkflowStep,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -77,7 +77,7 @@ type QuoteState = {
   undoDraft: () => void;
   redoDraft: () => void;
 
-  newDraft: (template: Template) => void;
+  newDraft: (template: Template, meta?: NewQuoteMeta) => void;
   abandon: () => void;
   setView: (v: QuoteViewKey) => void;
 
@@ -295,8 +295,18 @@ export const useQuoteStore = create<QuoteState>()(
           muted(() => set({ draft: EMPTY_DRAFT, snapshots: [], currentUsername: null, view: 'cost', cloudDirty: false, ...CLEAR_HIST }));
         },
 
-        newDraft: (template) => {
+        newDraft: (template, meta) => {
           const tpl = TEMPLATES[template];
+          // Metadata nhập ở bảng "Tạo báo giá mới" (chỉ báo giá nội địa/nước ngoài).
+          const metaFields = meta
+            ? {
+                ...(meta.request ? { request: meta.request } : {}),
+                ...(meta.deadline ? { deadline: meta.deadline } : {}),
+                ...(meta.customerId ? { customerId: meta.customerId } : {}),
+                ...(meta.customerName ? { customerName: meta.customerName } : {}),
+                ...(meta.collaborators?.length ? { pendingCollaborators: meta.collaborators } : {}),
+              }
+            : {};
           // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
           if (tpl.kind === 'alt' || !tpl.init) {
             muted(() => set((s) => ({
@@ -313,15 +323,27 @@ export const useQuoteStore = create<QuoteState>()(
               template === 'dmc' ? DMC_CAT_IDS.includes(c.id) : c.id !== 'dmc',
             ]),
           ) as Record<CategoryId, boolean>;
+          // Có metadata thì ưu tiên thông tin người dùng nhập; không thì giữ mẫu (sample).
+          const info = meta
+            ? {
+                ...EMPTY_DRAFT.info,
+                name: meta.name || (tpl.sample?.name ?? ''),
+                dest: tpl.sample?.dest ?? EMPTY_DRAFT.info.dest,
+                days: meta.days || EMPTY_DRAFT.info.days,
+                nights: meta.nights || EMPTY_DRAFT.info.nights,
+                startDate: meta.startDate ?? null,
+              }
+            : { ...EMPTY_DRAFT.info, ...(tpl.sample ?? {}), startDate: null };
           muted(() => set((s) => ({
             draft: {
               ...EMPTY_DRAFT,
               template,
-              info: { ...EMPTY_DRAFT.info, ...(tpl.sample ?? {}), startDate: null },
+              info,
               items,
               catEnabled,
               currentQuoteId: null,
               rates: seedNewRates(s.syncedRates),
+              ...metaFields,
               ...(template === 'dmc' ? dmcDefaults() : {}),
             },
             view: 'cost', cloudDirty: false,
@@ -729,6 +751,8 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              ...(draft.request ? { request: draft.request } : {}),
+              ...(draft.deadline ? { deadline: draft.deadline } : {}),
               ...(draft.lossReason ? { lossReason: draft.lossReason } : {}),
               ...(draft.info.startDate ? { departDate: draft.info.startDate } : {}),
               ...(draft.info.days ? { days: draft.info.days } : {}),

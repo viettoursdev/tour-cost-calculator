@@ -164,6 +164,54 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
   }
 }
 
+const QUOTE_DDL_KEY = 'vte_quote_deadline_notified';
+
+/**
+ * Nhắc deadline BÁO GIÁ: mỗi báo giá có `deadline` (chưa chốt/huỷ) → nhắc người tạo
+ * & cộng tác viên khi còn ≤ 1 ngày và khi còn ≤ 6 giờ. Mỗi (báo giá, mốc, hạn) nhắc
+ * 1 lần (dedup localStorage). Quét index lịch sử báo giá (đã subscribe) — chỉ áp dụng
+ * cho báo giá đã LƯU cloud. Vì là check lúc đăng nhập, mốc "6 giờ" chỉ bắn nếu người
+ * dùng có đăng nhập trong khoảng đó.
+ */
+export async function checkQuoteDeadlines(user: User): Promise<void> {
+  try {
+    const quotes = useQuoteHistoryStore.getState().quotes;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(QUOTE_DDL_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    const now = Date.now();
+    for (const q of quotes) {
+      if (!q.deadline) continue;
+      // Deal đã chốt/huỷ thì không nhắc nữa.
+      if (q.status === 'won' || q.status === 'not_selected' || q.status === 'cancelled') continue;
+      const due = new Date(q.deadline).getTime();
+      if (isNaN(due)) continue;
+      const involved = new Set<string>([q.createdByUsername, ...(q.collaborators ?? []).map((c) => c.u)]);
+      if (!involved.has(user.u)) continue;
+      const hoursLeft = (due - now) / 3600000;
+      if (hoursLeft <= 0) continue; // các mốc đều là TRƯỚC hạn
+      const milestone = hoursLeft <= 6 ? '6h' : hoursLeft <= 24 ? '1d' : null;
+      if (!milestone) continue;
+      const key = `${q.cloudId}:${milestone}:${q.deadline}`;
+      if (set.has(key)) continue;
+      set.add(key);
+      // Đã tới mốc 6h thì đánh dấu luôn mốc 1d (tránh nhắc lùi nếu chưa từng nhắc).
+      if (milestone === '6h') set.add(`${q.cloudId}:1d:${q.deadline}`);
+      const whenStr = new Date(due).toLocaleString('vi-VN');
+      await fbSendNotification(user.u, {
+        type: 'task',
+        title: milestone === '6h' ? '🔴 Deadline báo giá sắp hết giờ' : '⏰ Deadline báo giá sắp đến',
+        message: `Báo giá "${q.name}" — ${milestone === '6h' ? 'còn dưới 6 giờ' : 'còn dưới 1 ngày'} (${whenStr})`,
+        createdBy: 'Hệ thống',
+        data: { cloudId: q.cloudId },
+      });
+    }
+    try { localStorage.setItem(QUOTE_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkQuoteDeadlines failed:', (e as Error).message);
+  }
+}
+
 const SALES_KEY = 'vte_sales_followup_notified';
 /** Số ngày KHÔNG cập nhật trước khi nhắc follow-up, theo trạng thái deal. */
 const FOLLOWUP_DAYS: Partial<Record<string, number>> = { sent: 4, negotiating: 3 };

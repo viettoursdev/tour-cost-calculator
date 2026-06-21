@@ -13,7 +13,7 @@ import type {
   CloudQuoteEntry, CloudQuoteProject, Collaborator, Contract, Customer, CustomCostItem,
   FileAttachment, Itinerary, ItineraryIndexEntry, Menu, MenuIndexEntry, Ncc, NccProduct, PoiEntry,
   ActivityStatus, Notification, NotifThread, NotifComment, PaymentApprovalDoc, PaymentApprovalEntry, PaymentApprovalStage, PaymentRecord,
-  QuoteDraft, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
+  QuoteDraft, QuoteRequestKind, QuoteStatus, RateCard, RateCardDoc, Restaurant, Template, TourPayments, User,
   VisaProcDoc, VisaProcIndexEntry, VisaProduct, VisaProductsDoc, VisaProjectDoc,
 } from '@/types';
 
@@ -228,6 +228,8 @@ type SaveEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  request?: QuoteRequestKind;
+  deadline?: string;
   lossReason?: string;
   departDate?: string;
   days?: number;
@@ -267,6 +269,8 @@ function makeQuoteHistoryApi(
 
       const optionalFields: Partial<CloudQuoteEntry> = {};
       if (entry.status !== undefined) optionalFields.status = entry.status;
+      if (entry.request !== undefined) optionalFields.request = entry.request;
+      if (entry.deadline !== undefined) optionalFields.deadline = entry.deadline;
       if (entry.lossReason !== undefined) optionalFields.lossReason = entry.lossReason;
       if (entry.departDate !== undefined) optionalFields.departDate = entry.departDate;
       if (entry.days !== undefined) optionalFields.days = entry.days;

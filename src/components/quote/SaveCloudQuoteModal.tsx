@@ -21,6 +21,9 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const users = useAuthStore((s) => s.users);
   const currentUser = useAuthStore((s) => s.currentUser);
   const draftName = useQuoteStore((s) => s.draft.info.name);
+  const draftCustomerId = useQuoteStore((s) => s.draft.customerId);
+  const draftCustomerName = useQuoteStore((s) => s.draft.customerName);
+  const draftCollabs = useQuoteStore((s) => s.draft.pendingCollaborators);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const template = useQuoteStore((s) => s.draft.template);
   const saveCloud = useQuoteStore((s) => s.saveCloud);
@@ -45,11 +48,6 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   }, [existingEntry, customers]);
 
   const [name, setName] = useState(draftName || '');
-  // Mặc định lưu theo tên báo giá: mỗi lần mở hộp thoại, đồng bộ ô tên với tên
-  // báo giá hiện tại (người dùng vẫn sửa tay được sau đó).
-  useEffect(() => {
-    if (open) setName(draftName || '');
-  }, [open, draftName]);
   const [collabUsers, setCollabUsers] = useState<User[]>(() => {
     if (!existingEntry) return [];
     const set = new Set((existingEntry.collaborators ?? []).map((c) => c.u));
@@ -57,6 +55,24 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   });
   const [customer, setCustomer] = useState<Customer | null>(existingCustomer);
   const [customerInput, setCustomerInput] = useState<string>(existingCustomer?.name ?? '');
+
+  // Mỗi lần mở hộp thoại: đồng bộ tên + khách hàng + cộng tác viên. Báo giá đã lưu
+  // lấy theo bản ghi cloud; báo giá MỚI lấy theo metadata nhập lúc tạo (NewQuoteDialog).
+  useEffect(() => {
+    if (!open) return;
+    setName(draftName || '');
+    if (existingCustomer) {
+      setCustomer(existingCustomer); setCustomerInput(existingCustomer.name);
+    } else if (draftCustomerId) {
+      const c = customers.find((x) => x.id === draftCustomerId) ?? null;
+      setCustomer(c); setCustomerInput(c?.name ?? draftCustomerName ?? '');
+    } else if (draftCustomerName) {
+      setCustomer(null); setCustomerInput(draftCustomerName);
+    }
+    const collabSource = existingEntry?.collaborators ?? draftCollabs ?? [];
+    const set = new Set(collabSource.map((c) => c.u));
+    setCollabUsers(users.filter((u) => set.has(u.u)));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const [note, setNote] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>(
     () => existingEntry?.attachments ?? (existingEntry?.attachment ? [existingEntry.attachment] : []),

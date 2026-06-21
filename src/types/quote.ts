@@ -92,6 +92,22 @@ export type QuoteStatus =
   | 'not_selected'   // Không được lựa chọn
   | 'cancelled';     // Huỷ
 
+/** Loại yêu cầu báo giá: khách hỏi giá (Request tour) hay dự thầu (Thầu). */
+export type QuoteRequestKind = 'request' | 'thau';
+
+/** Thông tin nhập ở bảng "Tạo báo giá mới" (trước khi mở bảng giá). */
+export type NewQuoteMeta = {
+  request?: QuoteRequestKind;
+  name: string;
+  customerId?: string;
+  customerName?: string;
+  days: number;
+  nights: number;
+  startDate?: string | null;
+  deadline?: string;
+  collaborators?: Collaborator[];
+};
+
 /** Một hạng giá tạm tính của chuyến bay (đa tiền tệ). */
 export type FlightFare = { id: string; label: string; amount: number; cur: string };
 
@@ -194,6 +210,12 @@ export type QuoteDraft = {
   currentQuoteId: string | null;
   status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
   lossReason?: string;     // Lý do thua (khi status = not_selected/cancelled)
+  request?: QuoteRequestKind; // Loại yêu cầu (Request tour / Thầu) — nhập khi tạo
+  deadline?: string;       // Hạn hoàn thành báo giá (ISO datetime) — hệ thống nhắc trước 1 ngày & 6 giờ
+  // Thông tin khách & cộng tác viên nhập lúc tạo, mang sang hộp thoại Lưu cloud.
+  customerId?: string;
+  customerName?: string;
+  pendingCollaborators?: Collaborator[];
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
   workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
   passengers?: Passenger[]; // Danh sách khách đoàn (manifest + rooming)
@@ -288,6 +310,10 @@ export type CloudQuoteEntry = {
   customerId?: string;
   customerName?: string;
   status?: QuoteStatus;
+  /** Loại yêu cầu (Request tour / Thầu) — index cho lọc & thống kê. */
+  request?: QuoteRequestKind;
+  /** Hạn hoàn thành báo giá (ISO datetime) — để nhắc deadline toàn hệ thống. */
+  deadline?: string;
   /** Lý do thua deal (khi status = not_selected/cancelled) — cho phân tích. */
   lossReason?: string;
   /** Ngày khởi hành (ISO yyyy-mm-dd) — index cho Lịch khởi hành. */

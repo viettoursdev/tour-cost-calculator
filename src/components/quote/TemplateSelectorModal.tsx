@@ -7,11 +7,12 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
+import { NewQuoteDialog } from './NewQuoteDialog';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
-import type { Template } from '@/types';
+import type { NewQuoteMeta, Template } from '@/types';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
 
@@ -25,22 +26,40 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const currentUser = useAuthStore((s) => s.currentUser);
   const signOut = useAuthStore((s) => s.signOut);
   const [pendingConfirm, setPendingConfirm] = useState<Template | null>(null);
+  // Báo giá nội địa/nước ngoài → mở bảng nhập thông tin trước khi tạo draft.
+  const [metaTemplate, setMetaTemplate] = useState<'domestic' | 'intl' | null>(null);
 
-  const handlePick = (key: Template) => {
-    if (hasDraft && hasItems) {
-      setPendingConfirm(key);
+  const isMetaTemplate = (k: Template): k is 'domestic' | 'intl' => k === 'domestic' || k === 'intl';
+
+  const proceed = (key: Template) => {
+    if (isMetaTemplate(key)) {
+      setMetaTemplate(key);
     } else {
       newDraft(key);
       onClose?.();
     }
   };
 
+  const handlePick = (key: Template) => {
+    if (hasDraft && hasItems) {
+      setPendingConfirm(key);
+    } else {
+      proceed(key);
+    }
+  };
+
   const confirmReplace = () => {
     if (pendingConfirm) {
-      newDraft(pendingConfirm);
+      const key = pendingConfirm;
       setPendingConfirm(null);
-      onClose?.();
+      proceed(key);
     }
+  };
+
+  const handleMetaConfirm = (template: 'domestic' | 'intl', meta: NewQuoteMeta) => {
+    newDraft(template, meta);
+    setMetaTemplate(null);
+    onClose?.();
   };
 
   return (
@@ -208,6 +227,15 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           </Alert>
         )}
       </DialogContent>
+
+      {metaTemplate && (
+        <NewQuoteDialog
+          open
+          initialTemplate={metaTemplate}
+          onClose={() => setMetaTemplate(null)}
+          onConfirm={handleMetaConfirm}
+        />
+      )}
     </Dialog>
   );
 }

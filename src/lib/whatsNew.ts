@@ -9,6 +9,13 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-06-21', date: '21/06/2026', title: 'Bảng nhập thông tin khi tạo báo giá',
+    items: [
+      { icon: '📝', title: 'Tạo báo giá mới có bảng thông tin', desc: 'Chọn báo giá Nội địa/Nước ngoài sẽ mở bảng nhập: loại yêu cầu (Request tour/Thầu), tên tour, khách hàng, số ngày/đêm, ngày khởi hành dự kiến, deadline và nhân sự collab — hệ thống tự điền sẵn khi Lưu cloud.' },
+      { icon: '⏰', title: 'Tự nhắc deadline báo giá', desc: 'Đặt deadline khi tạo báo giá; sau khi lưu cloud, hệ thống tự nhắc người tạo & cộng tác viên khi còn 1 ngày và còn 6 giờ.' },
+    ],
+  },
+  {
     id: '2026-06-20', date: '20/06/2026', title: 'AI nhập báo giá & nâng cấp Nhà hàng',
     items: [
       { icon: '🤖', title: 'AI nhập báo giá từ file', desc: 'Trong tab Chi phí → "🤖 Nhập từ file (AI)": tải Excel/PDF/Word/ảnh báo giá, AI tự bóc từng dòng chi phí, phân loại vào hạng mục và đoán cách tính SL (×khách/đoàn/phòng). Xem trước & sửa trước khi thêm.' },
