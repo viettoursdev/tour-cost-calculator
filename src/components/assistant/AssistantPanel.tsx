@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   Box, Button, Chip, Drawer, IconButton, Link, Stack, TextField, Typography,
 } from '@mui/material';
@@ -6,13 +6,27 @@ import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import PublicIcon from '@mui/icons-material/Public';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import { runAssistant, type AssistantProposal } from '@/lib/assistant/agent';
 import { applyItineraryDraft, applyQuoteDraft, applySupplierDraft } from '@/lib/assistant/draftBuilders';
 import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
-import type { ChatMessage, Citation } from '@/lib/aiWorker';
+import type { ChatMessage, ContentBlock, Citation } from '@/lib/aiWorker';
 
-type UiMsg = { role: 'user' | 'assistant'; text: string; pending?: boolean; citations?: Citation[]; proposals?: AssistantProposal[] };
+type Attach = { name: string; mime: string; b64: string; kind: 'image' | 'pdf' };
+type UiMsg = { role: 'user' | 'assistant'; text: string; pending?: boolean; citations?: Citation[]; proposals?: AssistantProposal[]; files?: Attach[] };
+
+const MAX_ATTACH = 5 * 1024 * 1024; // 5MB / tệp (giới hạn ảnh Claude)
+
+function fileToB64(file: File): Promise<string> {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => { const s = String(fr.result); res(s.slice(s.indexOf(',') + 1)); };
+    fr.onerror = () => rej(new Error('Đọc tệp lỗi'));
+    fr.readAsDataURL(file);
+  });
+}
 
 const SUGGESTIONS = [
   'Tìm báo giá đi Nhật Bản',
@@ -39,21 +53,51 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
   const [busy, setBusy] = useState(false);
   const [web, setWeb] = useState(true);
   const [activity, setActivity] = useState('');
+  const [stream, setStream] = useState(''); // text trợ lý đang trả về (hiện dần)
+  const [attachments, setAttachments] = useState<Attach[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [ui, activity]);
+  }, [ui, activity, stream]);
+
+  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []); e.target.value = '';
+    for (const f of files) {
+      const isImg = f.type.startsWith('image/');
+      const isPdf = f.type === 'application/pdf';
+      if (!isImg && !isPdf) { toast(`"${f.name}" không phải ảnh/PDF.`, 'warning'); continue; }
+      if (f.size > MAX_ATTACH) { toast(`"${f.name}" vượt 5MB.`, 'warning'); continue; }
+      try {
+        const b64 = await fileToB64(f);
+        setAttachments((p) => [...p, { name: f.name, mime: f.type, b64, kind: isImg ? 'image' : 'pdf' }]);
+      } catch { toast(`Đọc "${f.name}" lỗi.`, 'error'); }
+    }
+  };
 
   const send = async (text: string) => {
     const q = text.trim();
-    if (!q || busy) return;
-    setInput('');
-    const nextHistory: ChatMessage[] = [...history, { role: 'user', content: q }];
-    setUi((p) => [...p, { role: 'user', text: q }, { role: 'assistant', text: '', pending: true }]);
-    setBusy(true);
+    const atts = attachments;
+    if ((!q && atts.length === 0) || busy) return;
+    setInput(''); setAttachments([]);
+    // Vision: nếu có đính kèm, gửi message dạng content blocks (ảnh/PDF + text).
+    const userContent: string | ContentBlock[] = atts.length
+      ? [
+          ...atts.map((a): ContentBlock => a.kind === 'image'
+            ? { type: 'image', source: { type: 'base64', media_type: a.mime, data: a.b64 } }
+            : { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.b64 } }),
+          ...(q ? [{ type: 'text', text: q } as ContentBlock] : []),
+        ]
+      : q;
+    const nextHistory: ChatMessage[] = [...history, { role: 'user', content: userContent }];
+    setUi((p) => [...p, { role: 'user', text: q, files: atts.length ? atts : undefined }, { role: 'assistant', text: '', pending: true }]);
+    setBusy(true); setActivity(''); setStream('');
     try {
-      const r = await runAssistant(nextHistory, { web, onActivity: setActivity });
+      const r = await runAssistant(nextHistory, {
+        web,
+        onActivity: (l) => { setActivity(l); setStream(''); },
+        onToken: (d) => { setStream((t) => t + d); setActivity(''); },
+      });
       setHistory(r.messages);
       setUi((p) => {
         const copy = [...p];
@@ -67,7 +111,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
         return copy;
       });
     } finally {
-      setBusy(false); setActivity('');
+      setBusy(false); setActivity(''); setStream('');
     }
   };
 
@@ -127,7 +171,19 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
                   color: m.role === 'user' ? '#fff' : 'text.primary',
                   border: m.role === 'user' ? 'none' : '1px solid rgba(15,58,74,0.12)',
                 }}>
-                  {m.pending ? <Typography variant="body2" color="text.secondary">{activity || 'Đang suy nghĩ…'}</Typography> : m.text}
+                  {m.files && m.files.length > 0 && (
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: m.text ? 0.75 : 0 }}>
+                      {m.files.map((f, k) => (
+                        <Chip key={k} size="small" icon={<InsertDriveFileOutlinedIcon />} label={f.name}
+                          sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', maxWidth: 200 }} />
+                      ))}
+                    </Stack>
+                  )}
+                  {m.pending
+                    ? (stream
+                        ? stream
+                        : <Typography variant="body2" color="text.secondary">{activity || 'Đang suy nghĩ…'}</Typography>)
+                    : m.text}
                   {m.citations && m.citations.length > 0 && (
                     <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed rgba(15,58,74,0.2)' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Nguồn:</Typography>
@@ -164,14 +220,27 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
           onClick={() => setWeb((v) => !v)} sx={{ fontWeight: 700 }}
         />
       </Box>
-      <Box sx={{ p: 1.5, pt: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+      {attachments.length > 0 && (
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ px: 1.5, pt: 1 }}>
+          {attachments.map((a, k) => (
+            <Chip key={k} size="small" icon={<InsertDriveFileOutlinedIcon />} label={a.name}
+              onDelete={() => setAttachments((p) => p.filter((_, i) => i !== k))}
+              sx={{ maxWidth: 220 }} />
+          ))}
+        </Stack>
+      )}
+      <Box sx={{ p: 1.5, pt: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', gap: 0.5, alignItems: 'flex-end' }}>
+        <IconButton component="label" disabled={busy} title="Đính kèm ảnh/PDF (≤5MB)">
+          <AttachFileIcon />
+          <input type="file" hidden multiple accept="image/*,application/pdf" onChange={(e) => void onPickFiles(e)} />
+        </IconButton>
         <TextField
           fullWidth multiline maxRows={4} size="small" value={input} disabled={busy}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input); } }}
           placeholder="Nhập câu hỏi… (Enter để gửi)"
         />
-        <IconButton color="primary" disabled={busy || !input.trim()} onClick={() => void send(input)}
+        <IconButton color="primary" disabled={busy || (!input.trim() && attachments.length === 0)} onClick={() => void send(input)}
           sx={{ bgcolor: '#0d7a6a', color: '#fff', '&:hover': { bgcolor: '#0a5c50' }, '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.12)' } }}>
           <SendIcon />
         </IconButton>

@@ -188,6 +188,27 @@ async function verifySupabaseToken(token, ref) {
   return payload;
 }
 
+// Đặt cache_control lên block nội dung CUỐI của message cuối → cache tiền tố hội
+// thoại qua các bước vòng lặp tool-use. Trả về mảng MỚI (không sửa input gốc).
+// Content có thể là string (bọc thành 1 text block) hoặc mảng block (gắn vào block cuối).
+function withConversationCache(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return messages;
+  const out = messages.slice();
+  const i = out.length - 1;
+  const last = out[i];
+  if (!last || typeof last !== 'object') return out;
+  const c = last.content;
+  if (typeof c === 'string') {
+    out[i] = { ...last, content: [{ type: 'text', text: c, cache_control: { type: 'ephemeral' } }] };
+  } else if (Array.isArray(c) && c.length) {
+    const blocks = c.slice();
+    const j = blocks.length - 1;
+    blocks[j] = { ...blocks[j], cache_control: { type: 'ephemeral' } };
+    out[i] = { ...last, content: blocks };
+  }
+  return out;
+}
+
 /** Trả về Response lỗi nếu xác thực bật & token không hợp lệ; null nếu hợp lệ/đang tắt. */
 async function requireAuth(request, env) {
   if (!env.SUPABASE_PROJECT_REF) return null; // chưa cấu hình → không bắt buộc
@@ -300,13 +321,25 @@ export default {
         if (!Array.isArray(body.messages)) return json({ error: "Thiếu trường 'messages'" }, 400);
         const tools = Array.isArray(body.tools) ? [...body.tools] : [];
         if (body.web) tools.push(WEB_SEARCH_TOOL);
+        // ── Prompt caching ──
+        // Thứ tự render là tools → system → messages, nên 1 breakpoint ở block system
+        // cache CHUNG cả tools + system (phần tĩnh, lặp lại mỗi bước & mỗi hội thoại).
+        // Thêm 1 breakpoint ở message cuối để cache tiền tố hội thoại qua các bước
+        // của vòng lặp tool-use (tool_result tích luỹ dần). Cache read ~0.1× giá input.
+        const system = body.system
+          ? [{ type: 'text', text: String(body.system), cache_control: { type: 'ephemeral' } }]
+          : null;
+        const messages = withConversationCache(body.messages);
         const payload = {
           model: MODEL_ASSISTANT,
           max_tokens: 4096,
-          messages: body.messages,
-          ...(body.system ? { system: body.system } : {}),
+          messages,
+          ...(system ? { system } : {}),
           ...(tools.length ? { tools } : {}),
         };
+        // Streaming: client xin SSE (hiện chữ dần). Đẩy nguyên luồng SSE của Anthropic
+        // về cho client tự dựng lại message (text + tool_use) để chạy vòng lặp tool-use.
+        if (body.stream) payload.stream = true;
         const r = await fetch(ANTHROPIC_URL, {
           method: 'POST',
           headers: {
@@ -316,6 +349,17 @@ export default {
           },
           body: JSON.stringify(payload),
         });
+        if (body.stream) {
+          // Lỗi (vd 4xx/5xx) trả JSON, không phải SSE → client tự phát hiện qua content-type.
+          if (!r.ok || !r.body) {
+            const err = await r.json().catch(() => ({}));
+            return json({ error: err?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
+          }
+          return new Response(r.body, {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', ...CORS },
+          });
+        }
         const data = await r.json();
         if (!r.ok) return json({ error: data?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
         return json(data);

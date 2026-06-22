@@ -3,7 +3,7 @@
  * worker `/chat`; khi Claude yêu cầu tool (custom) thì thực thi cục bộ rồi gửi
  * tool_result và lặp. `web_search` do API Anthropic tự xử lý (server tool).
  */
-import { callAIWorker, type ChatMessage, type ContentBlock, type Citation } from '@/lib/aiWorker';
+import { streamAIChat, type ChatMessage, type ContentBlock, type Citation } from '@/lib/aiWorker';
 import { ASSISTANT_TOOLS, PROPOSAL_TOOLS, runAssistantTool } from './tools';
 import { assistantSystem } from './prompt';
 
@@ -29,7 +29,7 @@ const MAX_TURNS = 8;
 
 export async function runAssistant(
   history: ChatMessage[],
-  opts: { web?: boolean; onActivity?: (label: string) => void } = {},
+  opts: { web?: boolean; onActivity?: (label: string) => void; onToken?: (delta: string) => void } = {},
 ): Promise<AssistantResult> {
   const messages: ChatMessage[] = [...history];
   const citations: Citation[] = [];
@@ -37,12 +37,12 @@ export async function runAssistant(
 
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
     opts.onActivity?.(turn === 0 ? 'Đang suy nghĩ…' : 'Đang phân tích…');
-    const res = await callAIWorker('/chat', {
+    const res = await streamAIChat({
       system: assistantSystem(),
       messages,
       tools: ASSISTANT_TOOLS,
       web: !!opts.web,
-    });
+    }, opts.onToken);
     const content = res.content ?? [];
     messages.push({ role: 'assistant', content });
     content.forEach((b) => { if (b.type === 'text' && b.citations) citations.push(...b.citations); });
