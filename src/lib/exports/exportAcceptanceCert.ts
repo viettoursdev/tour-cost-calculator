@@ -53,7 +53,7 @@ export function exportAcceptanceCertPDF(
   pdf.setFont(FONT, 'normal');
   atL('Công ty Cổ phần Viettours Incentives & Events'); ln(5);
   atL('Địa chỉ: 268 Tô Hiến Thành, P.15, Q.10, TP. Hồ Chí Minh'); ln(5);
-  atL(`Đại diện: ${user.name} - ${user.role}`); ln(10);
+  atL(`Đại diện: ${user.name}`); ln(10);
 
   // ── Bên B ──
   pdf.setFont(FONT, 'bold');

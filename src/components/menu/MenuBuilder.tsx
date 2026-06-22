@@ -107,6 +107,24 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
   const updMeal = (dayId: string, mid: string, patch: Partial<MenuMeal>) =>
     updDayById(dayId, (d) => ({ ...d, meals: d.meals.map((m) => (m.id === mid ? { ...m, ...patch } : m)) }));
 
+  /** Đồng bộ khối "Đề xuất từ nhà hàng" (menu/đơn giá) về set-menu của nhà hàng trong
+   *  thư viện — để thực đơn & đơn giá NCC luôn cập nhật. Chỉ ghi khi có thay đổi. */
+  const syncSuggestedToRestaurant = (meal: MenuMeal) => {
+    if (!meal.restaurantId || !meal.restMenuId) return;
+    const list = useRestaurantStore.getState().list;
+    const r = list.find((x) => x.id === meal.restaurantId);
+    const idx = r ? (r.menus ?? []).findIndex((m) => m.id === meal.restMenuId) : -1;
+    if (!r || idx < 0) return;
+    const cur = r.menus[idx];
+    const dishes = meal.suggestedDishes ?? '';
+    const price = +meal.suggestedPrice || 0;
+    const ccy = meal.suggestedCur || meal.cur || cur.cur;
+    if (cur.dishes === dishes && cur.price === price && cur.cur === ccy) return; // không đổi
+    const menus = r.menus.map((m, i) => (i === idx ? { ...m, dishes, price, cur: ccy } : m));
+    const next = list.map((x) => (x.id === r.id ? { ...x, menus } : x));
+    void useRestaurantStore.getState().save(next, savedBy);
+  };
+
   const pickRestaurant = (dayId: string, mid: string, rid: string) => {
     const r = restaurants.find((x) => x.id === rid);
     if (!r) {
@@ -408,18 +426,25 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
                           <Chip label="📋 Đề xuất từ nhà hàng" size="small"
                             sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', color: '#fff',
                                   fontSize: 10, fontWeight: 800, mb: 0.75 }} />
+                          {meal.restMenuId && (
+                            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                              ↻ Sửa ở đây tự cập nhật về thực đơn nhà hàng
+                            </Typography>
+                          )}
                           <TextField size="small" multiline minRows={4} fullWidth
                             value={meal.suggestedDishes}
                             onChange={(e) => updMeal(d.id, meal.id, { suggestedDishes: e.target.value })}
+                            onBlur={() => syncSuggestedToRestaurant(meal)}
                             placeholder="Mỗi món 1 dòng..."
                             sx={{ mb: 0.75, '& .MuiInputBase-input': { fontSize: 12 } }} />
                           <Stack direction="row" spacing={0.5} alignItems="center">
                             <Typography variant="caption" color="text.disabled">Giá:</Typography>
                             <TextField size="small" type="number" value={meal.suggestedPrice}
                               onChange={(e) => updMeal(d.id, meal.id, { suggestedPrice: +e.target.value })}
+                              onBlur={() => syncSuggestedToRestaurant(meal)}
                               InputProps={{ sx: { fontSize: 12, textAlign: 'right' } }} />
                             <Select size="small" value={meal.suggestedCur || meal.cur}
-                              onChange={(e) => updMeal(d.id, meal.id, { suggestedCur: e.target.value })}
+                              onChange={(e) => { updMeal(d.id, meal.id, { suggestedCur: e.target.value }); syncSuggestedToRestaurant({ ...meal, suggestedCur: e.target.value }); }}
                               sx={{ width: 70, fontSize: 11 }}>
                               {MENU_CUR.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                             </Select>

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, Todo } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -306,6 +306,36 @@ export async function sbPushEmailLinks(
     updated_by: `${pushedBy.name} (${pushedBy.role})`,
   }, { onConflict: 'one_row' });
   if (error) throw new Error('sbPushEmailLinks: ' + error.message);
+}
+
+// ── To-Do dùng chung (single-row) ──
+export function sbSubscribeTodos(
+  cb: (list: Todo[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'todos', async (cl) => {
+    const { data, error } = await cl
+      .from('todos')
+      .select('todos')
+      .eq('one_row', true)
+      .maybeSingle();
+    if (error) throw new Error('sbSubscribeTodos: ' + error.message);
+    return (data?.todos as Todo[]) ?? [];
+  }, cb);
+}
+
+export async function sbPushTodos(
+  list: Todo[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('todos').upsert({
+    one_row: true,
+    todos: list,
+    updated_at: new Date().toISOString(),
+    updated_by: `${pushedBy.name} (${pushedBy.role})`,
+  }, { onConflict: 'one_row' });
+  if (error) throw new Error('sbPushTodos: ' + error.message);
 }
 
 // ── POIs ──────────────────────────────────────────────────────────────────────

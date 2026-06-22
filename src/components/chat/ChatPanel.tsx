@@ -14,6 +14,7 @@ import ReplyIcon from '@mui/icons-material/Reply';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
+import { canViewStaffRole } from '@/auth/ROLES';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
 import { dmChatId, sbEnsureChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction } from '@/lib/supabase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
@@ -172,7 +173,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                 <Avatar sx={{ width: 32, height: 32, bgcolor: u.color || LEGACY.teal, fontSize: 14 }}>{u.name.slice(0, 1).toUpperCase()}</Avatar>
                 <Box sx={{ flex: 1 }}>
                   <Typography fontSize={14} fontWeight={700}>{u.name}</Typography>
-                  <Typography variant="caption" color="text.secondary">{u.role}</Typography>
+                  {canViewStaffRole(me) && <Typography variant="caption" color="text.secondary">{u.role}</Typography>}
                 </Box>
                 <Checkbox checked={groupSel.includes(u.u)} onClick={(e) => { e.stopPropagation(); setGroupSel((s) => s.includes(u.u) ? s.filter((x) => x !== u.u) : [...s, u.u]); }} />
               </Stack>

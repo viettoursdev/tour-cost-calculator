@@ -29,6 +29,8 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { tagForContext } from '@/components/shell/guideSteps';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { canViewStaffRole } from '@/auth/ROLES';
+import { DEPT_LABEL } from '@/auth/departments';
 import { LEGACY } from '@/theme';
 
 /** Viết tắt chữ cái đầu mỗi từ trong tên (tối đa 3 ký tự). VD "Hoàng Anh Tuấn" → "HAT". */
@@ -116,8 +118,10 @@ export function AppShell() {
           </Typography>
           {currentUser && (
             <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
-              {/* Tài khoản — gọn: chỉ badge viết tắt chữ cái đầu (VD "HAT"); tên & chức vụ ở tooltip */}
-              <Tooltip title={`${currentUser.name} · ${currentUser.role}`}>
+              {/* Tài khoản — gọn: chỉ badge viết tắt chữ cái đầu (VD "HAT"); chức vụ/phòng ban CHỈ CEO mới thấy */}
+              <Tooltip title={canViewStaffRole(currentUser)
+                ? `${currentUser.name} · ${currentUser.role}${currentUser.department ? ` · ${DEPT_LABEL[currentUser.department]}` : ''}`
+                : currentUser.name}>
                 <Avatar sx={{ width: 34, height: 34, bgcolor: '#dc3250', fontSize: 12.5, fontWeight: 800, border: '1px solid rgba(255,255,255,0.4)' }}>
                   {initialsOf(currentUser.name)}
                 </Avatar>

@@ -10,6 +10,7 @@ import SendIcon from '@mui/icons-material/Send';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { toast } from '@/stores/toastStore';
 import { fmtVND } from './calc';
 import { advanceTotals, emptyAdvance, lineAmount, newAdvanceLine } from './advanceCalc';
@@ -266,7 +267,7 @@ export function AdvanceView() {
                 key={n} size="small" options={users}
                 value={users.find((u) => u.u === cur?.u) ?? null}
                 onChange={(_, v) => patch({ [key]: v ? { u: v.u, name: v.name } : undefined })}
-                getOptionLabel={(u) => `${u.name} (${u.role})`}
+                getOptionLabel={(u) => userLabel(u, currentUser)}
                 isOptionEqualToValue={(a, b) => a.u === b.u}
                 renderInput={(params) => <TextField {...params} label={`Người duyệt ${n}`} placeholder="Chọn người duyệt" />}
               />

@@ -14,6 +14,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { NameCardScanButton } from '@/components/common/NameCardScanButton';
 import { AIPartyImportDialog } from '@/components/common/AIPartyImportDialog';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
@@ -232,7 +233,7 @@ export function CustomerModal({ customer, canEdit, onSave, onClose }: Props) {
             <TextField select label="Sales phụ trách" value={form.ownerU ?? ''} disabled={!canEdit}
               onChange={(e) => { const u = users.find((x) => x.u === e.target.value); setForm((p) => ({ ...p, ownerU: u?.u, ownerName: u?.name })); }}>
               <MenuItem value=""><em>—</em></MenuItem>
-              {users.map((u) => <MenuItem key={u.u} value={u.u}>{u.name} ({u.role})</MenuItem>)}
+              {users.map((u) => <MenuItem key={u.u} value={u.u}>{userLabel(u, currentUser)}</MenuItem>)}
             </TextField>
             <TextField label="Kênh ưa thích" value={form.preferredChannel ?? ''} onChange={(e) => setF('preferredChannel', e.target.value)} disabled={!canEdit} placeholder="Zalo / Email / Điện thoại" />
             {form.type === 'individual' && (

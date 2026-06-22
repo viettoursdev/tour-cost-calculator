@@ -10,6 +10,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
@@ -194,7 +195,7 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
           <Autocomplete
             multiple options={users} value={byUsername(doc.mainStaff)}
             onChange={(_, v) => setStaff('mainStaff', v)}
-            getOptionLabel={(u) => `${u.name} (${u.role})`}
+            getOptionLabel={(u) => userLabel(u, user)}
             isOptionEqualToValue={(a, b) => a.u === b.u}
             renderTags={(value, getTagProps) =>
               value.map((u, i) => {
@@ -208,7 +209,7 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
           <Autocomplete
             multiple options={users} value={byUsername(doc.supportStaff)}
             onChange={(_, v) => setStaff('supportStaff', v)}
-            getOptionLabel={(u) => `${u.name} (${u.role})`}
+            getOptionLabel={(u) => userLabel(u, user)}
             isOptionEqualToValue={(a, b) => a.u === b.u}
             renderTags={(value, getTagProps) =>
               value.map((u, i) => {

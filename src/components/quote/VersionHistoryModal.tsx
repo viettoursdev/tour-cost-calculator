@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle,
-  IconButton, Stack, Typography,
+  Alert, Box, Chip, CircularProgress, Dialog, DialogContent, DialogTitle,
+  IconButton, Stack, Tooltip, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RestoreIcon from '@mui/icons-material/Restore';
@@ -12,16 +12,19 @@ import { computeTotals, fmtVND } from './calc';
 import { LEGACY } from '@/theme';
 import type { QuoteVersion } from '@/types';
 
-type Props = { open: boolean; onClose: () => void };
+type Props = { open: boolean; onClose: () => void; cloudId?: string; isDmc?: boolean };
 
 /**
- * Lịch sử phiên bản của báo giá đang mở (mỗi lần Lưu cloud = 1 phiên bản, giữ tối
- * đa 20 bản gần nhất). Cho phép xem & KHÔI PHỤC một phiên bản cũ vào draft hiện
- * tại — lưu lại sẽ tạo thành phiên bản mới (không ghi đè lịch sử).
+ * Lịch sử phiên bản của báo giá (mỗi lần Lưu cloud = 1 phiên bản, giữ tối đa 20 bản
+ * gần nhất). Cho phép xem & KHÔI PHỤC một phiên bản cũ — lưu lại sẽ tạo thành phiên
+ * bản mới (không ghi đè lịch sử). Mặc định dùng báo giá ĐANG MỞ; truyền `cloudId`
+ * để mở cho một báo giá BẤT KỲ (vd từ dòng Lịch sử báo giá).
  */
-export function VersionHistoryModal({ open, onClose }: Props) {
-  const cloudId = useQuoteStore((s) => s.draft.currentQuoteId);
-  const isDmc = useQuoteStore((s) => s.draft.template === 'dmc');
+export function VersionHistoryModal({ open, onClose, cloudId: propCloudId, isDmc: propIsDmc }: Props) {
+  const draftCloudId = useQuoteStore((s) => s.draft.currentQuoteId);
+  const draftIsDmc = useQuoteStore((s) => s.draft.template === 'dmc');
+  const cloudId = propCloudId ?? draftCloudId;
+  const isDmc = propIsDmc ?? draftIsDmc;
   const restoreVersionState = useQuoteStore((s) => s.restoreVersionState);
 
   const [loading, setLoading] = useState(false);
@@ -95,7 +98,7 @@ export function VersionHistoryModal({ open, onClose }: Props) {
                     size="small"
                     label={i === 0 ? `Bản ${v.versionNo} · mới nhất` : `Bản ${v.versionNo}`}
                     color={i === 0 ? 'success' : 'default'}
-                    sx={{ fontWeight: 700 }}
+                    sx={{ fontWeight: 700, flexShrink: 0 }}
                   />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="body2" fontWeight={600} noWrap>{v.note || `Phiên bản ${v.versionNo}`}</Typography>
@@ -104,12 +107,14 @@ export function VersionHistoryModal({ open, onClose }: Props) {
                       {total != null ? ` · ${fmtVND(total)}` : ''}
                     </Typography>
                   </Box>
-                  <Button
-                    size="small" variant="outlined" startIcon={<RestoreIcon />}
-                    onClick={() => handleRestore(v)}
-                  >
-                    Khôi phục
-                  </Button>
+                  <Tooltip title="Khôi phục phiên bản này">
+                    <IconButton
+                      size="small" color="primary" onClick={() => handleRestore(v)}
+                      sx={{ flexShrink: 0, border: '1px solid', borderColor: 'rgba(20,150,140,0.5)', borderRadius: 1.5 }}
+                    >
+                      <RestoreIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Stack>
               );
             })}

@@ -493,7 +493,7 @@ export function LineRow({ item, pax, rates, catColor, onUpd, onDel, onDup, index
         {onDup && (
           <Tooltip title="Nhân bản dòng">
             <Box component="button" onClick={onDup} aria-label="Nhân bản dòng"
-              sx={{ background: 'none', border: 'none', color: 'rgba(15,58,74,0.4)', cursor: 'pointer', fontSize: 13, px: 0.5, fontFamily: 'inherit', '&:hover': { color: '#0d7a6a' } }}>
+              sx={{ background: 'none', border: 'none', color: 'rgba(15,58,74,0.4)', cursor: 'pointer', fontSize: 13, px: 0.5, mr: 1, fontFamily: 'inherit', '&:hover': { color: '#0d7a6a' } }}>
               ⧉
             </Box>
           </Tooltip>

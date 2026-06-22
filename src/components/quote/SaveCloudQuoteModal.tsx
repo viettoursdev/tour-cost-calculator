@@ -6,6 +6,7 @@ import {
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -253,12 +254,12 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
             options={otherUsers}
             value={collabUsers}
             onChange={(_, v) => setCollabUsers(v)}
-            getOptionLabel={(u) => `${u.name} (${u.role})`}
+            getOptionLabel={(u) => userLabel(u, currentUser)}
             isOptionEqualToValue={(a, b) => a.u === b.u}
             renderTags={(value, getTagProps) =>
               value.map((u, idx) => {
                 const { key, ...tagProps } = getTagProps({ index: idx });
-                return <Chip key={key} {...tagProps} label={`${u.name} (${u.role})`} />;
+                return <Chip key={key} {...tagProps} label={userLabel(u, currentUser)} />;
               })
             }
             renderInput={(params) => (

@@ -157,7 +157,7 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
   y += 4;
   pdf.setFontSize(8); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
   pdf.text(
-    `Breakdown nội bộ DMC · Phụ trách: ${savedBy.name} (${savedBy.role}) · ${new Date().toLocaleDateString('vi-VN')}`,
+    `Breakdown nội bộ DMC · Phụ trách: ${savedBy.name} · ${new Date().toLocaleDateString('vi-VN')}`,
     pageW / 2, y, { align: 'center' },
   );
 

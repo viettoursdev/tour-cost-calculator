@@ -3,6 +3,7 @@ import {
   ListItemButton, ListItemText, Stack, Typography,
 } from '@mui/material';
 import { useAuthStore } from '@/stores/authStore';
+import { canViewStaffRole } from '@/auth/ROLES';
 import type { VisaProcDoc } from '@/types';
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function VisaProcCollabModal({ doc, onClose, onChange }: Props) {
+  const me = useAuthStore((s) => s.currentUser);
   const users = useAuthStore((s) => s.users);
   const collabs = doc.collaborators ?? [];
 
@@ -48,7 +50,7 @@ export function VisaProcCollabModal({ doc, onClose, onChange }: Props) {
                 <Avatar sx={{ bgcolor: u.color || '#14a08c', width: 32, height: 32, mr: 1 }}>
                   {u.name[0]}
                 </Avatar>
-                <ListItemText primary={u.name} secondary={`@${u.u} · ${u.role}`} />
+                <ListItemText primary={u.name} secondary={`@${u.u}${canViewStaffRole(me) ? ` · ${u.role}` : ""}`} />
               </ListItemButton>
             );
           })}

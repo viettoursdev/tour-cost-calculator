@@ -103,6 +103,8 @@ export const sbSubscribeGuideSchedule = vi.fn(() => () => {});
 export const sbPushGuideSchedule = vi.fn(async () => {});
 export const sbSubscribeEmailLinks = vi.fn(() => () => {});
 export const sbPushEmailLinks = vi.fn(async () => {});
+export const sbSubscribeTodos = vi.fn(() => () => {});
+export const sbPushTodos = vi.fn(async () => {});
 export const sbPublishQuote = vi.fn(async () => {});
 export const sbGetPublicQuote = vi.fn(async () => null);
 export const sbAcceptPublicQuote = vi.fn(async () => {});

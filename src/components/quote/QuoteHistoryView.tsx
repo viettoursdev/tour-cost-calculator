@@ -6,6 +6,7 @@ import {
 import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
 import GroupIcon from '@mui/icons-material/Group';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -20,8 +21,10 @@ import { attMeta } from '@/lib/util';
 import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, WorkflowStep } from '@/types';
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import ContentCopy from '@mui/icons-material/ContentCopy';
+import HistoryIcon from '@mui/icons-material/History';
 import Delete from '@mui/icons-material/Delete';
 import { sbGetQuoteProject, sbGetDMCQuoteProject } from '@/lib/supabase';
+import { VersionHistoryModal } from './VersionHistoryModal';
 import AttachFile from '@mui/icons-material/AttachFile';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { filterRank } from '@/lib/search';
@@ -191,6 +194,7 @@ export function QuoteHistoryView() {
     el: HTMLElement;
     row: CloudQuoteEntry;
   } | null>(null);
+  const [versionsRow, setVersionsRow] = useState<CloudQuoteEntry | null>(null);
 
   const allQuotes = isDMC ? dmcQuotes : quotes;
 
@@ -460,6 +464,11 @@ export function QuoteHistoryView() {
       filterable: false,
       renderCell: (p) => (
         <Stack direction="row">
+          <Tooltip title="Lịch sử phiên bản (tối đa 20 bản)">
+            <IconButton size="small" onClick={() => setVersionsRow(p.row)}>
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Tải báo giá">
             <IconButton size="small" onClick={() => handleLoad(p.row)}>
               <CloudDownload fontSize="small" />
@@ -575,6 +584,15 @@ export function QuoteHistoryView() {
           }}
         />
       )}
+
+      {versionsRow && (
+        <VersionHistoryModal
+          open
+          cloudId={versionsRow.cloudId}
+          isDmc={isDMC}
+          onClose={() => setVersionsRow(null)}
+        />
+      )}
     </Box>
   );
 }
@@ -591,6 +609,7 @@ function CollaboratorPopover({
   onSave: (collabs: Collaborator[]) => Promise<void>;
 }) {
   const currentUserU = useAuthStore((s) => s.currentUser?.u);
+  const viewer = useAuthStore((s) => s.currentUser);
   const initial = useMemo(() => {
     const set = new Set((row.collaborators ?? []).map((c) => c.u));
     return users.filter((u) => set.has(u.u));
@@ -626,7 +645,7 @@ function CollaboratorPopover({
           options={otherUsers}
           value={picked}
           onChange={(_, v) => setPicked(v)}
-          getOptionLabel={(u) => `${u.name} (${u.role})`}
+          getOptionLabel={(u) => userLabel(u, viewer)}
           isOptionEqualToValue={(a, b) => a.u === b.u}
           renderInput={(params) => <TextField {...params} placeholder="Thêm cộng tác viên" />}
         />

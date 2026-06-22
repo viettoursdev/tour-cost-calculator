@@ -11,6 +11,7 @@ import EditNoteIcon from '@mui/icons-material/EditNote';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { useAuthStore } from '@/stores/authStore';
+import { userLabel } from '@/auth/ROLES';
 import { useCustomerStore } from '@/stores/customerStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { TPL_ACCENT } from './templateStyle';
@@ -331,7 +332,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
           <Autocomplete
             multiple options={otherUsers} value={collabUsers}
             onChange={(_, v) => setCollabUsers(v)}
-            getOptionLabel={(u) => `${u.name} (${u.role})`}
+            getOptionLabel={(u) => userLabel(u, currentUser)}
             isOptionEqualToValue={(a, b) => a.u === b.u}
             renderTags={(value, getTagProps) =>
               value.map((u, idx) => {
