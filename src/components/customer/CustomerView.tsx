@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -12,10 +13,11 @@ import { useNccStore } from '@/stores/nccStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canManageArea } from '@/auth/departments';
-import { canViewAll } from '@/auth/ROLES';
+import { visibleRecords, canShareRecord } from '@/auth/recordAccess';
 import { CustomerModal } from './CustomerModal';
 import { Customer360 } from './Customer360';
 import { ImportListModal } from '@/components/common/ImportListModal';
+import { ShareRecordDialog } from '@/components/common/ShareRecordDialog';
 import { MergeDialog } from '@/components/common/MergeDialog';
 import { customerToNcc } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
@@ -39,9 +41,11 @@ export function CustomerView() {
   const del = useCustomerStore((s) => s.delete);
   const merge = useCustomerStore((s) => s.merge);
   const currentUser = useAuthStore((s) => s.currentUser);
+  const users = useAuthStore((s) => s.users);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageCustomers') && canManageArea(currentUser, 'customers');
-  // Sales trở lên xem toàn bộ; dưới ngưỡng chỉ thấy khách hàng do mình tạo.
-  const viewAll = !!currentUser && canViewAll(currentUser.role, 'customers');
+  // Quyền xem theo nguyên tắc vận hành: người tạo + collab + Trưởng phòng (cùng
+  // phòng) + Ban Giám Đốc/CEO (toàn bộ). Xem src/auth/recordAccess.ts.
+  const visible = useMemo(() => visibleRecords(currentUser, customers, users), [customers, currentUser, users]);
 
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('');
@@ -59,6 +63,12 @@ export function CustomerView() {
   const suppliers = useNccStore((s) => s.suppliers);
   const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageNCC');
   const [convertTarget, setConvertTarget] = useState<Customer | null>(null);
+  const [shareTarget, setShareTarget] = useState<Customer | null>(null);
+  const saveShare = (collabs: Customer['collaborators']) => {
+    if (!shareTarget) return;
+    void save({ ...shareTarget, collaborators: collabs });
+    toast('✅ Đã cập nhật chia sẻ khách hàng.');
+  };
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('vte_cust_compact') === '1'; } catch { return false; } });
   const toggleCompact = () => setCompact((v) => { const nv = !v; try { localStorage.setItem('vte_cust_compact', nv ? '1' : '0'); } catch { /* quota */ } return nv; });
   // Gộp khách trùng: bật chế độ chọn → tích ≥2 bản → Gộp.
@@ -77,12 +87,11 @@ export function CustomerView() {
   };
 
   const owners = useMemo(
-    () => [...new Set(customers.map((c) => c.createdBy).filter(Boolean))].sort(),
-    [customers],
+    () => [...new Set(visible.map((c) => c.createdBy).filter(Boolean))].sort(),
+    [visible],
   );
   const filtered = useMemo(() => {
-    const base = customers.filter((c) => {
-      if (!viewAll && c.createdBy !== currentUser?.name) return false;
+    const base = visible.filter((c) => {
       if (filterType && c.type !== filterType) return false;
       if (owner && c.createdBy !== owner) return false;
       if (!inDateRange(c.updatedAt ?? c.createdAt, dateRange, dateFrom, dateTo)) return false;
@@ -93,7 +102,7 @@ export function CustomerView() {
       ...(c.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
-  }, [customers, search, filterType, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
+  }, [visible, search, filterType, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Customer) => {
     const norm = normalizeVN(form.name);
@@ -266,6 +275,8 @@ export function CustomerView() {
               onEdit={() => setModal({ customer: c })}
               onDelete={() => handleDeleteNow(c)}
               onConvert={() => setConvertTarget(c)}
+              onShare={() => setShareTarget(c)}
+              canShare={canShareRecord(currentUser, c, users)}
               onClick={() => setView360(c)}
             />
           ))}
@@ -299,6 +310,18 @@ export function CustomerView() {
           onClose={() => setModal(null)}
         />
       )}
+
+      <ShareRecordDialog
+        open={!!shareTarget}
+        onClose={() => setShareTarget(null)}
+        title="Chia sẻ khách hàng"
+        subtitle={shareTarget?.name}
+        ownerName={shareTarget?.createdBy}
+        ownerU={shareTarget?.createdByU}
+        collaborators={shareTarget?.collaborators ?? []}
+        users={users}
+        onSave={saveShare}
+      />
 
       <ImportListModal
         open={importOpen}
@@ -365,6 +388,8 @@ function CustomerCard({
   onEdit,
   onDelete,
   onConvert,
+  onShare,
+  canShare,
   onClick,
 }: {
   customer: Customer;
@@ -377,6 +402,8 @@ function CustomerCard({
   onEdit: () => void;
   onDelete: () => void;
   onConvert: () => void;
+  onShare: () => void;
+  canShare: boolean;
   onClick: () => void;
 }) {
   const isCompany = c.type === 'company';
@@ -407,6 +434,13 @@ function CustomerCard({
         </Stack>
         {canEdit && !selectable && (
           <Stack direction="row" onClick={(e) => e.stopPropagation()}>
+            {canShare && (
+              <Tooltip title="Chia sẻ cho người khác cùng xem">
+                <IconButton size="small" color="primary" onClick={onShare}>
+                  <PersonAddAlt1Icon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Sửa">
               <IconButton size="small" onClick={onEdit}>
                 <EditIcon fontSize="small" />
@@ -432,6 +466,7 @@ function CustomerCard({
       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
         <Chip size="small" label={isCompany ? '🏢 Công ty' : '👤 Cá nhân'} color={isCompany ? 'primary' : 'success'} variant="outlined" sx={{ fontSize: 11 }} />
         {c.source && <Chip size="small" label={`📥 ${c.source}`} variant="outlined" sx={{ fontSize: 11, color: 'text.secondary' }} />}
+        {!!c.collaborators?.length && <Chip size="small" label={`👥 Chia sẻ ${c.collaborators.length}`} variant="outlined" sx={{ fontSize: 11, color: 'primary.main' }} />}
         {(c.tags ?? []).map((t) => <Chip key={t} size="small" label={t} sx={{ fontSize: 11, bgcolor: 'rgba(20,150,140,0.12)', color: '#0d7a6a', fontWeight: 700 }} />)}
       </Stack>
 

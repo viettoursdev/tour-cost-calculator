@@ -1,4 +1,4 @@
-import type { CategoryId, FileAttachment } from './quote';
+import type { CategoryId, Collaborator, FileAttachment } from './quote';
 
 export type NccContact = {
   name: string;
@@ -86,6 +86,10 @@ export type Ncc = {
   ratings?: NccRating[];
   createdAt: string;
   createdBy: string;
+  /** Username người tạo (để phân quyền xem theo phòng ban; dữ liệu cũ chỉ có tên). */
+  createdByU?: string;
+  /** Người được chia sẻ cùng xem (collab) — ngoài người tạo. */
+  collaborators?: Collaborator[];
   updatedAt?: string;
   updatedBy?: string;
 };

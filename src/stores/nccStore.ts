@@ -43,7 +43,7 @@ export const useNccStore = create<NccState>()(
               ...form,
               id: form.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
               createdAt: now,
-              createdBy: u.name,
+              createdBy: u.name, createdByU: u.u,
             },
           ]
         : suppliers.map((s) =>
@@ -74,7 +74,7 @@ export const useNccStore = create<NccState>()(
           ...r,
           id: r.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + toAdd.length,
           createdAt: now,
-          createdBy: u.name,
+          createdBy: u.name, createdByU: u.u,
         });
       }
       if (!toAdd.length) return 0;

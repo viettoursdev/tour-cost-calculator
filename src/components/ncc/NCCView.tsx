@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useNccStore } from '@/stores/nccStore';
@@ -12,9 +13,10 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canManageArea } from '@/auth/departments';
-import { canViewAll } from '@/auth/ROLES';
+import { visibleRecords, canShareRecord } from '@/auth/recordAccess';
 import { NCCModal } from './NCCModal';
 import { ImportListModal } from '@/components/common/ImportListModal';
+import { ShareRecordDialog } from '@/components/common/ShareRecordDialog';
 import { MergeDialog } from '@/components/common/MergeDialog';
 import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
@@ -38,9 +40,11 @@ export function NCCView() {
   const del = useNccStore((s) => s.delete);
   const merge = useNccStore((s) => s.merge);
   const currentUser = useAuthStore((s) => s.currentUser);
+  const users = useAuthStore((s) => s.users);
   const canEdit = !!currentUser && hasPerm(currentUser, 'manageNCC') && canManageArea(currentUser, 'ncc');
-  // Operations trở lên xem toàn bộ; dưới ngưỡng chỉ thấy NCC do mình tạo.
-  const viewAll = !!currentUser && canViewAll(currentUser.role, 'ncc');
+  // Quyền xem theo nguyên tắc vận hành: người tạo + collab + Trưởng phòng (cùng
+  // phòng) + Ban Giám Đốc/CEO (toàn bộ). Xem src/auth/recordAccess.ts.
+  const visible = useMemo(() => visibleRecords(currentUser, suppliers, users), [suppliers, currentUser, users]);
 
   const [search, setSearch] = useState('');
   const [tourSearch, setTourSearch] = useState('');
@@ -60,6 +64,12 @@ export function NCCView() {
   const customers = useCustomerStore((s) => s.customers);
   const canConvert = canEdit && !!currentUser && hasPerm(currentUser, 'manageCustomers');
   const [convertTarget, setConvertTarget] = useState<Ncc | null>(null);
+  const [shareTarget, setShareTarget] = useState<Ncc | null>(null);
+  const saveShare = (collabs: Ncc['collaborators']) => {
+    if (!shareTarget) return;
+    void save({ ...shareTarget, collaborators: collabs });
+    toast('✅ Đã cập nhật chia sẻ nhà cung cấp.');
+  };
   const [compact, setCompact] = useState(() => { try { return localStorage.getItem('vte_ncc_compact') === '1'; } catch { return false; } });
   const toggleCompact = () => setCompact((v) => { const nv = !v; try { localStorage.setItem('vte_ncc_compact', nv ? '1' : '0'); } catch { /* quota */ } return nv; });
   // Gộp NCC trùng: bật chế độ chọn → tích ≥2 bản → Gộp.
@@ -78,13 +88,12 @@ export function NCCView() {
   };
 
   const owners = useMemo(
-    () => [...new Set(suppliers.map((s) => s.createdBy).filter(Boolean))].sort(),
-    [suppliers],
+    () => [...new Set(visible.map((s) => s.createdBy).filter(Boolean))].sort(),
+    [visible],
   );
   const filtered = useMemo(() => {
     const tq = normalizeVN(tourSearch.trim());
-    const base = suppliers.filter((s) => {
-      if (!viewAll && s.createdBy !== currentUser?.name) return false;
+    const base = visible.filter((s) => {
       if (filterSector && !s.sectors.includes(filterSector)) return false;
       if (filterContinent && s.continent !== filterContinent) return false;
       if (filterCountry && s.country !== filterCountry) return false;
@@ -99,7 +108,7 @@ export function NCCView() {
       ...(s.contacts ?? []).map((ct) => ct.name ?? ''),
     ].filter(Boolean).join(' ');
     return sortList(filterRank(base, search, text), sort);
-  }, [suppliers, search, tourSearch, filterSector, filterContinent, filterCountry, viewAll, currentUser?.name, sort, owner, dateRange, dateFrom, dateTo]);
+  }, [visible, search, tourSearch, filterSector, filterContinent, filterCountry, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Ncc) => {
     const norm = normalizeVN(form.name);
@@ -298,6 +307,8 @@ export function NCCView() {
               onEdit={() => setModal({ ncc: s })}
               onDelete={() => handleDeleteNow(s)}
               onConvert={() => setConvertTarget(s)}
+              onShare={() => setShareTarget(s)}
+              canShare={canShareRecord(currentUser, s, users)}
               onClick={() => setModal({ ncc: s })}
             />
           ))}
@@ -331,6 +342,18 @@ export function NCCView() {
           onMerge={(source, targetId) => void handleMerge(source, targetId)}
         />
       )}
+
+      <ShareRecordDialog
+        open={!!shareTarget}
+        onClose={() => setShareTarget(null)}
+        title="Chia sẻ nhà cung cấp"
+        subtitle={shareTarget?.name}
+        ownerName={shareTarget?.createdBy}
+        ownerU={shareTarget?.createdByU}
+        collaborators={shareTarget?.collaborators ?? []}
+        users={users}
+        onSave={saveShare}
+      />
 
       <ImportListModal
         open={importOpen}
@@ -398,6 +421,8 @@ function NccCard({
   onEdit,
   onDelete,
   onConvert,
+  onShare,
+  canShare,
   onClick,
 }: {
   ncc: Ncc;
@@ -410,6 +435,8 @@ function NccCard({
   onEdit: () => void;
   onDelete: () => void;
   onConvert: () => void;
+  onShare: () => void;
+  canShare: boolean;
   onClick: () => void;
 }) {
   return (
@@ -440,9 +467,17 @@ function NccCard({
               sx={{ height: 18, fontWeight: 700, bgcolor: s.status === 'paused' ? 'rgba(100,116,139,0.18)' : 'rgba(220,50,80,0.15)', color: s.status === 'paused' ? '#475569' : '#dc3250' }} />
           )}
           {(s.files ?? []).length > 0 && <Chip size="small" variant="outlined" label={`📎 ${(s.files ?? []).length}`} sx={{ height: 18 }} />}
+          {!!s.collaborators?.length && <Chip size="small" variant="outlined" label={`👥 Chia sẻ ${s.collaborators.length}`} sx={{ height: 18, color: 'primary.main' }} />}
         </Stack>
         {canEdit && !selectable && (
           <Stack direction="row" onClick={(e) => e.stopPropagation()}>
+            {canShare && (
+              <Tooltip title="Chia sẻ cho người khác cùng xem">
+                <IconButton size="small" color="primary" onClick={onShare}>
+                  <PersonAddAlt1Icon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Sửa">
               <IconButton size="small" onClick={onEdit}>
                 <EditIcon fontSize="small" />

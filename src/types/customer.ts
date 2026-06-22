@@ -1,4 +1,4 @@
-import type { FileAttachment } from './quote';
+import type { Collaborator, FileAttachment } from './quote';
 import type { BankInfo } from './ncc';
 
 /** Hồ sơ giấy tờ của MỘT người thuộc khách hàng (hộ chiếu + visa + file scan).
@@ -83,6 +83,10 @@ export type Customer = {
   files?: FileAttachment[];
   createdAt: string;
   createdBy: string;
+  /** Username người tạo (để phân quyền xem theo phòng ban; dữ liệu cũ chỉ có tên). */
+  createdByU?: string;
+  /** Người được chia sẻ cùng xem (collab) — ngoài người tạo. */
+  collaborators?: Collaborator[];
   updatedAt?: string;
   updatedBy?: string;
 };
