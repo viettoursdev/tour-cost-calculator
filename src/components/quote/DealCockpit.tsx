@@ -76,6 +76,9 @@ export function DealCockpit() {
   const na = nextAction(input);
   const totals = useMemo(() => (tpl ? computeTotals(draft) : null), [draft, tpl]);
   const prog = workflowProgress(draft.workflow ?? []);
+  // Hộp thoại chọn quốc gia khi thêm bộ hồ sơ visa (hooks PHẢI ở trước early-return).
+  const [visaDlg, setVisaDlg] = useState(false);
+  const [visaCountry, setVisaCountry] = useState('');
 
   // Báo giá DMC / template thay thế: cockpit chỉ áp cho báo giá tiêu chuẩn.
   if (!tpl || tpl === 'dmc' || tpl === 'menu' || tpl === 'itinerary' || tpl === 'visa' || tpl === 'doctranslate') {
@@ -94,8 +97,6 @@ export function DealCockpit() {
   };
   // Thêm một bộ hồ sơ visa cho MỘT quốc gia cụ thể (tour nhiều nước → nhiều bộ).
   // Mở hộp thoại chọn quốc gia chuẩn hoá (vẫn gõ nước ngoài danh sách được).
-  const [visaDlg, setVisaDlg] = useState(false);
-  const [visaCountry, setVisaCountry] = useState('');
   const openAddVisa = () => {
     if (!cid) { window.alert('Hãy lưu báo giá lên cloud trước khi tạo dự án visa.'); return; }
     setVisaCountry(draft.info.dest ?? '');
