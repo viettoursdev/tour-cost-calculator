@@ -10,6 +10,7 @@ import { VisaCatalog } from './VisaCatalog';
 import { VisaProcBuilder } from './VisaProcBuilder';
 import { VisaProcManager } from './VisaProcManager';
 import { VisaProjectManager } from './VisaProjectManager';
+import { VisaPipeline } from './VisaPipeline';
 import { VisaTimeline } from './VisaTimeline';
 import { VisaDashboard } from './VisaDashboard';
 import { VisaResultsDashboard } from './VisaResultsDashboard';
@@ -17,7 +18,7 @@ import { VisaGuestHistory } from './VisaGuestHistory';
 import { canViewVisaReports } from './visaAccess';
 import type { VisaProcDoc } from '@/types';
 
-type Tab = 'projects' | 'timeline' | 'dashboard' | 'reports' | 'guests' | 'catalog' | 'procedures';
+type Tab = 'projects' | 'pipeline' | 'timeline' | 'dashboard' | 'reports' | 'guests' | 'catalog' | 'procedures';
 
 type Props = { onExit: () => void };
 
@@ -79,6 +80,7 @@ export function VisaApp({ onExit }: Props) {
           }}
         >
           <Tab value="projects" label="📁 Dự án visa" />
+          <Tab value="pipeline" label="🧲 Điều phối" />
           <Tab value="timeline" label="🗓️ Timeline" />
           <Tab value="dashboard" label="📊 Tổng quan" />
           {canReports && <Tab value="reports" label="📈 Thống kê visa" />}
@@ -90,6 +92,8 @@ export function VisaApp({ onExit }: Props) {
 
       {tab === 'projects' ? (
         <VisaProjectManager initialOpenId={pendingProjId} onConsumeInitial={() => setPendingProjId(null)} />
+      ) : tab === 'pipeline' ? (
+        <VisaPipeline onOpenProject={openProject} />
       ) : tab === 'timeline' ? (
         <VisaTimeline />
       ) : tab === 'dashboard' ? (
