@@ -8,13 +8,11 @@ vite.config.d.ts
 .playwright-mcp/
 vite-after-mo-click.png
 
-# Firebase migration (Stage 2)
-# These contain credentials and Firestore data. Never commit.
+# Service-account keys — contain credentials. Never commit.
 old-service-account.json
 new-service-account.json
 prod-sa.json
 *-sa.json
-firestore-dump.json
 
 # Local env files — keep .env.example committed as the template.
 .env
@@ -29,3 +27,4 @@ supabase/.branches
 supabase/.temp
 .supabase_db_password
 prod-sa.json
+.supabase_service_key

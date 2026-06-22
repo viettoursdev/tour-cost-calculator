@@ -69,10 +69,8 @@ R2 (URL worker là công khai trong bundle). App tự đính kèm token (header
 `Authorization: Bearer …`) cho mọi lời gọi; client lấy token theo backend đang bật qua
 `authBackend.getAccessToken()`.
 
-> **Khi nào deploy bản này:** chỉ tại **bước cutover** (xem `docs/supabase-setup.md` → runbook).
-> Production hiện chạy Firebase Auth — token là Firebase ID token, mà worker này KHÔNG còn
-> xác thực được. Deploy sớm + đặt biến = mọi request AI/dịch/upload bị 401. Giữ bản worker
-> Firebase đang chạy cho tới khi frontend cutover sang Supabase.
+> **Trạng thái hiện tại:** Production đã chạy Supabase Auth. Worker xác thực JWT ES256 qua
+> JWKS bất đối xứng của Supabase. Cutover đã hoàn tất — bản worker này là bản đang chạy.
 
 **Bật/tắt bằng 1 biến — rollout an toàn, rollback tức thì:**
 
