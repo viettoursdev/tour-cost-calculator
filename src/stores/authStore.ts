@@ -94,7 +94,16 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         return;
       }
       persistSessionStart(user.u, get().pendingSignInMethod);
-      set({ currentUser: user, users, hasHydrated: true, authError: null, pendingSignInMethod: null });
+      // Giữ NGUYÊN object `currentUser` cũ nếu vẫn là cùng một người. Supabase phát
+      // lại sự kiện auth lành tính (TOKEN_REFRESHED, re-emit khi focus tab…); nếu mỗi
+      // lần đều tạo object mới sẽ làm các effect phụ thuộc [currentUser] chạy lại →
+      // khởi tạo lại store + reset `view`/`draft` → đóng modal đang mở (vd popup tạo
+      // Khách hàng/NCC). Vẫn cập nhật danh sách `users`.
+      const prev = get().currentUser;
+      set({
+        currentUser: prev && prev.u === user.u ? prev : user,
+        users, hasHydrated: true, authError: null, pendingSignInMethod: null,
+      });
     });
   },
 
