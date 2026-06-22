@@ -16,7 +16,6 @@ export default defineConfig({
           if (id.includes('node_modules/@mui') || id.includes('node_modules/@emotion')) {
             return 'mui';
           }
-          if (id.includes('node_modules/firebase')) return 'firebase';
           // KHÔNG gộp thủ công thư viện xuất (jspdf/docx/xlsx/html2canvas/exceljs)
           // hay src/lib/exports/* nữa: mọi call site đã dùng dynamic import(), nên
           // Rollup tự tách chúng thành chunk ASYNC — chỉ nạp khi bấm Xuất, không

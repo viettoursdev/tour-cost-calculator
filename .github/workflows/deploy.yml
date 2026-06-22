@@ -35,18 +35,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
         env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          # Supabase: dormant until VITE_AUTH_BACKEND is set to 'supabase'.
-          # Cutover = set the VITE_AUTH_BACKEND repo variable to 'supabase' and
-          # re-run Deploy; rollback = blank the variable and re-run.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_AUTH_BACKEND: ${{ vars.VITE_AUTH_BACKEND }}
       # Vite outputs to dist/ at the root. Preserve legacy monolith at /legacy.html.
       - run: cp public/legacy.html dist/legacy.html
       - uses: actions/upload-pages-artifact@v3

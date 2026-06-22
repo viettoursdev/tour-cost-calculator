@@ -10,8 +10,7 @@
 const LS_KEY = 'vte_ai_worker';
 
 /**
- * Header xác thực gửi kèm mọi lời gọi Worker: bearer token của backend auth đang
- * hoạt động (Firebase ID token hoặc Supabase access token tuỳ `VITE_AUTH_BACKEND`).
+ * Header xác thực gửi kèm mọi lời gọi Worker: Supabase access token.
  * Worker (sau khi redeploy bản có auth) sẽ verify token + domain @viettours
  * trước khi gọi Anthropic / ghi R2 — chặn lạm dụng API key & file từ bên ngoài.
  * Worker CŨ (chưa auth) bỏ qua header này nên không ảnh hưởng.
