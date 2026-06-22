@@ -1,5 +1,4 @@
 import type { User } from '@/types';
-import { firebaseBackend } from './backends/firebaseBackend';
 import { supabaseBackend } from './backends/supabaseBackend';
 
 export type AuthSession = { uid: string; email: string };
@@ -21,6 +20,4 @@ export interface AuthBackend {
   getAccessToken(): Promise<string | null>;
 }
 
-const which = import.meta.env.VITE_AUTH_BACKEND === 'supabase' ? 'supabase' : 'firebase';
-
-export const authBackend: AuthBackend = which === 'supabase' ? supabaseBackend : firebaseBackend;
+export const authBackend: AuthBackend = supabaseBackend;
