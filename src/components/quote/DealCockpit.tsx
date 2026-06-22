@@ -1,5 +1,8 @@
-import { useMemo } from 'react';
-import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mui/material';
+import { useMemo, useState } from 'react';
+import {
+  Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  LinearProgress, Paper, Stack, TextField, Typography,
+} from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -10,7 +13,7 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useLinkNavStore } from '@/stores/linkNavStore';
 import { canSeePrices } from '@/auth/quotePerms';
-import { VISA_STATUS_META } from '@/components/visa/constants';
+import { VISA_COUNTRIES, VISA_PROC_PRESETS, VISA_STATUS_META, visaPresetKeyForCountry } from '@/components/visa/constants';
 import { computeTotals, fmtVND } from './calc';
 import { workflowProgress } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
@@ -90,18 +93,26 @@ export function DealCockpit() {
     useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'visa' }, view: 'cost' }));
   };
   // Thêm một bộ hồ sơ visa cho MỘT quốc gia cụ thể (tour nhiều nước → nhiều bộ).
-  const addVisa = async () => {
+  // Mở hộp thoại chọn quốc gia chuẩn hoá (vẫn gõ nước ngoài danh sách được).
+  const [visaDlg, setVisaDlg] = useState(false);
+  const [visaCountry, setVisaCountry] = useState('');
+  const openAddVisa = () => {
     if (!cid) { window.alert('Hãy lưu báo giá lên cloud trước khi tạo dự án visa.'); return; }
-    const country = window.prompt('Quốc gia xin visa cho bộ hồ sơ này:', draft.info.dest ?? '');
-    if (country == null) return; // huỷ
+    setVisaCountry(draft.info.dest ?? '');
+    setVisaDlg(true);
+  };
+  const confirmAddVisa = async () => {
+    if (!cid) return;
+    setVisaDlg(false);
     const p = await useVisaProjectStore.getState().spawnFromQuote({
       quoteId: cid,
       quoteName: draft.info.name || 'Dự án visa',
-      country: country.trim(),
+      country: visaCountry.trim(),
       departDate: draft.info.startDate ? draft.info.startDate.slice(0, 10) : undefined,
     });
     if (p) openVisa(p.id);
   };
+  const presetLabel = VISA_PROC_PRESETS.find((p) => p.key === visaPresetKeyForCountry(visaCountry))?.label;
   const markWon = () => {
     if (window.confirm('Đánh dấu báo giá này là "Thành công" (chốt deal)? Hệ thống sẽ tự tạo bộ việc vận hành.')) {
       setStatus('won');
@@ -313,17 +324,42 @@ export function DealCockpit() {
                     </Stack>
                   );
                 })}
-                <Button size="small" variant="outlined" onClick={() => void addVisa()}>＋ Thêm nước</Button>
+                <Button size="small" variant="outlined" onClick={openAddVisa}>＋ Thêm nước</Button>
               </Stack>
             ) : (
               <Stack spacing={0.75} alignItems="flex-start">
                 <Typography variant="body2" color="text.secondary">Chưa có bộ hồ sơ visa.</Typography>
-                <Button size="small" variant="outlined" onClick={() => void addVisa()}>Tạo dự án visa</Button>
+                <Button size="small" variant="outlined" onClick={openAddVisa}>Tạo dự án visa</Button>
               </Stack>
             )}
           </CockpitCard>
         )}
       </Box>
+
+      {/* Hộp thoại chọn quốc gia khi thêm một bộ hồ sơ visa */}
+      <Dialog open={visaDlg} onClose={() => setVisaDlg(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Thêm bộ hồ sơ visa</DialogTitle>
+        <DialogContent>
+          <Autocomplete
+            freeSolo
+            options={VISA_COUNTRIES as readonly string[]}
+            value={visaCountry}
+            onInputChange={(_, v) => setVisaCountry(v)}
+            renderInput={(p) => <TextField {...p} autoFocus label="Quốc gia xin visa" placeholder="Chọn hoặc nhập nước…" sx={{ mt: 1 }} />}
+          />
+          {visaCountry.trim() && presetLabel && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Mẫu thủ tục sẽ áp: <strong>{presetLabel}</strong>
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVisaDlg(false)}>Huỷ</Button>
+          <Button variant="contained" disabled={!visaCountry.trim()} onClick={() => void confirmAddVisa()} sx={{ background: LEGACY.headerGradient }}>
+            Tạo bộ hồ sơ
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
