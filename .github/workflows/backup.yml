@@ -6,10 +6,14 @@
 # (14 days), not by this workflow.
 #
 # Secrets (GitHub repo → Settings → Secrets and variables → Actions):
-#   SUPABASE_DB_URL      — direct Postgres connection string for production.
-#   R2_ACCESS_KEY_ID     — R2 S3 API access key id.
+#   SUPABASE_DB_URL      — Postgres URI. Use the IPv4 Session pooler string
+#                          (Settings → Database → Connection string), NOT the
+#                          Direct connection (IPv6-only; unreachable from GH runners).
+#   R2_ACCESS_KEY_ID     — R2 S3 API access key id (token scoped to the bucket).
 #   R2_SECRET_ACCESS_KEY — R2 S3 API secret.
-#   R2_ENDPOINT          — https://<accountid>.r2.cloudflarestorage.com
+#   R2_ENDPOINT          — https://<accountid>.r2.cloudflarestorage.com (no bucket).
+# The Preflight step below fails fast with a clear message if any of these is
+# missing or wrong, before attempting the dump.
 
 name: Supabase Backup
 
@@ -30,6 +34,38 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Preflight — verify secrets + connectivity
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          missing=()
+          [ -n "$SUPABASE_DB_URL" ]      || missing+=("SUPABASE_DB_URL")
+          [ -n "$AWS_ACCESS_KEY_ID" ]    || missing+=("R2_ACCESS_KEY_ID")
+          [ -n "$AWS_SECRET_ACCESS_KEY" ] || missing+=("R2_SECRET_ACCESS_KEY")
+          [ -n "$R2_ENDPOINT" ]          || missing+=("R2_ENDPOINT")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing repo secret(s): ${missing[*]}. Set them in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          # Supabase connectivity (psql is preinstalled on ubuntu-latest; skip if absent).
+          if command -v psql >/dev/null 2>&1; then
+            if ! psql "$SUPABASE_DB_URL" -c 'select 1' >/dev/null 2>&1; then
+              echo "::error::Cannot connect to Supabase. Use the IPv4 Session pooler URI for SUPABASE_DB_URL (not Direct connection, which is IPv6-only on GitHub runners) and verify the DB password."
+              exit 1
+            fi
+          else
+            echo "psql not available — skipping Supabase probe (the dump step will validate)."
+          fi
+          # R2 access + bucket existence + token scope.
+          if ! aws s3 ls "s3://viettours-db-backups/" --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
+            echo "::error::Cannot access R2 bucket 'viettours-db-backups'. Check R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_ENDPOINT, that the bucket exists, and that the API token is scoped (Object Read & Write) to this bucket."
+            exit 1
+          fi
+          echo "Preflight OK — secrets present, Supabase reachable, R2 bucket accessible."
+
       - name: Dump Supabase
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
