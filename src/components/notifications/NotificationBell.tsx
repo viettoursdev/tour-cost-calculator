@@ -11,10 +11,13 @@ import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { useTodoStore } from '@/stores/todoStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
+import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import { sbSendNotification, sbSetApprovalStage, sbSetThreadStatus, sbSubscribeNotifThread } from '@/lib/supabase';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
-import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
+import { TodoModal } from '@/components/todo/TodoModal';
+import { todoFromNotification } from '@/lib/todoPrefill';
+import type { ActivityStatus, NotifLink, Notification, Todo, TourPaymentApprovalData } from '@/types';
 import { NOTIF_PRIORITY } from '@/types';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -46,6 +49,7 @@ export function NotificationBell({ sx }: { sx?: SxProps<Theme> } = {}) {
   const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [soundOn, setSoundOn] = useState(() => localStorage.getItem(SOUND_KEY) !== 'off');
+  const [taskPrefill, setTaskPrefill] = useState<Partial<Todo> | null>(null);
 
   const unreadByType = useMemo(() => {
     const m: Record<string, number> = {};
@@ -134,12 +138,15 @@ export function NotificationBell({ sx }: { sx?: SxProps<Theme> } = {}) {
                   currentUserName={currentUser.name}
                   currentUserRole={currentUser.role}
                   onRead={() => void markRead(currentUser.u, n.id)}
+                  onMakeTask={(notif) => { setTaskPrefill(todoFromNotification(notif)); setAnchor(null); }}
                 />
               ))
             )}
           </Box>
         </Box>
       </Popover>
+
+      {taskPrefill && <TodoModal todo={null} prefill={taskPrefill} onClose={() => setTaskPrefill(null)} />}
     </>
   );
 }
@@ -147,7 +154,7 @@ export function NotificationBell({ sx }: { sx?: SxProps<Theme> } = {}) {
 // ── Inline notification item ──
 
 function NotificationItem({
-  notif, canApprove, username, currentUserName, currentUserRole, onRead,
+  notif, canApprove, username, currentUserName, currentUserRole, onRead, onMakeTask,
 }: {
   notif: Notification;
   canApprove: boolean;
@@ -155,6 +162,7 @@ function NotificationItem({
   currentUserName: string;
   currentUserRole: string;
   onRead: () => void;
+  onMakeTask: (n: Notification) => void;
 }) {
   const updatePayments = useContractStore((s) => s.updatePayments);
   const [acting, setActing] = useState(false);
@@ -551,6 +559,13 @@ function NotificationItem({
           Đã xử lý
         </Typography>
       )}
+      <Button
+        size="small" startIcon={<AddTaskOutlinedIcon sx={{ fontSize: '16px !important' }} />}
+        onClick={(e) => { e.stopPropagation(); onMakeTask(notif); }}
+        sx={{ mt: 0.5, color: '#8e44ad', fontSize: 11.5, fontWeight: 700, textTransform: 'none', minWidth: 0, px: 0.5 }}
+      >
+        Tạo việc
+      </Button>
     </Box>
   );
 }

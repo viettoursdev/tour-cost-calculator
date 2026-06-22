@@ -8,6 +8,7 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
+import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import TableChartIcon from '@mui/icons-material/TableChart';
@@ -55,6 +56,7 @@ import { computeTotals, fmtVND } from './calc';
 import { blockingIssues } from './lineValidation';
 import { InvoiceModal } from './InvoiceModal';
 import { SharePublicQuoteModal } from './SharePublicQuoteModal';
+import { TodoModal } from '@/components/todo/TodoModal';
 import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
@@ -62,7 +64,7 @@ import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/const
 import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES, promptLossReason } from './constants';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
-import type { Contract, OutputCurrency, QuoteStatus } from '@/types';
+import type { Contract, OutputCurrency, QuoteStatus, Todo } from '@/types';
 
 type RateModalState =
   | { kind: 'none' }
@@ -176,6 +178,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const [rateModal, setRateModal] = useState<RateModalState>({ kind: 'none' });
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [todoPrefill, setTodoPrefill] = useState<Partial<Todo> | null>(null);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
@@ -265,6 +268,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   };
   const handleExportPDFImage = () => runPDFImage(printRef.current, 'BaoGiaAnh');
   const handleExportPDFImagePkg = () => runPDFImage(printRefPkg.current, 'BaoGiaAnhTronGoi');
+
+  // Tạo việc (To-Do) gắn sẵn link tới báo giá/thanh toán đang mở.
+  const openTodo = () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    const link = currentQuoteId
+      ? { kind: (view === 'payment' ? 'payment' : 'quote') as 'quote' | 'payment', id: currentQuoteId, label: info.name || 'Báo giá' }
+      : undefined;
+    setTodoPrefill(link ? { link } : {});
+  };
 
   const handleExportContract = () => {
     if (!currentUser || !template || template === 'dmc') return;
@@ -544,6 +556,15 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
             </IconButton>
           </Tooltip>
         )}
+        {/* Tạo việc (To-Do) gắn link báo giá đang mở */}
+        {canExport && (
+          <Tooltip title="Tạo việc cần làm (gắn báo giá này)">
+            <IconButton size="small" onClick={openTodo}
+              sx={{ border: '1px solid rgba(142,68,173,0.4)', borderRadius: 1.5, color: '#8e44ad' }}>
+              <AddTaskOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         {/* Export dropdown */}
         <Tooltip title="Xuất (PDF / Word / Excel…)">
           <IconButton size="small" onClick={(e) => setExportAnchor(e.currentTarget)}
@@ -725,6 +746,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         />
       )}
       {shareOpen && <SharePublicQuoteModal open={shareOpen} onClose={() => setShareOpen(false)} />}
+      {todoPrefill && <TodoModal todo={null} prefill={todoPrefill} onClose={() => setTodoPrefill(null)} />}
 
       {/* Rate Card management modals (opened from the Rate Card dropdown) */}
       <HotelModal

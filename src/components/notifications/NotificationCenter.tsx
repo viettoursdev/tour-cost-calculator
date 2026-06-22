@@ -9,6 +9,7 @@ import SendIcon from '@mui/icons-material/Send';
 import AddCommentIcon from '@mui/icons-material/AddComment';
 import LinkIcon from '@mui/icons-material/Link';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -21,7 +22,9 @@ import {
   sbSubscribeNotifThread, sbAddThreadComment, sbEnsureNotifThread, sbSendNotificationMany,
 } from '@/lib/supabase';
 import { LEGACY } from '@/theme';
-import type { FileAttachment, NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
+import { TodoModal } from '@/components/todo/TodoModal';
+import { todoFromNotification } from '@/lib/todoPrefill';
+import type { FileAttachment, NotifComment, NotifLink, NotifThread, Notification, NotificationType, Todo, User } from '@/types';
 import { NOTIF_TEMPLATES } from './notifCompose';
 import { REMINDER_OPTIONS } from '@/lib/notifReminders';
 import { NOTIF_PRIORITY } from '@/types';
@@ -91,6 +94,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
   const [composing, setComposing] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
+  const [taskPrefill, setTaskPrefill] = useState<Partial<Todo> | null>(null);
 
   const mineCount = useMemo(() => notifications.filter(needsMyAction).length, [notifications]);
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
@@ -246,7 +250,8 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
         {/* Detail */}
         <Box sx={{ flex: 1, minWidth: 0, overflowY: 'auto', p: 3 }}>
           {selected ? (
-            <DetailPane notif={selected} user={currentUser} onOpenLink={openLink} />
+            <DetailPane notif={selected} user={currentUser} onOpenLink={openLink}
+              onMakeTask={(n) => setTaskPrefill(todoFromNotification(n))} />
           ) : (
             <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.disabled' }}>
               <Typography>Chọn một thông báo để xem chi tiết</Typography>
@@ -256,13 +261,14 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
       </Box>
 
       {composing && <ComposeDialog onClose={() => setComposing(false)} />}
+      {taskPrefill && <TodoModal todo={null} prefill={taskPrefill} onClose={() => setTaskPrefill(null)} />}
     </Dialog>
   );
 }
 
 // ── Detail + shared comment thread ──
 
-function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: User; onOpenLink: (l: NotifLink) => void }) {
+function DetailPane({ notif, user, onOpenLink, onMakeTask }: { notif: Notification; user: User; onOpenLink: (l: NotifLink) => void; onMakeTask: (n: Notification) => void }) {
   const [thread, setThread] = useState<NotifThread | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -333,11 +339,16 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
         </Stack>
       )}
 
-      {notif.link && (
-        <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={() => onOpenLink(notif.link!)} sx={{ mb: 3, color: LEGACY.teal, borderColor: 'rgba(20,150,140,0.4)' }}>
-          {LINK_LABEL[notif.link.kind] ?? 'Mở'}: {notif.link.label}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
+        {notif.link && (
+          <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={() => onOpenLink(notif.link!)} sx={{ color: LEGACY.teal, borderColor: 'rgba(20,150,140,0.4)' }}>
+            {LINK_LABEL[notif.link.kind] ?? 'Mở'}: {notif.link.label}
+          </Button>
+        )}
+        <Button variant="outlined" startIcon={<AddTaskOutlinedIcon />} onClick={() => onMakeTask(notif)} sx={{ color: '#8e44ad', borderColor: 'rgba(142,68,173,0.4)' }}>
+          Tạo việc từ thông báo
         </Button>
-      )}
+      </Stack>
 
       <Divider sx={{ my: 2 }} />
 

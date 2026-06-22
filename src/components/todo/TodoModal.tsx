@@ -5,11 +5,12 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import LinkIcon from '@mui/icons-material/Link';
 import { useAuthStore } from '@/stores/authStore';
 import { userLabel } from '@/auth/ROLES';
 import { useTodoStore } from '@/stores/todoStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
-import type { CloudQuoteEntry, Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
+import type { CloudQuoteEntry, NotifLink, Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toLocal = (iso?: string) => {
@@ -28,27 +29,34 @@ const STATUS_OPTS: { v: TodoStatus; label: string }[] = [
   { v: 'todo', label: 'Chưa làm' }, { v: 'doing', label: 'Đang làm' }, { v: 'done', label: 'Xong' },
 ];
 
-export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () => void }) {
+export function TodoModal({ todo, prefill, onClose }: { todo: Todo | null; prefill?: Partial<Todo>; onClose: () => void }) {
   const me = useAuthStore((s) => s.currentUser);
   const users = useAuthStore((s) => s.users);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const add = useTodoStore((s) => s.add);
   const update = useTodoStore((s) => s.update);
 
-  const [title, setTitle] = useState(todo?.title ?? '');
-  const [note, setNote] = useState(todo?.note ?? '');
-  const [status, setStatus] = useState<TodoStatus>(todo?.status ?? 'todo');
-  const [priority, setPriority] = useState<Todo['priority']>(todo?.priority ?? 'normal');
-  const [assignees, setAssignees] = useState<User[]>(() => users.filter((u) => (todo?.assignees ?? []).includes(u.u)));
-  const [due, setDue] = useState(toLocal(todo?.dueDate));
-  const [lead, setLead] = useState<number[]>(todo?.remindLead ?? [60]);
-  const [remindAt, setRemindAt] = useState<string[]>(todo?.remindAt ?? []);
-  const [recurring, setRecurring] = useState<TodoRecurring>(todo?.recurring ?? 'none');
-  const [checklist, setChecklist] = useState<TodoChecklistItem[]>(todo?.checklist ?? []);
+  // Giá trị khởi tạo: SỬA việc (todo) hoặc TẠO MỚI với giá trị điền sẵn (prefill).
+  const seed = todo ?? prefill;
+
+  const [title, setTitle] = useState(seed?.title ?? '');
+  const [note, setNote] = useState(seed?.note ?? '');
+  const [status, setStatus] = useState<TodoStatus>(seed?.status ?? 'todo');
+  const [priority, setPriority] = useState<Todo['priority']>(seed?.priority ?? 'normal');
+  const [assignees, setAssignees] = useState<User[]>(() => users.filter((u) => (seed?.assignees ?? []).includes(u.u)));
+  const [due, setDue] = useState(toLocal(seed?.dueDate));
+  const [lead, setLead] = useState<number[]>(seed?.remindLead ?? [60]);
+  const [remindAt, setRemindAt] = useState<string[]>(seed?.remindAt ?? []);
+  const [recurring, setRecurring] = useState<TodoRecurring>(seed?.recurring ?? 'none');
+  const [checklist, setChecklist] = useState<TodoChecklistItem[]>(seed?.checklist ?? []);
   const [linkQuote, setLinkQuote] = useState<CloudQuoteEntry | null>(
-    () => (todo?.link?.kind === 'quote' || todo?.link?.kind === 'payment' ? quotes.find((q) => q.cloudId === todo.link!.id) ?? null : null),
+    () => (seed?.link?.kind === 'quote' || seed?.link?.kind === 'payment' ? quotes.find((q) => q.cloudId === seed.link!.id) ?? null : null),
   );
-  const [linkKind, setLinkKind] = useState<'quote' | 'payment'>(todo?.link?.kind === 'payment' ? 'payment' : 'quote');
+  const [linkKind, setLinkKind] = useState<'quote' | 'payment'>(seed?.link?.kind === 'payment' ? 'payment' : 'quote');
+  // Link KHÁC (hợp đồng/chương trình/thực đơn…) — modal không sửa được, chỉ giữ & hiển thị chỉ-đọc.
+  const [otherLink, setOtherLink] = useState<NotifLink | undefined>(
+    () => (seed?.link && seed.link.kind !== 'quote' && seed.link.kind !== 'payment' ? seed.link : undefined),
+  );
   const [busy, setBusy] = useState(false);
 
   const toggleLead = (m: number) => setLead((p) => (p.includes(m) ? p.filter((x) => x !== m) : [...p, m]));
@@ -71,7 +79,7 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
         remindAt: remindAt.map(fromLocal).filter(Boolean) as string[],
         recurring,
         checklist: checklist.filter((c) => c.text.trim()).map((c) => ({ ...c, text: c.text.trim() })),
-        link: linkQuote ? { kind: linkKind, id: linkQuote.cloudId, label: linkQuote.name } : undefined,
+        link: linkQuote ? { kind: linkKind, id: linkQuote.cloudId, label: linkQuote.name } : otherLink,
       };
       if (todo) await update(todo.id, payload);
       else await add(payload);
@@ -148,6 +156,12 @@ export function TodoModal({ todo, onClose }: { todo: Todo | null; onClose: () =>
           </TextField>
 
           {/* Liên kết tới báo giá (mở 1 chạm từ việc) */}
+          {otherLink && !linkQuote && (
+            <Chip
+              icon={<LinkIcon />} label={`Liên kết: ${otherLink.label}`} variant="outlined" color="primary"
+              onDelete={() => setOtherLink(undefined)} sx={{ alignSelf: 'flex-start', maxWidth: '100%' }}
+            />
+          )}
           <Stack direction="row" spacing={1.5}>
             <Autocomplete
               sx={{ flex: 1 }} options={quotes} value={linkQuote} onChange={(_, v) => setLinkQuote(v)}
