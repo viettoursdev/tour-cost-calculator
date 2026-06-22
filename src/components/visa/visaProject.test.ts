@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { countsFromApplicants, deadlineMeta } from './constants';
+import { countsFromApplicants, deadlineMeta, visaPresetKeyForCountry, VISA_PROC_PRESETS } from './constants';
 import type { VisaApplicant } from '@/types';
 
 const a = (result: VisaApplicant['result']): VisaApplicant => ({
@@ -17,6 +17,32 @@ describe('countsFromApplicants', () => {
     expect(countsFromApplicants([])).toEqual({
       applyCount: 0, passedCount: 0, failedCount: 0, haveVisaCount: 0, pendingCount: 0,
     });
+  });
+});
+
+describe('visaPresetKeyForCountry', () => {
+  it('maps các nước về đúng mẫu (không phụ thuộc dấu/hoa thường)', () => {
+    expect(visaPresetKeyForCountry('Hàn Quốc')).toBe('korea');
+    expect(visaPresetKeyForCountry('han quoc')).toBe('korea');
+    expect(visaPresetKeyForCountry('Nhật Bản')).toBe('japan');
+    expect(visaPresetKeyForCountry('Pháp')).toBe('schengen');
+    expect(visaPresetKeyForCountry('Đức')).toBe('schengen');
+    expect(visaPresetKeyForCountry('Mỹ')).toBe('usa');
+    expect(visaPresetKeyForCountry('Đài Loan')).toBe('taiwan');
+    expect(visaPresetKeyForCountry('Trung Quốc')).toBe('china');
+    expect(visaPresetKeyForCountry('Úc')).toBe('anz');
+  });
+  it('rỗng / không nhận diện → default', () => {
+    expect(visaPresetKeyForCountry('')).toBe('default');
+    expect(visaPresetKeyForCountry(null)).toBe('default');
+    expect(visaPresetKeyForCountry('Sao Hỏa')).toBe('default');
+  });
+  it('mọi khoá mẫu đều tồn tại trong VISA_PROC_PRESETS', () => {
+    const keys = new Set(VISA_PROC_PRESETS.map((p) => p.key));
+    for (const c of ['Hàn Quốc', 'Pháp', 'Mỹ', 'Đài Loan', 'Trung Quốc', 'Úc', 'Anh']) {
+      expect(keys.has(visaPresetKeyForCountry(c))).toBe(true);
+    }
+    expect(VISA_PROC_PRESETS.every((p) => p.steps.length > 0)).toBe(true);
   });
 });
 

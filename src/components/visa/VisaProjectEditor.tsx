@@ -25,7 +25,7 @@ import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
 import {
   APPLICANT_DOC_META, APPLICANT_RESULT_META, countsFromApplicants,
   deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaApplicant, newVisaMilestone,
-  VISA_COUNTRIES, VISA_STATUS_META, VISA_STATUS_ORDER,
+  VISA_COUNTRIES, VISA_PROC_PRESETS, visaPresetKeyForCountry, VISA_STATUS_META, VISA_STATUS_ORDER,
 } from './constants';
 import type {
   User, VisaApplicant, VisaMilestone, VisaProcIndexEntry, VisaProjectDoc, VisaProjectStatus,
@@ -119,6 +119,14 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
     if (window.confirm('Khôi phục danh sách mốc mặc định? Các mốc hiện tại sẽ bị thay thế.')) {
       setMilestones(DEFAULT_VISA_MILESTONES.map((l) => newVisaMilestone(l)));
     }
+  };
+  // Mẫu quy trình thủ tục theo nước — gợi ý theo quốc gia dự án, đổi tay được.
+  const [presetKey, setPresetKey] = useState(() => visaPresetKeyForCountry(doc.country));
+  const applyPreset = () => {
+    const preset = VISA_PROC_PRESETS.find((p) => p.key === presetKey);
+    if (!preset) return;
+    if (doc.milestones.length && !window.confirm(`Áp dụng mẫu quy trình "${preset.label}"? Danh sách mốc hiện tại sẽ bị thay thế.`)) return;
+    setMilestones(preset.steps.map((l) => newVisaMilestone(l)));
   };
 
   const handleSave = async () => {
@@ -383,9 +391,18 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
                 </Stack>
               );
             })}
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
               <Button size="small" startIcon={<AddIcon />} onClick={addMilestone}>Thêm mốc</Button>
               <Button size="small" color="inherit" startIcon={<RestartAltIcon />} onClick={resetMilestones}>Mốc mặc định</Button>
+              <Box sx={{ flex: 1 }} />
+              <TextField
+                select size="small" label="Mẫu quy trình theo nước"
+                value={presetKey} onChange={(e) => setPresetKey(e.target.value)}
+                sx={{ minWidth: 200 }}
+              >
+                {VISA_PROC_PRESETS.map((p) => <MenuItem key={p.key} value={p.key}>{p.label}</MenuItem>)}
+              </TextField>
+              <Button size="small" variant="outlined" onClick={applyPreset}>Áp dụng mẫu</Button>
             </Stack>
           </Stack>
         </Stack>

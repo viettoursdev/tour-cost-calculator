@@ -1,4 +1,5 @@
 import { daysUntil } from '@/lib/dateUtils';
+import { normalizeVN } from '@/lib/search';
 import type {
   ApplicantDoc, User, VisaApplicant, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField,
   VisaProcKind, VisaProcRow, VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
@@ -50,6 +51,96 @@ export const DEFAULT_VISA_MILESTONES: string[] = [
   'Dự kiến có visa',
   'Khởi hành',
 ];
+
+/** Mẫu quy trình thủ tục visa theo khu vực/nước. Mỗi mẫu là danh sách BƯỚC chuẩn
+ *  phản ánh đúng thủ tục từng loại visa; áp vào dự án sẽ thay danh sách mốc. */
+export const VISA_PROC_PRESETS: { key: string; label: string; steps: string[] }[] = [
+  { key: 'default', label: 'Chuẩn (mặc định)', steps: DEFAULT_VISA_MILESTONES },
+  {
+    key: 'schengen', label: 'Schengen (Châu Âu)',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Tư vấn & hướng dẫn thủ tục',
+      'Thu hồ sơ tài chính & việc làm', 'Đặt lịch hẹn VFS / TLScontact',
+      'Deadline nộp hồ sơ đoàn', 'Nộp hồ sơ & lấy sinh trắc học',
+      'Bổ sung hồ sơ (nếu LSQ yêu cầu)', 'Dự kiến có kết quả', 'Nhận hộ chiếu / visa', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'korea', label: 'Hàn Quốc',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Hướng dẫn & thu hồ sơ',
+      'Deadline hồ sơ chứng minh tài chính', 'Deadline nộp hồ sơ đoàn',
+      'Nộp hồ sơ KVAC', 'Dự kiến có visa', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'japan', label: 'Nhật Bản',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Thu hồ sơ & giấy tờ bảo lãnh',
+      'Chuẩn bị hồ sơ đại diện đoàn', 'Deadline nộp hồ sơ',
+      'Nộp ĐSQ/LSQ qua đại lý uỷ thác', 'Dự kiến có visa', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'usa', label: 'Mỹ (phỏng vấn)',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Khai DS-160',
+      'Đóng phí & đặt lịch phỏng vấn', 'Chuẩn bị hồ sơ phỏng vấn',
+      'Phỏng vấn tại LSQ', 'Nhận kết quả & hộ chiếu', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'taiwan', label: 'Đài Loan',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Thu hồ sơ',
+      'Xin visa Quan Hồng / eVisa', 'Dự kiến có visa', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'china', label: 'Trung Quốc',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Thu hồ sơ & ảnh',
+      'Nộp Trung tâm visa CVASC', 'Lấy sinh trắc học', 'Dự kiến có visa', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'uk', label: 'Anh (UK)',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Tư vấn & thu hồ sơ',
+      'Khai đơn online & đặt lịch VFS', 'Deadline nộp hồ sơ',
+      'Nộp hồ sơ & lấy sinh trắc học', 'Dự kiến có kết quả', 'Nhận hộ chiếu / visa', 'Khởi hành',
+    ],
+  },
+  {
+    key: 'anz', label: 'Úc / New Zealand',
+    steps: [
+      'Xác nhận tour', 'Nhận danh sách đoàn', 'Thu hồ sơ',
+      'Nộp hồ sơ online (ImmiAccount)', 'Khám sức khoẻ (nếu yêu cầu)',
+      'Lấy sinh trắc học', 'Dự kiến có visa', 'Khởi hành',
+    ],
+  },
+];
+
+const VISA_PRESET_KEYWORDS: Record<string, string[]> = {
+  schengen: ['schengen', 'chau au', 'europe', 'phap', 'france', 'duc', 'german', 'italy', 'tay ban nha', 'spain', 'ha lan', 'netherland', 'bo dao nha', 'portugal', 'thuy si', 'switzerland', 'austria', 'belgium', 'hy lap', 'greece', 'czech', 'sec'],
+  korea: ['han quoc', 'korea'],
+  japan: ['nhat', 'japan'],
+  usa: ['my', 'hoa ky', 'usa', 'america', 'united states'],
+  taiwan: ['dai loan', 'taiwan'],
+  china: ['trung quoc', 'china'],
+  uk: ['anh', 'uk', 'united kingdom', 'britain'],
+  anz: ['uc', 'australia', 'new zealand', 'niu di lan'],
+};
+
+/** Gợi ý khoá mẫu quy trình theo tên quốc gia (heuristic; user vẫn đổi tay được). */
+export function visaPresetKeyForCountry(country: string | undefined | null): string {
+  const c = normalizeVN(country);
+  if (!c) return 'default';
+  for (const [key, kws] of Object.entries(VISA_PRESET_KEYWORDS)) {
+    if (kws.some((k) => c.includes(k))) return key;
+  }
+  return 'default';
+}
 
 /** Nhãn + màu đếm ngược/quá hạn cho một mốc deadline. */
 export function deadlineMeta(date: string | null, done: boolean): { text: string; color: string } {
