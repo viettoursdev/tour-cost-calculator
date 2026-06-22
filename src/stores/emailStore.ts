@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { fbSubscribeEmailLinks, fbPushEmailLinks } from '@/lib/dataBackend';
+import { sbSubscribeEmailLinks, sbPushEmailLinks } from '@/lib/supabase';
 import { emailProvider } from '@/lib/email/provider';
 import { useAuthStore } from './authStore';
 import type { EmailAccount, EmailLink, EmailLinkTarget, EmailMessage } from '@/types';
@@ -27,7 +27,7 @@ export const useEmailStore = create<State>()((set, get) => ({
   links: [],
   loading: true,
 
-  init: () => fbSubscribeEmailLinks((links) => set({ links, loading: false })),
+  init: () => sbSubscribeEmailLinks((links) => set({ links, loading: false })),
 
   connect: async () => {
     set({ connecting: true });
@@ -60,7 +60,7 @@ export const useEmailStore = create<State>()((set, get) => ({
     };
     const next = [link, ...links];
     set({ links: next });
-    try { await fbPushEmailLinks(next, { name: u.name, role: u.role }); }
+    try { await sbPushEmailLinks(next, { name: u.name, role: u.role }); }
     catch (e) { window.alert('❌ Lỗi gắn email: ' + (e as Error).message); set({ links }); }
   },
 
@@ -70,7 +70,7 @@ export const useEmailStore = create<State>()((set, get) => ({
     const prev = get().links;
     const next = prev.filter((l) => l.id !== linkId);
     set({ links: next });
-    try { await fbPushEmailLinks(next, { name: u.name, role: u.role }); }
+    try { await sbPushEmailLinks(next, { name: u.name, role: u.role }); }
     catch (e) { window.alert('❌ Lỗi gỡ email: ' + (e as Error).message); set({ links: prev }); }
   },
 }));

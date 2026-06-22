@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -282,6 +282,36 @@ export async function sbPushGuideSchedule(
     updated_by: `${pushedBy.name} (${pushedBy.role})`,
   }, { onConflict: 'one_row' });
   if (error) throw new Error('sbPushGuideSchedule: ' + error.message);
+}
+
+// ── Liên kết email Outlook (single-row, dùng chung) ──
+export function sbSubscribeEmailLinks(
+  cb: (list: EmailLink[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'email_links', async (cl) => {
+    const { data, error } = await cl
+      .from('email_links')
+      .select('links')
+      .eq('one_row', true)
+      .maybeSingle();
+    if (error) throw new Error('sbSubscribeEmailLinks: ' + error.message);
+    return (data?.links as EmailLink[]) ?? [];
+  }, cb);
+}
+
+export async function sbPushEmailLinks(
+  list: EmailLink[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('email_links').upsert({
+    one_row: true,
+    links: list,
+    updated_at: new Date().toISOString(),
+    updated_by: `${pushedBy.name} (${pushedBy.role})`,
+  }, { onConflict: 'one_row' });
+  if (error) throw new Error('sbPushEmailLinks: ' + error.message);
 }
 
 // ── POIs ──────────────────────────────────────────────────────────────────────
