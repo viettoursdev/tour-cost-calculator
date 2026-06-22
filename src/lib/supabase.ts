@@ -1733,7 +1733,7 @@ export async function sbDeleteItinerary(
 
 // ─── Restaurants + Menus ─────────────────────────────────────────────────────
 
-import type { Restaurant, RestaurantMenu, Menu, MenuDay, MenuIndexEntry } from '@/types/menu';
+import type { Restaurant, RestaurantMenu, Menu, MenuDay, MenuIndexEntry, RestaurantTourLink } from '@/types/menu';
 
 // ── row assemblers ──
 
@@ -2033,6 +2033,49 @@ export async function sbDeleteMenu(
 ): Promise<void> {
   const { error } = await client.from('menus').delete().eq('legacy_id', id);
   if (error) throw new Error('sbDeleteMenu: ' + error.message);
+}
+
+/**
+ * Bản đồ ngược restaurantId → các tour (menu) đang dùng nhà hàng đó.
+ * Hai truy vấn: `menus` (tên/điểm đến) + `menu_days` (meals JSONB chứa restaurantId).
+ */
+export async function sbGetRestaurantTourLinks(
+  client: SupabaseClient = sb,
+): Promise<Record<string, RestaurantTourLink[]>> {
+  const { data: menus, error: mErr } = await client
+    .from('menus')
+    .select('id, legacy_id, title, destination, linked_quote_name');
+  if (mErr) throw new Error('sbGetRestaurantTourLinks menus: ' + mErr.message);
+  const { data: days, error: dErr } = await client
+    .from('menu_days')
+    .select('menu_id, meals');
+  if (dErr) throw new Error('sbGetRestaurantTourLinks days: ' + dErr.message);
+
+  const menuByUuid = new Map<string, RestaurantTourLink>();
+  for (const r of menus ?? []) {
+    menuByUuid.set(r.id as string, {
+      menuId: (r.legacy_id as string) ?? (r.id as string),
+      title: (r.title as string) || (r.linked_quote_name as string) || '(menu chưa đặt tên)',
+      destination: (r.destination as string) ?? '',
+    });
+  }
+
+  const out: Record<string, RestaurantTourLink[]> = {};
+  const seen = new Set<string>(); // restaurantId|menuUuid — gộp nhiều bữa cùng 1 tour
+  for (const d of days ?? []) {
+    const menu = menuByUuid.get(d.menu_id as string);
+    if (!menu) continue;
+    const meals = (d.meals as { restaurantId?: string }[] | null) ?? [];
+    for (const meal of meals) {
+      const rid = meal?.restaurantId;
+      if (!rid) continue;
+      const key = rid + '|' + (d.menu_id as string);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      (out[rid] ??= []).push(menu);
+    }
+  }
+  return out;
 }
 
 // ── Notifications + Threads ───────────────────────────────────────────────────

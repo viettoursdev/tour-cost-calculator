@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import {
-  sbDeleteMenu, sbGetMenu, sbSaveMenu, sbSubscribeMenus,
+  sbDeleteMenu, sbGetMenu, sbGetRestaurantTourLinks, sbSaveMenu, sbSubscribeMenus,
 } from '@/lib/supabase';
-import type { Menu, MenuIndexEntry } from '@/types';
+import type { Menu, MenuIndexEntry, RestaurantTourLink } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
@@ -12,6 +12,8 @@ type State = {
   save: (m: Menu, savedBy: string) => Promise<void>;
   load: (id: string) => Promise<Menu | null>;
   delete: (id: string) => Promise<void>;
+  /** Bản đồ restaurantId → các tour (menu) đang dùng nhà hàng đó. */
+  restaurantLinks: () => Promise<Record<string, RestaurantTourLink[]>>;
 };
 
 export const useMenuStore = create<State>()((set) => ({
@@ -34,4 +36,6 @@ export const useMenuStore = create<State>()((set) => ({
   delete: async (id) => {
     await sbDeleteMenu(id);
   },
+
+  restaurantLinks: () => sbGetRestaurantTourLinks(),
 }));

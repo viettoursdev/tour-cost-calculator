@@ -1,13 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Autocomplete, Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Autocomplete, Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
+import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
 import { NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from '@/components/ncc/constants';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useRestaurantStore } from '@/stores/restaurantStore';
+import { useMenuStore } from '@/stores/menuStore';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -18,7 +20,7 @@ import type { ParsedRestaurant } from '@/lib/restaurantFileParse';
 import { AiButton } from '@/components/common/AiButton';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import type { ChangeEvent } from 'react';
-import type { Restaurant } from '@/types';
+import type { Restaurant, RestaurantTourLink } from '@/types';
 
 type Props = { onBack: () => void };
 
@@ -36,6 +38,15 @@ function normalizeUrl(u: string | undefined): string {
 export function RestaurantLibrary({ onBack }: Props) {
   const list = useRestaurantStore((s) => s.list);
   const user = useAuthStore((s) => s.currentUser);
+  // Bản đồ nhà hàng → các tour (menu) đang dùng. Nạp 1 lần khi mở thư viện.
+  const [tourLinks, setTourLinks] = useState<Record<string, RestaurantTourLink[]>>({});
+  useEffect(() => {
+    let alive = true;
+    void useMenuStore.getState().restaurantLinks()
+      .then((m) => { if (alive) setTourLinks(m); })
+      .catch(() => { /* không chặn UI nếu lỗi tải liên kết */ });
+    return () => { alive = false; };
+  }, []);
   const [search, setSearch] = useState('');
   const [filterCont, setFilterCont] = useState('');
   const [filterCountry, setFilterCountry] = useState('');
@@ -227,6 +238,21 @@ export function RestaurantLibrary({ onBack }: Props) {
                 onChange={(e) => updR(r.id, { address: e.target.value })}
                 placeholder="📍 Địa chỉ"
                 sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
+
+              {/* Tour (menu) đang dùng nhà hàng này */}
+              {(tourLinks[r.id]?.length ?? 0) > 0 && (
+                <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                  <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+                    <RestaurantMenuOutlinedIcon sx={{ fontSize: 15 }} /> Đang dùng trong {tourLinks[r.id].length} tour:
+                  </Typography>
+                  {tourLinks[r.id].map((t) => (
+                    <Tooltip key={t.menuId} title={t.destination ? `Điểm đến: ${t.destination}` : ''} disableHoverListener={!t.destination}>
+                      <Chip size="small" label={t.title}
+                        sx={{ height: 20, fontSize: 11, fontWeight: 600, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a', maxWidth: 240 }} />
+                    </Tooltip>
+                  ))}
+                </Stack>
+              )}
 
               <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
                 <Typography variant="caption" fontWeight={700} color="text.secondary">

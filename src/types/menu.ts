@@ -74,6 +74,13 @@ export interface Menu {
   updatedBy?: string;
 }
 
+/** Một tour (menu) đang dùng một nhà hàng — để hiện "nhà hàng này gắn với tour nào". */
+export interface RestaurantTourLink {
+  menuId: string;       // Menu.id (legacy_id)
+  title: string;        // tên menu/tour
+  destination: string;
+}
+
 export interface MenuIndexEntry {
   id: string;
   code: string;
