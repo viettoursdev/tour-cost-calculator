@@ -66,28 +66,36 @@ export function parsedToRestaurant(p: ParsedRestaurant): Restaurant {
   };
 }
 
-const SYSTEM = [
+const SYSTEM_MULTI = [
   'Bạn trích xuất thông tin NHÀ HÀNG và THỰC ĐƠN từ file/ảnh (menu, brochure, bảng giá set ăn).',
+  'Một file có thể chứa NHIỀU nhà hàng (nhiều sheet/khối/bảng) — TÁCH RIÊNG từng nhà hàng thành 1 phần tử.',
   'CHỈ trả về JSON object hợp lệ, tiếng Việt, KHÔNG kèm chữ nào khác, theo schema:',
-  '{"name":"tên nhà hàng","address":"địa chỉ","city":"thành phố","country":"quốc gia","continent":"châu lục","contact":"sđt/email","note":"đặc sản/ghi chú","rating":điểm 1-5 nếu có,"menus":[{"name":"tên set/thực đơn","dishes":"các món, mỗi món 1 dòng","price":giá(số),"cur":"VND|USD","review":"ghi chú"}]}',
-  'Bỏ trống "" (hoặc menus rỗng) nếu không suy được. KHÔNG bịa số.',
+  '{"restaurants":[{"name":"tên nhà hàng","address":"địa chỉ","city":"thành phố","country":"quốc gia","continent":"châu lục","contact":"sđt/email","note":"đặc sản/ghi chú","rating":điểm 1-5 nếu có,"menus":[{"name":"tên set/thực đơn","dishes":"các món, mỗi món 1 dòng","price":giá(số),"cur":"VND|USD","review":"ghi chú"}]}]}',
+  'Nếu chỉ có 1 nhà hàng thì mảng có đúng 1 phần tử. Bỏ trống "" (hoặc menus rỗng) nếu không suy được. KHÔNG bịa số.',
 ].join('\n');
 
-export async function parseRestaurantAI(input: { text?: string; imageB64?: string }): Promise<ParsedRestaurant> {
+/** Phân tích NHIỀU nhà hàng trong một file/ảnh (user duyệt từng nhà hàng). */
+export async function parseRestaurantsAI(input: { text?: string; imageB64?: string }): Promise<ParsedRestaurant[]> {
   const content: ContentBlock[] = [];
   if (input.imageB64) content.push({ type: 'image', source: { type: 'base64', media_type: mediaTypeFromB64(input.imageB64), data: input.imageB64 } } as unknown as ContentBlock);
-  content.push({ type: 'text', text: input.text?.trim() || 'Phân tích thực đơn nhà hàng trong ảnh.' });
-  const res = await callAIWorker('/chat', { system: SYSTEM, messages: [{ role: 'user', content }] });
+  content.push({ type: 'text', text: input.text?.trim() || 'Phân tích các thực đơn nhà hàng trong ảnh.' });
+  const res = await callAIWorker('/chat', { system: SYSTEM_MULTI, messages: [{ role: 'user', content }] });
   if (res.error) throw new Error(res.error);
   const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
   const obj = extractObject(raw);
   if (!obj) throw new Error('AI trả về dữ liệu không đọc được. Hãy thử lại hoặc dùng file rõ hơn.');
-  return mapRestaurant(obj);
+  const arr = Array.isArray(obj.restaurants) ? obj.restaurants : [obj];
+  return arr
+    .map((o) => mapRestaurant((o ?? {}) as Record<string, unknown>))
+    .filter((p) => p.name || p.menus.length > 0);
 }
 
-/** Tiện ích: đọc file → AI → Restaurant sẵn sàng thêm. */
-export async function analyzeRestaurantFile(file: File, onProgress?: (m: string) => void): Promise<{ parsed: ParsedRestaurant; restaurant: Restaurant }> {
+/** Đọc file → AI → DANH SÁCH nhà hàng (mỗi cái kèm Restaurant sẵn sàng thêm). */
+export async function analyzeRestaurantFileMulti(
+  file: File,
+  onProgress?: (m: string) => void,
+): Promise<{ parsed: ParsedRestaurant; restaurant: Restaurant }[]> {
   const c = await extractFileContent(file, onProgress);
-  const parsed = await parseRestaurantAI({ text: c.text, imageB64: c.imageB64 });
-  return { parsed, restaurant: parsedToRestaurant(parsed) };
+  const list = await parseRestaurantsAI({ text: c.text, imageB64: c.imageB64 });
+  return list.map((parsed) => ({ parsed, restaurant: parsedToRestaurant(parsed) }));
 }
