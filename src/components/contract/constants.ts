@@ -1,4 +1,5 @@
-import type { CloudQuoteEntry, Contract, ContractCancel, ContractPayment } from '@/types';
+import type { CloudQuoteEntry, Contract, ContractCancel, ContractPayment, Customer } from '@/types';
+import { customerToPartyB } from '@/components/quote/contractFromDraft';
 
 export const CONTRACT_STATUS = {
   draft:     { label: 'Nháp',            color: '#95a5a6', bg: 'rgba(149,165,166,0.12)', icon: '📝' },
@@ -56,19 +57,24 @@ export function todayDMY(): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-/** Build an initial contract from a picked CloudQuoteEntry. */
-export function contractFromQuote(quote: CloudQuoteEntry, createdBy: string): Contract {
+/** Build an initial contract from a picked CloudQuoteEntry. Thiết lập liên kết
+ *  2 chiều báo giá ↔ hợp đồng; điền Bên B từ khách hàng nếu truyền vào. */
+export function contractFromQuote(quote: CloudQuoteEntry, createdBy: string, customer?: Customer | null): Contract {
   const base = emptyContract(createdBy);
   return {
     ...base,
     tourName: quote.name,
-    tourDest: '',   // not stored in CloudQuoteEntry top-level; user fills in
+    tourDest: quote.dest ?? '',
     contractPax: quote.pax,
     pricePerPax: quote.pax > 0 ? Math.round(quote.totalCost / quote.pax / 1000) * 1000 : 0,
     payments: DEFAULT_PAYMENTS.map(p => ({
       ...p,
       amount: Math.round(((quote.totalCost * p.percent!) / 100)),
     })),
+    ...(customer ? { partyB: customerToPartyB(customer) } : {}),
+    // ── Sợi dây CRM: liên kết 2 chiều ──
+    linkedQuoteId: quote.cloudId,
+    linkedQuoteName: quote.name,
   };
 }
 

@@ -24,6 +24,9 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import type { QuoteViewKey } from '@/stores/quoteStore';
 // Trình xuất (PDF/Excel) nạp ĐỘNG khi bấm — tránh kéo thư viện nặng vào bundle khởi động.
 import { emptyContract } from '@/components/contract/constants';
+import { buildContractFromQuote } from './contractFromDraft';
+import { canMakeContract } from './dealStage';
+import { useCustomerStore } from '@/stores/customerStore';
 import { QuotePrintable } from './QuotePrintable';
 import { FxRatesPanel } from './FxRatesPanel';
 import { QuoteLinksModal } from './QuoteLinksModal';
@@ -280,27 +283,29 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
 
   const handleExportContract = () => {
     if (!currentUser || !template || template === 'dmc') return;
-    const pricePerPax = totals.roundedPPax;
-    const c = emptyContract(currentUser.name);
-    setContractModal({
-      ...c,
-      tourName: info.name || c.tourName,
-      tourDest: info.dest || c.tourDest,
-      tourDays: info.days,
-      tourNights: info.nights,
-      contractPax: pax,
-      pricePerPax,
-      ...(draft.inclusions && draft.inclusions.length ? { includes: draft.inclusions.filter((s) => s.trim()) } : {}),
-      ...(draft.exclusions && draft.exclusions.length ? { excludes: draft.exclusions.filter((s) => s.trim()) } : {}),
-      ...(draft.payments && draft.payments.length
-        ? {
-            payments: draft.payments.map((p) => ({
-              id: p.id, label: p.label, amount: p.amount, dueDate: '',
-              note: p.note, status: 'pending' as const,
-            })),
-          }
-        : {}),
-    });
+    // Cổng chặn: báo giá nên đã CHỐT (won) trước khi lập hợp đồng. Cảnh báo mềm —
+    // người dùng vẫn được phép tiếp tục nếu xác nhận.
+    const gate = canMakeContract({ status });
+    if (!gate.ok && !window.confirm(`⚠️ ${gate.reason}\n\nVẫn lập hợp đồng ngay bây giờ?`)) return;
+    const customer = draft.customerId
+      ? useCustomerStore.getState().customers.find((c) => c.id === draft.customerId) ?? null
+      : null;
+    setContractModal(
+      buildContractFromQuote(emptyContract(currentUser.name), {
+        quoteId: currentQuoteId,
+        name: info.name,
+        dest: info.dest,
+        days: info.days,
+        nights: info.nights,
+        pax,
+        pricePerPax: totals.roundedPPax,
+        startDateISO: info.startDate,
+        inclusions: draft.inclusions,
+        exclusions: draft.exclusions,
+        payments: draft.payments,
+        customer,
+      }),
+    );
   };
 
   const endDateStr = (() => {

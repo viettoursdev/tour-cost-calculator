@@ -13,7 +13,9 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 // Trình xuất nạp động khi bấm (giảm bundle khởi động).
 import { useContractStore } from '@/stores/contractStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
+import { canMakeContract } from '@/components/quote/dealStage';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canManageArea } from '@/auth/departments';
 import { canViewAll } from '@/auth/ROLES';
@@ -106,7 +108,17 @@ export function ContractView() {
   const handlePickQuote = (quote: CloudQuoteEntry | null) => {
     setQuotePicker(false);
     const u = currentUser!;
-    setModal(quote ? contractFromQuote(quote, u.name) : emptyContract(u.name));
+    if (!quote) {
+      setModal(emptyContract(u.name));
+      return;
+    }
+    // Cổng chặn mềm: báo giá nên đã CHỐT (won) trước khi lập hợp đồng.
+    const gate = canMakeContract({ status: quote.status });
+    if (!gate.ok && !window.confirm(`⚠️ ${gate.reason}\n\nVẫn lập hợp đồng từ báo giá này?`)) return;
+    const customer = quote.customerId
+      ? useCustomerStore.getState().customers.find((c) => c.id === quote.customerId) ?? null
+      : null;
+    setModal(contractFromQuote(quote, u.name, customer));
   };
 
   return (
