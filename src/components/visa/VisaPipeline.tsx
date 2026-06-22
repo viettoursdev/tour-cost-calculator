@@ -28,7 +28,7 @@ export function VisaPipeline({ onOpenProject }: { onOpenProject: (id: string) =>
   const rows = useMemo(() => {
     let list = visible;
     if (owner) list = list.filter((p) => p.createdByName === owner);
-    return filterRank(list, search, (p) => `${p.name} ${p.code} ${p.country}`);
+    return filterRank(list, search, (p) => `${p.name} ${p.code} ${p.country} ${p.linkedQuoteName}`);
   }, [visible, search, owner]);
 
   const byStatus = (st: VisaProjectStatus) => rows.filter((p) => p.status === st);
@@ -102,8 +102,12 @@ export function VisaPipeline({ onOpenProject }: { onOpenProject: (id: string) =>
                     <Paper key={p.id} data-id={p.id} elevation={0} onClick={() => onOpenProject(p.id)}
                       sx={{ p: 1, cursor: 'grab', border: '1px solid rgba(15,58,74,0.14)', borderRadius: 1.5, '&:hover': { boxShadow: 2, borderColor: meta.color } }}>
                       <Typography fontSize={12.5} fontWeight={700} sx={{ lineHeight: 1.3 }}>{p.name || p.code}</Typography>
+                      <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+                        {p.country && <Chip size="small" label={p.country} sx={{ height: 17, fontSize: 10.5, bgcolor: meta.color + '14', color: meta.color }} />}
+                        {p.linkedQuoteName && <Chip size="small" label={`📋 ${p.linkedQuoteName}`} sx={{ height: 17, fontSize: 10.5 }} />}
+                      </Stack>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {p.country || '—'}{p.createdByName ? ` · ${p.createdByName}` : ''}
+                        {p.createdByName || '—'}
                       </Typography>
                       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
                         {apply > 0 && <Chip size="small" label={`${passedOf(p)}/${apply} đậu`} sx={{ height: 18, fontSize: 11 }} />}
