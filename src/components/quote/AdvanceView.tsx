@@ -15,7 +15,7 @@ import { fmtVND } from './calc';
 import { advanceTotals, emptyAdvance, lineAmount, newAdvanceLine } from './advanceCalc';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { RateCardModal } from '@/components/rates/RateCardModal';
-import { fbEnsureNotifThread, fbSendNotification, fbSubscribeNotifThread } from '@/lib/dataBackend';
+import { sbEnsureNotifThread, sbSendNotification, sbSubscribeNotifThread } from '@/lib/supabase';
 import { InlineNumberField } from '@/components/common/InlineNumberField';
 import { FxRatesPanel } from './FxRatesPanel';
 import { LEGACY } from '@/theme';
@@ -59,7 +59,7 @@ export function AdvanceView() {
   const [approvalStatus, setApprovalStatus] = useState<ActivityStatus | undefined>(undefined);
   useEffect(() => {
     if (!adv.threadId) { setApprovalStatus(undefined); return; }
-    return fbSubscribeNotifThread(adv.threadId, (th) => setApprovalStatus(th?.status));
+    return sbSubscribeNotifThread(adv.threadId, (th) => setApprovalStatus(th?.status));
   }, [adv.threadId]);
 
   const patch = (p: Partial<TourAdvance>) => setAdvance({ ...adv, ...p });
@@ -83,12 +83,12 @@ export function AdvanceView() {
     const members = [currentUser.u, adv.approver1.u, ...(adv.approver2 ? [adv.approver2.u] : [])];
     const link = { kind: 'quote' as const, id: cloudId, label: info.name || 'Tạm ứng tour' };
     try {
-      await fbEnsureNotifThread({
+      await sbEnsureNotifThread({
         id: threadId, title: `Tạm ứng: ${info.name || 'Tour'}`, members,
         comments: [], createdAt: new Date().toISOString(), createdBy: currentUser.name,
         actType: 'payment_approval', status: 'pending', link, data: { kind: 'advance', amount },
       });
-      await fbSendNotification(adv.approver1.u, {
+      await sbSendNotification(adv.approver1.u, {
         type: 'payment_approval',
         title: '💵 Đề nghị duyệt TẠM ỨNG tour',
         message: `${currentUser.name} đề nghị tạm ứng ${amount.toLocaleString('vi-VN')} đ · Tour: ${info.name || '—'}`,

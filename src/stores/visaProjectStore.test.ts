@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useVisaProjectStore } from './visaProjectStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { User, VisaProjectDoc } from '@/types';
 
 const resetProj = snapshotInitial(useVisaProjectStore);
@@ -39,8 +39,8 @@ describe('visaProjectStore', () => {
 
   it('init subscribes and populates when callback fires', () => {
     useVisaProjectStore.getState().init();
-    expect(fb.fbSubscribeVisaProjects).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeVisaProjects).mock.calls[0][0];
+    expect(fb.sbSubscribeVisaProjects).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeVisaProjects).mock.calls[0][0];
     cb([proj()]);
     const s = useVisaProjectStore.getState();
     expect(s.projects).toEqual([proj()]);
@@ -54,7 +54,7 @@ describe('visaProjectStore', () => {
     expect(list[0].name).toBe('Đoàn Nhật');
     expect(list[0].createdByUsername).toBe('ceo');
     expect(list[0].updatedBy).toBe('Tony');
-    expect(vi.mocked(fb.fbPushVisaProjects).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
+    expect(vi.mocked(fb.sbPushVisaProjects).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
   });
 
   it('save updates an existing project in place', async () => {
@@ -71,13 +71,13 @@ describe('visaProjectStore', () => {
     useAuthStore.setState({ currentUser: null }, false);
     await useVisaProjectStore.getState().save(proj({ id: 'x' }));
     expect(useVisaProjectStore.getState().projects).toEqual([]);
-    expect(fb.fbPushVisaProjects).not.toHaveBeenCalled();
+    expect(fb.sbPushVisaProjects).not.toHaveBeenCalled();
   });
 
   it('remove deletes by id and pushes', async () => {
     useVisaProjectStore.setState({ projects: [proj({ id: 'p1' }), proj({ id: 'p2' })] }, false);
     await useVisaProjectStore.getState().remove('p1');
     expect(useVisaProjectStore.getState().projects.map((p) => p.id)).toEqual(['p2']);
-    expect(fb.fbPushVisaProjects).toHaveBeenCalledTimes(1);
+    expect(fb.sbPushVisaProjects).toHaveBeenCalledTimes(1);
   });
 });

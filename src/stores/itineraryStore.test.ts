@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useItineraryStore } from './itineraryStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { Itinerary, ItineraryIndexEntry } from '@/types';
 
 const reset = snapshotInitial(useItineraryStore);
@@ -56,32 +56,32 @@ describe('itineraryStore', () => {
 
   it('init subscribes and loads list', () => {
     useItineraryStore.getState().init();
-    expect(fb.fbSubscribeItineraries).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeItineraries).mock.calls[0][0];
+    expect(fb.sbSubscribeItineraries).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeItineraries).mock.calls[0][0];
     cb([indexEntry()]);
     const s = useItineraryStore.getState();
     expect(s.list).toEqual([indexEntry()]);
     expect(s.loading).toBe(false);
   });
 
-  it('save forwards to fbSaveItinerary', async () => {
+  it('save forwards to sbSaveItinerary', async () => {
     const itin = full();
     await useItineraryStore.getState().save(itin, 'tester');
-    expect(fb.fbSaveItinerary).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbSaveItinerary).mock.calls[0]).toEqual([itin, 'tester']);
+    expect(fb.sbSaveItinerary).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbSaveItinerary).mock.calls[0]).toEqual([itin, 'tester']);
   });
 
-  it('load returns whatever fbGetItinerary resolves with', async () => {
+  it('load returns whatever sbGetItinerary resolves with', async () => {
     const itin = full({ id: 'fetched' });
-    vi.mocked(fb.fbGetItinerary).mockResolvedValueOnce(itin);
+    vi.mocked(fb.sbGetItinerary).mockResolvedValueOnce(itin);
     const got = await useItineraryStore.getState().load('fetched');
     expect(got).toEqual(itin);
-    expect(vi.mocked(fb.fbGetItinerary).mock.calls[0]).toEqual(['fetched']);
+    expect(vi.mocked(fb.sbGetItinerary).mock.calls[0]).toEqual(['fetched']);
   });
 
-  it('delete forwards id to fbDeleteItinerary', async () => {
+  it('delete forwards id to sbDeleteItinerary', async () => {
     await useItineraryStore.getState().delete('it1');
-    expect(fb.fbDeleteItinerary).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbDeleteItinerary).mock.calls[0]).toEqual(['it1']);
+    expect(fb.sbDeleteItinerary).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbDeleteItinerary).mock.calls[0]).toEqual(['it1']);
   });
 });

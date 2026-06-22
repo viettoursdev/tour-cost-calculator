@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { fbSubscribeChats } from '@/lib/dataBackend';
+import { sbSubscribeChats } from '@/lib/supabase';
 import type { Chat } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type ChatState = {
   chats: Chat[];
@@ -14,7 +14,7 @@ export const useChatStore = create<ChatState>()((set) => ({
   username: null,
   init: (username) => {
     set({ username, chats: [] });
-    return fbSubscribeChats(username, (chats) => set({ chats }));
+    return sbSubscribeChats(username, (chats) => set({ chats }));
   },
 }));
 

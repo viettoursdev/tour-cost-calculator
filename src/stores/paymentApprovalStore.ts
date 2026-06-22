@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { fbSubscribePaymentApprovals } from '@/lib/dataBackend';
+import { sbSubscribePaymentApprovals } from '@/lib/supabase';
 import type { PaymentApprovalDoc } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
   approvals: PaymentApprovalDoc;
@@ -11,7 +11,7 @@ type State = {
 export const usePaymentApprovalStore = create<State>()((set) => ({
   approvals: {},
   init: () =>
-    fbSubscribePaymentApprovals((data) => {
+    sbSubscribePaymentApprovals((data) => {
       set({ approvals: data });
     }),
 }));

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useRestaurantStore } from './restaurantStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { Restaurant } from '@/types';
 
 const reset = snapshotInitial(useRestaurantStore);
@@ -33,8 +33,8 @@ describe('restaurantStore', () => {
 
   it('init subscribes and populates list when callback fires', () => {
     useRestaurantStore.getState().init();
-    expect(fb.fbSubscribeRestaurants).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeRestaurants).mock.calls[0][0];
+    expect(fb.sbSubscribeRestaurants).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeRestaurants).mock.calls[0][0];
     cb([rest({ id: 'r1' }), rest({ id: 'r2' })]);
     const s = useRestaurantStore.getState();
     expect(s.list.length).toBe(2);
@@ -45,13 +45,13 @@ describe('restaurantStore', () => {
     const next = [rest({ id: 'r1', name: 'B' })];
     await useRestaurantStore.getState().save(next, 'tester');
     expect(useRestaurantStore.getState().list).toEqual(next);
-    expect(fb.fbSaveRestaurants).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbSaveRestaurants).mock.calls[0]).toEqual([next, 'tester']);
+    expect(fb.sbSaveRestaurants).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbSaveRestaurants).mock.calls[0]).toEqual([next, 'tester']);
   });
 
   it('save shows an alert when firebase rejects but keeps optimistic state', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-    vi.mocked(fb.fbSaveRestaurants).mockRejectedValueOnce(new Error('boom'));
+    vi.mocked(fb.sbSaveRestaurants).mockRejectedValueOnce(new Error('boom'));
     const next = [rest({ id: 'r1' })];
     await useRestaurantStore.getState().save(next, 'tester');
     expect(useRestaurantStore.getState().list).toEqual(next);

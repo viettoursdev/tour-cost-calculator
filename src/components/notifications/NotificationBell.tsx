@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
-import { fbSendNotification, fbSetApprovalStage, fbSetThreadStatus, fbSubscribeNotifThread } from '@/lib/dataBackend';
+import { sbSendNotification, sbSetApprovalStage, sbSetThreadStatus, sbSubscribeNotifThread } from '@/lib/supabase';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { ActivityStatus, NotifLink, Notification, TourPaymentApprovalData } from '@/types';
@@ -164,7 +164,7 @@ function NotificationItem({
   const [threadStatus, setThreadStatus] = useState<ActivityStatus | undefined>(undefined);
   useEffect(() => {
     if (!notif.threadId) { setThreadStatus(undefined); return; }
-    return fbSubscribeNotifThread(notif.threadId, (t) => setThreadStatus(t?.status));
+    return sbSubscribeNotifThread(notif.threadId, (t) => setThreadStatus(t?.status));
   }, [notif.threadId]);
   const resolved = threadStatus === 'approved' || threadStatus === 'rejected' || threadStatus === 'paid';
 
@@ -202,12 +202,12 @@ function NotificationItem({
         const newStatus: ActivityStatus = !approved
           ? 'rejected'
           : (stage === 1 && d.approver2Username ? 'pending_stage2' : 'approved');
-        try { await fbSetThreadStatus(notif.threadId, newStatus, currentUserName); }
+        try { await sbSetThreadStatus(notif.threadId, newStatus, currentUserName); }
         catch (err) { console.warn('Cập nhật trạng thái duyệt tạm ứng lỗi:', (err as Error).message); }
       }
       // Duyệt bước 1 + có người duyệt 2 → chuyển tiếp.
       if (approved && stage === 1 && d.approver2Username) {
-        await fbSendNotification(d.approver2Username, {
+        await sbSendNotification(d.approver2Username, {
           type: 'payment_approval',
           title: '💵 Đề nghị duyệt TẠM ỨNG tour (bước 2)',
           message: `${d.requestedByName ?? ''} đề nghị tạm ứng ${(d.amount ?? 0).toLocaleString('vi-VN')} đ · Tour: ${d.tourName ?? ''}`,
@@ -220,7 +220,7 @@ function NotificationItem({
       // Báo kết quả cho người đề nghị.
       if (d.requestedBy) {
         const done = approved && !(stage === 1 && d.approver2Username);
-        await fbSendNotification(d.requestedBy, {
+        await sbSendNotification(d.requestedBy, {
           type: 'payment_approval',
           title: !approved ? '❌ Đề nghị tạm ứng bị từ chối'
             : done ? '✅ Đề nghị tạm ứng đã được duyệt' : '✅ Tạm ứng được duyệt (bước 1)',
@@ -249,7 +249,7 @@ function NotificationItem({
       if (stage !== 1 && stage !== 2) return; // guard: not a genuine approval request
       const status: 'approved' | 'rejected' = approved ? 'approved' : 'rejected';
       const approverLabel = `${currentUserName} (${currentUserRole})`;
-      await fbSetApprovalStage(
+      await sbSetApprovalStage(
         data.approvalKey, stage, status, username, approverLabel, '',
         {
           intendedApprover1Name: data.approver1Name,
@@ -271,7 +271,7 @@ function NotificationItem({
             : stage === 1 && data.approver2Username ? 'pending_stage2'
               : 'paid';
         try {
-          await fbSetThreadStatus(data.threadId, newStatus, currentUserName);
+          await sbSetThreadStatus(data.threadId, newStatus, currentUserName);
         } catch (err) {
           console.warn('Cập nhật trạng thái activity thất bại (rules?):', (err as Error).message);
         }
@@ -280,7 +280,7 @@ function NotificationItem({
       // If stage 1 approved and stage 2 designated, forward to stage 2 approver.
       if (approved && stage === 1 && data.approver2Username) {
         const stage2Data: TourPaymentApprovalData = { ...data, approvalStage: 2 };
-        await fbSendNotification(data.approver2Username, {
+        await sbSendNotification(data.approver2Username, {
           type: 'payment_approval',
           title: '💰 Đề nghị duyệt (Stage 2) thanh toán NCC',
           message: `${data.requestedByName} đề nghị duyệt (stage 2): "${data.catName}" - ${data.supplier || '(NCC)'} - ${(data.amount || 0).toLocaleString('vi-VN')} đ · Tour: ${data.tourName}`,
@@ -313,7 +313,7 @@ function NotificationItem({
       }
 
       // Reply to requester (links back to the shared activity thread).
-      await fbSendNotification(data.requestedBy, {
+      await sbSendNotification(data.requestedBy, {
         type: 'payment_approval',
         title: approved ? '✅ Thanh toán đã được duyệt' : '❌ Đề nghị thanh toán bị từ chối',
         message: `"${data.catName}" · ${(data.amount || 0).toLocaleString('vi-VN')} đ · Tour: ${data.tourName}`,
@@ -362,7 +362,7 @@ function NotificationItem({
 
       // 2. Send reply notification to requester
       if (data?.requestedBy) {
-        await fbSendNotification(data.requestedBy, {
+        await sbSendNotification(data.requestedBy, {
           type: 'payment_approval',
           title: approved ? '✅ Thanh toán đã được duyệt' : '❌ Đề nghị thanh toán bị từ chối',
           message: `HĐ #${data.contractNo || data.contractId} - "${data.paymentLabel}": ${(data.amount ?? 0).toLocaleString('vi-VN')} đ`,
@@ -372,7 +372,7 @@ function NotificationItem({
       }
 
       // 3. Mark this notification as read
-      await fbSendNotification(username, {
+      await sbSendNotification(username, {
         type: 'payment_approval',
         title: approved ? '✅ Bạn đã duyệt thanh toán' : '❌ Bạn đã từ chối thanh toán',
         message: `HĐ #${(data?.contractNo) || data?.contractId}`,

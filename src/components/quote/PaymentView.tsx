@@ -6,7 +6,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { fbSetQuotePaymentSummary } from '@/lib/dataBackend';
+import { sbSetQuotePaymentSummary } from '@/lib/supabase';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { usePaymentStore } from '@/stores/paymentStore';
 import { usePaymentApprovalStore } from '@/stores/paymentApprovalStore';
@@ -73,9 +73,9 @@ export function PaymentView() {
   useEffect(() => {
     if (!cloudId || !payKey) return;
     const t = window.setTimeout(() => {
-      void fbSetQuotePaymentSummary(cloudId, {
+      void sbSetQuotePaymentSummary(cloudId, {
         payable: Math.round(totals.totalCost), paid: Math.round(totals.totalPaid), remaining: Math.round(totals.totalRemaining),
-      }, nccDue).catch(() => { /* index không chặn UI */ });
+      }).catch(() => { /* index không chặn UI */ });
     }, 1200);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

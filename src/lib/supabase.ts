@@ -3776,8 +3776,8 @@ export async function sbSetDMCEntryLink(
 export async function sbSetQuoteStatus(
   cloudId: string,
   status: QuoteStatus,
-  client: SupabaseClient = sb,
   lossReason?: string,
+  client: SupabaseClient = sb,
 ): Promise<void> {
   const isLoss = status === 'not_selected' || status === 'cancelled';
   let resolvedLossReason: string | null = null;
@@ -3803,10 +3803,10 @@ export async function sbSetQuoteStatus(
 export async function sbSetDMCQuoteStatus(
   cloudId: string,
   status: QuoteStatus,
-  client: SupabaseClient = sb,
   lossReason?: string,
+  client: SupabaseClient = sb,
 ): Promise<void> {
-  return sbSetQuoteStatus(cloudId, status, client, lossReason);
+  return sbSetQuoteStatus(cloudId, status, lossReason, client);
 }
 
 // ── Quote: backfill helpers ───────────────────────────────────────────────────

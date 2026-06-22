@@ -3,7 +3,7 @@ import { Box, Chip, MenuItem, Paper, Select, Stack, TextField, Typography } from
 import Sortable from 'sortablejs';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { fbSetQuoteStatus } from '@/lib/dataBackend';
+import { sbSetQuoteStatus } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { filterRank } from '@/lib/search';
 import { fmtVND } from './calc';
@@ -42,7 +42,7 @@ export function SalesPipeline() {
       if (r === null) return; // huỷ
       reason = r;
     }
-    void fbSetQuoteStatus(cloudId, status, reason).catch((e) => window.alert('Đổi trạng thái lỗi: ' + (e as Error).message));
+    void sbSetQuoteStatus(cloudId, status, reason).catch((e) => window.alert('Đổi trạng thái lỗi: ' + (e as Error).message));
     logAudit('update', 'Báo giá', q.name, `Trạng thái → ${QUOTE_STATUS_META[status].label}${reason ? ` (${reason})` : ''}`);
     if (currentQuoteId === cloudId) setStatus(status, reason); // đồng bộ báo giá đang mở
   };

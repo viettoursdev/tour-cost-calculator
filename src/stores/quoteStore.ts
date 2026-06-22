@@ -3,15 +3,15 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { readUserSnapshots, readSavedQuotes, writeSavedQuotes } from '@/lib/storage';
 import {
-  fbDeleteQuote, fbGetQuoteProject, fbSaveQuote, fbSaveQuoteState,
-  fbUpdateCollaborators,
-  fbDeleteDMCQuote, fbGetDMCQuoteProject, fbSaveDMCQuote, fbSaveDMCQuoteState,
-  fbUpdateDMCCollaborators,
-  fbSetRegularEntryLink,
-  fbSetQuoteStatus, fbSetDMCQuoteStatus,
-  fbPushFxRates,
+  sbDeleteQuote, sbGetQuoteProject, sbSaveQuote, sbSaveQuoteState,
+  sbUpdateCollaborators,
+  sbDeleteDMCQuote, sbGetDMCQuoteProject, sbSaveDMCQuote, sbSaveDMCQuoteState,
+  sbUpdateDMCCollaborators,
+  sbSetRegularEntryLink,
+  sbSetQuoteStatus, sbSetDMCQuoteStatus,
+  sbPushFxRates,
   generateQuoteCode,
-} from '@/lib/dataBackend';
+} from '@/lib/supabase';
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
 import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/workflowConstants';
@@ -383,7 +383,7 @@ export const useQuoteStore = create<QuoteState>()(
           set((s) => ({ draft: { ...s.draft, status, lossReason: nextLoss } }));
           const { draft } = get();
           if (draft.currentQuoteId && draft.template) {
-            const fn = draft.template === 'dmc' ? fbSetDMCQuoteStatus : fbSetQuoteStatus;
+            const fn = draft.template === 'dmc' ? sbSetDMCQuoteStatus : sbSetQuoteStatus;
             void fn(draft.currentQuoteId, status, nextLoss).catch((e) => console.warn('setStatus cloud:', (e as Error).message));
           }
         },
@@ -417,7 +417,7 @@ export const useQuoteStore = create<QuoteState>()(
         pushGlobalRates: async (rates) => {
           const by = useAuthStore.getState().currentUser?.name ?? 'unknown';
           const clean = { ...cleanRates(rates), VND: 1 };
-          const at = await fbPushFxRates(clean, by);
+          const at = await sbPushFxRates(clean, by);
           lastFxPushAt = at;
           writeFxRatesLS(clean);
           set({ syncedRates: clean, fxSyncedAt: at, fxSyncedBy: by });
@@ -731,8 +731,8 @@ export const useQuoteStore = create<QuoteState>()(
           if (!u) throw new Error('saveCloud: no current user');
           if (!draft.template) throw new Error('saveCloud: draft has no template');
           const isDmc = draft.template === 'dmc';
-          const _save  = isDmc ? fbSaveDMCQuote      : fbSaveQuote;
-          const _saveS = isDmc ? fbSaveDMCQuoteState : fbSaveQuoteState;
+          const _save  = isDmc ? sbSaveDMCQuote      : sbSaveQuote;
+          const _saveS = isDmc ? sbSaveDMCQuoteState : sbSaveQuoteState;
           const totalCost = computeTotals(draft).totalCost;
           // Lịch sử file Excel báo giá (tương thích dữ liệu cũ chỉ có excelFile đơn).
           const excelHistory = draft.excelFiles ?? (draft.excelFile ? [draft.excelFile] : []);
@@ -747,7 +747,7 @@ export const useQuoteStore = create<QuoteState>()(
             Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
           // "Mới" = không ghi đè & chưa gắn báo giá nào (giữ nguyên ngữ nghĩa cũ).
           const isNew = !overwrite && !draft.currentQuoteId;
-          // Tra bản ghi index hiện có theo cloudId để TÁI DÙNG `id` → fbSaveQuote
+          // Tra bản ghi index hiện có theo cloudId để TÁI DÙNG `id` → sbSaveQuote
           // cập nhật đúng chỗ (không sinh dòng index trùng) & dồn snapshot vào
           // cùng một project (giữ tối đa 20 phiên bản).
           const existingEntry = existing.find((q) => q.cloudId === cloudId);
@@ -790,7 +790,7 @@ export const useQuoteStore = create<QuoteState>()(
           // OK nếu rules chặn ghi; liên kết phía DMC đã được lưu ở trên).
           if (isDmc && linkedForeign) {
             try {
-              await fbSetRegularEntryLink(linkedForeign.id, {
+              await sbSetRegularEntryLink(linkedForeign.id, {
                 linkedQuoteId: cloudId,
                 linkedQuoteName: entry.name,
                 linkedQuoteTemplate: 'dmc',
@@ -804,7 +804,7 @@ export const useQuoteStore = create<QuoteState>()(
 
         deleteCloud: async (id, cloudId) => {
           const isDmc = get().draft.template === 'dmc';
-          const _del = isDmc ? fbDeleteDMCQuote : fbDeleteQuote;
+          const _del = isDmc ? sbDeleteDMCQuote : sbDeleteQuote;
           const hist = useQuoteHistoryStore.getState();
           const ent = (isDmc ? hist.dmcQuotes : hist.quotes).find((q) => q.cloudId === cloudId);
           await _del(id, cloudId);
@@ -817,7 +817,7 @@ export const useQuoteStore = create<QuoteState>()(
 
         updateCloudCollaborators: async (id, cloudId, collabs) => {
           const isDmc = get().draft.template === 'dmc';
-          const _col = isDmc ? fbUpdateDMCCollaborators : fbUpdateCollaborators;
+          const _col = isDmc ? sbUpdateDMCCollaborators : sbUpdateCollaborators;
           await _col(id, cloudId, collabs);
         },
 
@@ -826,7 +826,7 @@ export const useQuoteStore = create<QuoteState>()(
           // deep-links, which must load regardless of the currently open template.
           // Default: match the current draft template (QuoteHistoryView wiring).
           const isDmc = opts?.dmc ?? (get().draft.template === 'dmc');
-          const _get = isDmc ? fbGetDMCQuoteProject : fbGetQuoteProject;
+          const _get = isDmc ? sbGetDMCQuoteProject : sbGetQuoteProject;
           const project = await _get(cloudId);
           if (!project) {
             return { ok: false, error: 'Báo giá không tồn tại trong cloud' };
@@ -840,7 +840,7 @@ export const useQuoteStore = create<QuoteState>()(
             const linkedId = entry?.linkedQuoteId;
             if (linkedId) {
               try {
-                const linked = await fbGetQuoteProject(linkedId);
+                const linked = await sbGetQuoteProject(linkedId);
                 if (linked?.currentState?.rates) rates = keepSavedRates(linked.currentState.rates);
               } catch { /* giữ tỷ giá của chính DMC nếu không lấy được báo giá liên kết */ }
             }

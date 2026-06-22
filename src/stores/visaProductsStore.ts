@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { fbSaveVisaProducts, fbSubscribeVisaProducts } from '@/lib/dataBackend';
+import { sbSaveVisaProducts, sbSubscribeVisaProducts } from '@/lib/supabase';
 import { RATES_INIT } from '@/components/quote/constants';
 import type { VisaProduct, VisaProductVersion } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
   products: VisaProduct[];
@@ -19,7 +19,7 @@ export const useVisaProductsStore = create<State>()((set) => ({
   versions: [],
   loaded: false,
 
-  init: () => fbSubscribeVisaProducts((d) => {
+  init: () => sbSubscribeVisaProducts((d) => {
     if (d) {
       set((s) => ({
         products: d.products ?? [],
@@ -35,7 +35,7 @@ export const useVisaProductsStore = create<State>()((set) => ({
   save: async (data, savedBy) => {
     set({ products: data.products, rates: data.rates });
     try {
-      await fbSaveVisaProducts(data, savedBy);
+      await sbSaveVisaProducts(data, savedBy);
     } catch (e) {
       window.alert('Lỗi đồng bộ visa: ' + (e as Error).message);
     }

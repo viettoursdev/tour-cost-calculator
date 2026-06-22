@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSaveTourPayments, fbSubscribeTourPayments } from '@/lib/dataBackend';
+import { sbSaveTourPayments, sbSubscribeTourPayments } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { CustomCostItem, PaymentRecord, TourPayments } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type Slot = {
   data: TourPayments;
@@ -83,7 +83,7 @@ export const usePaymentStore = create<PaymentState>()(
       }
       slot.refCount += 1;
       if (!slot.unsub) {
-        slot.unsub = fbSubscribeTourPayments(tourKey, (data) => {
+        slot.unsub = sbSubscribeTourPayments(tourKey, (data) => {
           if (!data) return;
           const cur = get().slots[tourKey];
           if (!cur) return;
@@ -123,7 +123,7 @@ export const usePaymentStore = create<PaymentState>()(
         const u = useAuthStore.getState().currentUser;
         const savedBy = u?.name ?? 'unknown';
         const latest = get().slots[tourKey]?.data ?? EMPTY;
-        fbSaveTourPayments(tourKey, latest.payments, latest.customItems, savedBy).catch(() => {
+        sbSaveTourPayments(tourKey, latest.payments, latest.customItems, savedBy).catch(() => {
           /* swallow — local state + localStorage keep the edit; last-write-wins */
         });
       }, 1000);
@@ -139,7 +139,7 @@ export const usePaymentStore = create<PaymentState>()(
         const u = useAuthStore.getState().currentUser;
         const savedBy = u?.name ?? 'unknown';
         const latest = get().slots[tourKey]?.data ?? EMPTY;
-        fbSaveTourPayments(tourKey, latest.payments, latest.customItems, savedBy).catch(() => {
+        sbSaveTourPayments(tourKey, latest.payments, latest.customItems, savedBy).catch(() => {
           /* swallow */
         });
       }, 1000);

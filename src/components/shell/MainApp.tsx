@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { syncsSharedData } from '@/auth/ROLES';
 import { getSignInMethod, startActivityTracker } from '@/auth/sessionTimeout';
-import { fbSubscribeFxRates } from '@/lib/dataBackend';
+import { sbSubscribeFxRates } from '@/lib/supabase';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -59,7 +59,7 @@ export function MainApp() {
     useQuoteStore.getState().init(currentUser);
     const qhUnsub = useQuoteHistoryStore.getState().init(currentUser);
     // FX rates are shared across ALL accounts (not gated by syncsSharedData).
-    const fxUnsub = fbSubscribeFxRates((d) => {
+    const fxUnsub = sbSubscribeFxRates((d) => {
       if (d.rates) useQuoteStore.getState().setRatesSynced(d.rates, d._meta?.pushedAt, d._meta?.pushedBy);
     });
     // Instant cross-tab sync within the same browser (fires only in OTHER tabs).

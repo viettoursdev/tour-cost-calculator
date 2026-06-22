@@ -22,12 +22,12 @@ vi.mock('./data', () => ({
   ],
 }));
 
-vi.mock('@/lib/firebase', async () => ({
+vi.mock('@/lib/supabase', async () => ({
   // Spread the full gateway stub so the dataBackend barrel (transitively loaded
   // via repointed stores) can re-export every name; override the two used here.
-  ...(await import('@/test/firebaseStub')),
-  fbGetQuoteProject: vi.fn(async () => ({ currentState: draft({}) })),
-  fbGetDMCQuoteProject: vi.fn(async () => ({ currentState: draft({}) })),
+  ...(await import('@/test/supabaseStub')),
+  sbGetQuoteProject: vi.fn(async () => ({ currentState: draft({}) })),
+  sbGetDMCQuoteProject: vi.fn(async () => ({ currentState: draft({}) })),
 }));
 
 vi.mock('@/stores/poiStore', () => ({

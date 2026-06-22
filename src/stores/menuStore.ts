@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import {
-  fbDeleteMenu, fbGetMenu, fbSaveMenu, fbSubscribeMenus,
-} from '@/lib/dataBackend';
+  sbDeleteMenu, sbGetMenu, sbSaveMenu, sbSubscribeMenus,
+} from '@/lib/supabase';
 import type { Menu, MenuIndexEntry } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
   list: MenuIndexEntry[];
@@ -20,18 +20,18 @@ export const useMenuStore = create<State>()((set) => ({
 
   init: () => {
     set({ loading: true });
-    return fbSubscribeMenus((items) => {
+    return sbSubscribeMenus((items) => {
       set({ list: items, loading: false });
     });
   },
 
   save: async (m, savedBy) => {
-    await fbSaveMenu(m, savedBy);
+    await sbSaveMenu(m, savedBy);
   },
 
-  load: async (id) => fbGetMenu(id),
+  load: async (id) => sbGetMenu(id),
 
   delete: async (id) => {
-    await fbDeleteMenu(id);
+    await sbDeleteMenu(id);
   },
 }));

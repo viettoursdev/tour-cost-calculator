@@ -3,7 +3,7 @@ import { sbSubscribeEmailLinks, sbPushEmailLinks } from '@/lib/supabase';
 import { emailProvider } from '@/lib/email/provider';
 import { useAuthStore } from './authStore';
 import type { EmailAccount, EmailLink, EmailLinkTarget, EmailMessage } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 const newId = () => 'eml' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 

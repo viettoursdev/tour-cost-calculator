@@ -3,7 +3,7 @@ import {
   Box, Chip, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow,
   TextField, Typography,
 } from '@mui/material';
-import { fbSubscribeAuditLog } from '@/lib/dataBackend';
+import { sbSubscribeAuditLog } from '@/lib/supabase';
 import { filterRank } from '@/lib/search';
 import type { AuditEntry, AuditAction } from '@/types';
 
@@ -21,7 +21,7 @@ export function AuditView() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    const unsub = fbSubscribeAuditLog((e) => { setEntries(e); setLoading(false); });
+    const unsub = sbSubscribeAuditLog((e) => { setEntries(e); setLoading(false); });
     return () => unsub();
   }, []);
 

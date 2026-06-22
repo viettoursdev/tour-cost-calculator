@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeNccProducts, fbPushNccProducts } from '@/lib/dataBackend';
+import { sbSubscribeNccProducts, sbPushNccProducts } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { NccProduct } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 export const newNccProductId = () => 'np' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -29,7 +29,7 @@ export const useNccProductsStore = create<State>()(
 
     init: () => {
       set({ loading: true });
-      return fbSubscribeNccProducts((list) => set({ products: list, loading: false }));
+      return sbSubscribeNccProducts((list) => set({ products: list, loading: false }));
     },
 
     save: async (product) => {
@@ -43,7 +43,7 @@ export const useNccProductsStore = create<State>()(
         : { ...product, updatedAt: now, updatedBy: u.name };
       const next = isNew ? [stamped, ...products] : products.map((p) => (p.id === product.id ? stamped : p));
       set({ products: next, syncing: true });
-      try { await fbPushNccProducts(next, { name: u.name, role: u.role }); }
+      try { await sbPushNccProducts(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi đồng bộ sản phẩm NCC: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -53,7 +53,7 @@ export const useNccProductsStore = create<State>()(
       if (!u) return;
       const next = get().products.filter((p) => p.id !== id);
       set({ products: next, syncing: true });
-      try { await fbPushNccProducts(next, { name: u.name, role: u.role }); }
+      try { await sbPushNccProducts(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi xoá sản phẩm NCC: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },

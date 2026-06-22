@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { APPROVER_ROLES } from '@/auth/ROLES';
 import { usePaymentStore } from '@/stores/paymentStore';
-import { fbSendNotification, fbSendNotificationMany, fbEnsureNotifThread } from '@/lib/dataBackend';
+import { sbSendNotification, sbSendNotificationMany, sbEnsureNotifThread } from '@/lib/supabase';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
@@ -148,7 +148,7 @@ export function PaymentRequestModal({
       // but it must not block the actual request if its collection is locked
       // down (e.g. Firestore rules not yet deployed for notification_threads).
       try {
-        await fbEnsureNotifThread({
+        await sbEnsureNotifThread({
           id: threadId,
           title: `Đề nghị thanh toán: ${ci.name}`,
           members,
@@ -165,7 +165,7 @@ export function PaymentRequestModal({
       }
 
       // Actionable request → approver 1.
-      await fbSendNotification(form.approver1Username, {
+      await sbSendNotification(form.approver1Username, {
         type: 'payment_approval',
         title: '💰 Đề nghị xác nhận thanh toán NCC',
         message: `${currentUser.name} đề nghị duyệt: "${ci.name}" - ${form.supplier || '(NCC)'} - ${fmtVND(form.amount)} · Tour: ${info.name || ''}`,
@@ -178,7 +178,7 @@ export function PaymentRequestModal({
       // Mirror (no action buttons) → requester + approver 2 so they track status & comment.
       const others = members.filter((u) => u !== form.approver1Username);
       if (others.length) {
-        await fbSendNotificationMany(others, {
+        await sbSendNotificationMany(others, {
           type: 'payment_approval',
           title: '📤 Đã gửi đề nghị thanh toán',
           message: `Đề nghị duyệt "${ci.name}" - ${fmtVND(form.amount)} · gửi ${form.approver1}${form.approver2 ? ` → ${form.approver2}` : ''}`,

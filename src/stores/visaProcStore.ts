@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import {
-  fbDeleteVisaProc, fbGetVisaProc, fbSaveVisaProc, fbSubscribeVisaProcs,
-} from '@/lib/dataBackend';
+  sbDeleteVisaProc, sbGetVisaProc, sbSaveVisaProc, sbSubscribeVisaProcs,
+} from '@/lib/supabase';
 import type { VisaProcDoc, VisaProcIndexEntry } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
   list: VisaProcIndexEntry[];
@@ -20,18 +20,18 @@ export const useVisaProcStore = create<State>()((set) => ({
 
   init: () => {
     set({ loading: true });
-    return fbSubscribeVisaProcs((items) => {
+    return sbSubscribeVisaProcs((items) => {
       set({ list: items, loading: false });
     });
   },
 
   save: async (d, savedBy) => {
-    await fbSaveVisaProc(d, savedBy);
+    await sbSaveVisaProc(d, savedBy);
   },
 
-  load: async (id) => fbGetVisaProc(id),
+  load: async (id) => sbGetVisaProc(id),
 
   delete: async (id) => {
-    await fbDeleteVisaProc(id);
+    await sbDeleteVisaProc(id);
   },
 }));

@@ -15,7 +15,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
-import { dmChatId, fbEnsureChat, fbSendChatMessage, fbMarkChatRead, fbEditChatMessage, fbDeleteChatMessage, fbToggleChatReaction } from '@/lib/dataBackend';
+import { dmChatId, sbEnsureChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction } from '@/lib/supabase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
 import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
@@ -57,20 +57,20 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   // Đánh dấu đã đọc + cuộn xuống khi mở/đổi cuộc / có tin mới.
   useEffect(() => {
     if (!active || !me) return;
-    if (chatUnread(active, me.u)) void fbMarkChatRead(active.id, me.u);
+    if (chatUnread(active, me.u)) void sbMarkChatRead(active.id, me.u);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50);
   }, [active?.messages.length, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDM = async (otherU: string) => {
     if (!me) return;
     const id = dmChatId(me.u, otherU);
-    await fbEnsureChat({ id, members: [me.u, otherU], isGroup: false, createdBy: me.u, createdAt: new Date().toISOString(), messages: [] });
+    await sbEnsureChat({ id, members: [me.u, otherU], isGroup: false, createdBy: me.u, createdAt: new Date().toISOString(), messages: [] });
     setNewMode(false); setActiveId(id);
   };
   const createGroup = async () => {
     if (!me || groupSel.length < 1) return;
     const id = 'grp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-    await fbEnsureChat({ id, members: [me.u, ...groupSel], isGroup: true, title: groupTitle.trim() || `Nhóm ${groupSel.length + 1} người`, createdBy: me.u, createdAt: new Date().toISOString(), messages: [] });
+    await sbEnsureChat({ id, members: [me.u, ...groupSel], isGroup: true, title: groupTitle.trim() || `Nhóm ${groupSel.length + 1} người`, createdBy: me.u, createdAt: new Date().toISOString(), messages: [] });
     setNewMode(false); setGroupSel([]); setGroupTitle(''); setActiveId(id);
   };
 
@@ -81,7 +81,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     if (editTarget && !file) {
       if (!body) return;
       const t = editTarget; setText(''); setEditTarget(null);
-      try { await fbEditChatMessage(active.id, t.id, body); }
+      try { await sbEditChatMessage(active.id, t.id, body); }
       catch (e) { toast('Sửa lỗi: ' + (e as Error).message, 'error'); }
       return;
     }
@@ -92,7 +92,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       ...(replyTarget ? { replyTo: { id: replyTarget.id, byName: replyTarget.byName, text: previewOf(replyTarget) } } : {}),
     };
     setText(''); setReplyTarget(null);
-    try { await fbSendChatMessage(active.id, msg); }
+    try { await sbSendChatMessage(active.id, msg); }
     catch (e) { toast('Gửi lỗi: ' + (e as Error).message, 'error'); }
   };
 
@@ -101,13 +101,13 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const doDelete = async (m: ChatMessage) => {
     setMenuFor(null);
     if (!active || !window.confirm('Thu hồi tin nhắn này?')) return;
-    try { await fbDeleteChatMessage(active.id, m.id); }
+    try { await sbDeleteChatMessage(active.id, m.id); }
     catch (e) { toast('Thu hồi lỗi: ' + (e as Error).message, 'error'); }
   };
   const react = (m: ChatMessage, emoji: string) => {
     if (!active || !me) return;
     setMenuFor(null);
-    void fbToggleChatReaction(active.id, m.id, emoji, me.u).catch((e) => toast('Lỗi: ' + (e as Error).message, 'error'));
+    void sbToggleChatReaction(active.id, m.id, emoji, me.u).catch((e) => toast('Lỗi: ' + (e as Error).message, 'error'));
   };
   const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';

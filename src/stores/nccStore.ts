@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeNcc, fbPushNcc } from '@/lib/dataBackend';
+import { sbSubscribeNcc, sbPushNcc } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { Ncc, NccContact } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type NccState = {
   suppliers: Ncc[];
@@ -25,7 +25,7 @@ export const useNccStore = create<NccState>()(
 
     init: () => {
       set({ loading: true });
-      return fbSubscribeNcc((list) => {
+      return sbSubscribeNcc((list) => {
         set({ suppliers: list, loading: false });
       });
     },
@@ -51,7 +51,7 @@ export const useNccStore = create<NccState>()(
           );
       set({ suppliers: next, syncing: true });
       try {
-        await fbPushNcc(next, { name: u.name, role: u.role });
+        await sbPushNcc(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -81,7 +81,7 @@ export const useNccStore = create<NccState>()(
       const next = [...suppliers, ...toAdd];
       set({ suppliers: next, syncing: true });
       try {
-        await fbPushNcc(next, { name: u.name, role: u.role });
+        await sbPushNcc(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -96,7 +96,7 @@ export const useNccStore = create<NccState>()(
       const next = get().suppliers.filter((s) => s.id !== id);
       set({ suppliers: next, syncing: true });
       try {
-        await fbPushNcc(next, { name: u.name, role: u.role });
+        await sbPushNcc(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
       } finally {
@@ -145,7 +145,7 @@ export const useNccStore = create<NccState>()(
         .map((s) => (s.id === primary.id ? merged : s));
       set({ suppliers: next, syncing: true });
       try {
-        await fbPushNcc(next, { name: u.name, role: u.role });
+        await sbPushNcc(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi gộp: ' + (e as Error).message);
       } finally {

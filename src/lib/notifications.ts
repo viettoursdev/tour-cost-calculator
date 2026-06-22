@@ -15,7 +15,7 @@ export function showBrowserNotif(title: string, body: string): void {
   }
 }
 
-import { fbGetContracts, fbSendNotification } from '@/lib/dataBackend';
+import { sbGetContracts, sbSendNotification } from '@/lib/supabase';
 import { sbGetPublicQuote } from '@/lib/supabase';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -35,7 +35,7 @@ const WF_ESCALATE_AFTER = 3;
  */
 export async function checkContractDeadlines(user: User): Promise<void> {
   try {
-    const contracts = await fbGetContracts();
+    const contracts = await sbGetContracts();
     const today = new Date();
     const in7days = new Date(today.getTime() + 7 * 86400000);
     for (const c of contracts) {
@@ -49,7 +49,7 @@ export async function checkContractDeadlines(user: User): Promise<void> {
         if (isNaN(due.getTime())) continue;
         if (due <= in7days && due >= today) {
           const daysLeft = Math.ceil((due.getTime() - today.getTime()) / 86400000);
-          await fbSendNotification(user.u, {
+          await sbSendNotification(user.u, {
             type: 'payment_due',
             title: '⏰ Sắp đến hạn thanh toán',
             message: `HĐ #${c.contractNo || c.id} - "${p.label}": ${(+p.amount || 0).toLocaleString('vi-VN')} đ - còn ${daysLeft} ngày`,
@@ -89,7 +89,7 @@ export async function checkVisaDeadlines(user: User): Promise<void> {
         const key = `${p.id}:${m.id}:${m.date}`;
         if (set.has(key)) continue;
         set.add(key);
-        await fbSendNotification(user.u, {
+        await sbSendNotification(user.u, {
           type: 'task',
           title: '⏰ Sắp đến hạn hồ sơ visa',
           message: `Dự án "${p.name || p.code}" — ${m.label}: còn ${d} ngày (${new Date(m.date).toLocaleDateString('vi-VN')})`,
@@ -127,7 +127,7 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
         if (set.has(key)) continue;
         set.add(key);
         const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
-        await fbSendNotification(user.u, {
+        await sbSendNotification(user.u, {
           type: 'task',
           title: d < 0 ? '🔴 Bước quy trình quá hạn' : '⏰ Bước quy trình sắp đến hạn',
           message: `Báo giá "${q.name}" — ${w.label}: ${when} (${new Date(w.dueDate).toLocaleDateString('vi-VN')})`,
@@ -149,7 +149,7 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
           const key = `esc:${q.cloudId}:${w.label}:${w.dueDate}`;
           if (set.has(key)) continue;
           set.add(key);
-          await fbSendNotification(user.u, {
+          await sbSendNotification(user.u, {
             type: 'task',
             title: '🚩 Bước quy trình quá hạn lâu — cần đốc thúc',
             message: `Báo giá "${q.name}" — ${w.label}: QUÁ HẠN ${Math.abs(d)} ngày · phụ trách ${nameOf(owner)}`,
@@ -199,7 +199,7 @@ export async function checkQuoteDeadlines(user: User): Promise<void> {
       // Đã tới mốc 6h thì đánh dấu luôn mốc 1d (tránh nhắc lùi nếu chưa từng nhắc).
       if (milestone === '6h') set.add(`${q.cloudId}:1d:${q.deadline}`);
       const whenStr = new Date(due).toLocaleString('vi-VN');
-      await fbSendNotification(user.u, {
+      await sbSendNotification(user.u, {
         type: 'task',
         title: milestone === '6h' ? '🔴 Deadline báo giá sắp hết giờ' : '⏰ Deadline báo giá sắp đến',
         message: `Báo giá "${q.name}" — ${milestone === '6h' ? 'còn dưới 6 giờ' : 'còn dưới 1 ngày'} (${whenStr})`,
@@ -239,7 +239,7 @@ export async function checkNccPayments(user: User): Promise<void> {
         set.add(key);
         const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
         const amount = (due.amount || 0).toLocaleString('vi-VN');
-        await fbSendNotification(user.u, {
+        await sbSendNotification(user.u, {
           type: 'payment_due',
           title: d < 0 ? '🔴 Quá hạn thanh toán NCC' : '⏰ Sắp đến hạn thanh toán NCC',
           message: `Báo giá "${q.name}" — ${due.supplier ? due.supplier + ' · ' : ''}${due.label}: ${amount} đ · ${when} (${new Date(due.dueDate).toLocaleDateString('vi-VN')})`,
@@ -277,7 +277,7 @@ export async function checkQuoteAcceptances(user: User): Promise<void> {
       const key = `${token}:${pub.acceptance.at}`;
       if (set.has(key)) continue;
       set.add(key);
-      await fbSendNotification(user.u, {
+      await sbSendNotification(user.u, {
         type: 'task',
         title: '🎉 Khách đã đồng ý báo giá',
         message: `Báo giá "${q.name}"${pub.acceptance.name ? ` — ${pub.acceptance.name}` : ''} đã đồng ý chốt${pub.acceptance.note ? `: “${pub.acceptance.note}”` : ''}. Liên hệ xác nhận & chuyển trạng thái Thắng.`,
@@ -325,7 +325,7 @@ export async function checkDocExpiry(user: User): Promise<void> {
           // Đánh dấu cả mốc lớn hơn để không nhắc lùi.
           for (const m of DOC_EXP_MILESTONES) if (m >= milestone) set.add(`${c.id}:${t.id}:${kind}:${iso}:${m}`);
           const when = d < 0 ? 'ĐÃ HẾT HẠN' : `còn ${d} ngày`;
-          await fbSendNotification(user.u, {
+          await sbSendNotification(user.u, {
             type: 'task',
             title: d < 0 ? '🔴 Giấy tờ khách đã hết hạn' : '⏰ Giấy tờ khách sắp hết hạn',
             message: `${c.name} — ${t.fullName}: ${label} ${when} (${new Date(iso).toLocaleDateString('vi-VN')})`,
@@ -365,7 +365,7 @@ export async function checkSalesFollowups(user: User): Promise<void> {
       const key = `${q.cloudId}:${q.status}:${today}`;
       if (set.has(key)) continue;
       set.add(key);
-      await fbSendNotification(user.u, {
+      await sbSendNotification(user.u, {
         type: 'task',
         title: '📞 Cần follow-up báo giá',
         message: `"${q.name}" (${q.status === 'sent' ? 'đã gửi khách' : 'đang deal'}) — ${since} ngày chưa cập nhật. Liên hệ ${q.customerName || 'khách'} để chốt.`,
@@ -399,7 +399,7 @@ export async function checkCustomerFollowups(user: User): Promise<void> {
       if (set.has(key)) continue;
       set.add(key);
       const overdueDays = Math.floor((Date.parse(today) - Date.parse(fu.date)) / 86400000);
-      await fbSendNotification(user.u, {
+      await sbSendNotification(user.u, {
         type: 'task',
         title: '📅 Hẹn liên hệ lại khách hàng',
         message: `${c.name} — ${overdueDays > 0 ? `QUÁ HẠN ${overdueDays} ngày` : 'đến hẹn hôm nay'}${fu.note ? `: ${fu.note}` : ''}`,
@@ -449,7 +449,7 @@ export async function checkDormantCustomers(user: User): Promise<void> {
     try { seen = JSON.parse(localStorage.getItem(DORMANT_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
     if (seen.includes(monthKey)) return;
     seen.push(monthKey);
-    await fbSendNotification(user.u, {
+    await sbSendNotification(user.u, {
       type: 'task',
       title: '💤 Khách hàng cần chăm sóc lại',
       message: `Bạn có ${count} khách đã hơn ${DORMANT_MONTHS} tháng chưa quay lại. Vào tab Khách hàng để mời tour mới / chăm sóc.`,

@@ -17,8 +17,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import {
-  fbSubscribeNotifThread, fbAddThreadComment, fbEnsureNotifThread, fbSendNotificationMany,
-} from '@/lib/dataBackend';
+  sbSubscribeNotifThread, sbAddThreadComment, sbEnsureNotifThread, sbSendNotificationMany,
+} from '@/lib/supabase';
 import { LEGACY } from '@/theme';
 import type { FileAttachment, NotifComment, NotifLink, NotifThread, Notification, NotificationType, User } from '@/types';
 import { NOTIF_TEMPLATES } from './notifCompose';
@@ -270,7 +270,7 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
   useEffect(() => {
     setThread(null);
     if (!notif.threadId) return;
-    const unsub = fbSubscribeNotifThread(notif.threadId, setThread);
+    const unsub = sbSubscribeNotifThread(notif.threadId, setThread);
     return unsub;
   }, [notif.threadId]);
 
@@ -282,11 +282,11 @@ function DetailPane({ notif, user, onOpenLink }: { notif: Notification; user: Us
     const body = text.trim();
     const c: NotifComment = { id: genId(), by: user.u, byName: user.name, text: body, at: new Date().toISOString() };
     try {
-      await fbAddThreadComment(notif.threadId, c);
+      await sbAddThreadComment(notif.threadId, c);
       // Notify only the collaboration group (other thread members).
       const others = thread.members.filter((u) => u !== user.u);
       if (others.length) {
-        await fbSendNotificationMany(others, {
+        await sbSendNotificationMany(others, {
           type: 'collab_comment',
           title: `💬 Bình luận mới: ${thread.title}`,
           message: `${user.name}: ${body.slice(0, 140)}`,
@@ -470,14 +470,14 @@ function ComposeDialog({ onClose }: { onClose: () => void }) {
       // Best-effort: thread powers the discussion, but don't block the
       // notification itself if notification_threads is locked down.
       try {
-        await fbEnsureNotifThread({
+        await sbEnsureNotifThread({
           id: threadId, title: title.trim(), members, link,
           comments: [], createdAt: new Date().toISOString(), createdBy: currentUser.name,
         });
       } catch (err) {
         console.warn('Tạo thread thảo luận thất bại (rules?):', (err as Error).message);
       }
-      await fbSendNotificationMany(members, {
+      await sbSendNotificationMany(members, {
         type, title: title.trim(), message: message.trim(), createdBy: currentUser.name,
         ...(link ? { link } : {}), threadId, ...(priority !== 'normal' ? { priority } : {}),
         ...(attachments.length ? { attachments } : {}),

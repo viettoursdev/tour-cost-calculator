@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribePois, fbPushPois } from '@/lib/dataBackend';
+import { sbSubscribePois, sbPushPois } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { PoiEntry } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 const newId = () => 'poi' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -26,7 +26,7 @@ export const usePoiStore = create<State>()(
 
     init: () => {
       set({ loading: true });
-      return fbSubscribePois((list) => set({ pois: list, loading: false }));
+      return sbSubscribePois((list) => set({ pois: list, loading: false }));
     },
 
     save: async (poi) => {
@@ -40,7 +40,7 @@ export const usePoiStore = create<State>()(
         : { ...poi, updatedAt: now, updatedBy: u.name };
       const next = isNew ? [stamped, ...pois] : pois.map((p) => (p.id === poi.id ? stamped : p));
       set({ pois: next, syncing: true });
-      try { await fbPushPois(next, { name: u.name, role: u.role }); }
+      try { await sbPushPois(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi đồng bộ thuyết minh: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -50,7 +50,7 @@ export const usePoiStore = create<State>()(
       if (!u) return;
       const next = get().pois.filter((p) => p.id !== id);
       set({ pois: next, syncing: true });
-      try { await fbPushPois(next, { name: u.name, role: u.role }); }
+      try { await sbPushPois(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -73,7 +73,7 @@ export const usePoiStore = create<State>()(
       if (!toAdd.length) return 0;
       const next = [...toAdd, ...pois];
       set({ pois: next, syncing: true });
-      try { await fbPushPois(next, { name: u.name, role: u.role }); }
+      try { await sbPushPois(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi lưu thuyết minh: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
       return toAdd.length;

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeVisaProjects, fbPushVisaProjects } from '@/lib/dataBackend';
+import { sbSubscribeVisaProjects, sbPushVisaProjects } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { VisaProjectDoc } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
   projects: VisaProjectDoc[];
@@ -22,7 +22,7 @@ export const useVisaProjectStore = create<State>()(
 
     init: () => {
       set({ loading: true });
-      return fbSubscribeVisaProjects((list) => {
+      return sbSubscribeVisaProjects((list) => {
         set({ projects: list, loading: false });
       });
     },
@@ -41,7 +41,7 @@ export const useVisaProjectStore = create<State>()(
         : projects.map((p) => (p.id === proj.id ? stamped : p));
       set({ projects: next, syncing: true });
       try {
-        await fbPushVisaProjects(next, { name: u.name, role: u.role });
+        await sbPushVisaProjects(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ dự án visa: ' + (e as Error).message);
       } finally {
@@ -55,7 +55,7 @@ export const useVisaProjectStore = create<State>()(
       const next = get().projects.filter((p) => p.id !== id);
       set({ projects: next, syncing: true });
       try {
-        await fbPushVisaProjects(next, { name: u.name, role: u.role });
+        await sbPushVisaProjects(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi xoá dự án visa: ' + (e as Error).message);
       } finally {

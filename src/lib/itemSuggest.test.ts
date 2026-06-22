@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 import { recordItem, suggestItems } from './itemSuggest';
 
 describe('itemSuggest (từ điển tự học)', () => {

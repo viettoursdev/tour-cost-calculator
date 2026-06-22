@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { usePaymentStore } from './paymentStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { User } from '@/types';
 
 const resetPay = snapshotInitial(usePaymentStore);
@@ -39,16 +39,16 @@ describe('paymentStore', () => {
     expect(tour.customItems.length).toBe(1);
   });
 
-  it('ensureSubscribed creates a slot and calls fbSubscribeTourPayments once per key', () => {
+  it('ensureSubscribed creates a slot and calls sbSubscribeTourPayments once per key', () => {
     usePaymentStore.getState().ensureSubscribed('tourA');
     usePaymentStore.getState().ensureSubscribed('tourA');
-    expect(fb.fbSubscribeTourPayments).toHaveBeenCalledTimes(1);
+    expect(fb.sbSubscribeTourPayments).toHaveBeenCalledTimes(1);
     expect(usePaymentStore.getState().slots.tourA.refCount).toBe(2);
   });
 
   it('subscriber callback merges remote data and writes through to localStorage', () => {
     usePaymentStore.getState().ensureSubscribed('tourA');
-    const cb = vi.mocked(fb.fbSubscribeTourPayments).mock.calls[0][1];
+    const cb = vi.mocked(fb.sbSubscribeTourPayments).mock.calls[0][1];
     cb({ payments: { k: { supplier: 'X' } }, customItems: [] });
     const tour = usePaymentStore.getState().getTour('tourA');
     expect(tour.payments).toEqual({ k: { supplier: 'X' } });
@@ -57,7 +57,7 @@ describe('paymentStore', () => {
 
   it('releaseSubscription decrements refCount and unsubscribes on zero', () => {
     const unsub = vi.fn();
-    vi.mocked(fb.fbSubscribeTourPayments).mockReturnValueOnce(unsub);
+    vi.mocked(fb.sbSubscribeTourPayments).mockReturnValueOnce(unsub);
     usePaymentStore.getState().ensureSubscribed('tourA');
     usePaymentStore.getState().ensureSubscribed('tourA');
     usePaymentStore.getState().releaseSubscription('tourA');
@@ -69,10 +69,10 @@ describe('paymentStore', () => {
   it('setPayments writes through to localStorage immediately and debounces fb push by 1s', () => {
     usePaymentStore.getState().setPayments('tourA', { k: { supplier: 'A' } });
     expect(localStorage.getItem('vte_payments_tourA')).toBe(JSON.stringify({ k: { supplier: 'A' } }));
-    expect(fb.fbSaveTourPayments).not.toHaveBeenCalled();
+    expect(fb.sbSaveTourPayments).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1000);
-    expect(fb.fbSaveTourPayments).toHaveBeenCalledTimes(1);
-    const [tourKey, payments, customs, savedBy] = vi.mocked(fb.fbSaveTourPayments).mock.calls[0];
+    expect(fb.sbSaveTourPayments).toHaveBeenCalledTimes(1);
+    const [tourKey, payments, customs, savedBy] = vi.mocked(fb.sbSaveTourPayments).mock.calls[0];
     expect(tourKey).toBe('tourA');
     expect(payments).toEqual({ k: { supplier: 'A' } });
     expect(customs).toEqual([]);
@@ -131,7 +131,7 @@ describe('paymentStore', () => {
     ]);
     expect(localStorage.getItem('vte_pay_custom_tourA')).toBeTruthy();
     vi.advanceTimersByTime(1000);
-    expect(fb.fbSaveTourPayments).toHaveBeenCalledTimes(1);
+    expect(fb.sbSaveTourPayments).toHaveBeenCalledTimes(1);
   });
 
   it('repeated setPayments calls within 1s coalesce to one push', () => {
@@ -139,8 +139,8 @@ describe('paymentStore', () => {
     vi.advanceTimersByTime(500);
     usePaymentStore.getState().setPayments('tourA', { k: { supplier: 'B' } });
     vi.advanceTimersByTime(1000);
-    expect(fb.fbSaveTourPayments).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbSaveTourPayments).mock.calls[0][1]).toEqual({ k: { supplier: 'B' } });
+    expect(fb.sbSaveTourPayments).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbSaveTourPayments).mock.calls[0][1]).toEqual({ k: { supplier: 'B' } });
   });
 
   it('getTour returns EMPTY when key unknown', () => {

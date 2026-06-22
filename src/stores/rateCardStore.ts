@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { persist, subscribeWithSelector } from 'zustand/middleware';
-import { fbPullMasterRC, fbPushMasterRC, fbSubscribeMasterRC } from '@/lib/dataBackend';
+import { sbPullMasterRC, sbPushMasterRC, sbSubscribeMasterRC } from '@/lib/supabase';
 import { migrateLegacyRateCard } from '@/lib/storage';
 import { debounce } from '@/lib/util';
 import { useAuthStore } from './authStore';
 import type { RateCard } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 const EMPTY_RC: RateCard = { hotels: {}, visaRates: {}, otherRates: {} };
 
@@ -40,7 +40,7 @@ export const useRateCardStore = create<RateCardState>()(
           if (migrated) set({ rates: migrated });
 
           // 2. Pull current cloud state.
-          void fbPullMasterRC().then((cloud) => {
+          void sbPullMasterRC().then((cloud) => {
             if (cloud)
               set({
                 rates: {
@@ -54,7 +54,7 @@ export const useRateCardStore = create<RateCardState>()(
           // 3. Wire push debouncer (2s, matches legacy auto-sync).
           if (!pushDebounced) {
             pushDebounced = debounce((rc: RateCard, pushedBy: string) => {
-              fbPushMasterRC(rc, pushedBy)
+              sbPushMasterRC(rc, pushedBy)
                 .then((pushedAt) => {
                   lastSelfPushAt = pushedAt;
                   set({ status: 'idle' });
@@ -64,7 +64,7 @@ export const useRateCardStore = create<RateCardState>()(
           }
 
           // 4. Subscribe to remote changes from other clients.
-          return fbSubscribeMasterRC((cloud) => {
+          return sbSubscribeMasterRC((cloud) => {
             // Ignore the echo of our own push — applying it would overwrite
             // local edits made after the push and reset the active input.
             if (cloud._meta?.pushedAt && cloud._meta.pushedAt === lastSelfPushAt) return;

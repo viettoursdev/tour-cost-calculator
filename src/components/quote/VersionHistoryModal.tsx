@@ -6,7 +6,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import RestoreIcon from '@mui/icons-material/Restore';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
+import { sbGetQuoteProject, sbGetDMCQuoteProject } from '@/lib/supabase';
 import { toast } from '@/stores/toastStore';
 import { computeTotals, fmtVND } from './calc';
 import { LEGACY } from '@/theme';
@@ -35,7 +35,7 @@ export function VersionHistoryModal({ open, onClose }: Props) {
     setError(null);
     (async () => {
       try {
-        const proj = isDmc ? await fbGetDMCQuoteProject(cloudId) : await fbGetQuoteProject(cloudId);
+        const proj = isDmc ? await sbGetDMCQuoteProject(cloudId) : await sbGetQuoteProject(cloudId);
         if (!alive) return;
         setVersions([...(proj?.versions ?? [])].sort((a, b) => b.versionNo - a.versionNo));
       } catch (e) {

@@ -5,7 +5,7 @@
 import { filterRank, normalizeVN } from '@/lib/search';
 import { callAIWorker } from '@/lib/aiWorker';
 import { computeTotals, fmtVND } from '@/components/quote/calc';
-import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
+import { sbGetQuoteProject, sbGetDMCQuoteProject } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
@@ -266,8 +266,8 @@ function str(input: Record<string, unknown>, key: string): string {
 
 async function loadState(entry: CloudQuoteEntry) {
   const proj = entry.template === 'dmc'
-    ? await fbGetDMCQuoteProject(entry.cloudId)
-    : await fbGetQuoteProject(entry.cloudId);
+    ? await sbGetDMCQuoteProject(entry.cloudId)
+    : await sbGetQuoteProject(entry.cloudId);
   return proj?.currentState ?? null;
 }
 

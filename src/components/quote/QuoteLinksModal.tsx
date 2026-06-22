@@ -14,7 +14,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
-import { fbSetDMCEntryLink } from '@/lib/dataBackend';
+import { sbSetDMCEntryLink } from '@/lib/supabase';
 import { LEGACY } from '@/theme';
 import type { Template } from '@/types';
 
@@ -80,7 +80,7 @@ export function QuoteLinksModal({ open, onClose }: Props) {
     if (c) await useContractStore.getState().save({ ...c, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '' });
   });
   const linkDmc = (cloudId: string, on: boolean) => run(async () => {
-    await fbSetDMCEntryLink(cloudId, {
+    await sbSetDMCEntryLink(cloudId, {
       linkedQuoteId: on ? (qid ?? undefined) : undefined,
       linkedQuoteName: on ? qname : '',
       linkedQuoteTemplate: on ? (template ?? undefined) : undefined,

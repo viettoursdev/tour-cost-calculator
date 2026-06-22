@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeCustomers, fbPushCustomers } from '@/lib/dataBackend';
+import { sbSubscribeCustomers, sbPushCustomers } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { Customer, CustomerContact, CustomerInteraction, CustomerInteractionType } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type CustomerState = {
   customers: Customer[];
@@ -36,7 +36,7 @@ export const useCustomerStore = create<CustomerState>()(
 
     init: () => {
       set({ loading: true });
-      return fbSubscribeCustomers((list) => {
+      return sbSubscribeCustomers((list) => {
         set({ customers: list, loading: false });
       });
     },
@@ -62,7 +62,7 @@ export const useCustomerStore = create<CustomerState>()(
           );
       set({ customers: next, syncing: true });
       try {
-        await fbPushCustomers(next, { name: u.name, role: u.role });
+        await sbPushCustomers(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -92,7 +92,7 @@ export const useCustomerStore = create<CustomerState>()(
       const next = [...customers, ...toAdd];
       set({ customers: next, syncing: true });
       try {
-        await fbPushCustomers(next, { name: u.name, role: u.role });
+        await sbPushCustomers(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -107,7 +107,7 @@ export const useCustomerStore = create<CustomerState>()(
       const next = get().customers.filter((c) => c.id !== id);
       set({ customers: next, syncing: true });
       try {
-        await fbPushCustomers(next, { name: u.name, role: u.role });
+        await sbPushCustomers(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
       } finally {
@@ -122,7 +122,7 @@ export const useCustomerStore = create<CustomerState>()(
       const next = get().customers.map((c) =>
         c.id === customerId ? { ...c, interactions: [...(c.interactions ?? []), entry], updatedAt: entry.at, updatedBy: u.name } : c);
       set({ customers: next, syncing: true });
-      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi ghi chăm sóc: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -133,7 +133,7 @@ export const useCustomerStore = create<CustomerState>()(
       const next = get().customers.map((c) =>
         c.id === customerId ? { ...c, interactions: (c.interactions ?? []).filter((i) => i.id !== interactionId) } : c);
       set({ customers: next, syncing: true });
-      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -145,7 +145,7 @@ export const useCustomerStore = create<CustomerState>()(
       const next = get().customers.map((c) =>
         c.id === customerId ? { ...c, nextFollowUp: { date, note: note.trim(), byU: u.u, byName: u.name }, interactions: [...(c.interactions ?? []), log], updatedAt: log.at, updatedBy: u.name } : c);
       set({ customers: next, syncing: true });
-      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi đặt lịch: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -156,7 +156,7 @@ export const useCustomerStore = create<CustomerState>()(
       const next = get().customers.map((c) =>
         c.id === customerId ? { ...c, nextFollowUp: undefined } : c);
       set({ customers: next, syncing: true });
-      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
@@ -200,7 +200,7 @@ export const useCustomerStore = create<CustomerState>()(
         .filter((c) => !removeIds.has(c.id))
         .map((c) => (c.id === primary.id ? merged : c));
       set({ customers: next, syncing: true });
-      try { await fbPushCustomers(next, { name: u.name, role: u.role }); }
+      try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
       catch (e) { window.alert('❌ Lỗi gộp: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },

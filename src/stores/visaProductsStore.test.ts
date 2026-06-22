@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useVisaProductsStore } from './visaProductsStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { VisaProduct } from '@/types';
 
 const reset = snapshotInitial(useVisaProductsStore);
@@ -37,8 +37,8 @@ describe('visaProductsStore', () => {
 
   it('init subscribes; null payload still flips loaded=true', () => {
     useVisaProductsStore.getState().init();
-    expect(fb.fbSubscribeVisaProducts).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeVisaProducts).mock.calls[0][0];
+    expect(fb.sbSubscribeVisaProducts).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeVisaProducts).mock.calls[0][0];
     cb(null);
     expect(useVisaProductsStore.getState().loaded).toBe(true);
     expect(useVisaProductsStore.getState().products).toEqual([]);
@@ -47,7 +47,7 @@ describe('visaProductsStore', () => {
   it('callback with payload populates products and merges rates', () => {
     const before = useVisaProductsStore.getState().rates;
     useVisaProductsStore.getState().init();
-    const cb = vi.mocked(fb.fbSubscribeVisaProducts).mock.calls[0][0];
+    const cb = vi.mocked(fb.sbSubscribeVisaProducts).mock.calls[0][0];
     cb({ products: [product()], rates: { USD: 99_000 } });
     const s = useVisaProductsStore.getState();
     expect(s.products).toEqual([product()]);
@@ -61,7 +61,7 @@ describe('visaProductsStore', () => {
   it('callback with empty rates keeps existing seeded rates', () => {
     const seeded = useVisaProductsStore.getState().rates;
     useVisaProductsStore.getState().init();
-    const cb = vi.mocked(fb.fbSubscribeVisaProducts).mock.calls[0][0];
+    const cb = vi.mocked(fb.sbSubscribeVisaProducts).mock.calls[0][0];
     cb({ products: [], rates: {} });
     expect(useVisaProductsStore.getState().rates).toEqual(seeded);
   });
@@ -72,12 +72,12 @@ describe('visaProductsStore', () => {
     const s = useVisaProductsStore.getState();
     expect(s.products).toEqual(data.products);
     expect(s.rates).toEqual(data.rates);
-    expect(vi.mocked(fb.fbSaveVisaProducts).mock.calls[0]).toEqual([data, 'tester']);
+    expect(vi.mocked(fb.sbSaveVisaProducts).mock.calls[0]).toEqual([data, 'tester']);
   });
 
   it('save shows alert on firebase failure', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-    vi.mocked(fb.fbSaveVisaProducts).mockRejectedValueOnce(new Error('boom'));
+    vi.mocked(fb.sbSaveVisaProducts).mockRejectedValueOnce(new Error('boom'));
     await useVisaProductsStore.getState().save(
       { products: [], rates: {} }, 'tester',
     );

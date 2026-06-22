@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { usePaymentApprovalStore } from './paymentApprovalStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 
 const reset = snapshotInitial(usePaymentApprovalStore);
 beforeEach(() => { reset(); vi.clearAllMocks(); });
@@ -14,14 +14,14 @@ describe('paymentApprovalStore', () => {
     expect(usePaymentApprovalStore.getState().approvals).toEqual({});
   });
 
-  it('init subscribes to fbSubscribePaymentApprovals', () => {
+  it('init subscribes to sbSubscribePaymentApprovals', () => {
     usePaymentApprovalStore.getState().init();
-    expect(fb.fbSubscribePaymentApprovals).toHaveBeenCalledTimes(1);
+    expect(fb.sbSubscribePaymentApprovals).toHaveBeenCalledTimes(1);
   });
 
   it('updates approvals when the subscription callback fires', () => {
     usePaymentApprovalStore.getState().init();
-    const cb = vi.mocked(fb.fbSubscribePaymentApprovals).mock.calls[0][0];
+    const cb = vi.mocked(fb.sbSubscribePaymentApprovals).mock.calls[0][0];
     cb({ contractA: { p1: { stage: 'approved' } as never } } as never);
     expect(usePaymentApprovalStore.getState().approvals)
       .toEqual({ contractA: { p1: { stage: 'approved' } } });

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useVisaProcStore } from './visaProcStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { VisaProcDoc, VisaProcIndexEntry } from '@/types';
 
 const reset = snapshotInitial(useVisaProcStore);
@@ -52,28 +52,28 @@ describe('visaProcStore', () => {
 
   it('init subscribes and populates list', () => {
     useVisaProcStore.getState().init();
-    expect(fb.fbSubscribeVisaProcs).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeVisaProcs).mock.calls[0][0];
+    expect(fb.sbSubscribeVisaProcs).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeVisaProcs).mock.calls[0][0];
     cb([indexEntry()]);
     const s = useVisaProcStore.getState();
     expect(s.list).toEqual([indexEntry()]);
     expect(s.loading).toBe(false);
   });
 
-  it('save forwards to fbSaveVisaProc', async () => {
+  it('save forwards to sbSaveVisaProc', async () => {
     const d = full();
     await useVisaProcStore.getState().save(d, 'tester');
-    expect(vi.mocked(fb.fbSaveVisaProc).mock.calls[0]).toEqual([d, 'tester']);
+    expect(vi.mocked(fb.sbSaveVisaProc).mock.calls[0]).toEqual([d, 'tester']);
   });
 
-  it('load returns whatever fbGetVisaProc resolves with', async () => {
+  it('load returns whatever sbGetVisaProc resolves with', async () => {
     const d = full({ id: 'fetched' });
-    vi.mocked(fb.fbGetVisaProc).mockResolvedValueOnce(d);
+    vi.mocked(fb.sbGetVisaProc).mockResolvedValueOnce(d);
     expect(await useVisaProcStore.getState().load('fetched')).toEqual(d);
   });
 
-  it('delete forwards id to fbDeleteVisaProc', async () => {
+  it('delete forwards id to sbDeleteVisaProc', async () => {
     await useVisaProcStore.getState().delete('vp1');
-    expect(vi.mocked(fb.fbDeleteVisaProc).mock.calls[0]).toEqual(['vp1']);
+    expect(vi.mocked(fb.sbDeleteVisaProc).mock.calls[0]).toEqual(['vp1']);
   });
 });

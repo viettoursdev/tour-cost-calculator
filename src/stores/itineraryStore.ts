@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import {
-  fbDeleteItinerary, fbGetItinerary, fbSaveItinerary, fbSubscribeItineraries,
-} from '@/lib/dataBackend';
+  sbDeleteItinerary, sbGetItinerary, sbSaveItinerary, sbSubscribeItineraries,
+} from '@/lib/supabase';
 import type { Itinerary, ItineraryIndexEntry } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type State = {
   list: ItineraryIndexEntry[];
@@ -20,18 +20,18 @@ export const useItineraryStore = create<State>()((set) => ({
 
   init: () => {
     set({ loading: true });
-    return fbSubscribeItineraries((items) => {
+    return sbSubscribeItineraries((items) => {
       set({ list: items, loading: false });
     });
   },
 
   save: async (itin, savedBy) => {
-    await fbSaveItinerary(itin, savedBy);
+    await sbSaveItinerary(itin, savedBy);
   },
 
-  load: async (id) => fbGetItinerary(id),
+  load: async (id) => sbGetItinerary(id),
 
   delete: async (id) => {
-    await fbDeleteItinerary(id);
+    await sbDeleteItinerary(id);
   },
 }));

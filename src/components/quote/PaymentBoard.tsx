@@ -12,7 +12,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { filterRank } from '@/lib/search';
 import { ROLE_RANK } from '@/auth/ROLES';
-import { fbGetQuoteProject, fbGetTourPayments, fbBackfillPaymentIndex } from '@/lib/dataBackend';
+import { sbGetQuoteProject, sbGetTourPayments, sbBackfillPaymentIndex } from '@/lib/supabase';
 import { fmtVND } from './calc';
 import { getCATS } from './constants';
 import { computePaymentSummary, slugifyTourKey } from './paymentUtils';
@@ -63,14 +63,14 @@ export function PaymentBoard() {
     try {
       const updates: Record<string, { payable: number; paid: number; remaining: number }> = {};
       for (const q of missing) {
-        const proj = await fbGetQuoteProject(q.cloudId).catch(() => null);
+        const proj = await sbGetQuoteProject(q.cloudId).catch(() => null);
         const draft = proj?.currentState;
         if (!draft?.template) continue;
-        const pay = await fbGetTourPayments(slugifyTourKey(draft.info.name ?? '')).catch(() => null);
+        const pay = await sbGetTourPayments(slugifyTourKey(draft.info.name ?? '')).catch(() => null);
         const sumI = computePaymentSummary(draft, getCATS(draft.template), pay?.payments ?? {}, pay?.customItems ?? []);
         if (sumI.payable > 0) updates[q.cloudId] = sumI;
       }
-      const n = await fbBackfillPaymentIndex(updates);
+      const n = await sbBackfillPaymentIndex(updates);
       window.alert(n ? `✅ Đã tổng hợp công nợ cho ${n} báo giá.` : 'Không có báo giá nào có chi phí NCC để tổng hợp.');
     } catch (e) {
       window.alert('❌ Tổng hợp công nợ lỗi: ' + (e as Error).message);

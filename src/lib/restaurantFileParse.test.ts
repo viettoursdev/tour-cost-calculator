@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 import { mapRestaurant, parsedToRestaurant } from './restaurantFileParse';
 
 describe('mapRestaurant', () => {

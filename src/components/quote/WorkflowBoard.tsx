@@ -11,7 +11,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { deadlineMeta } from '@/components/visa/constants';
 import { filterRank } from '@/lib/search';
 import { ROLE_RANK } from '@/auth/ROLES';
-import { fbGetQuoteProject, fbBackfillWorkflowIndex } from '@/lib/dataBackend';
+import { sbGetQuoteProject, sbBackfillWorkflowIndex } from '@/lib/supabase';
 import { workflowBoardSummary, workflowDueSummary } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
 import type { CloudQuoteEntry } from '@/types';
@@ -48,7 +48,7 @@ export function WorkflowBoard() {
     try {
       const updates: Record<string, { workflowDue?: ReturnType<typeof workflowDueSummary>; workflowSummary?: ReturnType<typeof workflowBoardSummary>; departDate?: string }> = {};
       for (const q of missing) {
-        const proj = await fbGetQuoteProject(q.cloudId).catch(() => null);
+        const proj = await sbGetQuoteProject(q.cloudId).catch(() => null);
         const state = proj?.currentState;
         const steps = state?.workflow;
         const upd: { workflowDue?: ReturnType<typeof workflowDueSummary>; workflowSummary?: ReturnType<typeof workflowBoardSummary>; departDate?: string } = {};
@@ -56,7 +56,7 @@ export function WorkflowBoard() {
         if (state?.info?.startDate) upd.departDate = state.info.startDate;
         if (Object.keys(upd).length) updates[q.cloudId] = upd;
       }
-      const n = await fbBackfillWorkflowIndex(updates);
+      const n = await sbBackfillWorkflowIndex(updates);
       window.alert(n ? `✅ Đã cập nhật chỉ số cho ${n} báo giá.` : 'Không có báo giá nào có quy trình để cập nhật.');
     } catch (e) {
       window.alert('❌ Cập nhật chỉ số lỗi: ' + (e as Error).message);

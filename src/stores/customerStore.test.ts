@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useCustomerStore } from './customerStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { Customer, User } from '@/types';
 
 const resetCustomer = snapshotInitial(useCustomerStore);
@@ -40,8 +40,8 @@ describe('customerStore', () => {
 
   it('init subscribes and updates list when callback fires', () => {
     useCustomerStore.getState().init();
-    expect(fb.fbSubscribeCustomers).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeCustomers).mock.calls[0][0];
+    expect(fb.sbSubscribeCustomers).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeCustomers).mock.calls[0][0];
     cb([customer()]);
     const s = useCustomerStore.getState();
     expect(s.customers).toEqual([customer()]);
@@ -54,8 +54,8 @@ describe('customerStore', () => {
     expect(list.length).toBe(1);
     expect(list[0].name).toBe('X');
     expect(list[0].createdBy).toBe('Tony');
-    expect(fb.fbPushCustomers).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbPushCustomers).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
+    expect(fb.sbPushCustomers).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbPushCustomers).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
   });
 
   it('save updates an existing customer and stamps updatedBy', async () => {
@@ -71,7 +71,7 @@ describe('customerStore', () => {
     useAuthStore.setState({ currentUser: null }, false);
     await useCustomerStore.getState().save(customer({ id: 'x' }));
     expect(useCustomerStore.getState().customers).toEqual([]);
-    expect(fb.fbPushCustomers).not.toHaveBeenCalled();
+    expect(fb.sbPushCustomers).not.toHaveBeenCalled();
   });
 
   it('delete removes by id and pushes the trimmed list', async () => {
@@ -80,6 +80,6 @@ describe('customerStore', () => {
     }, false);
     await useCustomerStore.getState().delete('c1');
     expect(useCustomerStore.getState().customers).toEqual([customer({ id: 'c2' })]);
-    expect(fb.fbPushCustomers).toHaveBeenCalledTimes(1);
+    expect(fb.sbPushCustomers).toHaveBeenCalledTimes(1);
   });
 });

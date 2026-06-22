@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useMenuStore } from './menuStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { Menu, MenuIndexEntry } from '@/types';
 
 const reset = snapshotInitial(useMenuStore);
@@ -53,30 +53,30 @@ describe('menuStore', () => {
 
   it('init subscribes and populates list', () => {
     useMenuStore.getState().init();
-    expect(fb.fbSubscribeMenus).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.fbSubscribeMenus).mock.calls[0][0];
+    expect(fb.sbSubscribeMenus).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(fb.sbSubscribeMenus).mock.calls[0][0];
     cb([indexEntry()]);
     const s = useMenuStore.getState();
     expect(s.list).toEqual([indexEntry()]);
     expect(s.loading).toBe(false);
   });
 
-  it('save forwards to fbSaveMenu', async () => {
+  it('save forwards to sbSaveMenu', async () => {
     const m = full();
     await useMenuStore.getState().save(m, 'tester');
-    expect(fb.fbSaveMenu).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbSaveMenu).mock.calls[0]).toEqual([m, 'tester']);
+    expect(fb.sbSaveMenu).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbSaveMenu).mock.calls[0]).toEqual([m, 'tester']);
   });
 
-  it('load returns whatever fbGetMenu resolves with', async () => {
+  it('load returns whatever sbGetMenu resolves with', async () => {
     const m = full({ id: 'fetched' });
-    vi.mocked(fb.fbGetMenu).mockResolvedValueOnce(m);
+    vi.mocked(fb.sbGetMenu).mockResolvedValueOnce(m);
     const got = await useMenuStore.getState().load('fetched');
     expect(got).toEqual(m);
   });
 
-  it('delete forwards id to fbDeleteMenu', async () => {
+  it('delete forwards id to sbDeleteMenu', async () => {
     await useMenuStore.getState().delete('m1');
-    expect(vi.mocked(fb.fbDeleteMenu).mock.calls[0]).toEqual(['m1']);
+    expect(vi.mocked(fb.sbDeleteMenu).mock.calls[0]).toEqual(['m1']);
   });
 });

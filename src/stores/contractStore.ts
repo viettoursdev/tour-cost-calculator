@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeContracts, fbPushContracts } from '@/lib/dataBackend';
+import { sbSubscribeContracts, sbPushContracts } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import type { Contract, ContractPayment } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type ContractState = {
   contracts: Contract[];
@@ -26,7 +26,7 @@ export const useContractStore = create<ContractState>()(
 
     init: () => {
       set({ loading: true });
-      return fbSubscribeContracts((list) => {
+      return sbSubscribeContracts((list) => {
         set({ contracts: list, loading: false });
       });
     },
@@ -65,7 +65,7 @@ export const useContractStore = create<ContractState>()(
 
       set({ contracts: next, syncing: true });
       try {
-        await fbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts(next, { name: u.name, role: u.role });
         logAudit(isNew ? 'create' : 'update', 'Hợp đồng', saved.tourName || saved.id);
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
@@ -81,7 +81,7 @@ export const useContractStore = create<ContractState>()(
       const next = get().contracts.filter((c) => c.id !== id);
       set({ contracts: next, syncing: true });
       try {
-        await fbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts(next, { name: u.name, role: u.role });
         logAudit('delete', 'Hợp đồng', target?.tourName || id);
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
@@ -99,7 +99,7 @@ export const useContractStore = create<ContractState>()(
       );
       set({ contracts: next, syncing: true });
       try {
-        await fbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi: ' + (e as Error).message);
       } finally {
@@ -126,7 +126,7 @@ export const useContractStore = create<ContractState>()(
       );
       set({ contracts: next, syncing: true });
       try {
-        await fbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi: ' + (e as Error).message);
       } finally {
@@ -143,7 +143,7 @@ export const useContractStore = create<ContractState>()(
       );
       set({ contracts: next, syncing: true });
       try {
-        await fbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts(next, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi: ' + (e as Error).message);
       } finally {

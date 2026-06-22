@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { usePoiStore } from './poiStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { PoiEntry, User } from '@/types';
 
 const resetPoi = snapshotInitial(usePoiStore);
@@ -25,7 +25,7 @@ const poi = (over: Partial<PoiEntry> = {}): PoiEntry =>
 describe('poiStore', () => {
   it('init subscribes and populates', () => {
     usePoiStore.getState().init();
-    const cb = vi.mocked(fb.fbSubscribePois).mock.calls[0][0];
+    const cb = vi.mocked(fb.sbSubscribePois).mock.calls[0][0];
     cb([poi()]);
     expect(usePoiStore.getState().pois).toEqual([poi()]);
   });
@@ -37,7 +37,7 @@ describe('poiStore', () => {
     expect(list[0].place).toBe('Hội An');
     expect(list[0].createdBy).toBe('Tony');
     expect(list[0].id.length).toBeGreaterThan(0);
-    expect(fb.fbPushPois).toHaveBeenCalledTimes(1);
+    expect(fb.sbPushPois).toHaveBeenCalledTimes(1);
   });
 
   it('upsertMany adds new places and skips duplicates (case-insensitive)', async () => {
@@ -57,6 +57,6 @@ describe('poiStore', () => {
     useAuthStore.setState({ currentUser: null }, false);
     const n = await usePoiStore.getState().upsertMany([{ place: 'X', commentary: 'Y' }]);
     expect(n).toBe(0);
-    expect(fb.fbPushPois).not.toHaveBeenCalled();
+    expect(fb.sbPushPois).not.toHaveBeenCalled();
   });
 });

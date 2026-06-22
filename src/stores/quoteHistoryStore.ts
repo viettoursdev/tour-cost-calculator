@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeQuoteHistory, fbSubscribeDMCQuoteHistory } from '@/lib/dataBackend';
+import { sbSubscribeQuoteHistory, sbSubscribeDMCQuoteHistory } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { CloudQuoteEntry, Template, User } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type QuoteHistoryState = {
   quotes: CloudQuoteEntry[];          // regular template quotes
@@ -23,10 +23,10 @@ export const useQuoteHistoryStore = create<QuoteHistoryState>()(
 
     init: (_user) => {
       set({ loading: true, error: null });
-      const u1 = fbSubscribeQuoteHistory((quotes) => {
+      const u1 = sbSubscribeQuoteHistory((quotes) => {
         set({ quotes, loading: false });
       });
-      const u2 = fbSubscribeDMCQuoteHistory((dmcQuotes) => {
+      const u2 = sbSubscribeDMCQuoteHistory((dmcQuotes) => {
         set({ dmcQuotes });
       });
       return () => {

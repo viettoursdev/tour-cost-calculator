@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sbSubscribeGuideSchedule, sbPushGuideSchedule } from '@/lib/supabase';
-import { fbGetQuoteProject } from '@/lib/dataBackend';
+import { sbGetQuoteProject } from '@/lib/supabase';
 import { buildLegsFromFlights } from '@/lib/guideSchedule';
 import { useAuthStore } from './authStore';
 import type { FreelanceGuide, GuideFlightLeg, GuideRef, TourGuideAssignment } from '@/types';
@@ -117,7 +117,7 @@ export const useGuideScheduleStore = create<State>()(
       },
 
       seedLegsFromQuote: async (tourCloudId, guideIds, meta) => {
-        const proj = await fbGetQuoteProject(tourCloudId);
+        const proj = await sbGetQuoteProject(tourCloudId);
         const flights = proj?.currentState?.flights;
         const departISO = meta.departDate ?? proj?.currentState?.info?.startDate ?? undefined;
         const fresh: GuideFlightLeg[] = guideIds.flatMap((gid, gi) =>
@@ -132,7 +132,7 @@ export const useGuideScheduleStore = create<State>()(
       },
 
       loadTourFlightCandidates: async (tourCloudId, departDate) => {
-        const proj = await fbGetQuoteProject(tourCloudId);
+        const proj = await sbGetQuoteProject(tourCloudId);
         const flights = proj?.currentState?.flights;
         const departISO = departDate ?? proj?.currentState?.info?.startDate ?? undefined;
         return buildLegsFromFlights(flights, '', tourCloudId, departISO,

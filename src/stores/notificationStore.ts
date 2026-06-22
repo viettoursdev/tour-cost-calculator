@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {
-  fbSubscribeNotifications, fbPushNotifications,
-} from '@/lib/dataBackend';
+  sbSubscribeNotifications, sbPushNotifications,
+} from '@/lib/supabase';
 import type { Notification } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type NotificationState = {
   notifications: Notification[];
@@ -25,14 +25,14 @@ export const useNotificationStore = create<NotificationState>()(
     setCenterOpen: (v) => set({ centerOpen: v }),
 
     init: (username) =>
-      fbSubscribeNotifications(username, (list) => {
+      sbSubscribeNotifications(username, (list) => {
         set({ notifications: list, unreadCount: list.filter((n) => !n.read).length });
       }),
 
     markAllRead: async (username) => {
       const next = get().notifications.map((n) => ({ ...n, read: true }));
       set({ notifications: next, unreadCount: 0 });
-      await fbPushNotifications(username, next);
+      await sbPushNotifications(username, next);
     },
 
     markRead: async (username, id) => {
@@ -40,7 +40,7 @@ export const useNotificationStore = create<NotificationState>()(
         n.id === id ? { ...n, read: true } : n,
       );
       set({ notifications: next, unreadCount: next.filter((n) => !n.read).length });
-      await fbPushNotifications(username, next);
+      await sbPushNotifications(username, next);
     },
   })),
 );

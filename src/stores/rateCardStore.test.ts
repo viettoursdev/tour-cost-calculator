@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useRateCardStore } from './rateCardStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { User } from '@/types';
 
 const resetRC = snapshotInitial(useRateCardStore);
@@ -32,14 +32,14 @@ describe('rateCardStore', () => {
     expect(s.status).toBe('idle');
   });
 
-  it('init subscribes to fbSubscribeMasterRC', () => {
+  it('init subscribes to sbSubscribeMasterRC', () => {
     useRateCardStore.getState().init();
-    expect(fb.fbSubscribeMasterRC).toHaveBeenCalledTimes(1);
+    expect(fb.sbSubscribeMasterRC).toHaveBeenCalledTimes(1);
   });
 
   it('subscriber callback applies remote rates', () => {
     useRateCardStore.getState().init();
-    const cb = vi.mocked(fb.fbSubscribeMasterRC).mock.calls[0][0];
+    const cb = vi.mocked(fb.sbSubscribeMasterRC).mock.calls[0][0];
     cb({
       hotels: { 'Hà Nội': [{ name: 'h1' }] },
       visaRates: { JP: { fee: 100 } },
@@ -57,10 +57,10 @@ describe('rateCardStore', () => {
       hotels: { x: [] }, visaRates: {}, otherRates: {},
     });
     expect(useRateCardStore.getState().status).toBe('syncing');
-    expect(fb.fbPushMasterRC).not.toHaveBeenCalled();
+    expect(fb.sbPushMasterRC).not.toHaveBeenCalled();
     vi.advanceTimersByTime(2000);
-    expect(fb.fbPushMasterRC).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.fbPushMasterRC).mock.calls[0][1]).toBe('Tony (CEO)');
+    expect(fb.sbPushMasterRC).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fb.sbPushMasterRC).mock.calls[0][1]).toBe('Tony (CEO)');
   });
 
   it('updateHotels merges a city into hotels without mutating prior state', () => {
@@ -92,7 +92,7 @@ describe('rateCardStore', () => {
       hotels: {}, visaRates: {}, otherRates: { k: { v: 1 } },
     });
     vi.advanceTimersByTime(2000);
-    const calls = vi.mocked(fb.fbPushMasterRC).mock.calls;
+    const calls = vi.mocked(fb.sbPushMasterRC).mock.calls;
     expect(calls[calls.length - 1][1]).toBe('unknown');
   });
 });

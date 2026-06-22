@@ -21,7 +21,7 @@ import type { CloudQuoteEntry, Collaborator, QuoteStatus, Template, User, Workfl
 import CloudDownload from '@mui/icons-material/CloudDownload';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
-import { fbGetQuoteProject, fbGetDMCQuoteProject } from '@/lib/dataBackend';
+import { sbGetQuoteProject, sbGetDMCQuoteProject } from '@/lib/supabase';
 import AttachFile from '@mui/icons-material/AttachFile';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { filterRank } from '@/lib/search';
@@ -256,7 +256,7 @@ export function QuoteHistoryView() {
   const handleDuplicate = async (row: CloudQuoteEntry) => {
     if (!window.confirm(`Tạo báo giá MỚI từ "${row.name}"? Sao chép hạng mục & cấu hình; quy trình về "Chưa làm", chưa lưu.`)) return;
     try {
-      const proj = row.template === 'dmc' ? await fbGetDMCQuoteProject(row.cloudId) : await fbGetQuoteProject(row.cloudId);
+      const proj = row.template === 'dmc' ? await sbGetDMCQuoteProject(row.cloudId) : await sbGetQuoteProject(row.cloudId);
       const st = proj?.currentState;
       if (!st) { window.alert('Không tải được dữ liệu báo giá nguồn.'); return; }
       const workflow = (st.workflow ?? []).map((s): WorkflowStep => ({ ...s, status: 'todo', doneDate: null, dueDate: null, log: undefined }));

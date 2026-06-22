@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/firebase', () => import('@/test/firebaseStub'));
+vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useQuoteStore } from './quoteStore';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/firebase';
+import * as fb from '@/lib/supabase';
 import type { User } from '@/types';
 
 const resetQuote = snapshotInitial(useQuoteStore);
@@ -197,24 +197,24 @@ describe('quoteStore.exportJSON', () => {
 });
 
 describe('quoteStore.saveCloud', () => {
-  it('calls fbSaveQuote for non-dmc templates', async () => {
+  it('calls sbSaveQuote for non-dmc templates', async () => {
     useQuoteStore.setState({
       draft: { ...useQuoteStore.getState().draft, template: 'domestic', currentQuoteId: null },
     }, false);
     await useQuoteStore.getState().saveCloud('q1', []);
-    expect(fb.fbSaveQuote).toHaveBeenCalledTimes(1);
-    expect(fb.fbSaveQuoteState).toHaveBeenCalledTimes(1);
-    expect(fb.fbSaveDMCQuote).not.toHaveBeenCalled();
+    expect(fb.sbSaveQuote).toHaveBeenCalledTimes(1);
+    expect(fb.sbSaveQuoteState).toHaveBeenCalledTimes(1);
+    expect(fb.sbSaveDMCQuote).not.toHaveBeenCalled();
   });
 
-  it('calls fbSaveDMCQuote for dmc templates', async () => {
+  it('calls sbSaveDMCQuote for dmc templates', async () => {
     useQuoteStore.setState({
       draft: { ...useQuoteStore.getState().draft, template: 'dmc', currentQuoteId: null },
     }, false);
     await useQuoteStore.getState().saveCloud('q1', []);
-    expect(fb.fbSaveDMCQuote).toHaveBeenCalledTimes(1);
-    expect(fb.fbSaveDMCQuoteState).toHaveBeenCalledTimes(1);
-    expect(fb.fbSaveQuote).not.toHaveBeenCalled();
+    expect(fb.sbSaveDMCQuote).toHaveBeenCalledTimes(1);
+    expect(fb.sbSaveDMCQuoteState).toHaveBeenCalledTimes(1);
+    expect(fb.sbSaveQuote).not.toHaveBeenCalled();
   });
 
   it('generates a quote code only when the draft is new', async () => {

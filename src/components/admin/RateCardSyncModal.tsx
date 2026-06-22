@@ -8,7 +8,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
-import { fbPullMasterRC, fbPushMasterRC, fbSubscribeMasterRC } from '@/lib/dataBackend';
+import { sbPullMasterRC, sbPushMasterRC, sbSubscribeMasterRC } from '@/lib/supabase';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import type { RateCard, RateCardDoc, User } from '@/types';
@@ -72,7 +72,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
     setCloudLoading(true);
     setCloudStatus(null);
     let cancelled = false;
-    void fbPullMasterRC().then((d) => {
+    void sbPullMasterRC().then((d) => {
       if (!cancelled) {
         setCloudData(d);
         setCloudLoading(false);
@@ -80,7 +80,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
     }).catch(() => {
       if (!cancelled) setCloudLoading(false);
     });
-    const unsub = fbSubscribeMasterRC((d) => {
+    const unsub = sbSubscribeMasterRC((d) => {
       if (!cancelled) setCloudData(d);
     });
     return () => {
@@ -106,7 +106,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
     if (!window.confirm('Đẩy rate card hiện tại lên cloud?\n\n⚠ Dữ liệu cloud sẽ bị ghi đè. Tất cả tài khoản kéo về sẽ nhận bản mới này.')) return;
     setPushing(true); setCloudStatus(null);
     try {
-      await fbPushMasterRC(localRates, who);
+      await sbPushMasterRC(localRates, who);
       setCloudStatus({ type: 'success', msg: '✅ Đẩy lên cloud thành công! Tất cả tài khoản có thể kéo về ngay.' });
     } catch (err) {
       setCloudStatus({ type: 'error', msg: '❌ Lỗi: ' + (err as Error).message });
