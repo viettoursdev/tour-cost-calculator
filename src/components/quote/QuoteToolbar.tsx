@@ -10,6 +10,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import AddTaskOutlinedIcon from '@mui/icons-material/AddTaskOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import LayersClearOutlinedIcon from '@mui/icons-material/LayersClearOutlined';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
@@ -190,6 +191,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const undoDraft = useQuoteStore((s) => s.undoDraft);
   const redoDraft = useQuoteStore((s) => s.redoDraft);
+  const clearItems = useQuoteStore((s) => s.clearItems);
   const canUndo = useQuoteStore((s) => s.draftPast.length > 0);
   const canRedo = useQuoteStore((s) => s.draftFuture.length > 0);
   useUndoRedoShortcuts(undoDraft, redoDraft);
@@ -562,6 +564,20 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
             <AddCircleOutlineIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+        {/* Reset báo giá: xoá hết hạng mục & đơn giá của báo giá đang mở (totals = 0). */}
+        {(template === 'domestic' || template === 'intl' || isDMC) && (
+          <Tooltip title="Reset báo giá (xoá hết hạng mục & đơn giá về 0)">
+            <IconButton size="small"
+              onClick={() => {
+                if (window.confirm('Xoá HẾT hạng mục & đơn giá của báo giá đang mở? Tất cả về 0.\n(Có thể hoàn tác bằng Hoàn tác/Ctrl+Z.)')) {
+                  clearItems();
+                }
+              }}
+              sx={{ border: '1px solid rgba(220,50,80,0.4)', borderRadius: 1.5, color: '#dc3250' }}>
+              <LayersClearOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
         {/* Share to customer (regular quotes only) */}
         {canExport && (
           <Tooltip title="Chia sẻ báo giá cho khách (link)">

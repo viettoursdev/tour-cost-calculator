@@ -73,6 +73,9 @@ type QuoteState = {
 
   init: (user: User) => void;
   reset: () => void;
+  /** Xoá hết hạng mục & đơn giá của báo giá ĐANG MỞ (totals về 0), giữ nguyên
+   *  tên/khách/template/tỷ giá. Có ghi lịch sử nên Ctrl+Z hoàn tác được. */
+  clearItems: () => void;
   /** CEO: ghi tỷ giá lên cloud đồng bộ toàn hệ thống (áp cho báo giá mới). */
   pushGlobalRates: (rates: Record<string, number>) => Promise<void>;
   /** Sửa 1 dòng trong bảng tỷ giá đồng bộ (global scope, trước khi Đồng bộ). */
@@ -301,6 +304,10 @@ export const useQuoteStore = create<QuoteState>()(
         reset: () => {
           muted(() => set({ draft: EMPTY_DRAFT, snapshots: [], currentUsername: null, view: 'cost', cloudDirty: false, ...CLEAR_HIST }));
         },
+
+        // Xoá toàn bộ dòng hạng mục (và đơn giá kèm theo) → totals = 0. KHÔNG muted
+        // để còn hoàn tác; giữ template/info/rates/catEnabled.
+        clearItems: () => set((s) => ({ draft: { ...s.draft, items: {} } })),
 
         newDraft: (template, meta) => {
           const tpl = TEMPLATES[template];
