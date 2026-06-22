@@ -61,9 +61,16 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   // sau mép phải logo để không đè; chiều rộng giới hạn để tránh chạm cột nhân viên.
   const logoBottom = drawLogo(pdf, mX, y);
   const brandX = mX + LOGO_W_MM + 5;
-  const brandMaxW = 78; // chừa khoảng cho cột liên hệ bên phải
-  pdf.setFontSize(12); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6, { maxWidth: brandMaxW });
+  // Chừa ~36mm bên phải cho cột nhân viên báo giá.
+  const brandMaxW = pageW - mX - 36 - brandX;
+  // Tên công ty: THU NHỎ vừa 1 dòng (không xuống dòng đè lên hotline).
+  pdf.setFont(FONT, 'bold');
+  let brandSize = 12;
+  pdf.setFontSize(brandSize);
+  const brandW = pdf.getTextWidth('VIETTOURS INCENTIVES & EVENTS');
+  if (brandW > brandMaxW) brandSize = Math.max(8, (brandSize * brandMaxW) / brandW);
+  pdf.setFontSize(brandSize); pdf.setTextColor(...teal);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
   pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: brandMaxW });
 

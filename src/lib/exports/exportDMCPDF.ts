@@ -45,10 +45,17 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
   pdf.setFillColor(...navy); pdf.rect(0, 0, pageW, 8, 'F');
   const logoBottom = drawLogo(pdf, mX, y);
   const brandX = mX + LOGO_W_MM + 5;
-  pdf.setFontSize(12); pdf.setTextColor(...navy); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6, { maxWidth: 78 });
+  const brandMaxW = pageW - mX - 36 - brandX; // chừa cột nhân viên bên phải
+  // Tên công ty: THU NHỎ vừa 1 dòng (không xuống dòng đè lên hotline).
+  pdf.setFont(FONT, 'bold');
+  let brandSize = 12;
+  pdf.setFontSize(brandSize);
+  const brandW = pdf.getTextWidth('VIETTOURS INCENTIVES & EVENTS');
+  if (brandW > brandMaxW) brandSize = Math.max(8, (brandSize * brandMaxW) / brandW);
+  pdf.setFontSize(brandSize); pdf.setTextColor(...navy);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: 78 });
+  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: brandMaxW });
   pdf.setFontSize(7); pdf.setTextColor(...gray);
   pdf.text('NHÂN VIÊN PHỤ TRÁCH', pageW - mX, y + 2, { align: 'right' });
   pdf.setFontSize(9.5); pdf.setTextColor(...navy); pdf.setFont(FONT, 'bold');
