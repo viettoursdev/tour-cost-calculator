@@ -9,9 +9,11 @@ import {
   canClose,
   dealGates,
   isTerminalStage,
+  contractFlags,
   DEAL_STAGES,
   type DealInput,
 } from './dealStage';
+import type { Contract } from '@/types';
 import { defaultWorkflow, setStepStatus, type WorkflowStepKey } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
 
@@ -170,6 +172,33 @@ describe('nextAction — CTA theo giai đoạn', () => {
     expect(isTerminalStage('closed')).toBe(true);
     expect(isTerminalStage('lost')).toBe(true);
     expect(isTerminalStage('operating')).toBe(false);
+  });
+});
+
+describe('contractFlags — rút cờ từ hợp đồng', () => {
+  const c = (s: Contract['contractStatus'], acc = false): Pick<Contract, 'contractStatus' | 'hasAcceptance'> => ({
+    contractStatus: s,
+    hasAcceptance: acc,
+  });
+  it('null/undefined → null', () => {
+    expect(contractFlags(null)).toBeNull();
+    expect(contractFlags(undefined)).toBeNull();
+  });
+  it('draft → chưa ký', () => {
+    expect(contractFlags(c('draft'))).toEqual({ signed: false, completed: false, cancelled: false, hasAcceptance: false });
+  });
+  it('signed/active/completed đều coi là đã ký', () => {
+    expect(contractFlags(c('signed'))?.signed).toBe(true);
+    expect(contractFlags(c('active'))?.signed).toBe(true);
+    expect(contractFlags(c('completed'))?.signed).toBe(true);
+  });
+  it('completed → completed=true; cancelled → cancelled=true', () => {
+    expect(contractFlags(c('completed'))?.completed).toBe(true);
+    expect(contractFlags(c('cancelled'))?.cancelled).toBe(true);
+  });
+  it('xâu chuỗi với dealStage: hợp đồng completed + nghiệm thu → closed', () => {
+    const flags = contractFlags(c('completed', true));
+    expect(dealStage({ status: 'won', contract: flags })).toBe('closed');
   });
 });
 

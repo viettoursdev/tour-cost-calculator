@@ -49,7 +49,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 };
 
 export type QuoteViewKey =
-  | 'home' | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
+  | 'home' | 'cost' | 'cockpit' | 'summary' | 'history' | 'dashboard' | 'payment'
   | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics' | 'execboard' | 'advance' | 'process' | 'hr' | 'todo';
 
 type QuoteState = {

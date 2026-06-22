@@ -339,6 +339,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
     : [
         item('home', 'Hôm nay', <TodayOutlinedIcon />),
         item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
+        item('cockpit', 'Hồ sơ tour', <RouteOutlinedIcon />),
         item('history', 'Lịch sử báo giá', <HistoryIcon />),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),

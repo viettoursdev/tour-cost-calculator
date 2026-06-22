@@ -10,7 +10,7 @@
 //  Các cổng chặn (gate) là PREDICATE thuần trả về { ok, reason }. Tầng UI tự
 //  quyết định chặn cứng (disable nút) hay chỉ cảnh báo — module không ép.
 // ════════════════════════════════════════════════════════════════════════
-import type { QuoteStatus, WorkflowStatus, WorkflowStep } from '@/types';
+import type { Contract, QuoteStatus, WorkflowStatus, WorkflowStep } from '@/types';
 import { keyOf, type WorkflowStepKey } from './workflowConstants';
 
 /** Giai đoạn trong đường dây CRM. 7 giai đoạn xuôi + 1 nhánh kết thúc 'lost'. */
@@ -30,6 +30,20 @@ export interface DealContractFlags {
   completed?: boolean; // contractStatus === 'completed'
   cancelled?: boolean; // contractStatus === 'cancelled'
   hasAcceptance?: boolean; // đã có biên bản nghiệm thu
+}
+
+/** Rút cờ máy trạng thái từ một hợp đồng (null nếu chưa có hợp đồng liên kết). */
+export function contractFlags(
+  c: Pick<Contract, 'contractStatus' | 'hasAcceptance'> | null | undefined,
+): DealContractFlags | null {
+  if (!c) return null;
+  const s = c.contractStatus;
+  return {
+    signed: s === 'signed' || s === 'active' || s === 'completed',
+    completed: s === 'completed',
+    cancelled: s === 'cancelled',
+    hasAcceptance: !!c.hasAcceptance,
+  };
 }
 
 /** Đầu vào thuần cho máy trạng thái — decoupled khỏi store/Supabase. */

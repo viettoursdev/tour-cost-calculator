@@ -20,6 +20,7 @@ const PaymentView = lazy(() => import('./PaymentView').then((m) => ({ default: m
 const QuoteHistoryView = lazy(() => import('./QuoteHistoryView').then((m) => ({ default: m.QuoteHistoryView })));
 const FlightView = lazy(() => import('./FlightView').then((m) => ({ default: m.FlightView })));
 const WorkflowView = lazy(() => import('./WorkflowView').then((m) => ({ default: m.WorkflowView })));
+const DealCockpit = lazy(() => import('./DealCockpit').then((m) => ({ default: m.DealCockpit })));
 const PassengerView = lazy(() => import('./PassengerView').then((m) => ({ default: m.PassengerView })));
 const WorkflowBoard = lazy(() => import('./WorkflowBoard').then((m) => ({ default: m.WorkflowBoard })));
 const ProcessHub = lazy(() => import('@/components/process/ProcessHub').then((m) => ({ default: m.ProcessHub })));
@@ -116,6 +117,7 @@ export function QuoteView() {
             {view === 'advance' && <AdvanceView />}
             {view === 'payment' && <PaymentView />}
             {view === 'flights' && <FlightView />}
+            {view === 'cockpit' && <DealCockpit />}
             {view === 'workflow' && <WorkflowView />}
             {view === 'passengers' && <PassengerView />}
             {view === 'opsboard' && <WorkflowBoard />}
