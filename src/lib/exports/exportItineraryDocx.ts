@@ -11,6 +11,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
+import { BRAND_TEAL_HEX, LOGO_W_PX, LOGO_H_PX } from './brand';
 import { flightDepStr, flightArrStr } from '@/components/itinerary/flightFields';
 import { dayLabel } from '@/components/itinerary/itinCode';
 import { parseInlineRich, splitLines } from '@/lib/richText';
@@ -18,7 +19,7 @@ import type { Itinerary } from '@/types';
 
 const FONT = 'Aptos';
 const NAVY = '0F3A4A';
-const TEAL = '14A08C';
+const TEAL = BRAND_TEAL_HEX;
 const INK = '2B3640';
 const MUTE = '8A9099';
 const WHITE = 'FFFFFF';
@@ -275,7 +276,7 @@ export async function exportItineraryDocx(it: Itinerary, code: string): Promise<
       children: [
         cell([new Paragraph({
           // Logo đúng kích thước yêu cầu: 4.65cm × 1.25cm (≈ 176 × 47 px @96dpi) — đúng tỉ lệ gốc.
-          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: 180, height: 48 } })],
+          children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: LOGO_W_PX, height: LOGO_H_PX } })],
           spacing: { after: 0 },
         })], { width: 5153, valign: VerticalAlign.CENTER }),
         cell([

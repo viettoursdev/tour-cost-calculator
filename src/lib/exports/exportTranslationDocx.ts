@@ -6,12 +6,13 @@ import {
   BorderStyle, Document, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import { BRAND_TEAL_HEX } from './brand';
 
 const FONT = 'Aptos';
 const NAVY = '0F3A4A';
 const INK = '2B3640';
 const MUTE = '8A9099';
-const TEAL = '14A08C';
+const TEAL = BRAND_TEAL_HEX;
 
 function isHeadingLine(t: string): boolean {
   return t.length < 70 && /^[0-9IVX]*[.)]?\s*[A-Z]/.test(t) && t === t.toUpperCase();

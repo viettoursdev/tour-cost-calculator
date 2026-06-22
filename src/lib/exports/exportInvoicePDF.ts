@@ -9,7 +9,7 @@ import { calcVND, type Totals } from '@/components/quote/calc';
 import { getCATS } from '@/components/quote/constants';
 import { calcEndDate, fmtDate } from '@/lib/dateUtils';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 export interface InvoiceCustomer {
@@ -30,7 +30,7 @@ export interface InvoiceArgs {
 
 type RGB = [number, number, number];
 
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const DARK: RGB = [15, 58, 74];
 const GRAY: RGB = [120, 130, 140];
 const RED: RGB = [220, 50, 80];
@@ -64,9 +64,9 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   // Top accent band
   pdf.setFillColor(...TEAL); pdf.rect(0, 0, pageW, 4, 'F');
 
-  // Logo + Company block (left). Falls back to text-only if logo fails.
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y - 2, 42, 11.2, undefined, 'FAST'); } catch { /* ignore */ }
-  const cx = mX + 46;
+  // Logo (chuẩn 46.5×12.5mm) + Company block (left). Khối chữ đặt sau mép phải logo.
+  drawLogo(pdf, mX, y - 2);
+  const cx = mX + LOGO_W_MM + 5;
   // Brand name: shrink-to-fit so it never overlaps the right-aligned "HÓA ĐƠN" title.
   setF('bold');
   pdf.setFontSize(22);

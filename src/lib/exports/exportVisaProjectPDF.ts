@@ -4,14 +4,14 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
 import { APPLICANT_DOC_META, APPLICANT_RESULT_META, VISA_STATUS_META } from '@/components/visa/constants';
 import type { VisaProjectDoc } from '@/types';
 
 type RGB = [number, number, number];
 const NAVY: RGB = [15, 58, 74];
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const INK: RGB = [43, 54, 64];
 const MUTE: RGB = [138, 144, 153];
 const WHITE: RGB = [255, 255, 255];
@@ -29,14 +29,14 @@ export function exportVisaProjectPDF(p: VisaProjectDoc, nameOf: (u: string) => s
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
 
   // Header
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 8, undefined, 'FAST'); } catch { /* ignore */ }
+  const logoBottom = drawLogo(pdf, M, y);
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + LOGO_W_MM + 5, y + 7);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text('MÃ DỰ ÁN', PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(13); pdf.setTextColor(...NAVY);
-  pdf.text(p.code ?? '', PW - M, y + 12, { align: 'right' });
-  y += 22;
+  pdf.text(p.code ?? '', PW - M, y + 11, { align: 'right' });
+  y = logoBottom + 6;
 
   setF('normal'); pdf.setFontSize(9.5); pdf.setTextColor(...MUTE);
   pdf.text('TỔNG QUAN DỰ ÁN VISA', PW / 2, y, { align: 'center' });

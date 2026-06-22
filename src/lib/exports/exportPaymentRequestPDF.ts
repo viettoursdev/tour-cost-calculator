@@ -6,7 +6,7 @@
 import { jsPDF } from 'jspdf';
 import { numberToVietWords } from './vietWords';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import type {
   FileAttachment, PaymentApprovalEntry, PaymentItem, QuoteInfo, User,
 } from '@/types';
@@ -26,7 +26,7 @@ export interface PaymentRequestForm {
 
 type RGB = [number, number, number];
 
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const DARK: RGB = [15, 58, 74];
 const GRAY: RGB = [120, 130, 140];
 const RED: RGB = [220, 50, 80];
@@ -50,16 +50,17 @@ export function exportPaymentRequestPDF(
   const now = new Date();
   const reqNo = `PTT-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
 
-  // Top teal stripe + logo
+  // Top teal stripe + logo (chuẩn 46.5×12.5mm)
   pdf.setFillColor(...TEAL); pdf.rect(0, 0, pageW, 4, 'F');
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 36, 9.6, undefined, 'FAST'); } catch { /* ignore */ }
+  const logoBottom = drawLogo(pdf, mX, y);
+  const brandX = mX + LOGO_W_MM + 5;
 
-  // Header (right of logo)
+  // Header (bên phải logo, căn giữa theo chiều cao logo)
   pdf.setFontSize(13); pdf.setTextColor(...TEAL); setFont('bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 40, y + 8);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   pdf.setFontSize(8); pdf.setTextColor(...GRAY); setFont('normal');
-  pdf.text('Công ty TNHH Du lịch và Sự kiện Việt · MST: 0302650371', mX + 40, y + 13);
-  y += 28;
+  pdf.text('Công ty TNHH Du lịch và Sự kiện Việt · MST: 0302650371', brandX, y + 11);
+  y = logoBottom + 8;
 
   // Title
   pdf.setFontSize(18); pdf.setTextColor(...DARK); setFont('bold');

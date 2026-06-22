@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, BRAND_TEAL_ARGB, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
 import type { Passenger, QuoteInfo } from '@/types';
 
@@ -17,7 +17,7 @@ const slug = (s: string) => (s || 'Tour').replace(/[^a-zA-Z0-9_]/g, '_').slice(0
 
 type RGB = [number, number, number];
 const NAVY: RGB = [15, 58, 74];
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const INK: RGB = [43, 54, 64];
 const MUTE: RGB = [138, 144, 153];
 const WHITE: RGB = [255, 255, 255];
@@ -34,12 +34,12 @@ export function exportManifestPDF(info: QuoteInfo, pax: Passenger[]): void {
   let y = M;
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
 
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 26, 6.93, undefined, 'FAST'); } catch { /* ignore */ }
+  const logoBottom = drawLogo(pdf, M, y);
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 30, y + 7);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + LOGO_W_MM + 5, y + 7);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text(`${pax.length} khách`, PW - M, y + 5, { align: 'right' });
-  y += 18;
+  y = logoBottom + 6;
 
   setF('bold'); pdf.setFontSize(15); pdf.setTextColor(...NAVY);
   pdf.text(`DANH SÁCH KHÁCH ĐOÀN — ${(info.name || 'Tour').toUpperCase()}`, M, y);
@@ -88,7 +88,7 @@ export async function exportManifestExcel(info: QuoteInfo, pax: Passenger[]): Pr
     { header: 'Ghi chú', width: 22 },
   ];
   ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF14A08C' } };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND_TEAL_ARGB } };
   ws.spliceRows(1, 0, [`DANH SÁCH KHÁCH — ${info.name || 'Tour'}  ·  ${info.dest || ''}  ·  Khởi hành ${fmtDate(info.startDate) || ''}`]);
   ws.getRow(1).font = { bold: true, size: 13 };
   pax.forEach((p, i) => ws.addRow([

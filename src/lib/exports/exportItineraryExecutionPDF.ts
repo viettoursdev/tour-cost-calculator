@@ -5,7 +5,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
 import { buildExecModel, mealsLabel } from './execModel';
 import { dayLabel } from '@/components/itinerary/itinCode';
@@ -13,7 +13,7 @@ import type { ExecContact, Itinerary, Menu, Restaurant } from '@/types';
 
 type RGB = [number, number, number];
 const NAVY: RGB = [15, 58, 74];
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const INK: RGB = [43, 54, 64];
 const MUTE: RGB = [138, 144, 153];
 const WHITE: RGB = [255, 255, 255];
@@ -39,14 +39,14 @@ export function exportItineraryExecutionPDF(
   const wrap = (t: string, w: number) => pdf.splitTextToSize(String(t ?? ''), w) as string[];
 
   // ── Header ──
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 8, undefined, 'FAST'); } catch { /* ignore */ }
+  const logoBottom = drawLogo(pdf, M, y);
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + LOGO_W_MM + 5, y + 7);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text('MÃ TOUR', PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(12); pdf.setTextColor(...NAVY);
-  pdf.text(m.code || '—', PW - M, y + 12, { align: 'right' });
-  y += 22;
+  pdf.text(m.code || '—', PW - M, y + 11, { align: 'right' });
+  y = logoBottom + 6;
 
   setF('normal'); pdf.setFontSize(9.5); pdf.setTextColor(...MUTE);
   pdf.text('BẢN ĐIỀU HÀNH TOUR · ITINERARY EXECUTION', PW / 2, y, { align: 'center' });

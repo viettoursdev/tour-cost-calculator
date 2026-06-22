@@ -9,7 +9,10 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { numberToVietWords } from './vietWords';
+import { BRAND_TEAL_HEX } from './brand';
 import type { Contract } from '@/types';
+
+const TEAL = BRAND_TEAL_HEX;
 
 export async function exportContractDocx(contract: Contract): Promise<void> {
   const form = contract;
@@ -47,7 +50,7 @@ export async function exportContractDocx(contract: Contract): Promise<void> {
   });
 
   const Heading = (text: string) => new Paragraph({
-    children: [new TextRun({ text, bold: true, size: 26, color: '14A08C' })],
+    children: [new TextRun({ text, bold: true, size: 26, color: TEAL })],
     spacing: { before: 300, after: 160 },
   });
 
@@ -59,7 +62,7 @@ export async function exportContractDocx(contract: Contract): Promise<void> {
   children.push(P('---o0o---', { align: AlignmentType.CENTER, after: 200 }));
 
   // ── Title ──
-  children.push(P('HỢP ĐỒNG CUNG CẤP DỊCH VỤ', { bold: true, size: 36, color: '14A08C', align: AlignmentType.CENTER, before: 200 }));
+  children.push(P('HỢP ĐỒNG CUNG CẤP DỊCH VỤ', { bold: true, size: 36, color: TEAL, align: AlignmentType.CENTER, before: 200 }));
   children.push(P(`(HĐ Số: ${form.contractNo || '_______/HĐ-VTE'})`, { italics: true, size: 22, color: '707880', align: AlignmentType.CENTER, after: 300 }));
 
   // ── Legal bases ──
@@ -71,7 +74,7 @@ export async function exportContractDocx(contract: Contract): Promise<void> {
   children.push(P(`Hôm nay, ngày ${form.contractDate}, chúng tôi gồm có:`, { before: 200, after: 160 }));
 
   // ── Bên A ──
-  children.push(P('BÊN A: CÔNG TY TNHH DU LỊCH VÀ SỰ KIỆN VIỆT (VIETTOURS)', { bold: true, size: 24, color: '14A08C', before: 120, after: 120 }));
+  children.push(P('BÊN A: CÔNG TY TNHH DU LỊCH VÀ SỰ KIỆN VIỆT (VIETTOURS)', { bold: true, size: 24, color: TEAL, before: 120, after: 120 }));
   ([
     ['Địa chỉ:', '19B Mai Thị Lựu, Phường Tân Định, TP. Hồ Chí Minh'],
     ['Tel:', '(028) 38 218 218 – 38 217 217          Fax: (028) 38 218 999'],
@@ -81,7 +84,7 @@ export async function exportContractDocx(contract: Contract): Promise<void> {
   ] as [string, string][]).forEach(([k, v]) => children.push(Mixed([{ text: k + ' ', bold: true }, { text: v }])));
 
   // ── Bên B ──
-  children.push(P(`BÊN B: ${(form.partyB.name || '________________________').toUpperCase()}`, { bold: true, size: 24, color: '14A08C', before: 200, after: 120 }));
+  children.push(P(`BÊN B: ${(form.partyB.name || '________________________').toUpperCase()}`, { bold: true, size: 24, color: TEAL, before: 200, after: 120 }));
   ([
     ['Địa chỉ:', form.partyB.address || '_________________'],
     ['Tel:', form.partyB.tel || '_________________'],
@@ -101,7 +104,7 @@ export async function exportContractDocx(contract: Contract): Promise<void> {
   children.push(P(`Tổng giá trị HĐ (đã bao gồm VAT): ${fmtV(totalAmount)} VNĐ`, { bold: true, color: 'DC3250', size: 24, before: 120 }));
   children.push(P(`(Bằng chữ: ${numberToVietWords(totalAmount)} đồng.)`, { italics: true, color: '707880', size: 20, after: 200 }));
 
-  children.push(P('Bao gồm:', { bold: true, color: '14A08C', before: 120, after: 80 }));
+  children.push(P('Bao gồm:', { bold: true, color: TEAL, before: 120, after: 80 }));
   (form.includes || []).forEach(it => { if (it.trim()) children.push(Bullet(it)); });
 
   children.push(P('Không bao gồm:', { bold: true, color: 'DC3250', before: 160, after: 80 }));
@@ -136,7 +139,7 @@ export async function exportContractDocx(contract: Contract): Promise<void> {
     const amt = p.percent !== undefined ? Math.round(totalAmount * p.percent / 100) : (p.amount || 0);
     const pct = p.percent ?? (totalAmount > 0 ? +((p.amount / totalAmount) * 100).toFixed(2) : 0);
     children.push(Mixed([
-      { text: `Đợt ${i + 1}: `, bold: true, color: '14A08C' },
+      { text: `Đợt ${i + 1}: `, bold: true, color: TEAL },
       { text: `${p.label} – Thanh toán ${pct}% giá trị HĐ, tương đương ${fmtV(amt)} VNĐ${p.note ? '. ' + p.note : ''}.` },
     ], { indent: 360 }));
   });

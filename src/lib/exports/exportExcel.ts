@@ -8,6 +8,7 @@ import { saveAs } from 'file-saver';
 import { getCATS } from '@/components/quote/constants';
 import { plainNote } from '@/lib/util';
 import { qtyOf } from '@/components/quote/calc';
+import { BRAND_TEAL_ARGB } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -22,7 +23,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   const isDmc = template === 'dmc';
   const foreign = template === 'intl';
   const FONT = 'Aptos';
-  const NAVY = 'FF0F3A4A', TEAL = 'FF14A08C', INK = 'FF2B3640', MUTE = 'FF8A9099', WHITE = 'FFFFFFFF';
+  const NAVY = 'FF0F3A4A', TEAL = BRAND_TEAL_ARGB, INK = 'FF2B3640', MUTE = 'FF8A9099', WHITE = 'FFFFFFFF';
   const ZEBRA = 'FFF7F9FA', LINE = 'FFE4E8EB', SUBT = 'FFEEF2F4', HILITE = 'FFF4FAF8', YEL = 'FFFFFBE6';
   // Highlight dòng Optional (đỏ nhạt) & FOC (xanh lá nhạt) ở cột đơn giá + thành tiền.
   const OPT_HL = 'FFFCE4E6', FOC_HL = 'FFE6F4EA';

@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf';
 import { numberToVietWords } from './vietWords';
 import { loadVNFont } from './vnFont';
+import { BRAND_TEAL } from './brand';
 import type { Contract } from '@/types';
 
 function buildContractPDF(contract: Contract): { pdf: jsPDF; filename: string } {
@@ -20,7 +21,7 @@ function buildContractPDF(contract: Contract): { pdf: jsPDF; filename: string } 
   const setFont = (s = 'normal') => pdf.setFont(FONT, s);
   const pageW = 210, pageH = 297, mX = 20;
   const contentW = pageW - mX * 2;
-  const teal: [number, number, number] = [20, 160, 140];
+  const teal: [number, number, number] = BRAND_TEAL;
   const dark: [number, number, number] = [15, 58, 74];
   const gray: [number, number, number] = [120, 130, 140];
   const red: [number, number, number] = [220, 50, 80];

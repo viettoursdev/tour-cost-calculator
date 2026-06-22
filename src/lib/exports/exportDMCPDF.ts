@@ -8,7 +8,7 @@ import { getCATS } from '@/components/quote/constants';
 import { calcVND, computeTotals, qtyOf } from '@/components/quote/calc';
 import { fmtCurrency, toOutputCurrency } from '@/lib/currency';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { drawLogo, LOGO_W_MM } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type Params = {
@@ -43,11 +43,12 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
 
   // Header band + logo + salesperson
   pdf.setFillColor(...navy); pdf.rect(0, 0, pageW, 8, 'F');
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 9.07, undefined, 'FAST'); } catch { /* ignore */ }
+  const logoBottom = drawLogo(pdf, mX, y);
+  const brandX = mX + LOGO_W_MM + 5;
   pdf.setFontSize(12); pdf.setTextColor(...navy); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', mX + 37, y + 8, { maxWidth: 95 });
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6, { maxWidth: 78 });
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', mX + 37, y + 14, { maxWidth: 95 });
+  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: 78 });
   pdf.setFontSize(7); pdf.setTextColor(...gray);
   pdf.text('NHÂN VIÊN PHỤ TRÁCH', pageW - mX, y + 2, { align: 'right' });
   pdf.setFontSize(9.5); pdf.setTextColor(...navy); pdf.setFont(FONT, 'bold');
@@ -56,7 +57,7 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
   let cy = y + 11.5;
   if (savedBy.phone) { pdf.text(`ĐT: ${savedBy.phone}`, pageW - mX, cy, { align: 'right' }); cy += 4; }
   if (savedBy.email) { pdf.text(savedBy.email, pageW - mX, cy, { align: 'right' }); }
-  y += 24;
+  y = Math.max(logoBottom, cy) + 4;
 
   // Title band
   pdf.setFillColor(...navy);

@@ -10,11 +10,12 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
+import { BRAND_TEAL_HEX, LOGO_W_PX, LOGO_H_PX } from './brand';
 import type { Menu } from '@/types';
 
 const FONT = 'Aptos';
 const NAVY = '0F3A4A';
-const TEAL = '14A08C';
+const TEAL = BRAND_TEAL_HEX;
 const INK = '2B3640';
 const MUTE = '8A9099';
 const WHITE = 'FFFFFF';
@@ -95,7 +96,7 @@ export async function exportMenuDocx(it: Menu, code: string, includePrices = tru
           children: [new ImageRun({
             type: 'png',
             data: b64ToU8(VTE_LOGO),
-            transformation: { width: 90, height: 24 },
+            transformation: { width: LOGO_W_PX, height: LOGO_H_PX },
           })],
           spacing: { after: 0 },
         }),

@@ -4,14 +4,14 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
 import { workflowProgress, WORKFLOW_STATUS_META } from '@/components/quote/workflowConstants';
 import type { QuoteInfo, WorkflowStep } from '@/types';
 
 type RGB = [number, number, number];
 const NAVY: RGB = [15, 58, 74];
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const INK: RGB = [43, 54, 64];
 const MUTE: RGB = [138, 144, 153];
 const WHITE: RGB = [255, 255, 255];
@@ -33,15 +33,15 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
 
   // Header
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 8, undefined, 'FAST'); } catch { /* ignore */ }
+  const logoBottom = drawLogo(pdf, M, y);
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + LOGO_W_MM + 5, y + 7);
   const prog = workflowProgress(steps);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text('TIẾN ĐỘ', PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(13); pdf.setTextColor(...NAVY);
-  pdf.text(`${prog.pct}%  ·  ${prog.done}/${prog.total}`, PW - M, y + 12, { align: 'right' });
-  y += 22;
+  pdf.text(`${prog.pct}%  ·  ${prog.done}/${prog.total}`, PW - M, y + 11, { align: 'right' });
+  y = logoBottom + 6;
 
   setF('normal'); pdf.setFontSize(9.5); pdf.setTextColor(...MUTE);
   pdf.text('QUY TRÌNH VẬN HÀNH', PW / 2, y, { align: 'center' });

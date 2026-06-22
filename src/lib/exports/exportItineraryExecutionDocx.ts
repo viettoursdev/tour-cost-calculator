@@ -9,12 +9,13 @@ import {
 import { saveAs } from 'file-saver';
 import { fmtDate } from '@/lib/dateUtils';
 import { buildExecModel, mealsLabel } from './execModel';
+import { BRAND_TEAL_HEX } from './brand';
 import { dayLabel } from '@/components/itinerary/itinCode';
 import type { ExecContact, Itinerary, Menu, Restaurant } from '@/types';
 
 const FONT = 'Aptos';
 const NAVY = '0F3A4A';
-const TEAL = '14A08C';
+const TEAL = BRAND_TEAL_HEX;
 const INK = '2B3640';
 const MUTE = '8A9099';
 const RED = 'C0392B';

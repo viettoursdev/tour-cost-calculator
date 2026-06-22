@@ -9,7 +9,7 @@ import { plainNote } from '@/lib/util';
 import { calcVND, computeTotals, fmtVND } from '@/components/quote/calc';
 import { pricingLines } from '@/components/quote/pricing';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -43,7 +43,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   const pageW = 210, mX = 15;
   let y = 18;
 
-  const teal: [number, number, number] = [20, 160, 140];
+  const teal: [number, number, number] = BRAND_TEAL;
   const dark: [number, number, number] = [15, 58, 74];
   const gray: [number, number, number] = [120, 130, 140];
   const red: [number, number, number] = [220, 50, 80];
@@ -57,15 +57,15 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setFillColor(...teal);
   pdf.rect(0, 0, pageW, 8, 'F');
 
-  // Logo + company name. Company block is width-capped on the left so it can
-  // never run into the salesperson block on the right.
-  try { pdf.addImage(VTE_LOGO, 'PNG', mX, y, 34, 9.07, undefined, 'FAST'); } catch { /* ignore */ }
-  const brandX = mX + 37;
-  const brandMaxW = 95; // keeps clear of the right-side contact column
+  // Logo (chuẩn 46.5×12.5mm) + tên công ty. Khối chữ đặt BÊN PHẢI logo, bắt đầu
+  // sau mép phải logo để không đè; chiều rộng giới hạn để tránh chạm cột nhân viên.
+  const logoBottom = drawLogo(pdf, mX, y);
+  const brandX = mX + LOGO_W_MM + 5;
+  const brandMaxW = 78; // chừa khoảng cho cột liên hệ bên phải
   pdf.setFontSize(12); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 8, { maxWidth: brandMaxW });
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6, { maxWidth: brandMaxW });
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 14, { maxWidth: brandMaxW });
+  pdf.text('Hotline 1900 1839  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: brandMaxW });
 
   // Salesperson contact (right side)
   pdf.setFontSize(7); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
@@ -76,7 +76,8 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   let cy = y + 11.5;
   if (savedBy.phone) { pdf.text(`ĐT: ${savedBy.phone}`, pageW - mX, cy, { align: 'right' }); cy += 4; }
   if (savedBy.email) { pdf.text(savedBy.email, pageW - mX, cy, { align: 'right' }); }
-  y += 24;
+  // Đặt mốc kế tiếp DƯỚI điểm thấp nhất của logo & khối liên hệ (không đè).
+  y = Math.max(logoBottom, cy) + 4;
 
   // Quote title band
   pdf.setFillColor(...teal);

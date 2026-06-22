@@ -6,13 +6,13 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import type { Menu } from '@/types';
 
 type RGB = [number, number, number];
 
 const NAVY: RGB = [15, 58, 74];
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const PURP: RGB = [194, 65, 12];
 const INK: RGB = [43, 54, 64];
 const MUTE: RGB = [138, 144, 153];
@@ -35,16 +35,17 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
   };
 
   // Header (logo + brand)
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 30, 8, undefined, 'FAST'); } catch { /* ignore */ }
+  drawLogo(pdf, M, y);
+  const brandX = M + LOGO_W_MM + 5;
   setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 34, y + 8);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   setF('normal'); pdf.setFontSize(7); pdf.setTextColor(...MUTE);
-  pdf.text('Tour Cost Calculator', M + 34, y + 13);
+  pdf.text('Tour Cost Calculator', brandX, y + 11);
 
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text('MA THUC DON', PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(13); pdf.setTextColor(...NAVY);
-  pdf.text(code, PW - M, y + 12, { align: 'right' });
+  pdf.text(code, PW - M, y + 11, { align: 'right' });
   y += 22;
 
   setF('normal'); pdf.setFontSize(10); pdf.setTextColor(...MUTE);

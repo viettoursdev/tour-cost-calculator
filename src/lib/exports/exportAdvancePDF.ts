@@ -4,14 +4,14 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { VTE_LOGO } from './vteLogo';
+import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
 import type { AdvanceLine, QuoteInfo, TourAdvance } from '@/types';
 import type { AdvanceTotals } from '@/components/quote/advanceCalc';
 import { lineAmount, lineActual } from '@/components/quote/advanceCalc';
 
 type RGB = [number, number, number];
 const NAVY: RGB = [15, 58, 74];
-const TEAL: RGB = [20, 160, 140];
+const TEAL: RGB = BRAND_TEAL;
 const INK: RGB = [43, 54, 64];
 const MUTE: RGB = [138, 144, 153];
 const LINE: RGB = [215, 222, 226];
@@ -34,13 +34,14 @@ export function exportAdvancePDF({
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
   const showActual = adv.status !== 'draft';
 
-  // ── Header ──
-  try { pdf.addImage(VTE_LOGO, 'PNG', M, y, 28, 7.47, undefined, 'FAST'); } catch { /* ignore */ }
+  // ── Header (logo chuẩn 46.5×12.5mm + chữ bên phải, không đè) ──
+  const logoBottom = drawLogo(pdf, M, y);
+  const brandX = M + LOGO_W_MM + 5;
   setF('bold'); pdf.setFontSize(12); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + 32, y + 7);
+  pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   setF('normal'); pdf.setFontSize(8.5); pdf.setTextColor(...MUTE);
-  pdf.text('Hotline 1900 1839 · www.viettours.com.vn', M + 32, y + 12);
-  y += 22;
+  pdf.text('Hotline 1900 1839 · www.viettours.com.vn', brandX, y + 11);
+  y = logoBottom + 6;
 
   setF('bold'); pdf.setFontSize(16); pdf.setTextColor(...NAVY);
   pdf.text('ĐỀ NGHỊ TẠM ỨNG TOUR', PW / 2, y, { align: 'center' });
