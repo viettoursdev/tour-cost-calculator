@@ -145,8 +145,8 @@ export function PaymentRequestModal({
         [currentUser.u, form.approver1Username, form.approver2Username].filter(Boolean),
       ));
       // Best-effort: the shared activity thread powers 2-way status + comments,
-      // but it must not block the actual request if its collection is locked
-      // down (e.g. Firestore rules not yet deployed for notification_threads).
+      // but it must not block the actual request if the table is not yet
+      // accessible (e.g. Supabase RLS not yet configured for notification_threads).
       try {
         await sbEnsureNotifThread({
           id: threadId,

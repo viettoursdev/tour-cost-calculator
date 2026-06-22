@@ -4,7 +4,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useMenuStore } from './menuStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { Menu, MenuIndexEntry } from '@/types';
 
 const reset = snapshotInitial(useMenuStore);
@@ -53,8 +53,8 @@ describe('menuStore', () => {
 
   it('init subscribes and populates list', () => {
     useMenuStore.getState().init();
-    expect(fb.sbSubscribeMenus).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.sbSubscribeMenus).mock.calls[0][0];
+    expect(sb.sbSubscribeMenus).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(sb.sbSubscribeMenus).mock.calls[0][0];
     cb([indexEntry()]);
     const s = useMenuStore.getState();
     expect(s.list).toEqual([indexEntry()]);
@@ -64,19 +64,19 @@ describe('menuStore', () => {
   it('save forwards to sbSaveMenu', async () => {
     const m = full();
     await useMenuStore.getState().save(m, 'tester');
-    expect(fb.sbSaveMenu).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.sbSaveMenu).mock.calls[0]).toEqual([m, 'tester']);
+    expect(sb.sbSaveMenu).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbSaveMenu).mock.calls[0]).toEqual([m, 'tester']);
   });
 
   it('load returns whatever sbGetMenu resolves with', async () => {
     const m = full({ id: 'fetched' });
-    vi.mocked(fb.sbGetMenu).mockResolvedValueOnce(m);
+    vi.mocked(sb.sbGetMenu).mockResolvedValueOnce(m);
     const got = await useMenuStore.getState().load('fetched');
     expect(got).toEqual(m);
   });
 
   it('delete forwards id to sbDeleteMenu', async () => {
     await useMenuStore.getState().delete('m1');
-    expect(vi.mocked(fb.sbDeleteMenu).mock.calls[0]).toEqual(['m1']);
+    expect(vi.mocked(sb.sbDeleteMenu).mock.calls[0]).toEqual(['m1']);
   });
 });

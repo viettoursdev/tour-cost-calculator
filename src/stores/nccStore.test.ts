@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 import { useNccStore } from './nccStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { Ncc, User } from '@/types';
 
 const resetNcc = snapshotInitial(useNccStore);
@@ -41,8 +41,8 @@ describe('nccStore', () => {
 
   it('init subscribes and populates list when callback fires', () => {
     useNccStore.getState().init();
-    expect(fb.sbSubscribeNcc).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.sbSubscribeNcc).mock.calls[0][0];
+    expect(sb.sbSubscribeNcc).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(sb.sbSubscribeNcc).mock.calls[0][0];
     cb([ncc()]);
     const s = useNccStore.getState();
     expect(s.suppliers).toEqual([ncc()]);
@@ -56,7 +56,7 @@ describe('nccStore', () => {
     expect(list[0].name).toBe('B');
     expect(list[0].createdBy).toBe('Tony');
     expect(list[0].id.length).toBeGreaterThan(0);
-    expect(vi.mocked(fb.sbPushNcc).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
+    expect(vi.mocked(sb.sbPushNcc).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
   });
 
   it('save updates existing supplier and stamps updatedBy', async () => {
@@ -71,7 +71,7 @@ describe('nccStore', () => {
     useAuthStore.setState({ currentUser: null }, false);
     await useNccStore.getState().save(ncc({ id: 'x' }));
     expect(useNccStore.getState().suppliers).toEqual([]);
-    expect(fb.sbPushNcc).not.toHaveBeenCalled();
+    expect(sb.sbPushNcc).not.toHaveBeenCalled();
   });
 
   it('delete removes by id and pushes', async () => {
@@ -80,6 +80,6 @@ describe('nccStore', () => {
     }, false);
     await useNccStore.getState().delete('n1');
     expect(useNccStore.getState().suppliers).toEqual([ncc({ id: 'n2' })]);
-    expect(fb.sbPushNcc).toHaveBeenCalledTimes(1);
+    expect(sb.sbPushNcc).toHaveBeenCalledTimes(1);
   });
 });

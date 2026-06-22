@@ -6,7 +6,7 @@ import { useQuoteStore } from './quoteStore';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { User } from '@/types';
 
 const resetQuote = snapshotInitial(useQuoteStore);
@@ -202,9 +202,9 @@ describe('quoteStore.saveCloud', () => {
       draft: { ...useQuoteStore.getState().draft, template: 'domestic', currentQuoteId: null },
     }, false);
     await useQuoteStore.getState().saveCloud('q1', []);
-    expect(fb.sbSaveQuote).toHaveBeenCalledTimes(1);
-    expect(fb.sbSaveQuoteState).toHaveBeenCalledTimes(1);
-    expect(fb.sbSaveDMCQuote).not.toHaveBeenCalled();
+    expect(sb.sbSaveQuote).toHaveBeenCalledTimes(1);
+    expect(sb.sbSaveQuoteState).toHaveBeenCalledTimes(1);
+    expect(sb.sbSaveDMCQuote).not.toHaveBeenCalled();
   });
 
   it('calls sbSaveDMCQuote for dmc templates', async () => {
@@ -212,9 +212,9 @@ describe('quoteStore.saveCloud', () => {
       draft: { ...useQuoteStore.getState().draft, template: 'dmc', currentQuoteId: null },
     }, false);
     await useQuoteStore.getState().saveCloud('q1', []);
-    expect(fb.sbSaveDMCQuote).toHaveBeenCalledTimes(1);
-    expect(fb.sbSaveDMCQuoteState).toHaveBeenCalledTimes(1);
-    expect(fb.sbSaveQuote).not.toHaveBeenCalled();
+    expect(sb.sbSaveDMCQuote).toHaveBeenCalledTimes(1);
+    expect(sb.sbSaveDMCQuoteState).toHaveBeenCalledTimes(1);
+    expect(sb.sbSaveQuote).not.toHaveBeenCalled();
   });
 
   it('generates a quote code only when the draft is new', async () => {
@@ -222,14 +222,14 @@ describe('quoteStore.saveCloud', () => {
       draft: { ...useQuoteStore.getState().draft, template: 'domestic', currentQuoteId: null },
     }, false);
     await useQuoteStore.getState().saveCloud('q1', []);
-    expect(fb.generateQuoteCode).toHaveBeenCalledTimes(1);
+    expect(sb.generateQuoteCode).toHaveBeenCalledTimes(1);
 
     vi.clearAllMocks();
     useQuoteStore.setState({
       draft: { ...useQuoteStore.getState().draft, currentQuoteId: 'existing-id' },
     }, false);
     await useQuoteStore.getState().saveCloud('q1', []);
-    expect(fb.generateQuoteCode).not.toHaveBeenCalled();
+    expect(sb.generateQuoteCode).not.toHaveBeenCalled();
   });
 
   it('stamps currentQuoteId on the draft after a successful save', async () => {

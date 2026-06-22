@@ -4,7 +4,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useNotificationStore } from './notificationStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { Notification } from '@/types';
 
 const reset = snapshotInitial(useNotificationStore);
@@ -33,13 +33,13 @@ describe('notificationStore', () => {
 
   it('init subscribes for the given user', () => {
     useNotificationStore.getState().init('ceo');
-    expect(fb.sbSubscribeNotifications).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.sbSubscribeNotifications).mock.calls[0][0]).toBe('ceo');
+    expect(sb.sbSubscribeNotifications).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbSubscribeNotifications).mock.calls[0][0]).toBe('ceo');
   });
 
   it('subscriber callback populates list and recomputes unreadCount', () => {
     useNotificationStore.getState().init('ceo');
-    const cb = vi.mocked(fb.sbSubscribeNotifications).mock.calls[0][1];
+    const cb = vi.mocked(sb.sbSubscribeNotifications).mock.calls[0][1];
     cb([notif({ id: 'a' }), notif({ id: 'b', read: true }), notif({ id: 'c' })]);
     const s = useNotificationStore.getState();
     expect(s.notifications.length).toBe(3);
@@ -55,8 +55,8 @@ describe('notificationStore', () => {
     const s = useNotificationStore.getState();
     expect(s.unreadCount).toBe(0);
     expect(s.notifications.every((n) => n.read)).toBe(true);
-    expect(fb.sbPushNotifications).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.sbPushNotifications).mock.calls[0][0]).toBe('ceo');
+    expect(sb.sbPushNotifications).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbPushNotifications).mock.calls[0][0]).toBe('ceo');
   });
 
   it('markRead flips only the matching id and recomputes count', async () => {
@@ -69,6 +69,6 @@ describe('notificationStore', () => {
     expect(s.notifications.find((n) => n.id === 'a')?.read).toBe(true);
     expect(s.notifications.find((n) => n.id === 'b')?.read).toBe(false);
     expect(s.unreadCount).toBe(1);
-    expect(fb.sbPushNotifications).toHaveBeenCalledTimes(1);
+    expect(sb.sbPushNotifications).toHaveBeenCalledTimes(1);
   });
 });

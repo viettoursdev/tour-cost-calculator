@@ -49,7 +49,7 @@ export type TourGuideAssignment = {
   updatedBy?: string;
 };
 
-/** Toàn bộ kho lịch HDV (1 doc Firestore). */
+/** Toàn bộ kho lịch HDV (1 row Supabase). */
 export type GuideScheduleDoc = {
   freelancers: FreelanceGuide[];
   /** keyed theo tourCloudId. */

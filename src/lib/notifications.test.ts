@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { checkContractDeadlines } from './notifications';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { User } from '@/types';
 
 const user: User = { u: 'ceo', p: 'x', role: 'CEO', name: 'Tony', color: '#dc3250' };
@@ -46,7 +46,7 @@ describe('checkContractDeadlines', () => {
   it('sends a reminder for payments due within 7 days', async () => {
     const today = new Date();
     const in3days = new Date(today.getTime() + 3 * 86400000);
-    vi.mocked(fb.sbGetContracts).mockResolvedValueOnce([
+    vi.mocked(sb.sbGetContracts).mockResolvedValueOnce([
       makeContract([{
         id: 'p1',
         label: 'Đặt cọc',
@@ -56,9 +56,9 @@ describe('checkContractDeadlines', () => {
       }]),
     ]);
     await checkContractDeadlines(user);
-    expect(fb.sbSendNotification).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.sbSendNotification).mock.calls[0][0]).toBe('ceo');
-    const payload = vi.mocked(fb.sbSendNotification).mock.calls[0][1];
+    expect(sb.sbSendNotification).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbSendNotification).mock.calls[0][0]).toBe('ceo');
+    const payload = vi.mocked(sb.sbSendNotification).mock.calls[0][1];
     expect(payload.type).toBe('payment_due');
     expect(payload.data).toMatchObject({ contractId: 'c1', paymentId: 'p1' });
   });
@@ -66,7 +66,7 @@ describe('checkContractDeadlines', () => {
   it('does NOT send for payments due more than 7 days out', async () => {
     const today = new Date();
     const in20days = new Date(today.getTime() + 20 * 86400000);
-    vi.mocked(fb.sbGetContracts).mockResolvedValueOnce([
+    vi.mocked(sb.sbGetContracts).mockResolvedValueOnce([
       makeContract([{
         id: 'p1',
         label: 'X',
@@ -76,13 +76,13 @@ describe('checkContractDeadlines', () => {
       }]),
     ]);
     await checkContractDeadlines(user);
-    expect(fb.sbSendNotification).not.toHaveBeenCalled();
+    expect(sb.sbSendNotification).not.toHaveBeenCalled();
   });
 
   it('does NOT send for past-due payments (due < today)', async () => {
     const today = new Date();
     const yesterday = new Date(today.getTime() - 86400000);
-    vi.mocked(fb.sbGetContracts).mockResolvedValueOnce([
+    vi.mocked(sb.sbGetContracts).mockResolvedValueOnce([
       makeContract([{
         id: 'p1',
         label: 'X',
@@ -92,13 +92,13 @@ describe('checkContractDeadlines', () => {
       }]),
     ]);
     await checkContractDeadlines(user);
-    expect(fb.sbSendNotification).not.toHaveBeenCalled();
+    expect(sb.sbSendNotification).not.toHaveBeenCalled();
   });
 
   it('does NOT send for non-pending payments', async () => {
     const today = new Date();
     const in3days = new Date(today.getTime() + 3 * 86400000);
-    vi.mocked(fb.sbGetContracts).mockResolvedValueOnce([
+    vi.mocked(sb.sbGetContracts).mockResolvedValueOnce([
       makeContract([{
         id: 'p1',
         label: 'X',
@@ -108,23 +108,23 @@ describe('checkContractDeadlines', () => {
       }]),
     ]);
     await checkContractDeadlines(user);
-    expect(fb.sbSendNotification).not.toHaveBeenCalled();
+    expect(sb.sbSendNotification).not.toHaveBeenCalled();
   });
 
   it('skips payments with missing or unparseable dueDate', async () => {
-    vi.mocked(fb.sbGetContracts).mockResolvedValueOnce([
+    vi.mocked(sb.sbGetContracts).mockResolvedValueOnce([
       makeContract([
         { id: 'p1', label: 'X', amount: 100, dueDate: '', status: 'pending' },
         { id: 'p2', label: 'Y', amount: 100, dueDate: 'not-a-date', status: 'pending' },
       ]),
     ]);
     await checkContractDeadlines(user);
-    expect(fb.sbSendNotification).not.toHaveBeenCalled();
+    expect(sb.sbSendNotification).not.toHaveBeenCalled();
   });
 
-  it('swallows Firestore errors (does not throw)', async () => {
-    vi.mocked(fb.sbGetContracts).mockRejectedValueOnce(new Error('network down'));
+  it('swallows Supabase errors (does not throw)', async () => {
+    vi.mocked(sb.sbGetContracts).mockRejectedValueOnce(new Error('network down'));
     await expect(checkContractDeadlines(user)).resolves.toBeUndefined();
-    expect(fb.sbSendNotification).not.toHaveBeenCalled();
+    expect(sb.sbSendNotification).not.toHaveBeenCalled();
   });
 });

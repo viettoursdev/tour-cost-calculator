@@ -26,8 +26,8 @@ export type User = {
                       // pre-migration records still load. Migration to
                       // required happens in Phase 4 cleanup.
   phone?: string;     // contact phone shown on exported quotes
-  /** @deprecated Mật khẩu plaintext (di sản). KHÔNG còn lưu lên Firestore —
-   *  fbPushUsers/fbPullUsers loại bỏ; fbPurgeLegacyPasswords xoá bản ghi cũ. */
+  /** @deprecated Mật khẩu plaintext (di sản). KHÔNG còn lưu lên Supabase —
+   *  sbPushUsers loại bỏ; sbPurgeLegacyPasswords là no-op (cột không tồn tại). */
   p?: string;
   role: Role;
   department?: Department;  // phòng ban — quyết định mảng được TẠO/SỬA

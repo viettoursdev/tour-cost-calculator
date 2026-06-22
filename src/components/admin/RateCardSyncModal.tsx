@@ -192,7 +192,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
       <DialogTitle sx={{ background: 'linear-gradient(135deg,#8e44ad,#9b59b6)', color: '#fff' }}>
         <Typography variant="h6" fontWeight={800}>🗂️ Đồng bộ Master Rate Card</Typography>
         <Typography variant="caption" sx={{ opacity: 0.85 }}>
-          Đồng bộ real-time qua Firebase · hoặc xuất/nhập file
+          Đồng bộ real-time qua Supabase · hoặc xuất/nhập file
         </Typography>
       </DialogTitle>
       <Tabs
@@ -214,7 +214,7 @@ export function RateCardSyncModal({ open, onClose, currentUser }: Props) {
             <Paper variant="outlined" sx={{ p: 2, bgcolor: 'rgba(168,230,221,0.2)', borderColor: 'rgba(20,150,140,0.2)' }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                 <Typography variant="caption" fontWeight={700} sx={{ color: 'text.secondary', letterSpacing: 1, textTransform: 'uppercase' }}>
-                  ☁️ Dữ liệu trên Cloud (Firebase)
+                  ☁️ Dữ liệu trên Cloud (Supabase)
                 </Typography>
                 <Typography variant="caption" fontWeight={700} sx={{ color: cloudLoading ? '#d18a13' : cloudData ? '#0d7a6a' : '#dc3250' }}>
                   {cloudLoading ? '⏳ Đang tải...' : cloudData ? '🟢 Đã kết nối' : '⚪ Chưa có dữ liệu'}

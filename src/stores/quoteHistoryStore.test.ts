@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { CloudQuoteEntry, User } from '@/types';
 
 const resetHistory = snapshotInitial(useQuoteHistoryStore);
@@ -48,14 +48,14 @@ describe('quoteHistoryStore', () => {
 
   it('init wires both subscribers', () => {
     useQuoteHistoryStore.getState().init(u);
-    expect(fb.sbSubscribeQuoteHistory).toHaveBeenCalledTimes(1);
-    expect(fb.sbSubscribeDMCQuoteHistory).toHaveBeenCalledTimes(1);
+    expect(sb.sbSubscribeQuoteHistory).toHaveBeenCalledTimes(1);
+    expect(sb.sbSubscribeDMCQuoteHistory).toHaveBeenCalledTimes(1);
   });
 
   it('regular subscriber updates quotes only; dmc subscriber updates dmcQuotes only', () => {
     useQuoteHistoryStore.getState().init(u);
-    const cbReg = vi.mocked(fb.sbSubscribeQuoteHistory).mock.calls[0][0];
-    const cbDmc = vi.mocked(fb.sbSubscribeDMCQuoteHistory).mock.calls[0][0];
+    const cbReg = vi.mocked(sb.sbSubscribeQuoteHistory).mock.calls[0][0];
+    const cbDmc = vi.mocked(sb.sbSubscribeDMCQuoteHistory).mock.calls[0][0];
     cbReg([entry({ id: 1 })]);
     expect(useQuoteHistoryStore.getState().quotes).toHaveLength(1);
     expect(useQuoteHistoryStore.getState().dmcQuotes).toEqual([]);
@@ -67,8 +67,8 @@ describe('quoteHistoryStore', () => {
   it('init returns a function that unsubscribes both', () => {
     const unsubReg = vi.fn();
     const unsubDmc = vi.fn();
-    vi.mocked(fb.sbSubscribeQuoteHistory).mockReturnValueOnce(unsubReg);
-    vi.mocked(fb.sbSubscribeDMCQuoteHistory).mockReturnValueOnce(unsubDmc);
+    vi.mocked(sb.sbSubscribeQuoteHistory).mockReturnValueOnce(unsubReg);
+    vi.mocked(sb.sbSubscribeDMCQuoteHistory).mockReturnValueOnce(unsubDmc);
     const teardown = useQuoteHistoryStore.getState().init(u);
     teardown();
     expect(unsubReg).toHaveBeenCalled();

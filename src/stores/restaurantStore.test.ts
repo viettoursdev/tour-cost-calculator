@@ -4,7 +4,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 
 import { useRestaurantStore } from './restaurantStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { Restaurant } from '@/types';
 
 const reset = snapshotInitial(useRestaurantStore);
@@ -33,25 +33,25 @@ describe('restaurantStore', () => {
 
   it('init subscribes and populates list when callback fires', () => {
     useRestaurantStore.getState().init();
-    expect(fb.sbSubscribeRestaurants).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.sbSubscribeRestaurants).mock.calls[0][0];
+    expect(sb.sbSubscribeRestaurants).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(sb.sbSubscribeRestaurants).mock.calls[0][0];
     cb([rest({ id: 'r1' }), rest({ id: 'r2' })]);
     const s = useRestaurantStore.getState();
     expect(s.list.length).toBe(2);
     expect(s.loading).toBe(false);
   });
 
-  it('save updates state optimistically and forwards to firebase', async () => {
+  it('save updates state optimistically and forwards to supabase', async () => {
     const next = [rest({ id: 'r1', name: 'B' })];
     await useRestaurantStore.getState().save(next, 'tester');
     expect(useRestaurantStore.getState().list).toEqual(next);
-    expect(fb.sbSaveRestaurants).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fb.sbSaveRestaurants).mock.calls[0]).toEqual([next, 'tester']);
+    expect(sb.sbSaveRestaurants).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbSaveRestaurants).mock.calls[0]).toEqual([next, 'tester']);
   });
 
-  it('save shows an alert when firebase rejects but keeps optimistic state', async () => {
+  it('save shows an alert when supabase rejects but keeps optimistic state', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-    vi.mocked(fb.sbSaveRestaurants).mockRejectedValueOnce(new Error('boom'));
+    vi.mocked(sb.sbSaveRestaurants).mockRejectedValueOnce(new Error('boom'));
     const next = [rest({ id: 'r1' })];
     await useRestaurantStore.getState().save(next, 'tester');
     expect(useRestaurantStore.getState().list).toEqual(next);

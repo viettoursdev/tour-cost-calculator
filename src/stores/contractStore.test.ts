@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 import { useContractStore } from './contractStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { Contract, ContractPayment, User } from '@/types';
 
 const resetContract = snapshotInitial(useContractStore);
@@ -67,8 +67,8 @@ describe('contractStore', () => {
 
   it('init subscribes and updates list when callback fires', () => {
     useContractStore.getState().init();
-    expect(fb.sbSubscribeContracts).toHaveBeenCalledTimes(1);
-    const cb = vi.mocked(fb.sbSubscribeContracts).mock.calls[0][0];
+    expect(sb.sbSubscribeContracts).toHaveBeenCalledTimes(1);
+    const cb = vi.mocked(sb.sbSubscribeContracts).mock.calls[0][0];
     cb([contract()]);
     expect(useContractStore.getState().contracts).toEqual([contract()]);
     expect(useContractStore.getState().loading).toBe(false);
@@ -113,7 +113,7 @@ describe('contractStore', () => {
     useAuthStore.setState({ currentUser: null }, false);
     await useContractStore.getState().save(contract({ id: 'x' }));
     expect(useContractStore.getState().contracts).toEqual([]);
-    expect(fb.sbPushContracts).not.toHaveBeenCalled();
+    expect(sb.sbPushContracts).not.toHaveBeenCalled();
   });
 
   it('delete removes by id and pushes', async () => {
@@ -122,7 +122,7 @@ describe('contractStore', () => {
     }, false);
     await useContractStore.getState().delete('hd1');
     expect(useContractStore.getState().contracts.map((c) => c.id)).toEqual(['hd2']);
-    expect(fb.sbPushContracts).toHaveBeenCalledTimes(1);
+    expect(sb.sbPushContracts).toHaveBeenCalledTimes(1);
   });
 
   it('updatePayments replaces payments on matching contract', async () => {

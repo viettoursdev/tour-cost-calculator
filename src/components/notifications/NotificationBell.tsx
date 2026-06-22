@@ -264,7 +264,7 @@ function NotificationItem({
 
       // Update the shared activity status so the requester + both approvers see
       // it live. Best-effort — must not block approval if notification_threads
-      // is locked down (Firestore rules not yet deployed).
+      // is not yet accessible (e.g. Supabase RLS not yet configured).
       if (data.threadId) {
         const newStatus: ActivityStatus =
           !approved ? 'rejected'

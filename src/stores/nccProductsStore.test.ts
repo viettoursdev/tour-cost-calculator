@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase', () => import('@/test/supabaseStub'));
 import { useNccProductsStore, priceToVND } from './nccProductsStore';
 import { useAuthStore } from './authStore';
 import { snapshotInitial } from '@/test/storeReset';
-import * as fb from '@/lib/supabase';
+import * as sb from '@/lib/supabase';
 import type { NccProduct, User } from '@/types';
 
 const resetProd = snapshotInitial(useNccProductsStore);
@@ -25,7 +25,7 @@ const prod = (over: Partial<NccProduct> = {}): NccProduct =>
 describe('nccProductsStore', () => {
   it('init subscribes and populates', () => {
     useNccProductsStore.getState().init();
-    const cb = vi.mocked(fb.sbSubscribeNccProducts).mock.calls[0][0];
+    const cb = vi.mocked(sb.sbSubscribeNccProducts).mock.calls[0][0];
     cb([prod()]);
     expect(useNccProductsStore.getState().products).toHaveLength(1);
   });
@@ -37,7 +37,7 @@ describe('nccProductsStore', () => {
     expect(list[0].name).toBe('Xe 16 chỗ');
     expect(list[0].createdBy).toBe('Khang');
     expect(list[0].id.length).toBeGreaterThan(0);
-    expect(fb.sbPushNccProducts).toHaveBeenCalledTimes(1);
+    expect(sb.sbPushNccProducts).toHaveBeenCalledTimes(1);
   });
 
   it('save updates an existing product in place', async () => {
@@ -55,7 +55,7 @@ describe('nccProductsStore', () => {
     const list = useNccProductsStore.getState().products;
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe('np2');
-    expect(fb.sbPushNccProducts).toHaveBeenCalledTimes(1);
+    expect(sb.sbPushNccProducts).toHaveBeenCalledTimes(1);
   });
 });
 

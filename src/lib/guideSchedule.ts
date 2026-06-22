@@ -1,7 +1,7 @@
 /**
  * Logic THUẦN cho Lịch đi tour HDV: parse ngày bay "DDMMM" + neo năm, dựng mốc
  * thời gian đầy đủ từ một chặng bay, bắt trùng lịch (overlap + đệm tối thiểu) và
- * sinh màu nhận diện cố định. Không phụ thuộc React/Firestore để dễ unit-test.
+ * sinh màu nhận diện cố định. Không phụ thuộc React/Supabase để dễ unit-test.
  */
 import type { FlightSegment, QuoteFlight } from '@/types/quote';
 import type { GuideFlightLeg, GuideConflict } from '@/types/guide';

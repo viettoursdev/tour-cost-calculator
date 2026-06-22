@@ -7,7 +7,7 @@ import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type QuoteHistoryState = {
   quotes: CloudQuoteEntry[];          // regular template quotes
-  dmcQuotes: CloudQuoteEntry[];       // DMC template quotes (separate Firestore doc)
+  dmcQuotes: CloudQuoteEntry[];       // DMC template quotes (separate Supabase table)
   loading: boolean;
   error: string | null;
   init: (user: User) => Unsubscribe;

@@ -212,7 +212,7 @@ export function LoginScreen() {
                     autoComplete="email"
                   />
                   <TextField
-                    label="Mật khẩu (Firebase Auth)"
+                    label="Mật khẩu (Supabase Auth)"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -228,7 +228,7 @@ export function LoginScreen() {
                     {busy ? 'Đang đăng nhập…' : 'Đăng nhập (dev)'}
                   </Button>
                   <Alert severity="info" sx={{ fontSize: 11 }}>
-                    Tài khoản được tạo trong Firebase Console (Authentication → Users). Khác với cột "Mật khẩu" plaintext cũ — đó là legacy, sẽ xoá ở Phase 4.
+                    Tài khoản được tạo trong Supabase (Authentication → Users).
                   </Alert>
                 </Stack>
               </Box>

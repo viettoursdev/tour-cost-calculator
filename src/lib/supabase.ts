@@ -133,12 +133,12 @@ export async function sbPushUsers(users: User[], client: SupabaseClient = sb): P
   }
 }
 
-/** No-op in Supabase (no plaintext password column exists). Kept for signature parity with Firebase gateway. */
+/** No-op in Supabase (no plaintext password column exists). Kept for API compatibility. */
 export async function sbPurgeLegacyPasswords(_client: SupabaseClient = sb): Promise<number> {
   return 0;
 }
 
-// ── Auth gateway (`sb*` auth fns — mirrors `fb*` auth fns in firebase.ts) ────
+// ── Auth gateway (`sb*` auth fns) ────────────────────────────────────────────
 
 export async function sbSendSignInLink(email: string, client: SupabaseClient = sb): Promise<void> {
   // Compute redirect lazily so module scope doesn't reference window (node env).
@@ -196,7 +196,7 @@ export async function sbGetAccessToken(client: SupabaseClient = sb): Promise<str
 
 // ── FX rates ──────────────────────────────────────────────────────────────────
 
-/** Identical shape to firebase.ts:FxRatesDoc — redeclared here to avoid importing firebase initialisation code. */
+/** FX rates document shape. Redeclared here to avoid importing Supabase initialisation code in tests. */
 export type FxRatesDoc = {
   rates: Record<string, number>;
   _meta?: { pushedAt?: string; pushedBy?: string };
@@ -764,7 +764,7 @@ async function assembleContracts(client: SupabaseClient): Promise<Contract[]> {
   );
 }
 
-/** Subscribe to the contract list. Mirrors fbSubscribeContracts (firebase.ts:562). */
+/** Subscribe to the contract list. */
 export function sbSubscribeContracts(
   cb: (list: Contract[]) => void,
   client: SupabaseClient = sb,
@@ -772,12 +772,12 @@ export function sbSubscribeContracts(
   return subscribeTable(client, 'contracts', assembleContracts, cb);
 }
 
-/** One-time pull. Mirrors fbGetContracts (firebase.ts:572). */
+/** One-time pull. */
 export async function sbGetContracts(client: SupabaseClient = sb): Promise<Contract[]> {
   return assembleContracts(client);
 }
 
-/** Full-overwrite push. Mirrors fbPushContracts (firebase.ts:581). */
+/** Full-overwrite push. */
 export async function sbPushContracts(
   list: Contract[],
   pushedBy: { name: string; role: string },
@@ -887,7 +887,7 @@ import type { RateCard, RateCardDoc, RateCardMeta } from '@/types/rates';
 // Strip the vte_visa_rates mirror that sbPushMasterRC writes into rate_card_other.
 // The canonical source for visa rates is the top-level visaRates field; the mirror
 // is for legacy _applyRC() compatibility only and must not leak into the store.
-// Mirrors stripVisaMirror (firebase.ts:146-153).
+// See stripVisaMirror below.
 function stripVisaMirror(doc: RateCardDoc): RateCardDoc {
   if (!doc.otherRates || !('vte_visa_rates' in doc.otherRates)) return doc;
   const cleaned: Record<string, unknown> = {};
@@ -942,12 +942,12 @@ async function assembleRC(client: SupabaseClient): Promise<RateCardDoc | null> {
   return stripVisaMirror({ hotels, visaRates, otherRates, _meta });
 }
 
-/** One-time pull. Mirrors fbPullMasterRC (firebase.ts:155). */
+/** One-time pull. */
 export async function sbPullMasterRC(client: SupabaseClient = sb): Promise<RateCardDoc | null> {
   return assembleRC(client);
 }
 
-/** Full-overwrite push. Mirrors fbPushMasterRC (firebase.ts:161). Returns pushedAt ISO string. */
+/** Full-overwrite push. Returns pushedAt ISO string. */
 export async function sbPushMasterRC(
   rc: RateCard,
   pushedBy: string,
@@ -956,7 +956,7 @@ export async function sbPushMasterRC(
   const pushedAt = new Date().toISOString();
 
   // Mirror vte_visa_rates into otherRates for legacy _applyRC() compatibility,
-  // exactly as fbPushMasterRC does (firebase.ts:168-171).
+  // Mirror vte_visa_rates into otherRates so legacy _applyRC() works.
   const otherRatesWithVisaMirror: RateCard['otherRates'] = {
     ...rc.otherRates,
     vte_visa_rates: rc.visaRates as unknown as RateCardDoc['otherRates'][string],
@@ -1030,7 +1030,7 @@ export async function sbPushMasterRC(
   return pushedAt;
 }
 
-/** Realtime subscribe. Mirrors fbSubscribeMasterRC (firebase.ts:191). */
+/** Realtime subscribe. */
 export function sbSubscribeMasterRC(
   cb: (rc: RateCardDoc) => void,
   client: SupabaseClient = sb,
@@ -1199,7 +1199,7 @@ export async function sbSaveVisaProducts(
 ): Promise<void> {
   const now = new Date().toISOString();
 
-  // Read current meta to build next version snapshot (mirrors firebase.ts:1078-1085)
+  // Read current meta to build next version snapshot
   const { data: prevMeta } = await client.from('visa_products_meta').select('versions').maybeSingle();
   const prevVersions: VisaProductVersion[] = (prevMeta?.versions as VisaProductVersion[]) ?? [];
   const versionNo = (prevVersions[0]?.versionNo ?? 0) + 1;
@@ -1530,7 +1530,7 @@ const rowToItineraryIndex = (r: Record<string, unknown>): ItineraryIndexEntry =>
 
 /**
  * Subscribe to the itinerary metadata index (lightweight list).
- * Mirrors fbSubscribeItineraries (firebase.ts:960-965).
+
  */
 export function sbSubscribeItineraries(
   cb: (list: ItineraryIndexEntry[]) => void,
@@ -1553,7 +1553,7 @@ export function sbSubscribeItineraries(
 
 /**
  * One-time fetch of a full itinerary, reassembling schedule + flights from child tables.
- * Mirrors fbGetItinerary (firebase.ts:933-935).
+
  */
 export async function sbGetItinerary(
   id: string,
@@ -1610,7 +1610,7 @@ export async function sbGetItinerary(
 
 /**
  * Save itinerary: upsert parent by legacy_id, replace days and flights children.
- * Mirrors fbSaveItinerary (firebase.ts:905-926).
+
  */
 export async function sbSaveItinerary(
   itin: Itinerary,
@@ -1695,7 +1695,7 @@ export async function sbSaveItinerary(
 
 /**
  * Delete itinerary by legacy_id. Cascade rules drop days + flights automatically.
- * Mirrors fbDeleteItinerary (firebase.ts:943-953).
+
  */
 export async function sbDeleteItinerary(
   id: string,
@@ -1749,7 +1749,7 @@ const rowToMenuDay = (r: Record<string, unknown>): MenuDay => ({
 
 /**
  * Subscribe to the shared restaurant library (parent + restaurant_menus children).
- * Mirrors fbSubscribeRestaurants (firebase.ts:976-979).
+
  */
 export function sbSubscribeRestaurants(
   cb: (list: Restaurant[]) => void,
@@ -1803,7 +1803,7 @@ export function sbSubscribeRestaurants(
 
 /**
  * Full-overwrite push of the restaurant library.
- * Mirrors fbSaveRestaurants (firebase.ts:986-992).
+
  */
 export async function sbSaveRestaurants(
   list: Restaurant[],
@@ -1878,7 +1878,7 @@ export async function sbSaveRestaurants(
 
 /**
  * Subscribe to the menu metadata index (lightweight list).
- * Mirrors fbSubscribeMenus (firebase.ts:1046-1049).
+
  */
 export function sbSubscribeMenus(
   cb: (list: MenuIndexEntry[]) => void,
@@ -1903,7 +1903,7 @@ export function sbSubscribeMenus(
 
 /**
  * One-time fetch of a full menu, reassembling schedule from menu_days.
- * Mirrors fbGetMenu (firebase.ts:1028-1030).
+
  */
 export async function sbGetMenu(
   id: string,
@@ -1948,7 +1948,7 @@ export async function sbGetMenu(
 
 /**
  * Save menu: upsert parent by legacy_id, replace menu_days children.
- * Preserves createdAt on re-save. Mirrors fbSaveMenu (firebase.ts:1003-1025).
+ * Preserves createdAt on re-save.
  */
 export async function sbSaveMenu(
   m: Menu,
@@ -2004,7 +2004,7 @@ export async function sbSaveMenu(
 
 /**
  * Delete menu by legacy_id. Cascade drops menu_days automatically.
- * Mirrors fbDeleteMenu (firebase.ts:1033-1043).
+
  */
 export async function sbDeleteMenu(
   id: string,
@@ -2048,7 +2048,7 @@ const rowToNotif = (r: Record<string, unknown>, attachments?: FileAttachment[]):
 /**
  * Send a notification to a target user. Resolves username → user_id; inserts
  * one row; caps the user's notification list at 100 by deleting oldest excess.
- * Mirrors fbSendNotification (firebase.ts:598-615).
+
  */
 export async function sbSendNotification(
   targetUsername: string,
@@ -2092,7 +2092,7 @@ export async function sbSendNotification(
 
 /**
  * Subscribe to a user's notifications (newest-first).
- * Mirrors fbSubscribeNotifications (firebase.ts:621-628).
+
  */
 export function sbSubscribeNotifications(
   username: string,
@@ -2122,7 +2122,7 @@ export function sbSubscribeNotifications(
 
 /**
  * Full-overwrite push of a user's notification list (used for mark-read).
- * Mirrors fbPushNotifications (firebase.ts:633-638).
+
  */
 export async function sbPushNotifications(
   username: string,
@@ -2162,7 +2162,7 @@ export async function sbPushNotifications(
 
 /**
  * Send the same notification to multiple recipients (deduplicated).
- * Mirrors fbSendNotificationMany (firebase.ts:763-768).
+
  */
 export async function sbSendNotificationMany(
   targets: string[],
@@ -2176,7 +2176,7 @@ export async function sbSendNotificationMany(
 
 /**
  * Create the thread if missing; else merge in newly-added members and update link/title.
- * Mirrors fbEnsureNotifThread (firebase.ts:719-730).
+
  */
 export async function sbEnsureNotifThread(
   thread: NotifThread,
@@ -2263,7 +2263,7 @@ const assembleThread = async (cl: SupabaseClient, id: string): Promise<NotifThre
 /**
  * Subscribe to a shared thread (members + comments reassembled).
  * Listens to ALL THREE tables so a new comment fires the subscriber.
- * Mirrors fbSubscribeNotifThread (firebase.ts:732-734).
+
  */
 export function sbSubscribeNotifThread(
   id: string,
@@ -2291,7 +2291,7 @@ export function sbSubscribeNotifThread(
 
 /**
  * Append a comment to a thread. sort_order = current max + 1.
- * Mirrors fbAddThreadComment (firebase.ts:737-742).
+
  */
 export async function sbAddThreadComment(
   id: string,
@@ -2326,7 +2326,7 @@ export async function sbAddThreadComment(
 
 /**
  * Update the live status of a shared thread.
- * Mirrors fbSetThreadStatus (firebase.ts:749-760).
+
  */
 export async function sbSetThreadStatus(
   id: string,
@@ -2390,7 +2390,7 @@ const assembleTourPayments = async (
 
 /**
  * Full-overwrite push of a tour's payments + customItems.
- * Mirrors fbSaveTourPayments (firebase.ts:794-806).
+
  */
 export async function sbSaveTourPayments(
   tourKey: string,
@@ -2435,7 +2435,7 @@ export async function sbSaveTourPayments(
 
 /**
  * One-time fetch of a tour's payment doc.
- * Mirrors fbGetTourPayments (firebase.ts:809-817).
+
  */
 export async function sbGetTourPayments(
   tourKey: string,
@@ -2446,7 +2446,7 @@ export async function sbGetTourPayments(
 
 /**
  * Subscribe to a tour's payment doc.
- * Mirrors fbSubscribeTourPayments (firebase.ts:823-835).
+
  */
 export function sbSubscribeTourPayments(
   tourKey: string,
@@ -2501,11 +2501,10 @@ const assembleApprovals = async (cl: SupabaseClient): Promise<PaymentApprovalDoc
 
 /**
  * Write a single stage of an approval (1 or 2).
- * Final status rules (firebase.ts:869-870):
+ * Final status rules:
  *   rejected at any stage  → 'rejected'
  *   approved at stage 2    → 'approved'
  *   approved at stage 1    → 'pending_stage2'
- * Mirrors fbSetApprovalStage (firebase.ts:850-882).
  */
 export async function sbSetApprovalStage(
   key: string,
@@ -2555,7 +2554,7 @@ export async function sbSetApprovalStage(
 
 /**
  * Subscribe to the full payment-approvals document (key → entry map).
- * Mirrors fbSubscribePaymentApprovals (firebase.ts:888-894).
+
  */
 export function sbSubscribePaymentApprovals(
   cb: (doc: PaymentApprovalDoc) => void,
@@ -2568,10 +2567,9 @@ export function sbSubscribePaymentApprovals(
 // Phase 2 — Quote History Index
 // Functions: generateQuoteCode, sbSaveQuote/sbSaveDMCQuote,
 //            sbSubscribeQuoteHistory/sbSubscribeDMCQuoteHistory
-// Source parity: firebase.ts:204-326
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Types (local; match firebase.ts:220-243) ──────────────────────────────────
+// ── Types (local) ──────────────────────────────────────────────────────────────
 
 type SaveEntry = {
   id: number;
@@ -2598,7 +2596,7 @@ type SaveEntry = {
 
 type SavedBy = { u: string; name: string; role: string };
 
-// ── generateQuoteCode — verbatim copy of firebase.ts:204-216 ─────────────────
+// ── generateQuoteCode ───────────────────────────────────────────────────────────
 
 /**
  * Generate a quote code like "NĐ.01.31.05.26" / "NN.01.31.05.26" / "DMC.01.31.05.26".
@@ -2685,7 +2683,7 @@ async function saveSingleQuoteEntry(
   let createdByUsername: string;
 
   if (existing) {
-    // update: preserve code + createdAt + creator info (mirror firebase.ts:291-292)
+    // update: preserve code + createdAt + creator info
     quoteCode = (existing.quote_code as string) ?? entry.quoteCode ?? '';
     createdAt = existing.created_at as string;
     createdByName = (existing.created_by_name as string) || savedBy.name;
@@ -2731,7 +2729,7 @@ async function saveSingleQuoteEntry(
     updated_by_name: savedByLabel,
   };
 
-  // optional fields: only write when defined (mirror firebase.ts:267-279 optionalFields pattern)
+  // optional fields: only write when defined
   if (entry.status !== undefined)           row.status = entry.status;
   if (entry.lossReason !== undefined)       row.loss_reason = entry.lossReason;
   if (entry.customerName !== undefined)     row.customer_name = entry.customerName;
@@ -2862,10 +2860,8 @@ async function loadQuoteHistory(
 
 /**
  * Save (insert or update) a regular quote's index metadata.
- * Parity: firebase.ts:260 `fbSaveQuote` via `makeQuoteHistoryApi(historyDoc, ...)`.
  * On insert: auto-generates quote_code (counting non-dmc rows) via generateQuoteCode.
  * On update: preserves existing quote_code and createdAt.
- * Drops Firestore's ≤500/1 MB caps — those are Firestore artifacts; Postgres rows are unbounded.
  */
 export async function sbSaveQuote(
   entry: SaveEntry,
@@ -2877,7 +2873,7 @@ export async function sbSaveQuote(
 
 /**
  * Save (insert or update) a DMC quote's index metadata.
- * Parity: firebase.ts:260 `fbSaveQuote` via `makeQuoteHistoryApi(dmcHistoryDoc, ...)`.
+
  * On insert: auto-generates quote_code counting only template='dmc' rows.
  */
 export async function sbSaveDMCQuote(
@@ -2890,7 +2886,7 @@ export async function sbSaveDMCQuote(
 
 /**
  * Subscribe to the regular quote history index (template <> 'dmc'), newest first.
- * Parity: firebase.ts:253 `fbSubscribeQuoteHistory`.
+
  */
 export function sbSubscribeQuoteHistory(
   cb: (quotes: CloudQuoteEntry[]) => void,
@@ -2906,7 +2902,7 @@ export function sbSubscribeQuoteHistory(
 
 /**
  * Subscribe to the DMC quote history index (template = 'dmc'), newest first.
- * Parity: firebase.ts:253 `fbSubscribeQuoteHistory` (DMC variant via makeQuoteHistoryApi(dmcHistoryDoc)).
+
  */
 export function sbSubscribeDMCQuoteHistory(
   cb: (quotes: CloudQuoteEntry[]) => void,
@@ -2922,7 +2918,6 @@ export function sbSubscribeDMCQuoteHistory(
 
 // ── Phase 2 Task 5 — Quote Project State ────────────────────────────────────
 // Functions: sbSaveQuoteState/sbSaveDMCQuoteState, sbGetQuoteProject/sbGetDMCQuoteProject
-// Parity: firebase.ts:327-403
 
 import type { QuoteDraft, QuoteVersion, CloudQuoteProject } from '@/types/quote';
 import { decomposeQuote, assembleQuote } from './supabase/quoteMap';
@@ -3153,7 +3148,7 @@ async function getQuoteProjectImpl(
 
 // ── public exports ────────────────────────────────────────────────────────────
 
-/** Mirror of `fbSaveQuoteState` (firebase.ts:329). Computes next version_no via
+/** Save quote state to Supabase. Computes next version_no via
  *  max(version_no)+1, builds decomposeQuote payload with version snapshot, calls
  *  save_quote_state(p jsonb) RPC atomically. decomposeQuote omits total_cost so the
  *  RPC's CASE WHEN q ? 'total_cost' clause preserves the index-owned value. */
@@ -3179,7 +3174,7 @@ export async function sbSaveDMCQuoteState(
   return saveQuoteStateImpl(cloudId, state, note, savedBy, client);
 }
 
-/** Mirror of `fbGetQuoteProject` (firebase.ts:400). SELECTs the quotes row + all
+/** Fetch a quote project from Supabase. SELECTs the quotes row + all
  *  child tables + quote_versions + quote_collaborators; reassembles currentState via
  *  assembleQuote; returns QuoteVersion[] newest-first. Returns null if absent. */
 export async function sbGetQuoteProject(
@@ -3201,14 +3196,12 @@ export async function sbGetDMCQuoteProject(
 
 // ── Phase 2 Task 6 — Quote delete + collaborators ────────────────────────────
 // Functions: sbDeleteQuote/sbDeleteDMCQuote, sbUpdateCollaborators/sbUpdateDMCCollaborators
-// Parity: firebase.ts:364-397
 
 /**
  * Delete a quote (regular or DMC) by cloud_id.
  * Children (line_items, flights, workflow, groups, payments, versions,
  * collaborators) cascade via ON DELETE CASCADE.
- * `_id` (numeric legacy id) is accepted for signature parity with fbDeleteQuote
- * (firebase.ts:364) but is not used — delete is by cloud_id.
+ * `_id` (numeric legacy id) is accepted for API compatibility but is not used — delete is by cloud_id.
  */
 export async function sbDeleteQuote(
   _id: number,
@@ -3220,8 +3213,7 @@ export async function sbDeleteQuote(
 }
 
 /** Thin DMC variant — same logic; template discriminator is irrelevant for
- *  delete (cloud_id is globally unique in the quotes table). Mirrors
- *  fbDeleteDMCQuote (firebase.ts:494 via _dmc factory). */
+ *  delete (cloud_id is globally unique in the quotes table). */
 export async function sbDeleteDMCQuote(
   id: number,
   cloudId: string,
@@ -3237,8 +3229,7 @@ export async function sbDeleteDMCQuote(
  *    users get user_id = null, but username + name are still stored).
  * 3. replaceChildren clears old rows then re-inserts the new set atomically.
  *
- * Mirrors fbUpdateCollaborators (firebase.ts:379-397): that fn writes to both
- * the project doc and the history entry. Here both live in the same quotes row /
+ * Both project state and history entry live in the same quotes row /
  * quote_collaborators child table, so one replaceChildren suffices.
  */
 export async function sbUpdateCollaborators(
@@ -3271,8 +3262,7 @@ export async function sbUpdateCollaborators(
 }
 
 /** Thin DMC variant — same logic (template discriminator not needed; cloud_id
- *  is unique across both regular and DMC quotes). Mirrors fbUpdateDMCCollaborators
- *  (firebase.ts:495 via _dmc factory). */
+ *  is unique across both regular and DMC quotes). */
 export async function sbUpdateDMCCollaborators(
   id: number,
   cloudId: string,
@@ -3283,14 +3273,14 @@ export async function sbUpdateDMCCollaborators(
 }
 
 // ── Chat gateway (Phase 1.5 Task 7) ──────────────────────────────────────────
-// Mirrors firebase.ts:661–753 fbSubscribeChats/fbSubscribeChat/fbEnsureChat/fbSendChatMessage
+// Chat functions: sbSubscribeChats/sbSubscribeChat/sbEnsureChat/sbSendChatMessage
 // Tables: chats (text PK), chat_members (chat_id, username), chat_messages (uuid PK)
 
 import type { Chat, ChatMessage } from '@/types/chat';
 
 const CHAT_MSG_CAP = 500;
 
-/** ID for a 1-1 DM (stable, sorted). Mirrors firebase.ts:665 dmChatId. */
+/** ID for a 1-1 DM (stable, sorted). */
 export const dmChatId = (a: string, b: string): string => 'dm_' + [a, b].sort().join('__');
 
 // Assemble a Chat value from db rows (used by both subscribe fns).
@@ -3420,11 +3410,11 @@ async function assembleChats(
       row,
       membersByChat.get(row.id as string) ?? [],
       readsByChat.get(row.id as string) ?? {},
-      [], // messages not loaded in list view (matches fbSubscribeChats which stores messages in the doc but we skip here)
+      [], // messages not loaded in list view
     );
   });
 
-  // Sort newest-active first by lastAt ?? createdAt (mirrors firebase.ts:672)
+  // Sort newest-active first by lastAt ?? createdAt
   chats.sort((a, b) =>
     (b.lastAt ?? b.createdAt).localeCompare(a.lastAt ?? a.createdAt),
   );
@@ -3433,7 +3423,7 @@ async function assembleChats(
 
 /**
  * Realtime subscribe to all chats where `username` is a member.
- * Mirrors fbSubscribeChats (firebase.ts:668).
+
  * Messages are empty in the list view (only loaded in sbSubscribeChat).
  */
 export function sbSubscribeChats(
@@ -3462,7 +3452,7 @@ export function sbSubscribeChats(
 
 /**
  * Realtime subscribe to a single chat (with its messages).
- * Mirrors fbSubscribeChat (firebase.ts:677).
+
  */
 export function sbSubscribeChat(
   id: string,
@@ -3490,7 +3480,7 @@ export function sbSubscribeChat(
 
 /**
  * Create a chat if not yet present, or merge members for group chats.
- * Mirrors fbEnsureChat (firebase.ts:682).
+
  * - DM (isGroup=false): if exists, no-op (members are fixed by PK).
  * - Group (isGroup=true): if exists, merge in new members; preserve existing title.
  * Resolves username → user_id for created_by and each member.
@@ -3524,7 +3514,7 @@ export async function sbEnsureChat(chat: Chat, client: SupabaseClient = sb): Pro
       if (memErr) throw new Error('sbEnsureChat members: ' + memErr.message);
     }
   } else if (chat.isGroup) {
-    // Group re-ensure: merge new members; update title only when it actually changes (mirrors fbEnsureChat)
+    // Group re-ensure: merge new members; update title only when it actually changes
     const newTitle = chat.title || (existing.title as string) || null;
     if (newTitle !== (existing.title ?? null)) {
       const { error: upErr } = await client.from('chats')
@@ -3546,12 +3536,11 @@ export async function sbEnsureChat(chat: Chat, client: SupabaseClient = sb): Pro
       if (memErr) throw new Error('sbEnsureChat merge members: ' + memErr.message);
     }
   }
-  // DM already exists → no-op (mirrors fb*)
+  // DM already exists → no-op
 }
 
 /**
  * Send a message to a chat.
- * Mirrors fbSendChatMessage (firebase.ts:696):
  * - Inserts into chat_messages (legacy_id=msg.id, by_username, file/reply_to jsonb, reactions)
  * - Updates chats.last_at/last_text/last_by_name
  * - Updates sender's chat_members.last_read = msg.at
@@ -3562,7 +3551,7 @@ export async function sbSendChatMessage(
   msg: ChatMessage,
   client: SupabaseClient = sb,
 ): Promise<void> {
-  // Guard: chat must exist (mirrors fb*: if (!snap.exists()) return)
+  // Guard: chat must exist
   const { data: chatExists } = await client.from('chats').select('id').eq('id', id).maybeSingle();
   if (!chatExists) return;
 
@@ -3617,11 +3606,9 @@ export async function sbSendChatMessage(
 
 /**
  * Edit the text of an existing message.
- * Mirrors fbEditChatMessage (firebase.ts:712):
  * - Sets text and edited_at on the row matching (chat_id, legacy_id).
- * - Note: the firebase version also updates lastText when the edited message is
- *   the last in the chat; that preview field is a convenience and is not
- *   required to be kept in sync here (the subscriber assembles it from messages).
+ * - Note: lastText in chats is not updated on edit here; the subscriber
+ *   assembles it from messages.
  */
 export async function sbEditChatMessage(
   id: string,
@@ -3638,7 +3625,6 @@ export async function sbEditChatMessage(
 
 /**
  * Soft-delete a message (revoke / thu hồi).
- * Mirrors fbDeleteChatMessage (firebase.ts:722):
  * - Sets deleted=true, clears text and file on the row.
  * - Keeps id/by/byName/at intact so the UI can render a tombstone.
  */
@@ -3656,7 +3642,6 @@ export async function sbDeleteChatMessage(
 
 /**
  * Toggle a reaction emoji for a user on a message.
- * Mirrors fbToggleChatReaction (firebase.ts:732):
  * - Reads the current reactions jsonb for the row.
  * - Adds username to reactions[emoji] if absent; removes if present.
  * - Drops the emoji key entirely when its array becomes empty.
@@ -3695,7 +3680,6 @@ export async function sbToggleChatReaction(
 
 /**
  * Mark a user as having read a chat up to the current moment.
- * Mirrors fbMarkChatRead (firebase.ts:748):
  * - Updates chat_members.last_read = now() for (chat_id, username).
  */
 export async function sbMarkChatRead(
@@ -3712,7 +3696,7 @@ export async function sbMarkChatRead(
 
 // ── Phase 2 Task 7 — Quote cross-links + status ──────────────────────────────
 // Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
-// Parity: firebase.ts:405-413 (fbSetEntryLink), firebase.ts:462-473 (fbSetEntryStatus)
+// Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
 
 import type { QuoteStatus } from '@/types/quote';
 
@@ -3724,11 +3708,8 @@ type EntryLink = {
 
 /**
  * Update the cross-link fields on a regular quote's index row.
- * Mirrors fbSetRegularEntryLink = _regular.fbSetEntryLink (firebase.ts:484 / 407-414):
- * that fn mutates the matching entry in the flat quotes[] array; here we UPDATE
- * the quotes row directly by cloud_id.
- * Only fields present in `link` are written; absent fields are set to null to
- * match fb* behaviour (it spreads the whole EntryLink object, clearing omitted keys).
+ * Updates the cross-link fields on the quotes row directly by cloud_id.
+ * Only fields present in `link` are written; absent fields are set to null.
  */
 export async function sbSetRegularEntryLink(
   cloudId: string,
@@ -3746,7 +3727,7 @@ export async function sbSetRegularEntryLink(
 
 /**
  * Same as sbSetRegularEntryLink for DMC quotes.
- * Mirrors fbSetDMCEntryLink = _dmc.fbSetEntryLink (firebase.ts:497).
+
  * cloud_id is globally unique in quotes (regular and DMC share the table),
  * so the implementation is identical — the template discriminator is not needed.
  */
@@ -3760,12 +3741,11 @@ export async function sbSetDMCEntryLink(
 
 /**
  * Update status (and optional lossReason) on a regular quote.
- * Mirrors fbSetEntryStatus (firebase.ts:462-473):
  * - Loss states ('not_selected' | 'cancelled'): set loss_reason to provided value;
- *   if lossReason is undefined, READ existing loss_reason and preserve it (fb parity).
+ *   if lossReason is undefined, READ existing loss_reason and preserve it.
  * - Non-loss states: clear loss_reason (set to null).
  * The optional `lossReason` parameter is only applied when `status` is a loss state;
- * otherwise it is ignored and loss_reason is cleared — matching firebase.ts:470-471.
+ * otherwise it is ignored and loss_reason is cleared.
  */
 export async function sbSetQuoteStatus(
   cloudId: string,
@@ -3791,7 +3771,7 @@ export async function sbSetQuoteStatus(
 
 /**
  * Update status on a DMC quote.
- * Mirrors fbSetDMCQuoteStatus = _dmc.fbSetEntryStatus (firebase.ts:498).
+
  * Delegates to sbSetQuoteStatus (cloud_id unique across both flavours).
  */
 export async function sbSetDMCQuoteStatus(
@@ -3807,9 +3787,7 @@ export async function sbSetDMCQuoteStatus(
 
 /**
  * Batch-update workflow index columns for many quotes.
- * Mirrors fbBackfillWorkflowIndex (firebase.ts:418-434): that fn reads the full
- * Firestore history array, patches matching entries, writes once. Here each
- * cloud_id requires its own UPDATE (Supabase JS client has no bulk conditional
+ * Each cloud_id requires its own UPDATE (Supabase JS client has no bulk conditional
  * update with per-row values), but the pattern is sequential and the total row
  * count is bounded by the number of active quotes in the system.
  *
@@ -3844,7 +3822,7 @@ export async function sbBackfillWorkflowIndex(
 
 /**
  * Update payment_summary for a single quote by cloud_id.
- * Mirrors fbSetEntryPaymentSummary / fbSetQuotePaymentSummary (firebase.ts:436-445).
+
  */
 export async function sbSetQuotePaymentSummary(
   cloudId: string,
@@ -3860,13 +3838,12 @@ export async function sbSetQuotePaymentSummary(
 
 /**
  * Batch-update payment_summary for many quotes.
- * Mirrors fbBackfillPaymentIndex (firebase.ts:447-459).
+
  * Returns count of quotes actually updated.
  *
- * Design note: Firestore's fb* version reads the full 1-document array and
- * writes once (one write cycle regardless of N). Supabase rows are independent
- * so we issue N sequential UPDATEs. For the expected scale (hundreds of active
- * quotes) this is acceptable; if N grows large, consider a PL/pgSQL RPC.
+ * Design note: Supabase rows are independent so we issue N sequential UPDATEs.
+ * For the expected scale (hundreds of active quotes) this is acceptable;
+ * if N grows large, consider a PL/pgSQL RPC.
  */
 export async function sbBackfillPaymentIndex(
   updates: Record<string, CloudQuoteEntry['paymentSummary']>,
