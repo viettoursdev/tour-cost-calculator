@@ -26,6 +26,9 @@ export type GuideFlightLeg = {
   id: string;
   guideId: string;       // GuideRef.id
   tourCloudId: string;   // báo giá nguồn
+  /** Mã booking nguồn (QuoteFlight.id). Các chặng CÙNG booking (nối chuyến, khứ hồi)
+   *  KHÔNG tính là trùng lịch với nhau. Leg thêm tay không có → vẫn so trùng. */
+  bookingId?: string;
   flightNo?: string;
   depAirport?: string;
   arrAirport?: string;

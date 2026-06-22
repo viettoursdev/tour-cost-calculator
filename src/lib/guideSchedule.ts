@@ -116,6 +116,7 @@ export function buildLegsFromFlights(
         id: legId(i, seg),
         guideId,
         tourCloudId,
+        bookingId: f.id,
         flightNo: seg.flightNo,
         depAirport: seg.depAirport,
         arrAirport: seg.arrAirport,
@@ -156,7 +157,13 @@ export function detectConflicts(
         const bStart = new Date(b.startISO).getTime();
         const gapMins = (bStart - maxEnd) / 60000;
         if (gapMins >= bufferMins) break; // các chặng sau còn xa hơn → dừng
-        out.push({ guideId, legA: a, legB: b, kind: gapMins < 0 ? 'overlap' : 'buffer', gapMins: Math.round(gapMins) });
+        // Hai chặng CÙNG một booking (nối chuyến, khứ hồi) là một hành trình liền —
+        // không tính trùng lịch với nhau. Vẫn cập nhật maxEnd để các chặng booking
+        // KHÁC phía sau vẫn được so đúng khoảng đệm.
+        const sameBooking = !!a.bookingId && a.bookingId === b.bookingId;
+        if (!sameBooking) {
+          out.push({ guideId, legA: a, legB: b, kind: gapMins < 0 ? 'overlap' : 'buffer', gapMins: Math.round(gapMins) });
+        }
         maxEnd = Math.max(maxEnd, new Date(b.endISO).getTime());
       }
     }

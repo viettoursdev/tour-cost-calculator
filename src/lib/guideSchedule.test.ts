@@ -120,6 +120,21 @@ describe('detectConflicts', () => {
     expect(c).toHaveLength(1);
     expect(conflictedLegIds(c)).toEqual(new Set(['a', 'b']));
   });
+  it('does not flag two legs in the same booking (connection within one PNR)', () => {
+    const legs = [
+      leg({ id: 'a', bookingId: 'bk1', startISO: '2026-11-20T10:00:00Z', endISO: '2026-11-20T12:00:00Z' }),
+      leg({ id: 'b', bookingId: 'bk1', startISO: '2026-11-20T13:00:00Z', endISO: '2026-11-20T15:00:00Z' }), // gap 60' nhưng cùng booking
+    ];
+    expect(detectConflicts(legs, 120)).toHaveLength(0);
+  });
+  it('still flags a different booking that crowds a connection (maxEnd kept across same-booking legs)', () => {
+    const legs = [
+      leg({ id: 'a', bookingId: 'bk1', startISO: '2026-11-20T08:00:00Z', endISO: '2026-11-20T10:00:00Z' }),
+      leg({ id: 'b', bookingId: 'bk1', startISO: '2026-11-20T11:00:00Z', endISO: '2026-11-20T13:00:00Z' }), // nối chuyến cùng booking
+      leg({ id: 'c', bookingId: 'bk2', startISO: '2026-11-20T13:30:00Z', endISO: '2026-11-20T15:00:00Z' }), // booking khác, sát chặng b
+    ];
+    expect(conflictedLegIds(detectConflicts(legs, 120)).has('c')).toBe(true);
+  });
   it('catches a long leg overlapping several later short legs', () => {
     const legs = [
       leg({ id: 'long', startISO: '2026-11-20T08:00:00Z', endISO: '2026-11-20T20:00:00Z' }),
