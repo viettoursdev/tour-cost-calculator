@@ -1,85 +1,54 @@
 # backup.yml
 #
-# Hourly Firestore backup with TWO safety nets:
-#   1. Mirror — re-imports the dump into a second Firebase project so its
-#      Firestore lags production by at most ~1 hour.
-#   2. Artifact — uploads the dump as a 30-day GitHub Actions artifact for
-#      point-in-time recovery against any project.
+# Hourly Supabase backup: a plain-SQL dump (`supabase db dump`, which emits SQL
+# text — restore with `psql`), gzipped, uploaded to the Cloudflare R2 bucket
+# `viettours-db-backups`. Retention is enforced by an R2 bucket lifecycle rule
+# (14 days), not by this workflow.
 #
-# Currently SRC is tour-cost-calculator-4336c (production) and DEST is
-# tour-cost-calculator-v2 (backup-only — not served to clients). See CLAUDE.md.
-#
-# Secrets required (set in: GitHub repo → Settings → Secrets and variables → Actions):
-#   FIREBASE_BACKUP_SRC_SA_JSON  — service-account JSON for the SOURCE (production) project.
-#   FIREBASE_BACKUP_DEST_SA_JSON — service-account JSON for the DEST (mirror) project.
-#
-# Failure semantics:
-#   - export fails → upload + import skip; run is red.
-#   - export ok, upload fails → import skips; run is red (the mirror skip is
-#     acceptable because the artifact is the more reliable safety net).
-#   - export + upload ok, import fails → run is red but the artifact is
-#     already preserved.
-#   - SA files are scrubbed unconditionally on exit.
+# Secrets (GitHub repo → Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL      — direct Postgres connection string for production.
+#   R2_ACCESS_KEY_ID     — R2 S3 API access key id.
+#   R2_SECRET_ACCESS_KEY — R2 S3 API secret.
+#   R2_ENDPOINT          — https://<accountid>.r2.cloudflarestorage.com
 
-name: Firestore Backup
+name: Supabase Backup
 
 on:
   schedule:
-    - cron: '17 * * * *'  # :17 of every hour, UTC — avoid top-of-hour cron contention
-  workflow_dispatch:        # manual trigger
+    - cron: '17 * * * *'  # :17 of every hour, UTC
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: firestore-backup
-  cancel-in-progress: false  # queue overlapping runs; do not drop them
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  group: supabase-backup
+  cancel-in-progress: false
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - run: npm ci
-
-      - name: Materialize SA JSONs
+      - name: Dump Supabase
         env:
-          SRC_SA_JSON: ${{ secrets.FIREBASE_BACKUP_SRC_SA_JSON }}
-          DEST_SA_JSON: ${{ secrets.FIREBASE_BACKUP_DEST_SA_JSON }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          printf '%s' "$SRC_SA_JSON" > src-sa.json
-          printf '%s' "$DEST_SA_JSON" > dest-sa.json
-          chmod 600 src-sa.json dest-sa.json
+          STAMP="$(date -u +%Y/%m/%d/%H%M%SZ)"
+          [ -n "$STAMP" ] || { echo "empty timestamp"; exit 1; }
+          echo "OBJECT_KEY=$STAMP/supabase-dump.sql" >> "$GITHUB_ENV"
+          npx --yes supabase db dump --db-url "$SUPABASE_DB_URL" -f dump.sql
+          gzip -9 dump.sql
 
-      - name: Export Firestore from SRC
-        run: SA_PATH=src-sa.json node scripts/firestore-export.mjs
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          aws s3 cp dump.sql.gz "s3://viettours-db-backups/${OBJECT_KEY}.gz" \
+            --endpoint-url "$R2_ENDPOINT"
 
-      - name: Upload dump artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: firestore-dump-${{ github.run_id }}
-          path: firestore-dump.json
-          retention-days: 30
-          if-no-files-found: error
-
-      # Mirror to v2 is paused: v2 was banned by Google on 2026-06-17.
-      # Remove the `false &&` once the ban is lifted to resume the live mirror.
-      # The artifact upload above continues to run every hour regardless.
-      - name: Import Firestore into DEST (mirror)
-        if: false && success()
-        run: SA_PATH=dest-sa.json node scripts/firestore-import.mjs
-
-      - name: Scrub SA files
+      - name: Scrub
         if: always()
-        run: rm -f src-sa.json dest-sa.json
+        run: rm -f dump.sql dump.sql.gz
