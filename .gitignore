@@ -14,6 +14,11 @@ new-service-account.json
 prod-sa.json
 *-sa.json
 
+# Data dumps — contain user/supplier PII. Never commit; backups live in R2.
+firestore-dump.json
+*-dump.json
+*.sql.gz
+
 # Local env files — keep .env.example committed as the template.
 .env
 .env.local
