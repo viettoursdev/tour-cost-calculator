@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/aiWorker', () => ({ callAIWorker: vi.fn() }));
+vi.mock('@/lib/aiWorker', () => ({ callAIWorker: vi.fn(), streamAIChat: vi.fn() }));
 vi.mock('./tools', () => ({
   ASSISTANT_TOOLS: [{ name: 'search_records', description: '', input_schema: {} }],
   PROPOSAL_TOOLS: new Set(['propose_itinerary', 'propose_quote']),
   runAssistantTool: vi.fn(),
 }));
 
-import { callAIWorker } from '@/lib/aiWorker';
+import { streamAIChat } from '@/lib/aiWorker';
 import { runAssistantTool } from './tools';
 import { runAssistant } from './agent';
 
-const mockCall = vi.mocked(callAIWorker);
+// agent.ts gọi streamAIChat(body, onText) (SSE) thay cho callAIWorker('/chat', body).
+const mockCall = vi.mocked(streamAIChat);
 const mockTool = vi.mocked(runAssistantTool);
 
 beforeEach(() => { mockCall.mockReset(); mockTool.mockReset(); });
@@ -55,7 +56,7 @@ describe('runAssistant', () => {
       stop_reason: 'end_turn',
     });
     const r = await runAssistant([{ role: 'user', content: 'hỏi web' }], { web: true });
-    expect(mockCall).toHaveBeenCalledWith('/chat', expect.objectContaining({ web: true }));
+    expect(mockCall).toHaveBeenCalledWith(expect.objectContaining({ web: true }), undefined);
     expect(r.citations).toEqual([{ url: 'https://x.com', title: 'X' }]);
   });
 });
