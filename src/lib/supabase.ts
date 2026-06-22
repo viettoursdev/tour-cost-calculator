@@ -3850,16 +3850,13 @@ export async function sbPublishQuote(d: PublicQuoteDoc, client: SupabaseClient =
 }
 
 export async function sbGetPublicQuote(token: string, client: SupabaseClient = sb): Promise<PublicQuoteDoc | null> {
-  const { data, error } = await client
-    .from('public_quotes')
-    .select('payload, acceptance')
-    .eq('token', token)
-    .maybeSingle();
+  const { data, error } = await client.rpc('get_public_quote', { p_token: token });
   if (error) throw new Error('sbGetPublicQuote: ' + error.message);
-  if (!data) return null;
+  const row = (data as { payload: unknown; acceptance: unknown }[] | null)?.[0];
+  if (!row) return null;
   return {
-    ...(data.payload as Omit<PublicQuoteDoc, 'acceptance'>),
-    acceptance: (data.acceptance as PublicQuoteDoc['acceptance']) ?? undefined,
+    ...(row.payload as Omit<PublicQuoteDoc, 'acceptance'>),
+    acceptance: (row.acceptance as PublicQuoteDoc['acceptance']) ?? undefined,
   };
 }
 

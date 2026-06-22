@@ -28,12 +28,16 @@ describe('public quotes gateway', () => {
     expect(got?.acceptance).toBeUndefined();
   });
 
-  it('anonymous client can READ but not publish', async () => {
+  it('anonymous client can READ via token but not enumerate or publish', async () => {
     const c = await getViettoursClient();
     await sbPublishQuote(mk('tokB'), c);
     const anon = anonClient();
+    // Read by token (via RPC) still works
     const got = await sbGetPublicQuote('tokB', anon);
     expect(got?.tourName).toBe('Tour X');
+    // Direct table enumeration is blocked (no anon SELECT grant)
+    const res = await anon.from('public_quotes').select('token');
+    expect(!!(res.error || (res.data ?? []).length === 0)).toBe(true);
     // anon insert is denied by RLS
     const ins = await anon.from('public_quotes').insert({ token: 'tokX', payload: {} });
     expect(ins.error).toBeTruthy();

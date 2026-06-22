@@ -15,8 +15,6 @@ alter table public.quotes add column share jsonb;
 
 alter table public.public_quotes enable row level security;
 
--- Anyone (incl. unauthenticated customers) may read a shared quote by token.
-create policy public_quotes_read on public.public_quotes for select using (true);
 -- Only company users publish / edit / unpublish.
 create policy public_quotes_write on public.public_quotes for all
   using (public.is_viettours_user()) with check (public.is_viettours_user());
@@ -36,5 +34,19 @@ as $$
 $$;
 
 -- 0017 grants cover only authenticated/service_role; grant anon explicitly.
-grant select on public.public_quotes to anon;
+-- (No table-wide SELECT grant for anon — read access is via get_public_quote RPC only.)
 grant execute on function public.accept_public_quote(text, jsonb) to anon;
+
+-- Anonymous read REQUIRES the token (the capability). SECURITY DEFINER so anon can
+-- fetch exactly one row by token without a table-wide SELECT grant (prevents enumeration).
+create or replace function public.get_public_quote(p_token text)
+returns table(payload jsonb, acceptance jsonb)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select payload, acceptance from public.public_quotes where token = p_token;
+$$;
+
+grant execute on function public.get_public_quote(text) to anon;

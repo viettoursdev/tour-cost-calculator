@@ -1,8 +1,9 @@
 begin;
-select plan(6);
+select plan(7);
 select has_table('public', 'public_quotes', 'public_quotes table exists');
 select has_column('public', 'quotes', 'share', 'quotes.share column added');
 select has_function('public', 'accept_public_quote', array['text', 'jsonb'], 'accept RPC exists');
+select has_function('public', 'get_public_quote', array['text'], 'get_public_quote RPC exists');
 
 insert into public.public_quotes (token, payload) values ('tok1', '{"tourName":"X"}'::jsonb);
 select public.accept_public_quote('tok1', '{"name":"Khach"}'::jsonb);
