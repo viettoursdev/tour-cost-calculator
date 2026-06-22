@@ -1,3 +1,5 @@
+import type { Department } from './user';
+
 export type CategoryId =
   | 'flight' | 'hotel' | 'transport' | 'meal' | 'sight' | 'meeting'
   | 'teambuild' | 'gala' | 'logistics' | 'staff' | 'insurance'
@@ -197,6 +199,12 @@ export type WorkflowStep = {
   note?: string;
   log?: WorkflowLogEntry[];   // nhật ký thay đổi (giữ tối đa 50 dòng gần nhất)
   attachments?: FileAttachment[]; // file đính kèm theo bước (R2 qua AI Worker)
+  // ── Trường dùng cho Quy trình phòng ban (SOP). Optional → không ảnh hưởng
+  //    quy trình vận hành per-báo-giá đã có. ──
+  output?: string;            // Đầu ra / bằng chứng của bước (cột SOP)
+  risk?: string;              // Điểm kiểm soát rủi ro thường gặp
+  ownerDept?: Department;     // Phòng/bộ phận phụ trách bước
+  dueRule?: string;           // Hạn dạng chữ: "T-7", "T+3 sau tour", "trong 24h"
 };
 
 export type QuoteDraft = {

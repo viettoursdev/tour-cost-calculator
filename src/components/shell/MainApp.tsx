@@ -23,6 +23,7 @@ import { useTodoStore } from '@/stores/todoStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useProcessStore } from '@/stores/processStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders } from '@/lib/notifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
@@ -85,6 +86,7 @@ export function MainApp() {
     const vprocUnsub = useVisaProcStore.getState().init();
     const vprojUnsub = useVisaProjectStore.getState().init();
     const poiUnsub = usePoiStore.getState().init();
+    const processUnsub = useProcessStore.getState().init();
 
     const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
     const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
@@ -137,6 +139,7 @@ export function MainApp() {
       vprocUnsub?.();
       vprojUnsub?.();
       poiUnsub?.();
+      processUnsub?.();
     };
   }, [currentUser]);
 

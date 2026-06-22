@@ -8,7 +8,13 @@ import { daysUntil } from '@/lib/dateUtils';
 import { fmtVND } from './calc';
 import { TodoPanel } from '@/components/todo/TodoPanel';
 import { TodoModal } from '@/components/todo/TodoModal';
-import type { CloudQuoteEntry, Todo } from '@/types';
+import { DEPARTMENTS } from '@/auth/departments';
+import { PROCESS_SEED, DEPT_COLOR, DEPT_ICON } from '@/components/process/processSeed';
+import { runProgress, currentStep } from '@/components/process/processRun';
+import { useProcessStore } from '@/stores/processStore';
+import type { CloudQuoteEntry, Department, Todo } from '@/types';
+
+const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa', 'ketoan'];
 
 function Section({ icon, title, count, color, onAll, children }: {
   icon: string; title: string; count: number; color: string; onAll?: () => void; children: React.ReactNode;
@@ -58,8 +64,16 @@ export function HomeView() {
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setView = useQuoteStore((s) => s.setView);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
+  const processRuns = useProcessStore((s) => s.runs);
+  const setOpenRun = useProcessStore((s) => s.setOpenRun);
   const [todoOpen, setTodoOpen] = useState(false);
   const [editTodo, setEditTodo] = useState<Todo | null>(null);
+
+  // Phiên chạy quy trình đang hoạt động của tôi (phụ trách hoặc tự tạo).
+  const myRuns = processRuns
+    .filter((r) => r.status === 'active' && (r.assignee === me?.u || r.createdByUsername === me?.u))
+    .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
+  const openRun = (id: string) => { setOpenRun(id); setView('process'); };
 
   const today = new Date().toISOString().slice(0, 10);
   // Đồng hồ đếm ngược: nhịp lại mỗi phút để nhãn "còn … giờ" tự cập nhật.
@@ -130,6 +144,53 @@ export function HomeView() {
       {todoOpen && <TodoModal todo={editTodo} onClose={() => setTodoOpen(false)} />}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+        <Box sx={{ gridColumn: { md: '1 / -1' } }}>
+          <Section icon="🗂️" title="Quy trình phòng ban" count={PROCESS_SEED.length} color="#0d7a6a" onAll={() => go('process')}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
+              {DEPARTMENTS.filter((d) => PROCESS_DEPTS.includes(d.id)).map((d) => {
+                const color = DEPT_COLOR[d.id];
+                const n = PROCESS_SEED.filter((t) => t.department === d.id).length;
+                return (
+                  <Paper key={d.id} variant="outlined" onClick={() => go('process')}
+                    sx={{ p: 1, cursor: 'pointer', textAlign: 'center', borderTop: `3px solid ${color}`, '&:hover': { boxShadow: 1 } }}>
+                    <Box sx={{ fontSize: 22 }}>{DEPT_ICON[d.id]}</Box>
+                    <Typography fontSize={11.5} fontWeight={700} noWrap>{d.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">{n} quy trình</Typography>
+                  </Paper>
+                );
+              })}
+            </Box>
+          </Section>
+        </Box>
+
+        {myRuns.length > 0 && (
+          <Box sx={{ gridColumn: { md: '1 / -1' } }}>
+            <Section icon="▶️" title="Quy trình đang chạy của tôi" count={myRuns.length} color="#0d7a6a" onAll={() => go('process')}>
+              <Stack spacing={0.75}>
+                {myRuns.slice(0, 6).map((r) => {
+                  const p = runProgress(r);
+                  const cur = currentStep(r);
+                  const color = DEPT_COLOR[r.department];
+                  const overdue = r.dueDate ? r.dueDate < today : false;
+                  return (
+                    <Row key={r.id} onClick={() => openRun(r.id)}
+                      primary={r.title}
+                      secondary={cur ? `Bước: ${cur.label}${r.ref ? ` · ${r.ref.label}` : ''}` : (r.ref?.label ?? '')}
+                      right={
+                        <Stack alignItems="flex-end" spacing={0.25}>
+                          <Chip size="small" label={`${p.done}/${p.total} · ${p.pct}%`} sx={{ height: 20, fontWeight: 700, bgcolor: color + '22', color }} />
+                          {r.dueDate && <Typography variant="caption" sx={{ color: overdue ? '#dc3250' : 'text.disabled', fontWeight: overdue ? 700 : 400 }}>
+                            {new Date(r.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                          </Typography>}
+                        </Stack>
+                      } />
+                  );
+                })}
+              </Stack>
+            </Section>
+          </Box>
+        )}
+
         <Box sx={{ gridColumn: { md: '1 / -1' } }}>
           <Section icon="⏳" title="Deadline công việc (2 tuần)" count={data.deadlines.length} color="#7c3aed" onAll={() => go('workflow')}>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.75 }}>

@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, Todo } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus } from '@/types';
+import type { WorkflowStep } from '@/types/quote';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -1392,6 +1393,144 @@ export async function sbDeleteVisaProc(
   if (attErr) throw new Error('sbDeleteVisaProc attachments: ' + attErr.message);
   const { error } = await client.from('visa_procedures').delete().eq('legacy_id', id);
   if (error) throw new Error('sbDeleteVisaProc: ' + error.message);
+}
+
+// ── process_templates (Quy trình phòng ban) ─────────────────────────────────
+
+const rowToProcessTemplate = (r: Record<string, unknown>): ProcessTemplate => ({
+  id: (r.legacy_id as string) ?? '',
+  department: (r.department as Department),
+  name: (r.name as string) ?? '',
+  description: (r.description as string) || undefined,
+  icon: (r.icon as string) || undefined,
+  color: (r.color as string) || undefined,
+  steps: (r.steps as WorkflowStep[]) ?? [],
+  version: (r.version as number) ?? 1,
+  isPublished: (r.is_published as boolean) ?? true,
+  createdByUsername: (r.created_by_username as string) || undefined,
+  createdByName: (r.created_by_name as string) || undefined,
+  createdAt: (r.created_at as string) || undefined,
+  updatedAt: (r.updated_at as string) || undefined,
+  updatedBy: (r.updated_by_name as string) || undefined,
+});
+
+export function sbSubscribeProcessTemplates(
+  cb: (list: ProcessTemplate[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'process_templates', async (cl) => {
+    const { data, error } = await cl
+      .from('process_templates')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false });
+    if (error) throw new Error('sbSubscribeProcessTemplates: ' + error.message);
+    return (data ?? []).map(rowToProcessTemplate);
+  }, cb);
+}
+
+export async function sbSaveProcessTemplate(
+  t: ProcessTemplate,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await client.from('process_templates').upsert({
+    legacy_id: t.id,
+    department: t.department,
+    name: t.name ?? '',
+    description: t.description ?? '',
+    icon: t.icon ?? '',
+    color: t.color ?? '',
+    steps: t.steps ?? [],
+    version: t.version ?? 1,
+    is_published: t.isPublished ?? true,
+    created_by_username: t.createdByUsername ?? '',
+    created_by_name: t.createdByName ?? '',
+    created_at: t.createdAt,
+    updated_at: now,
+    updated_by_name: savedBy || '',
+  }, { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbSaveProcessTemplate: ' + error.message);
+}
+
+export async function sbDeleteProcessTemplate(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('process_templates').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteProcessTemplate: ' + error.message);
+}
+
+// ── process_runs (Phiên chạy quy trình) ─────────────────────────────────────
+
+const rowToProcessRun = (r: Record<string, unknown>): ProcessRun => ({
+  id: (r.legacy_id as string) ?? '',
+  templateId: (r.template_id as string) || undefined,
+  department: (r.department as Department),
+  title: (r.title as string) ?? '',
+  ref: r.ref_kind
+    ? { kind: r.ref_kind as ProcessRefKind, id: (r.ref_id as string) ?? '', label: (r.ref_label as string) ?? '' }
+    : undefined,
+  steps: (r.steps as WorkflowStep[]) ?? [],
+  status: (r.status as ProcessRunStatus) ?? 'active',
+  assignee: (r.assignee as string) || undefined,
+  startDate: (r.start_date as string) || undefined,
+  dueDate: (r.due_date as string) || undefined,
+  createdByUsername: (r.created_by_username as string) || undefined,
+  createdByName: (r.created_by_name as string) || undefined,
+  createdAt: (r.created_at as string) || undefined,
+  updatedAt: (r.updated_at as string) || undefined,
+  updatedBy: (r.updated_by_name as string) || undefined,
+});
+
+export function sbSubscribeProcessRuns(
+  cb: (list: ProcessRun[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'process_runs', async (cl) => {
+    const { data, error } = await cl
+      .from('process_runs')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false });
+    if (error) throw new Error('sbSubscribeProcessRuns: ' + error.message);
+    return (data ?? []).map(rowToProcessRun);
+  }, cb);
+}
+
+export async function sbSaveProcessRun(
+  run: ProcessRun,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await client.from('process_runs').upsert({
+    legacy_id: run.id,
+    template_id: run.templateId ?? null,
+    department: run.department,
+    title: run.title ?? '',
+    ref_kind: run.ref?.kind ?? null,
+    ref_id: run.ref?.id ?? null,
+    ref_label: run.ref?.label ?? null,
+    steps: run.steps ?? [],
+    status: run.status ?? 'active',
+    assignee: run.assignee ?? null,
+    start_date: run.startDate ?? null,
+    due_date: run.dueDate ?? null,
+    created_by_username: run.createdByUsername ?? '',
+    created_by_name: run.createdByName ?? '',
+    created_at: run.createdAt,
+    updated_at: now,
+    updated_by_name: savedBy || '',
+  }, { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbSaveProcessRun: ' + error.message);
+}
+
+export async function sbDeleteProcessRun(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('process_runs').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteProcessRun: ' + error.message);
 }
 
 // ── visa_projects ─────────────────────────────────────────────────────────────
