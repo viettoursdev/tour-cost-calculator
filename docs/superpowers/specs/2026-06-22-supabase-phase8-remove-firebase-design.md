@@ -48,9 +48,13 @@ writing Firestore in production**:
 | Public quote sharing | `fbPublishQuote`, `fbGetPublicQuote`, `fbAcceptPublicQuote`, `fbUnpublishQuote` | `SharePublicQuoteModal`, `PublicQuoteView`, `notifications.ts` |
 
 (`fbSetQuoteShare` is an alias of `_regular.fbSetEntryShare` — an internal
-quote-entry share setter, **not** a public-quotes function. Its `sb` parity
-(`sbSetEntryShare`) is assumed to exist from Phase 2 and must be verified during
-implementation.)
+quote-entry share setter, **not** a public-quotes function. Planning confirmed it
+has **no Supabase parity**: there is no `sbSetEntryShare`/`sbSetQuoteShare` and the
+`quotes` table has no `share` column. It is therefore built as part of the
+public-quotes work — a new `quotes.share jsonb` column + `sbSetQuoteShare(cloudId,
+share|null)`, with `share` mapped in `rowToCloudQuoteEntry`/`loadQuoteHistory`. The
+`save_quote_state` RPC does not touch the new column, so re-saving a quote never
+clobbers the share marker.)
 
 Removing Firebase therefore requires building Supabase backing for these three
 groups first, or those features break.
