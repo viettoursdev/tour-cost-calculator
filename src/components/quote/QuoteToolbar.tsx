@@ -685,7 +685,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
             size="small" variant="contained"
             onClick={(e) => setStatusAnchor(e.currentTarget)}
             endIcon={<ExpandMoreIcon />}
-            sx={{ fontWeight: 800, color: '#fff', bgcolor: QUOTE_STATUS_META[status].color, '&:hover': { bgcolor: QUOTE_STATUS_META[status].color, filter: 'brightness(0.93)' } }}
+            sx={{
+              fontWeight: 700, fontSize: 12, textTransform: 'none', lineHeight: 1.4,
+              py: 0.25, px: 1, minWidth: 0, color: '#fff', bgcolor: QUOTE_STATUS_META[status].color,
+              '& .MuiButton-endIcon': { ml: 0.2 }, '& .MuiButton-endIcon svg': { fontSize: 16 },
+              '&:hover': { bgcolor: QUOTE_STATUS_META[status].color, filter: 'brightness(0.93)' },
+            }}
           >
             ● {QUOTE_STATUS_META[status].label}
           </Button>
