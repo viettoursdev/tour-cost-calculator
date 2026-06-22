@@ -2652,6 +2652,7 @@ function rowToCloudQuoteEntry(
     workflowDue: (r.workflow_due as CloudQuoteEntry['workflowDue']) ?? undefined,
     workflowSummary: (r.workflow_summary as CloudQuoteEntry['workflowSummary']) ?? undefined,
     paymentSummary: (r.payment_summary as CloudQuoteEntry['paymentSummary']) ?? undefined,
+    nccDue: (r.ncc_due as CloudQuoteEntry['nccDue']) ?? undefined,
     share: (r.share as CloudQuoteEntry['share']) ?? undefined,
     linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
     linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
@@ -2821,7 +2822,7 @@ async function loadQuoteHistory(
   let q = client
     .from('quotes')
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
-            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
+            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ncc_due, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, share, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .order('created_at', { ascending: false });
@@ -3826,15 +3827,17 @@ export async function sbBackfillWorkflowIndex(
 }
 
 /**
- * Update payment_summary for a single quote by cloud_id.
+ * Update payment_summary (and the NCC payment-due index) for a single quote by cloud_id.
  */
 export async function sbSetQuotePaymentSummary(
   cloudId: string,
   paymentSummary: CloudQuoteEntry['paymentSummary'],
+  nccDue?: CloudQuoteEntry['nccDue'],
   client: SupabaseClient = sb,
 ): Promise<void> {
   const { error } = await client.from('quotes').update({
     payment_summary: (paymentSummary as unknown as Record<string, unknown>) ?? null,
+    ncc_due: (nccDue as unknown as Record<string, unknown>[]) ?? null,
     updated_at: new Date().toISOString(),
   }).eq('cloud_id', cloudId);
   if (error) throw new Error('sbSetQuotePaymentSummary: ' + error.message);

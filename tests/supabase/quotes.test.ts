@@ -1198,11 +1198,15 @@ describe('Task 8 — workflow/payment backfills', () => {
     const summary: CloudQuoteEntry['paymentSummary'] = {
       payable: 8000000, paid: 3000000, remaining: 5000000,
     };
-    await sbSetQuotePaymentSummary('q-pay-1', summary, c);
+    const nccDue: CloudQuoteEntry['nccDue'] = [
+      { supplier: 'Sheraton', label: 'Khách sạn · Đợt 2', amount: 5000000, dueDate: '2026-07-15' },
+    ];
+    await sbSetQuotePaymentSummary('q-pay-1', summary, nccDue, c);
 
     const list = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
     const e = list.find((e) => e.cloudId === 'q-pay-1')!;
     expect(e.paymentSummary).toMatchObject({ payable: 8000000, paid: 3000000, remaining: 5000000 });
+    expect(e.nccDue).toEqual(nccDue);
   });
 
   // ── sbBackfillPaymentIndex ────────────────────────────────────────────────

@@ -75,7 +75,7 @@ export function PaymentView() {
     const t = window.setTimeout(() => {
       void sbSetQuotePaymentSummary(cloudId, {
         payable: Math.round(totals.totalCost), paid: Math.round(totals.totalPaid), remaining: Math.round(totals.totalRemaining),
-      }).catch(() => { /* index không chặn UI */ });
+      }, nccDue).catch(() => { /* index không chặn UI */ });
     }, 1200);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
