@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Internal tool for Viettours sales/operations — tour cost calculation, quotes, contracts, suppliers, customers, itineraries, menus, visa & doc translation.
 
 - **Live:** https://viettoursdev.github.io/tour-cost-calculator/
-- **Stack:** Vite 5 · React 18 · TypeScript 5 (strict) · MUI v6 + MUI X · Zustand 4 · Firebase 10 (Firestore, default DB) · GitHub Pages
+- **Stack:** Vite 5 · React 18 · TypeScript 5 (strict) · MUI v6 + MUI X · Zustand 4 · Supabase (Postgres 17 + Supabase Auth) · GitHub Pages
 - **Build step required** — this is no longer a single-file Babel-in-browser app. See `package.json` and `vite.config.ts`.
 
 ## Commands
@@ -33,7 +33,7 @@ src/
   theme.ts              # MUI theme + LEGACY palette tokens
   global.css
   auth/                 # PERMISSIONS, ROLES, DEFAULT_USERS
-  lib/                  # firebase.ts, currency, dateUtils, notifications,
+  lib/                  # supabase.ts, currency, dateUtils, notifications,
                         # exports/ (PDF/DOCX/Excel/Invoice generators)
   stores/               # 15 Zustand stores (auth, quote, rateCard,
                         # quoteHistory, contract, customer, ncc, payment,
@@ -76,59 +76,59 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 ## Key Design Decisions
 
-**Firebase Auth — magic link in production, Email+Password panel in DEV builds only for testing.** `sendSignInLinkToEmail` restricted to `@viettours.com.vn`. `authStore.init()` completes any in-flight magic link and subscribes via `onIdTokenChanged`; the verified email is matched (case-insensitive) against `User.email` in `viettours/user_accounts` to resolve `currentUser`. Legacy plaintext `User.p` has been removed: it is now optional/`@deprecated`, `fbPushUsers`/`fbPullUsers` strip it on write/read, and `fbPurgeLegacyPasswords()` (run once per successful sign-in) deletes it from any remaining docs. Console setup steps live in `docs/firebase-setup.md`; project switch workflow in `docs/firebase-migration.md`.
+**Supabase Auth — magic link in production, Email+Password panel in DEV builds only for testing.** Magic-link (`signInWithOtp`) is restricted to `@viettours.com.vn`. `authStore.init()` completes any in-flight magic link and subscribes via `onAuthStateChange`; the verified email is matched (case-insensitive) against `profiles.email` to resolve `currentUser`. Setup steps live in `docs/supabase-setup.md`.
 
 **48h inactivity sign-out (magic-link only).** Magic-link sessions auto-sign-out after 48 hours of no user interaction. `src/auth/sessionTimeout.ts` owns the per-user `vte_session_last_active_{username}` timestamp; `startActivityTracker` listens to `pointerdown`/`keydown` (throttled to one write per 30s) and runs a 60-second interval check plus an immediate check on `focus`/`visibilitychange`. `authStore.expireSession()` signs the user out and shows "Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại." DEV password sign-ins are intentionally exempt — they stay signed in indefinitely for testing convenience.
-
-**Default Firestore database.** The current project `tour-cost-calculator-4336c` uses the default (unnamed) database — `getFirestore(app)` at `src/lib/firebase.ts`. The string `'viettours'` still appears throughout `src/lib/firebase.ts` as a *collection* name within that database, not as a database name.
 
 **Per-user persisted quote draft (gotcha).** `quoteStore` registers persist middleware with a placeholder name and overrides the storage adapter at write time to use `vte_quote_draft_{username}`. The `getItem` handler returns `null` on initial hydration; the real hydration happens in `quoteStore.init(user)` which reads `localStorage` directly. Don't "fix" this by giving persist a static name — you'll cross-leak users.
 
 **DMC view is restricted.** `quoteStore.setView` forces `view` to `cost` or `history` whenever `template === 'dmc'`. Any new top-level view will not be reachable from DMC unless you whitelist it here.
 
-**Single-document collections.** Most domain data lives in one Firestore doc per area (e.g., `viettours/ncc_master.suppliers[]`). 1 MB doc limit not yet a concern.
-
-**Dual quote history:** local `HistPanel` (fast, per-user localStorage) + cloud history (versioned, cross-device, collaborative). DMC quotes are stored separately (`viettours/dmc_quote_history`, `dmc_quote_projects/{id}`).
+**Dual quote history:** local `HistPanel` (fast, per-user localStorage) + cloud history (versioned, cross-device, collaborative). DMC quotes share the unified `quotes` / `quote_versions` tables, distinguished by `template = 'dmc'`.
 
 **AI features via Cloudflare Worker.** `src/lib/aiWorker.ts:callAIWorker(path, body)` proxies to `cloudflare-worker/viettours-ai-worker.js` (holds `ANTHROPIC_API_KEY` + R2). Endpoints: `/ai` (tour program, Haiku), `/ocr` (structure-preserving Markdown, Sonnet), `/translate` (visa-grade VI→EN, Sonnet), `/chat` (assistant tool-use, Sonnet, optional `web_search`). **The worker is NOT auto-deployed by CI — redeploy manually** after editing it.
 
 **Trợ lý ảo (AI assistant).** `src/components/assistant/AssistantPanel.tsx` (header "🤖 Trợ lý") runs a client-side tool-use loop (`src/lib/assistant/agent.ts`) against permission-filtered data (`assistant/data.ts` → reuses `visibleQuotes`/`canViewAll`/`visibleVisaProjects`). Tools (`assistant/tools.ts`) only READ; `propose_itinerary`/`propose_quote` stage a draft the user opens 1-click (`assistant/draftBuilders.ts`). Unified search index extracted to `src/lib/searchIndex.ts` (shared with `GlobalSearch`).
 
-## Firebase
+## Supabase
 
 ```
-Project ID:    tour-cost-calculator-4336c
-Database name: (default)
-Location:      asia-southeast1
-Auth Domain:   tour-cost-calculator-4336c.firebaseapp.com
+Project ref:  zkzrvctqwnhzklvsoahk
+Database:     Postgres 17
+Region:       ap-southeast-1 (Singapore)
 ```
 
-Web SDK config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`) is read from `VITE_FIREBASE_*` env vars — see `.env.example`. Local dev uses `.env` (gitignored); CI uses repo secrets injected in `.github/workflows/deploy.yml`. The values are public (shipped in the browser bundle); access control is enforced by Firestore Rules + Auth domain allowlist.
+Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read from env vars — see `.env.example`. Local dev uses `.env` (gitignored); CI uses repo secrets injected in `.github/workflows/deploy.yml`. Access control is enforced by Row Level Security (RLS) on every table; the helper `public.is_viettours_user()` checks that the authenticated email ends with `@viettours.com.vn`. Anonymous and external-domain clients are denied across the board.
 
-**Project history (2026-06-15 → 06-17).** One prior Firebase project sits retired: `viettours-cost-calculator` (named DB `viettours`, retired in the first migration). On 2026-06-15 the project then-called `tour-cost-calculator-4336c` was thought lost mid-migration when its owner Google account was banned, so a new project `tour-cost-calculator-v2` was bootstrapped as production and `4336c` (after the account was recovered) was repurposed as the backup mirror destination. On **2026-06-17** the two were swapped back: `tour-cost-calculator-4336c` is once again production (browser API key suspension lifted), and `tour-cost-calculator-v2` was demoted to backup mirror destination. **Same day**, the first verification mirror run revealed `v2` had been banned by Google (Firestore returns `ACCOUNT_STATE_INVALID` for the v2 SA). The live-mirror step in `.github/workflows/backup.yml` is gated off (`if: false && success()`) until the ban is lifted; the hourly artifact upload continues unaffected.
+**R2 `pg_dump` backup.** `.github/workflows/backup.yml` runs every UTC hour: dumps the production DB and uploads to Cloudflare R2 with a 14-day lifecycle policy. Worst-case data-loss window: ~1 hour.
 
-**Hourly mirror + artifact backup.** `.github/workflows/backup.yml` runs every UTC hour with two safety nets: (1) it imports the production export into `tour-cost-calculator-v2` so the backup project's Firestore lags production by at most ~1 hour, and (2) it uploads `firestore-dump.json` as a workflow artifact with 30-day retention for point-in-time recovery. Secrets: `FIREBASE_BACKUP_SRC_SA_JSON` (production project SA — currently `4336c`) and `FIREBASE_BACKUP_DEST_SA_JSON` (backup project SA — currently `v2`). To restore from the mirror: repoint `VITE_FIREBASE_*` to the backup project, or use a one-off `firestore-import.mjs` run from the latest artifact. Worst-case data-loss window: ~1 hour. Cost: ~720 read+write cycles/month, negligible.
+**Local dev.** Run `npx supabase start` (Docker required) to spin up a local Postgres stack with all migrations applied. See `docs/supabase-setup.md` for the full workflow.
 
-Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tools deploy --only firestore:rules`. Every collection requires `request.auth != null` plus a `@viettours.com.vn` email — anonymous and external-domain clients are denied across the board.
+### Postgres Table Map
 
-### Firestore Document Map
+| Table | Content |
+|-------|---------|
+| `profiles` | User accounts (mirrors Supabase Auth users; provisioned by DB trigger) |
+| `rate_card` | Shared rate card — JSONB blob (hotels, transport, staff, etc.) |
+| `fx_rates` | Tỷ giá ĐỒNG BỘ (→ VND). Chỉ CEO ghi (nút "Đồng bộ tỷ giá" → `pushGlobalRates`); chỉ seed cho báo giá MỚI. Mỗi báo giá giữ `draft.rates` riêng — bản đồng bộ KHÔNG ghi đè báo giá cũ. |
+| `suppliers` | Supplier list (NCC master) |
+| `ncc_products` | Catalog sản phẩm NCC: mỗi sản phẩm tham chiếu supplier + bảng nhiều dòng giá + file R2. Tab "📦 Sản phẩm NCC" (view `nccProducts`, gate `manageNCC`). |
+| `customers` | Customer list |
+| `contracts` | All contracts |
+| `quotes` | Quote metadata index (regular + DMC) |
+| `quote_versions` | Full state per quote version (max 20); shredded children in `quote_items`, `quote_groups`, `quote_collab_payments`, `quote_flights`, `quote_workflow_steps`, `quote_passengers`. DMC quotes share this table, distinguished by `template = 'dmc'`. |
+| `itineraries` | Itinerary records |
+| `menus` / `restaurants` | Menu and restaurant records |
+| `visa_projects` | Visa application projects |
+| `tour_payments` / `payment_approvals` | Payment tracking and approval records |
+| `notifications` / `notification_threads` | Per-user notification queue + shared comment threads |
+| `guide_schedule` | Lịch đi tour HDV (single shared row) |
+| `email_links` | Outbound email link tracking |
+| `public_quotes` | Báo giá chia sẻ công khai cho khách (token-based, anon-readable) |
+| `app_config` | Application configuration (e.g. CEO bootstrap, feature flags) |
+| `chat_messages` | AI assistant conversation history |
 
-| Document/Collection | Content |
-|--------------------|---------|
-| `viettours/master_rate_card` | Shared rate card (hotels, transport, staff, etc.) |
-| `viettours/fx_rates` | Tỷ giá ĐỒNG BỘ (→ VND). Chỉ CEO ghi (nút "Đồng bộ tỷ giá" → `pushGlobalRates`); chỉ seed cho báo giá MỚI. Mỗi báo giá giữ `draft.rates` riêng (lưu trong từng bản lịch sử) — bản đồng bộ KHÔNG ghi đè báo giá cũ. DMC linked mirror tỷ giá báo giá khi load. |
-| `viettours/ncc_products` | Catalog sản phẩm NCC (`nccProductsStore`): mỗi sản phẩm tham chiếu NCC master + bảng nhiều dòng giá + file R2. Tab "📦 Sản phẩm NCC" (view `nccProducts`, gate `manageNCC`); nút "Thanh toán" thêm `CustomCostItem` + supplier vào `paymentStore` của tour hiện tại. |
-
-**Per-quote draft fields (no new collection).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
-| `viettours/user_accounts` | All user accounts |
-| `viettours/ncc_master` | Supplier list |
-| `viettours/contracts_master` | All contracts |
-| `viettours/quote_history` | Metadata index for regular quotes |
-| `viettours/dmc_quote_history` | Metadata index for DMC quotes |
-| `quote_projects/{id}` | Full state per regular quote version (max 20) |
-| `dmc_quote_projects/{id}` | Full state per DMC quote version |
-| `user_notifications/{username}` | Per-user notification queue |
-| `notification_threads/{threadId}` | Shared comment thread for a collaboration group |
+**Per-quote draft fields (no new table).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
 
 ## localStorage Keys
 
@@ -139,7 +139,7 @@ Firestore rules live in `firestore.rules` (root). Deploy with `npx firebase-tool
 | `vte_remembered_email` | Last successfully-used email, used to prefill the login screen (`rememberedEmail`). Never cleared on sign-out. |
 | `vte_session_method_{username}` | `'link'` or `'password'` — which sign-in method started this session (`authStore` / `sessionTimeout`) |
 | `vte_session_last_active_{username}` | Epoch ms of the user's last interaction. Drives the 48h inactivity sign-out for `link` sessions only. |
-| Firebase Auth IndexedDB | Session token (managed by `firebase/auth`, persists across browser restarts) |
+| Supabase Auth localStorage | Session token (managed by `@supabase/supabase-js`, persists across browser restarts) |
 | `vte_quote_draft_{username}` | Per-user persisted quote draft (`quoteStore`) |
 | `vte_hotels_v2_{city}` | Hotel rate cards per city |
 | `vte_visa_rates` | Visa rate overrides |
@@ -167,7 +167,7 @@ Check with `hasPerm(user, 'permName')`. Payment-approver roles: `APPROVER_ROLES`
 Shared areas (`SharedArea` in `src/auth/ROLES.ts`): contracts, menu, itinerary,
 rateCard, ncc, customers. `ROLE_RANK` gives seniority (CEO 8 … Standard 0).
 
-- **Sync** (continuous Firestore subscription, wired in `MainApp.tsx`): everyone
+- **Sync** (continuous Supabase Realtime subscription, wired in `MainApp.tsx`): everyone
   EXCEPT `NO_SYNC_ROLES` = Marketing, Admin, Accountant (`syncsSharedData(role)`).
 - **View/manage full list** (`canViewAll(role, area)` — min rank): contracts →
   Ban Giám Đốc+, ncc/menu/itinerary → Operations+, customers → Sales+, rateCard →
@@ -186,7 +186,7 @@ GitHub Pages via `.github/workflows/deploy.yml` on push to `main`:
 5. `cp public/legacy.html dist/legacy.html` (preserves `/legacy.html` URL)
 6. `actions/upload-pages-artifact` + `actions/deploy-pages`
 
-Vite `base: '/tour-cost-calculator/'` — any absolute URL/asset construction must respect this. Vendor chunks split into `mui`, `firebase`, `exports` (see `vite.config.ts:manualChunks`).
+Vite `base: '/tour-cost-calculator/'` — any absolute URL/asset construction must respect this. MUI is split into its own vendor chunk; export libs (jspdf/docx/xlsx/etc.) use dynamic imports and are loaded on demand (see `vite.config.ts:manualChunks`).
 
 ## Conventions
 
