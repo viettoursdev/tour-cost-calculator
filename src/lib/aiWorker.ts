@@ -123,8 +123,10 @@ export async function uploadFileToWorker(
       if (!d.key) { reject(new Error('Worker không trả về key')); return; }
       resolve({ key: d.key, name: d.name || file.name });
     };
-    xhr.onerror = () => reject(new Error('Lỗi mạng khi tải file'));
-    xhr.ontimeout = () => reject(new Error('Hết thời gian tải file'));
+    xhr.onerror = () => reject(new Error('Lỗi mạng khi tải file (worker không phản hồi / chặn CORS — kiểm tra worker đã deploy chưa)'));
+    // Tránh treo im lặng nếu worker không phản hồi (vd bản worker cũ chưa xử lý CORS preflight).
+    xhr.timeout = 120000;
+    xhr.ontimeout = () => reject(new Error('Hết thời gian tải file — worker không phản hồi'));
     xhr.send(file);
   });
 }
