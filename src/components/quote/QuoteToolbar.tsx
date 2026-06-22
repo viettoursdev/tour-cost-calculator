@@ -692,7 +692,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
               '&:hover': { bgcolor: QUOTE_STATUS_META[status].color, filter: 'brightness(0.93)' },
             }}
           >
-            ● {QUOTE_STATUS_META[status].label}
+            ● {QUOTE_STATUS_META[status].short}
           </Button>
         </Tooltip>
         <Menu anchorEl={statusAnchor} open={!!statusAnchor} onClose={() => setStatusAnchor(null)}>

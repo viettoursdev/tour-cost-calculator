@@ -1,13 +1,14 @@
 import type { CategoryId, Item, QuoteStatus, Template } from '@/types';
 
-// Trạng thái báo giá (pipeline bán) — nhãn + màu theo tính chất.
-export const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; color: string }> = {
-  in_progress:  { label: 'Đang triển khai',      color: '#2563eb' },
-  sent:         { label: 'Đã gửi khách hàng',    color: '#0891b2' },
-  negotiating:  { label: 'Đang deal giá',        color: '#f5a623' },
-  won:          { label: 'Thành công',           color: '#27ae60' },
-  not_selected: { label: 'Không được lựa chọn',  color: '#dc3250' },
-  cancelled:    { label: 'Huỷ',                  color: '#64748b' },
+// Trạng thái báo giá (pipeline bán) — nhãn đầy đủ + nhãn rút gọn (cho nút/chip
+// hẹp) + màu theo tính chất.
+export const QUOTE_STATUS_META: Record<QuoteStatus, { label: string; short: string; color: string }> = {
+  in_progress:  { label: 'Đang triển khai',      short: 'Triển khai',   color: '#2563eb' },
+  sent:         { label: 'Đã gửi khách hàng',    short: 'Đã gửi KH',    color: '#0891b2' },
+  negotiating:  { label: 'Đang deal giá',        short: 'Deal giá',     color: '#f5a623' },
+  won:          { label: 'Thành công',           short: 'Thành công',   color: '#27ae60' },
+  not_selected: { label: 'Không được lựa chọn',  short: 'Không chọn',   color: '#dc3250' },
+  cancelled:    { label: 'Huỷ',                  short: 'Huỷ',          color: '#64748b' },
 };
 
 export const QUOTE_STATUS_ORDER: QuoteStatus[] =
