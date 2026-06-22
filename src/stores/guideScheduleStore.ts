@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { fbSubscribeGuideSchedule, fbPushGuideSchedule, fbGetQuoteProject } from '@/lib/dataBackend';
+import { sbSubscribeGuideSchedule, sbPushGuideSchedule } from '@/lib/supabase';
+import { fbGetQuoteProject } from '@/lib/dataBackend';
 import { buildLegsFromFlights } from '@/lib/guideSchedule';
 import { useAuthStore } from './authStore';
 import type { FreelanceGuide, GuideFlightLeg, GuideRef, TourGuideAssignment } from '@/types';
-import type { Unsubscribe } from 'firebase/firestore';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 const newId = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -40,7 +41,7 @@ export const useGuideScheduleStore = create<State>()(
       if (!u) return;
       set({ syncing: true });
       try {
-        await fbPushGuideSchedule(
+        await sbPushGuideSchedule(
           { freelancers: get().freelancers, assignments: get().assignments },
           { name: u.name, role: u.role },
         );
@@ -76,7 +77,7 @@ export const useGuideScheduleStore = create<State>()(
 
       init: () => {
         set({ loading: true });
-        return fbSubscribeGuideSchedule((d) =>
+        return sbSubscribeGuideSchedule((d) =>
           set({ freelancers: d.freelancers, assignments: d.assignments, loading: false }),
         );
       },

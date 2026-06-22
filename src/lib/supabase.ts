@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -246,6 +246,42 @@ export async function sbPushFxRates(
     if (up.error) throw new Error('sbPushFxRates upsert: ' + up.error.message);
   }
   return pushedAt;
+}
+
+// ── Lịch đi tour HDV (single-row, dùng chung) ──
+export function sbSubscribeGuideSchedule(
+  cb: (d: GuideScheduleDoc) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'guide_schedule', async (cl) => {
+    const { data, error } = await cl
+      .from('guide_schedule')
+      .select('freelancers, assignments, updated_at, updated_by')
+      .eq('one_row', true)
+      .maybeSingle();
+    if (error) throw new Error('sbSubscribeGuideSchedule: ' + error.message);
+    return {
+      freelancers: (data?.freelancers as GuideScheduleDoc['freelancers']) ?? [],
+      assignments: (data?.assignments as GuideScheduleDoc['assignments']) ?? {},
+      updatedAt: (data?.updated_at as string) ?? undefined,
+      updatedBy: (data?.updated_by as string) ?? undefined,
+    } as GuideScheduleDoc;
+  }, cb);
+}
+
+export async function sbPushGuideSchedule(
+  d: GuideScheduleDoc,
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('guide_schedule').upsert({
+    one_row: true,
+    freelancers: d.freelancers ?? [],
+    assignments: d.assignments ?? {},
+    updated_at: new Date().toISOString(),
+    updated_by: `${pushedBy.name} (${pushedBy.role})`,
+  }, { onConflict: 'one_row' });
+  if (error) throw new Error('sbPushGuideSchedule: ' + error.message);
 }
 
 // ── POIs ──────────────────────────────────────────────────────────────────────
