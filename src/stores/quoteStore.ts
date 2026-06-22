@@ -52,6 +52,10 @@ export type QuoteViewKey =
   | 'home' | 'cost' | 'cockpit' | 'summary' | 'history' | 'dashboard' | 'payment'
   | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics' | 'execboard' | 'advance' | 'process' | 'hr' | 'todo';
 
+/** Bảng điều hành cấp cao — chỉ CEO mới xem (chốt chặn ở setView, song song với
+ *  việc ẩn mục trong menu điều hướng). */
+const CEO_ONLY_VIEWS = new Set<QuoteViewKey>(['execboard', 'pipeline', 'salesanalytics']);
+
 type QuoteState = {
   draft: QuoteDraft;
   view: QuoteViewKey;
@@ -368,6 +372,10 @@ export const useQuoteStore = create<QuoteState>()(
             let next: QuoteState['view'] = v;
             if (s.draft.template === 'dmc' && next !== 'cost' && next !== 'history') {
               next = 'cost';
+            }
+            // Bảng điều hành cấp cao chỉ dành cho CEO — chặn cả khi vào bằng lối khác.
+            if (CEO_ONLY_VIEWS.has(next) && useAuthStore.getState().currentUser?.role !== 'CEO') {
+              next = 'home';
             }
             return { view: next };
           }),
