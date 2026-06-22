@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Box, Button, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
@@ -11,14 +11,17 @@ import { VisaProcBuilder } from './VisaProcBuilder';
 import { VisaProcManager } from './VisaProcManager';
 import { VisaProjectManager } from './VisaProjectManager';
 import { VisaPipeline } from './VisaPipeline';
+import { VisaAlerts } from './VisaAlertsPanel';
 import { VisaTimeline } from './VisaTimeline';
 import { VisaDashboard } from './VisaDashboard';
 import { VisaResultsDashboard } from './VisaResultsDashboard';
 import { VisaGuestHistory } from './VisaGuestHistory';
-import { canViewVisaReports } from './visaAccess';
+import { canViewVisaReports, visibleVisaProjects } from './visaAccess';
+import { computeVisaAlerts } from './visaAlerts';
+import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import type { VisaProcDoc } from '@/types';
 
-type Tab = 'projects' | 'pipeline' | 'timeline' | 'dashboard' | 'reports' | 'guests' | 'catalog' | 'procedures';
+type Tab = 'projects' | 'pipeline' | 'alerts' | 'timeline' | 'dashboard' | 'reports' | 'guests' | 'catalog' | 'procedures';
 
 type Props = { onExit: () => void };
 
@@ -28,6 +31,11 @@ export function VisaApp({ onExit }: Props) {
   const [pendingProjId, setPendingProjId] = useState<string | null>(null);
   const user = useAuthStore((s) => s.currentUser);
   const canReports = canViewVisaReports(user);
+  const projects = useVisaProjectStore((s) => s.projects);
+  const alertCount = useMemo(
+    () => computeVisaAlerts(visibleVisaProjects(user, projects), new Date().toISOString().slice(0, 10)).length,
+    [projects, user],
+  );
 
   const openProject = (id: string) => { setPendingProjId(id); setTab('projects'); };
 
@@ -81,6 +89,7 @@ export function VisaApp({ onExit }: Props) {
         >
           <Tab value="projects" label="📁 Dự án visa" />
           <Tab value="pipeline" label="🧲 Điều phối" />
+          <Tab value="alerts" label={alertCount > 0 ? `⚠️ Cảnh báo (${alertCount})` : '⚠️ Cảnh báo'} />
           <Tab value="timeline" label="🗓️ Timeline" />
           <Tab value="dashboard" label="📊 Tổng quan" />
           {canReports && <Tab value="reports" label="📈 Thống kê visa" />}
@@ -94,6 +103,8 @@ export function VisaApp({ onExit }: Props) {
         <VisaProjectManager initialOpenId={pendingProjId} onConsumeInitial={() => setPendingProjId(null)} />
       ) : tab === 'pipeline' ? (
         <VisaPipeline onOpenProject={openProject} />
+      ) : tab === 'alerts' ? (
+        <VisaAlerts onOpenProject={openProject} />
       ) : tab === 'timeline' ? (
         <VisaTimeline />
       ) : tab === 'dashboard' ? (
