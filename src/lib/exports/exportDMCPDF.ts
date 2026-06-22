@@ -30,8 +30,8 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
   const pageW = 210, mX = 15;
   let y = 18;
 
-  const teal: [number, number, number] = BRAND_TEAL;
-  const tealLt: [number, number, number] = [20, 160, 140]; // teal sáng — số tiền phụ
+  const teal: [number, number, number] = BRAND_TEAL;       // tiêu đề/dải + số tiền (như mẫu báo giá)
+  const dark: [number, number, number] = [15, 58, 74];     // navy — chữ nhãn/mục + hộp tổng
   const gray: [number, number, number] = [120, 130, 140];
   const checkPage = (need: number) => { if (y + need > 279) { pdf.addPage(); y = 18; } };
 
@@ -91,27 +91,27 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
     if (catItems.length === 0) return;
     const sub = catItems.reduce((s: number, i: Item) => s + calcVND(i, rates, pax), 0);
     checkPage(10);
-    pdf.setFontSize(10); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');
+    pdf.setFontSize(10); pdf.setTextColor(...dark); pdf.setFont(FONT, 'bold');
     pdf.text(`${cat.label} / ${cat.labelEn}`, mX, y);
-    pdf.setTextColor(...tealLt);
+    pdf.setTextColor(...teal);
     pdf.text(money(sub), pageW - mX, y, { align: 'right' });
     y += 5;
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
     catItems.forEach((it: Item) => {
       checkPage(6);
-      pdf.setTextColor(...teal);
+      pdf.setTextColor(...dark);
       pdf.text(`• ${(it.name || '').slice(0, 50)} (x${qtyOf(it, pax)})`, mX + 4, y);
-      pdf.setTextColor(...tealLt);
+      pdf.setTextColor(...teal);
       pdf.text(money(calcVND(it, rates, pax)), pageW - mX, y, { align: 'right' });
       y += 4.5;
     });
     y += 2;
   });
 
-  // Totals
+  // Totals — hộp NAVY như "QUOTATION SUMMARY" của mẫu báo giá
   checkPage(34);
   y += 2;
-  pdf.setFillColor(...teal);
+  pdf.setFillColor(...dark);
   pdf.roundedRect(mX, y, pageW - mX * 2, 30, 2, 2, 'F');
   const col1 = mX + 5, col2 = pageW - mX - 5;
   pdf.setTextColor(255, 255, 255); pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
@@ -147,9 +147,9 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
       const bdPpax = toOutputCurrency(t.totalCost + mVND, cur, rates) / gs;
       const diff = dmcPpax - bdPpax;
       checkPage(6);
-      pdf.setFont(FONT, 'bold'); pdf.setFontSize(9); pdf.setTextColor(...teal);
+      pdf.setFont(FONT, 'bold'); pdf.setFontSize(9); pdf.setTextColor(...dark);
       pdf.text(`${gs} khách`, cA, y);
-      pdf.setFont(FONT, 'normal'); pdf.setTextColor(...tealLt);
+      pdf.setFont(FONT, 'normal'); pdf.setTextColor(...teal);
       pdf.text(fmtCurrency(dmcPpax, cur), cB, y, { align: 'right' });
       pdf.text(fmtCurrency(bdPpax, cur), cC, y, { align: 'right' });
       pdf.setTextColor(diff >= 0 ? 39 : 220, diff >= 0 ? 174 : 50, diff >= 0 ? 96 : 80);
