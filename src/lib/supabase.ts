@@ -309,7 +309,59 @@ export async function sbPushEmailLinks(
   if (error) throw new Error('sbPushEmailLinks: ' + error.message);
 }
 
-// ── To-Do dùng chung (single-row) ──
+// ── To-Do (row-per-task, xem 0036) ──
+const iso = (v: unknown): string | undefined => (v ? new Date(v as string).toISOString() : undefined);
+
+const rowToTodo = (r: Record<string, unknown>): Todo => ({
+  id: r.id as string,
+  title: (r.title as string) ?? '',
+  note: (r.note as string) ?? undefined,
+  status: (r.status as Todo['status']) ?? 'todo',
+  priority: (r.priority as Todo['priority']) ?? 'normal',
+  createdBy: (r.created_by as string) ?? '',
+  createdByName: (r.created_by_name as string) ?? '',
+  createdAt: iso(r.created_at) ?? new Date().toISOString(),
+  assignees: (r.assignees as string[]) ?? [],
+  dueDate: iso(r.due_date),
+  remindAt: (r.remind_at as string[]) ?? undefined,
+  remindLead: (r.remind_lead as number[]) ?? undefined,
+  link: (r.link as Todo['link']) ?? undefined,
+  checklist: (r.checklist as Todo['checklist']) ?? undefined,
+  recurring: (r.recurring as Todo['recurring']) ?? 'none',
+  tags: (r.tags as string[]) ?? undefined,
+  auto: (r.auto as string) ?? undefined,
+  responses: (r.responses as Todo['responses']) ?? undefined,
+  completedAt: iso(r.completed_at),
+  completedBy: (r.completed_by as string) ?? undefined,
+  updatedAt: iso(r.updated_at),
+  updatedBy: (r.updated_by as string) ?? undefined,
+});
+
+const todoToRow = (t: Todo): Record<string, unknown> => ({
+  id: t.id,
+  title: t.title,
+  note: t.note ?? null,
+  status: t.status,
+  priority: t.priority,
+  created_by: t.createdBy,
+  created_by_name: t.createdByName,
+  created_at: t.createdAt,
+  assignees: t.assignees ?? [],
+  due_date: t.dueDate ?? null,
+  remind_at: t.remindAt ?? null,
+  remind_lead: t.remindLead ?? null,
+  link: t.link ?? null,
+  checklist: t.checklist ?? null,
+  recurring: t.recurring ?? 'none',
+  tags: t.tags ?? [],
+  auto: t.auto ?? null,
+  responses: t.responses ?? null,
+  completed_at: t.completedAt ?? null,
+  completed_by: t.completedBy ?? null,
+  updated_at: t.updatedAt ?? null,
+  updated_by: t.updatedBy ?? null,
+});
+
 export function sbSubscribeTodos(
   cb: (list: Todo[]) => void,
   client: SupabaseClient = sb,
@@ -317,26 +369,29 @@ export function sbSubscribeTodos(
   return subscribeTable(client, 'todos', async (cl) => {
     const { data, error } = await cl
       .from('todos')
-      .select('todos')
-      .eq('one_row', true)
-      .maybeSingle();
+      .select('*')
+      .order('created_at', { ascending: false });
     if (error) throw new Error('sbSubscribeTodos: ' + error.message);
-    return (data?.todos as Todo[]) ?? [];
+    return (data ?? []).map(rowToTodo);
   }, cb);
 }
 
-export async function sbPushTodos(
-  list: Todo[],
-  pushedBy: { name: string; role: string },
-  client: SupabaseClient = sb,
-): Promise<void> {
-  const { error } = await client.from('todos').upsert({
-    one_row: true,
-    todos: list,
-    updated_at: new Date().toISOString(),
-    updated_by: `${pushedBy.name} (${pushedBy.role})`,
-  }, { onConflict: 'one_row' });
-  if (error) throw new Error('sbPushTodos: ' + error.message);
+/** Upsert một việc (tạo/sửa). Chỉ đụng đúng dòng đó → không ghi đè việc của người khác. */
+export async function sbUpsertTodo(todo: Todo, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('todos').upsert(todoToRow(todo), { onConflict: 'id' });
+  if (error) throw new Error('sbUpsertTodo: ' + error.message);
+}
+
+/** Upsert nhiều việc một lần (việc lặp sinh bản kế / thao tác hàng loạt / di trú). */
+export async function sbUpsertTodos(list: Todo[], client: SupabaseClient = sb): Promise<void> {
+  if (!list.length) return;
+  const { error } = await client.from('todos').upsert(list.map(todoToRow), { onConflict: 'id' });
+  if (error) throw new Error('sbUpsertTodos: ' + error.message);
+}
+
+export async function sbDeleteTodo(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('todos').delete().eq('id', id);
+  if (error) throw new Error('sbDeleteTodo: ' + error.message);
 }
 
 // ── POIs ──────────────────────────────────────────────────────────────────────

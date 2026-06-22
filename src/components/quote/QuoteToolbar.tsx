@@ -342,6 +342,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           item('salesanalytics', 'Phân tích bán hàng'),
         ] },
         { group: 'Vận hành', icon: <EngineeringOutlinedIcon />, items: [
+          item('todo', 'Việc cần làm'),
           item('process', 'Quy trình phòng ban'),
           item('workflow', 'Quy trình vận hành'),
           item('passengers', 'Khách đoàn'),

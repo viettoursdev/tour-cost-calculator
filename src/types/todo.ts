@@ -40,6 +40,8 @@ export type Todo = {
   checklist?: TodoChecklistItem[];
   recurring?: TodoRecurring;
   tags?: string[];
+  /** Nguồn tự sinh (vd 'quote_won') — để khỏi sinh trùng & nhận diện việc do hệ thống tạo. */
+  auto?: string;
   /** Phản hồi của những người được giao (xác nhận/từ chối + comment). */
   responses?: TodoResponse[];
   completedAt?: string;

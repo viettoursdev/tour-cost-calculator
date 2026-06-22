@@ -6,6 +6,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import { useAuthStore } from '@/stores/authStore';
 import { useTodoStore, isMyTodo } from '@/stores/todoStore';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -30,6 +31,7 @@ export function TodoPanel({ onEdit }: { onEdit: (t: Todo | null) => void }) {
   const add = useTodoStore((s) => s.add);
   const setStatus = useTodoStore((s) => s.setStatus);
   const remove = useTodoStore((s) => s.remove);
+  const setView = useQuoteStore((s) => s.setView);
 
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [quick, setQuick] = useState('');
@@ -130,6 +132,7 @@ export function TodoPanel({ onEdit }: { onEdit: (t: Todo | null) => void }) {
         <Chip size="small" label="Của tôi" color={scope === 'mine' ? 'primary' : 'default'} variant={scope === 'mine' ? 'filled' : 'outlined'} onClick={() => setScope('mine')} />
         <Chip size="small" label="Tất cả" color={scope === 'all' ? 'primary' : 'default'} variant={scope === 'all' ? 'filled' : 'outlined'} onClick={() => setScope('all')} />
         <Tooltip title="Việc mới (đầy đủ)"><IconButton size="small" onClick={() => onEdit(null)} sx={{ color: '#0d7a6a' }}><AddIcon fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Mở trang Việc cần làm (Kanban, lọc, dashboard)"><IconButton size="small" onClick={() => setView('todo')} sx={{ color: '#0d7a6a' }}><OpenInFullIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
       </Stack>
 
       <TextField fullWidth size="small" value={quick} onChange={(e) => setQuick(e.target.value)}

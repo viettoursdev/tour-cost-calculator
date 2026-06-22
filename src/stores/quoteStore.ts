@@ -18,6 +18,7 @@ import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/wor
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
+import { useTodoStore } from './todoStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, FileAttachment, Item, OutputCurrency,
   NewQuoteMeta, Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, TourAdvance, User, WorkflowStep,
@@ -49,7 +50,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'home' | 'cost' | 'summary' | 'history' | 'dashboard' | 'payment'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics' | 'execboard' | 'advance' | 'process' | 'hr';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics' | 'execboard' | 'advance' | 'process' | 'hr' | 'todo';
 
 type QuoteState = {
   draft: QuoteDraft;
@@ -380,11 +381,21 @@ export const useQuoteStore = create<QuoteState>()(
         setStatus: (status, lossReason) => {
           const isLoss = status === 'not_selected' || status === 'cancelled';
           const nextLoss = isLoss ? (lossReason ?? get().draft.lossReason) : undefined;
+          const prevStatus = get().draft.status;
           set((s) => ({ draft: { ...s.draft, status, lossReason: nextLoss } }));
           const { draft } = get();
           if (draft.currentQuoteId && draft.template) {
             const fn = draft.template === 'dmc' ? sbSetDMCQuoteStatus : sbSetQuoteStatus;
             void fn(draft.currentQuoteId, status, nextLoss).catch((e) => console.warn('setStatus cloud:', (e as Error).message));
+            // Báo giá vừa CHỐT (won) → tự sinh bộ việc vận hành chuẩn (idempotent).
+            if (status === 'won' && prevStatus !== 'won' && draft.template !== 'dmc') {
+              void useTodoStore.getState().spawnQuoteTasks({
+                quoteId: draft.currentQuoteId,
+                quoteName: draft.info.name || 'Báo giá',
+                departDate: draft.info.startDate ? draft.info.startDate.slice(0, 10) : undefined,
+              }).then((n) => { if (n > 0) window.alert(`✅ Đã tạo ${n} việc vận hành cho tour vừa chốt (xem 📋 Việc cần làm).`); })
+                .catch((e) => console.warn('spawnQuoteTasks:', (e as Error).message));
+            }
           }
         },
 

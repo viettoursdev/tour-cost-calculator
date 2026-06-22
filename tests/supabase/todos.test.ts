@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getViettoursClient, truncate } from './_setup';
-import { sbSubscribeTodos, sbPushTodos } from '../../src/lib/supabase';
+import { sbSubscribeTodos, sbUpsertTodos, sbUpsertTodo, sbDeleteTodo } from '../../src/lib/supabase';
 import type { Todo } from '@/types';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
@@ -15,12 +15,30 @@ const mk = (id: string): Todo => ({
 describe('todos gateway', () => {
   beforeEach(async () => { await truncate(['todos']); });
 
-  it('push then subscribe round-trips the list', async () => {
+  it('upsert then subscribe round-trips the rows', async () => {
     const c = await getViettoursClient();
-    await sbPushTodos([mk('1'), mk('2')], { name: 'Admin', role: 'CEO' }, c);
+    await sbUpsertTodos([mk('1'), mk('2')], c);
     const got = await once<Todo[]>((cb) => sbSubscribeTodos(cb, c));
     expect(got).toHaveLength(2);
-    expect(got[0].title).toBe('Task 1');
+    expect(got.map((t) => t.title).sort()).toEqual(['Task 1', 'Task 2']);
+  });
+
+  it('upsert updates a single row without touching others', async () => {
+    const c = await getViettoursClient();
+    await sbUpsertTodos([mk('1'), mk('2')], c);
+    await sbUpsertTodo({ ...mk('1'), status: 'done' }, c);
+    const got = await once<Todo[]>((cb) => sbSubscribeTodos(cb, c));
+    expect(got).toHaveLength(2);
+    expect(got.find((t) => t.id === '1')?.status).toBe('done');
+    expect(got.find((t) => t.id === '2')?.status).toBe('todo');
+  });
+
+  it('delete removes only the targeted row', async () => {
+    const c = await getViettoursClient();
+    await sbUpsertTodos([mk('1'), mk('2')], c);
+    await sbDeleteTodo('1', c);
+    const got = await once<Todo[]>((cb) => sbSubscribeTodos(cb, c));
+    expect(got.map((t) => t.id)).toEqual(['2']);
   });
 
   it('subscribe on empty table yields []', async () => {

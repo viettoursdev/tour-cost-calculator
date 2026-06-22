@@ -106,7 +106,9 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 
 **Local dev.** Run `npx supabase start` (Docker required) for a local Postgres stack with all migrations applied. After adding a migration, run `npx supabase db reset` to apply it to the running stack before `npm run test:integration`. pgTAP runs via `npx supabase test db` (fresh shadow DB — auto-applies all migrations). Privileged remote CLI calls need `SUPABASE_ACCESS_TOKEN="$(cat ~/.supabase_token)"` (interactive `supabase login` fails non-TTY). See `docs/supabase-setup.md` for the full workflow.
 
-**Shared single-row tables** (rate-card meta, `guide_schedule`, `email_links`, `todos`): `one_row boolean primary key default true check (one_row)`, read via `.eq('one_row', true).maybeSingle()`, written via `upsert({ one_row: true, … }, { onConflict: 'one_row' })`. Register any non-`id` primary key in `tests/supabase/_setup.ts` `PK_COL` or `truncate()` won't clear the table in integration tests.
+**Shared single-row tables** (rate-card meta, `guide_schedule`, `email_links`): `one_row boolean primary key default true check (one_row)`, read via `.eq('one_row', true).maybeSingle()`, written via `upsert({ one_row: true, … }, { onConflict: 'one_row' })`. Register any non-`id` primary key in `tests/supabase/_setup.ts` `PK_COL` or `truncate()` won't clear the table in integration tests.
+
+**`todos` is row-per-task** (migration `0036`, was single-row in `0032`). Each task is one row keyed by `id` (text); nested fields (`checklist`, `responses`, `remind_at`, `remind_lead`, `link`) are JSONB, queryable fields (`status`, `priority`, `assignees text[]`, `due_date`, `tags text[]`) are columns. Gateway: `sbSubscribeTodos` / `sbUpsertTodo` / `sbUpsertTodos` / `sbDeleteTodo` in `src/lib/supabase.ts`. `todoStore` writes per-row with optimistic rollback. Won quotes auto-spawn a standard ops task set (`todoStore.spawnQuoteTasks`, `auto = 'quote_won'`, idempotent). Full workspace at view `todo` (`src/components/todo/TodoView.tsx`: list + Kanban + dashboard, filter/search); compact summary stays in `TodoPanel` on Home.
 
 ### Postgres Table Map
 

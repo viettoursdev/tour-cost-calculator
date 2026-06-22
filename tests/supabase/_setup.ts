@@ -64,7 +64,6 @@ const PK_COL: Record<string, string> = {
   visa_products_meta: 'one_row',
   guide_schedule: 'one_row',
   email_links: 'one_row',
-  todos: 'one_row',
   notification_thread_members: 'thread_id',
   chat_members: 'chat_id',  // composite PK (chat_id, username) — no id column
   public_quotes: 'token',

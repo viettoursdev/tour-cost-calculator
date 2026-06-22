@@ -9,6 +9,7 @@ import LinkIcon from '@mui/icons-material/Link';
 import { useAuthStore } from '@/stores/authStore';
 import { userLabel } from '@/auth/ROLES';
 import { useTodoStore } from '@/stores/todoStore';
+import { allTags } from '@/lib/todoFilter';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import type { CloudQuoteEntry, NotifLink, Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
 
@@ -35,6 +36,7 @@ export function TodoModal({ todo, prefill, onClose }: { todo: Todo | null; prefi
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const add = useTodoStore((s) => s.add);
   const update = useTodoStore((s) => s.update);
+  const tagOptions = allTags(useTodoStore((s) => s.todos));
 
   // Giá trị khởi tạo: SỬA việc (todo) hoặc TẠO MỚI với giá trị điền sẵn (prefill).
   const seed = todo ?? prefill;
@@ -48,6 +50,7 @@ export function TodoModal({ todo, prefill, onClose }: { todo: Todo | null; prefi
   const [lead, setLead] = useState<number[]>(seed?.remindLead ?? [60]);
   const [remindAt, setRemindAt] = useState<string[]>(seed?.remindAt ?? []);
   const [recurring, setRecurring] = useState<TodoRecurring>(seed?.recurring ?? 'none');
+  const [tags, setTags] = useState<string[]>(seed?.tags ?? []);
   const [checklist, setChecklist] = useState<TodoChecklistItem[]>(seed?.checklist ?? []);
   const [linkQuote, setLinkQuote] = useState<CloudQuoteEntry | null>(
     () => (seed?.link?.kind === 'quote' || seed?.link?.kind === 'payment' ? quotes.find((q) => q.cloudId === seed.link!.id) ?? null : null),
@@ -78,6 +81,7 @@ export function TodoModal({ todo, prefill, onClose }: { todo: Todo | null; prefi
         remindLead: lead.length ? lead : undefined,
         remindAt: remindAt.map(fromLocal).filter(Boolean) as string[],
         recurring,
+        tags: tags.map((t) => t.trim()).filter(Boolean),
         checklist: checklist.filter((c) => c.text.trim()).map((c) => ({ ...c, text: c.text.trim() })),
         link: linkQuote ? { kind: linkKind, id: linkQuote.cloudId, label: linkQuote.name } : otherLink,
       };
@@ -154,6 +158,13 @@ export function TodoModal({ todo, prefill, onClose }: { todo: Todo | null; prefi
           <TextField select label="Lặp lại" value={recurring} onChange={(e) => setRecurring(e.target.value as TodoRecurring)}>
             {RECUR_OPTS.map((o) => <MenuItem key={o.v} value={o.v}>{o.label}</MenuItem>)}
           </TextField>
+
+          <Autocomplete
+            multiple freeSolo options={tagOptions} value={tags}
+            onChange={(_, v) => setTags(v.map((x) => x.replace(/^#/, '').trim()).filter(Boolean))}
+            renderTags={(value, getTagProps) => value.map((tag, i) => { const { key, ...p } = getTagProps({ index: i }); return <Chip key={key} {...p} label={`#${tag}`} size="small" />; })}
+            renderInput={(p) => <TextField {...p} label="Nhãn (tags)" placeholder="vd: NCC, hợp đồng, gấp… (Enter để thêm)" />}
+          />
 
           {/* Liên kết tới báo giá (mở 1 chạm từ việc) */}
           {otherLink && !linkQuote && (

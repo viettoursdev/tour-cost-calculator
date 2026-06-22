@@ -36,6 +36,7 @@ const CustomerView = lazy(() => import('@/components/customer/CustomerView').the
 const NCCView = lazy(() => import('@/components/ncc/NCCView').then((m) => ({ default: m.NCCView })));
 const NccProductView = lazy(() => import('@/components/ncc/NccProductView').then((m) => ({ default: m.NccProductView })));
 const HRView = lazy(() => import('@/components/hr/HRView').then((m) => ({ default: m.HRView })));
+const TodoView = lazy(() => import('@/components/todo/TodoView').then((m) => ({ default: m.TodoView })));
 const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').then((m) => ({ default: m.ItineraryApp })));
 const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
 const VisaApp = lazy(() => import('@/components/visa/VisaApp').then((m) => ({ default: m.VisaApp })));
@@ -131,6 +132,7 @@ export function QuoteView() {
             {view === 'ncc' && <NCCView />}
             {view === 'nccProducts' && <NccProductView />}
             {view === 'hr' && <HRView />}
+            {view === 'todo' && <TodoView />}
            </Suspense>
           </Box>
 

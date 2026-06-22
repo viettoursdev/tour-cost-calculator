@@ -1,9 +1,13 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeTodos, sbPushTodos, sbSendNotification } from '@/lib/supabase';
+import { sbSubscribeTodos, sbUpsertTodo, sbUpsertTodos, sbDeleteTodo, sbSendNotification } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
+import { QUOTE_WON_TASKS, quoteTaskDue } from '@/lib/todoTemplates';
 import type { Todo, TodoRecurring, TodoStatus } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
+
+/** Nguồn tự sinh cho việc tạo khi báo giá chốt (dùng để dedup). */
+export const AUTO_QUOTE_WON = 'quote_won';
 
 const newId = () => 'td' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -27,6 +31,8 @@ type State = {
   /** Người được giao phản hồi việc (xác nhận/từ chối + comment) → báo người tạo. */
   respond: (id: string, accepted: boolean, comment?: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  /** Tự sinh bộ việc vận hành chuẩn khi báo giá CHỐT. Idempotent (không sinh trùng). */
+  spawnQuoteTasks: (q: { quoteId: string; quoteName: string; departDate?: string }) => Promise<number>;
 };
 
 export const useTodoStore = create<State>()(
@@ -51,7 +57,10 @@ export const useTodoStore = create<State>()(
         dueDate: t.dueDate, remindAt: t.remindAt, remindLead: t.remindLead,
         link: t.link, checklist: t.checklist, recurring: t.recurring ?? 'none', tags: t.tags,
       };
-      await persist([todo, ...get().todos], u);
+      const prev = get().todos;
+      set({ todos: [todo, ...prev] });
+      const ok = await save(() => sbUpsertTodo(todo), prev);
+      if (!ok) return null;
       notifyAssign(todo, todo.assignees.filter((a) => a !== u.u), u.u, u.name);
       return todo;
     },
@@ -59,14 +68,17 @@ export const useTodoStore = create<State>()(
     update: async (id, patch) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      const old = get().todos.find((x) => x.id === id);
-      const next = get().todos.map((x) => (x.id === id ? { ...x, ...patch, updatedAt: new Date().toISOString(), updatedBy: u.name } : x));
-      await persist(next, u);
+      const prev = get().todos;
+      const old = prev.find((x) => x.id === id);
+      if (!old) return;
+      const next = { ...old, ...patch, updatedAt: new Date().toISOString(), updatedBy: u.name } as Todo;
+      set({ todos: prev.map((x) => (x.id === id ? next : x)) });
+      const ok = await save(() => sbUpsertTodo(next), prev);
       // Người MỚI được giao → gửi thông báo "được giao việc".
-      if (patch.assignees && old) {
+      if (ok && patch.assignees) {
         const had = new Set(old.assignees);
         const added = patch.assignees.filter((a) => !had.has(a) && a !== u.u);
-        if (added.length) notifyAssign({ ...old, ...patch } as Todo, added, u.u, u.name);
+        if (added.length) notifyAssign(next, added, u.u, u.name);
       }
     },
 
@@ -74,33 +86,37 @@ export const useTodoStore = create<State>()(
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
       const now = new Date().toISOString();
-      const cur = get().todos.find((x) => x.id === id);
-      let next = get().todos.map((x) => (x.id === id
-        ? { ...x, status, completedAt: status === 'done' ? now : undefined, completedBy: status === 'done' ? u.name : undefined, updatedAt: now, updatedBy: u.name }
-        : x));
+      const prev = get().todos;
+      const cur = prev.find((x) => x.id === id);
+      if (!cur) return;
+      const updated: Todo = { ...cur, status, completedAt: status === 'done' ? now : undefined, completedBy: status === 'done' ? u.name : undefined, updatedAt: now, updatedBy: u.name };
       // Việc LẶP LẠI khi hoàn thành → sinh việc kế tiếp (dời hạn + mốc nhắc).
-      if (status === 'done' && cur && cur.recurring && cur.recurring !== 'none') {
-        const spawn: Todo = {
+      let spawn: Todo | null = null;
+      if (status === 'done' && cur.recurring && cur.recurring !== 'none') {
+        spawn = {
           ...cur, id: newId(), status: 'todo', createdAt: now, completedAt: undefined, completedBy: undefined, updatedAt: undefined, updatedBy: undefined,
           dueDate: cur.dueDate ? shiftRecurring(cur.dueDate, cur.recurring) : undefined,
           remindAt: cur.remindAt?.map((r) => shiftRecurring(r, cur.recurring!)),
           checklist: cur.checklist?.map((c) => ({ ...c, done: false })),
         };
-        next = [spawn, ...next];
       }
-      await persist(next, u);
+      set({ todos: [...(spawn ? [spawn] : []), ...prev.map((x) => (x.id === id ? updated : x))] });
+      await save(() => (spawn ? sbUpsertTodos([updated, spawn]) : sbUpsertTodo(updated)), prev);
     },
 
     respond: async (id, accepted, comment) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      const t = get().todos.find((x) => x.id === id);
+      const prev = get().todos;
+      const t = prev.find((x) => x.id === id);
       if (!t) return;
       const resp = { u: u.u, name: u.name, accepted, comment: comment?.trim() || undefined, at: new Date().toISOString() };
       const responses = [...(t.responses ?? []).filter((r) => r.u !== u.u), resp];
-      await persist(get().todos.map((x) => (x.id === id ? { ...x, responses } : x)), u);
+      const next = { ...t, responses };
+      set({ todos: prev.map((x) => (x.id === id ? next : x)) });
+      const ok = await save(() => sbUpsertTodo(next), prev);
       // Báo người tạo việc.
-      if (t.createdBy && t.createdBy !== u.u) {
+      if (ok && t.createdBy && t.createdBy !== u.u) {
         void sbSendNotification(t.createdBy, {
           type: 'task',
           title: accepted ? '✅ Đã xác nhận việc' : '❌ Đã từ chối việc',
@@ -114,7 +130,33 @@ export const useTodoStore = create<State>()(
     remove: async (id) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      await persist(get().todos.filter((x) => x.id !== id), u);
+      const prev = get().todos;
+      set({ todos: prev.filter((x) => x.id !== id) });
+      await save(() => sbDeleteTodo(id), prev);
+    },
+
+    spawnQuoteTasks: async ({ quoteId, quoteName, departDate }) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return 0;
+      const prev = get().todos;
+      // Dedup: đã sinh bộ việc cho báo giá này rồi → bỏ qua.
+      if (prev.some((t) => t.auto === AUTO_QUOTE_WON && t.link?.id === quoteId)) return 0;
+      const now = new Date().toISOString();
+      const link = { kind: 'quote' as const, id: quoteId, label: quoteName };
+      const spawned: Todo[] = QUOTE_WON_TASKS.map((tpl) => ({
+        id: newId(),
+        title: tpl.title,
+        status: 'todo',
+        priority: tpl.priority,
+        createdBy: u.u, createdByName: u.name, createdAt: now,
+        assignees: [],
+        dueDate: quoteTaskDue(tpl, departDate),
+        remindLead: [1440],
+        link, tags: ['tour'], recurring: 'none', auto: AUTO_QUOTE_WON,
+      }));
+      set({ todos: [...spawned, ...prev] });
+      await save(() => sbUpsertTodos(spawned), prev);
+      return spawned.length;
     },
   })),
 );
@@ -133,10 +175,17 @@ function notifyAssign(todo: Todo, recipients: string[], byU: string, byName: str
   }
 }
 
-async function persist(next: Todo[], u: { name: string; role: string }): Promise<void> {
-  useTodoStore.setState({ todos: next });
-  try { await sbPushTodos(next, { name: u.name, role: u.role }); }
-  catch (e) { window.alert('❌ Lỗi đồng bộ công việc: ' + (e as Error).message); }
+/**
+ * Chạy thao tác ghi Supabase; nếu lỗi thì KHÔI PHỤC state về `prev` (rollback lạc quan)
+ * và báo lỗi. Trả về true nếu thành công.
+ */
+async function save(op: () => Promise<void>, prev: Todo[]): Promise<boolean> {
+  try { await op(); return true; }
+  catch (e) {
+    useTodoStore.setState({ todos: prev });
+    window.alert('❌ Lỗi đồng bộ công việc: ' + (e as Error).message);
+    return false;
+  }
 }
 
 /** Việc liên quan tới user (người tạo hoặc được giao). */
