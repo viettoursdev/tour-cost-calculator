@@ -66,7 +66,7 @@ describe('visaProductsStore', () => {
     expect(useVisaProductsStore.getState().rates).toEqual(seeded);
   });
 
-  it('save updates state optimistically and forwards to fb', async () => {
+  it('save updates state optimistically and forwards to sb', async () => {
     const data = { products: [product()], rates: { USD: 25_000 } };
     await useVisaProductsStore.getState().save(data, 'tester');
     const s = useVisaProductsStore.getState();

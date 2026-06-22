@@ -1530,7 +1530,6 @@ const rowToItineraryIndex = (r: Record<string, unknown>): ItineraryIndexEntry =>
 
 /**
  * Subscribe to the itinerary metadata index (lightweight list).
-
  */
 export function sbSubscribeItineraries(
   cb: (list: ItineraryIndexEntry[]) => void,
@@ -1553,7 +1552,6 @@ export function sbSubscribeItineraries(
 
 /**
  * One-time fetch of a full itinerary, reassembling schedule + flights from child tables.
-
  */
 export async function sbGetItinerary(
   id: string,
@@ -1610,7 +1608,6 @@ export async function sbGetItinerary(
 
 /**
  * Save itinerary: upsert parent by legacy_id, replace days and flights children.
-
  */
 export async function sbSaveItinerary(
   itin: Itinerary,
@@ -1695,7 +1692,6 @@ export async function sbSaveItinerary(
 
 /**
  * Delete itinerary by legacy_id. Cascade rules drop days + flights automatically.
-
  */
 export async function sbDeleteItinerary(
   id: string,
@@ -1749,7 +1745,6 @@ const rowToMenuDay = (r: Record<string, unknown>): MenuDay => ({
 
 /**
  * Subscribe to the shared restaurant library (parent + restaurant_menus children).
-
  */
 export function sbSubscribeRestaurants(
   cb: (list: Restaurant[]) => void,
@@ -1803,7 +1798,6 @@ export function sbSubscribeRestaurants(
 
 /**
  * Full-overwrite push of the restaurant library.
-
  */
 export async function sbSaveRestaurants(
   list: Restaurant[],
@@ -1878,7 +1872,6 @@ export async function sbSaveRestaurants(
 
 /**
  * Subscribe to the menu metadata index (lightweight list).
-
  */
 export function sbSubscribeMenus(
   cb: (list: MenuIndexEntry[]) => void,
@@ -1903,7 +1896,6 @@ export function sbSubscribeMenus(
 
 /**
  * One-time fetch of a full menu, reassembling schedule from menu_days.
-
  */
 export async function sbGetMenu(
   id: string,
@@ -2004,7 +1996,6 @@ export async function sbSaveMenu(
 
 /**
  * Delete menu by legacy_id. Cascade drops menu_days automatically.
-
  */
 export async function sbDeleteMenu(
   id: string,
@@ -2048,7 +2039,6 @@ const rowToNotif = (r: Record<string, unknown>, attachments?: FileAttachment[]):
 /**
  * Send a notification to a target user. Resolves username → user_id; inserts
  * one row; caps the user's notification list at 100 by deleting oldest excess.
-
  */
 export async function sbSendNotification(
   targetUsername: string,
@@ -2092,7 +2082,6 @@ export async function sbSendNotification(
 
 /**
  * Subscribe to a user's notifications (newest-first).
-
  */
 export function sbSubscribeNotifications(
   username: string,
@@ -2122,7 +2111,6 @@ export function sbSubscribeNotifications(
 
 /**
  * Full-overwrite push of a user's notification list (used for mark-read).
-
  */
 export async function sbPushNotifications(
   username: string,
@@ -2162,7 +2150,6 @@ export async function sbPushNotifications(
 
 /**
  * Send the same notification to multiple recipients (deduplicated).
-
  */
 export async function sbSendNotificationMany(
   targets: string[],
@@ -2176,7 +2163,6 @@ export async function sbSendNotificationMany(
 
 /**
  * Create the thread if missing; else merge in newly-added members and update link/title.
-
  */
 export async function sbEnsureNotifThread(
   thread: NotifThread,
@@ -2263,7 +2249,6 @@ const assembleThread = async (cl: SupabaseClient, id: string): Promise<NotifThre
 /**
  * Subscribe to a shared thread (members + comments reassembled).
  * Listens to ALL THREE tables so a new comment fires the subscriber.
-
  */
 export function sbSubscribeNotifThread(
   id: string,
@@ -2291,7 +2276,6 @@ export function sbSubscribeNotifThread(
 
 /**
  * Append a comment to a thread. sort_order = current max + 1.
-
  */
 export async function sbAddThreadComment(
   id: string,
@@ -2326,7 +2310,6 @@ export async function sbAddThreadComment(
 
 /**
  * Update the live status of a shared thread.
-
  */
 export async function sbSetThreadStatus(
   id: string,
@@ -2390,7 +2373,6 @@ const assembleTourPayments = async (
 
 /**
  * Full-overwrite push of a tour's payments + customItems.
-
  */
 export async function sbSaveTourPayments(
   tourKey: string,
@@ -2435,7 +2417,6 @@ export async function sbSaveTourPayments(
 
 /**
  * One-time fetch of a tour's payment doc.
-
  */
 export async function sbGetTourPayments(
   tourKey: string,
@@ -2446,7 +2427,6 @@ export async function sbGetTourPayments(
 
 /**
  * Subscribe to a tour's payment doc.
-
  */
 export function sbSubscribeTourPayments(
   tourKey: string,
@@ -2554,7 +2534,6 @@ export async function sbSetApprovalStage(
 
 /**
  * Subscribe to the full payment-approvals document (key → entry map).
-
  */
 export function sbSubscribePaymentApprovals(
   cb: (doc: PaymentApprovalDoc) => void,
@@ -2886,7 +2865,6 @@ export async function sbSaveDMCQuote(
 
 /**
  * Subscribe to the regular quote history index (template <> 'dmc'), newest first.
-
  */
 export function sbSubscribeQuoteHistory(
   cb: (quotes: CloudQuoteEntry[]) => void,
@@ -2902,7 +2880,6 @@ export function sbSubscribeQuoteHistory(
 
 /**
  * Subscribe to the DMC quote history index (template = 'dmc'), newest first.
-
  */
 export function sbSubscribeDMCQuoteHistory(
   cb: (quotes: CloudQuoteEntry[]) => void,
@@ -3452,7 +3429,6 @@ export function sbSubscribeChats(
 
 /**
  * Realtime subscribe to a single chat (with its messages).
-
  */
 export function sbSubscribeChat(
   id: string,
@@ -3696,7 +3672,6 @@ export async function sbMarkChatRead(
 
 // ── Phase 2 Task 7 — Quote cross-links + status ──────────────────────────────
 // Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
-// Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
 
 import type { QuoteStatus } from '@/types/quote';
 
@@ -3822,7 +3797,6 @@ export async function sbBackfillWorkflowIndex(
 
 /**
  * Update payment_summary for a single quote by cloud_id.
-
  */
 export async function sbSetQuotePaymentSummary(
   cloudId: string,
