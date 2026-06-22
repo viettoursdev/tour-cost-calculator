@@ -333,12 +333,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
     : [
         item('home', 'Hôm nay', <TodayOutlinedIcon />),
         item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
+        item('history', 'Lịch sử báo giá', <HistoryIcon />),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),
           ...(isMgr ? [item('execboard', 'Tổng quan điều hành')] : []),
           item('pipeline', 'Pipeline bán hàng'),
           item('salesanalytics', 'Phân tích bán hàng'),
-          item('history', 'Lịch sử báo giá'),
         ] },
         { group: 'Vận hành', icon: <EngineeringOutlinedIcon />, items: [
           item('workflow', 'Quy trình vận hành'),
