@@ -53,8 +53,9 @@ export function DealCockpit() {
     () => (draft.customerId ? customers.find((c) => c.id === draft.customerId) : undefined),
     [customers, draft.customerId],
   );
-  const linkedVisa = useMemo(
-    () => (cid ? visaProjects.find((p) => p.linkedQuoteId === cid) : undefined),
+  // Một báo giá có thể có NHIỀU bộ hồ sơ visa — mỗi nước một bộ.
+  const linkedVisas = useMemo(
+    () => (cid ? visaProjects.filter((p) => p.linkedQuoteId === cid) : []),
     [visaProjects, cid],
   );
 
@@ -88,12 +89,15 @@ export function DealCockpit() {
     useLinkNavStore.getState().request('visaProject', id);
     useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'visa' }, view: 'cost' }));
   };
-  const createVisa = async () => {
+  // Thêm một bộ hồ sơ visa cho MỘT quốc gia cụ thể (tour nhiều nước → nhiều bộ).
+  const addVisa = async () => {
     if (!cid) { window.alert('Hãy lưu báo giá lên cloud trước khi tạo dự án visa.'); return; }
+    const country = window.prompt('Quốc gia xin visa cho bộ hồ sơ này:', draft.info.dest ?? '');
+    if (country == null) return; // huỷ
     const p = await useVisaProjectStore.getState().spawnFromQuote({
       quoteId: cid,
       quoteName: draft.info.name || 'Dự án visa',
-      country: draft.info.dest,
+      country: country.trim(),
       departDate: draft.info.startDate ? draft.info.startDate.slice(0, 10) : undefined,
     });
     if (p) openVisa(p.id);
@@ -287,21 +291,34 @@ export function DealCockpit() {
         </CockpitCard>
 
         {tpl === 'intl' && (
-          <CockpitCard title="🛂 Visa" onOpen={linkedVisa ? () => openVisa(linkedVisa.id) : undefined}>
-            {linkedVisa ? (
-              <>
-                <Chip
-                  size="small"
-                  label={VISA_STATUS_META[linkedVisa.status].label}
-                  sx={{ bgcolor: `${VISA_STATUS_META[linkedVisa.status].color}1a`, color: VISA_STATUS_META[linkedVisa.status].color, fontWeight: 700 }}
-                />
-                <Line label="Hồ sơ" value={`${linkedVisa.passedCount + linkedVisa.haveVisaCount}/${linkedVisa.applyCount || (linkedVisa.applicants?.length ?? 0)} đậu`} />
-                {linkedVisa.country && <Line label="Quốc gia" value={linkedVisa.country} />}
-              </>
+          <CockpitCard title="🛂 Visa">
+            {linkedVisas.length > 0 ? (
+              <Stack spacing={0.75}>
+                {linkedVisas.map((v) => {
+                  const apply = v.applyCount || (v.applicants?.length ?? 0);
+                  return (
+                    <Stack key={v.id} direction="row" alignItems="center" spacing={0.75}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography fontSize={12.5} fontWeight={700} noWrap>{v.country || '(chưa rõ nước)'}</Typography>
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <Chip
+                            size="small"
+                            label={VISA_STATUS_META[v.status].label}
+                            sx={{ height: 18, fontSize: 11, bgcolor: `${VISA_STATUS_META[v.status].color}1a`, color: VISA_STATUS_META[v.status].color, fontWeight: 700 }}
+                          />
+                          {apply > 0 && <Typography variant="caption" color="text.secondary">{v.passedCount + v.haveVisaCount}/{apply} đậu</Typography>}
+                        </Stack>
+                      </Box>
+                      <Button size="small" sx={{ minWidth: 0 }} onClick={() => openVisa(v.id)}>Mở</Button>
+                    </Stack>
+                  );
+                })}
+                <Button size="small" variant="outlined" onClick={() => void addVisa()}>＋ Thêm nước</Button>
+              </Stack>
             ) : (
               <Stack spacing={0.75} alignItems="flex-start">
-                <Typography variant="body2" color="text.secondary">Chưa có dự án visa liên kết.</Typography>
-                <Button size="small" variant="outlined" onClick={() => void createVisa()}>Tạo dự án visa</Button>
+                <Typography variant="body2" color="text.secondary">Chưa có bộ hồ sơ visa.</Typography>
+                <Button size="small" variant="outlined" onClick={() => void addVisa()}>Tạo dự án visa</Button>
               </Stack>
             )}
           </CockpitCard>

@@ -74,26 +74,35 @@ describe('visaProjectStore', () => {
     expect(sb.sbPushVisaProjects).not.toHaveBeenCalled();
   });
 
-  it('spawnFromQuote tạo dự án visa liên kết, prefill tên/quốc gia/ngày đi', async () => {
+  it('spawnFromQuote tạo bộ hồ sơ visa gắn báo giá+nước, tự áp mẫu thủ tục theo nước', async () => {
     const p = await useVisaProjectStore.getState().spawnFromQuote({
       quoteId: 'q-1', quoteName: 'Tour Hàn 5N', country: 'Hàn Quốc', departDate: '2026-09-01',
     });
     expect(p).not.toBeNull();
     expect(p?.linkedQuoteId).toBe('q-1');
-    expect(p?.name).toBe('Tour Hàn 5N');
+    expect(p?.name).toBe('Tour Hàn 5N — Hàn Quốc');
     expect(p?.country).toBe('Hàn Quốc');
     expect(p?.departureDate).toBe('2026-09-01');
     expect(p?.status).toBe('planning');
+    // Mẫu Hàn Quốc có bước KVAC.
+    expect(p?.milestones.some((m) => m.label.includes('KVAC'))).toBe(true);
     expect(useVisaProjectStore.getState().projects).toHaveLength(1);
   });
 
-  it('spawnFromQuote idempotent: báo giá đã gắn → trả về dự án cũ, không tạo trùng', async () => {
-    useVisaProjectStore.setState({ projects: [proj({ id: 'pp', linkedQuoteId: 'q-1', name: 'Cũ' })] }, false);
-    const p = await useVisaProjectStore.getState().spawnFromQuote({ quoteId: 'q-1', quoteName: 'Mới' });
+  it('spawnFromQuote idempotent theo (báo giá + nước): cùng nước → bộ cũ', async () => {
+    useVisaProjectStore.setState({ projects: [proj({ id: 'pp', linkedQuoteId: 'q-1', country: 'Hàn Quốc', name: 'Cũ' })] }, false);
+    const p = await useVisaProjectStore.getState().spawnFromQuote({ quoteId: 'q-1', quoteName: 'Mới', country: 'hàn quốc' });
     expect(p?.id).toBe('pp');
-    expect(p?.name).toBe('Cũ');
     expect(useVisaProjectStore.getState().projects).toHaveLength(1);
     expect(sb.sbPushVisaProjects).not.toHaveBeenCalled();
+  });
+
+  it('spawnFromQuote: cùng báo giá KHÁC nước → tạo bộ mới (mỗi nước một bộ)', async () => {
+    useVisaProjectStore.setState({ projects: [proj({ id: 'pp', linkedQuoteId: 'q-1', country: 'Pháp' })] }, false);
+    const p = await useVisaProjectStore.getState().spawnFromQuote({ quoteId: 'q-1', quoteName: 'Tour Âu', country: 'Anh' });
+    expect(p?.id).not.toBe('pp');
+    expect(p?.country).toBe('Anh');
+    expect(useVisaProjectStore.getState().projects).toHaveLength(2);
   });
 
   it('remove deletes by id and pushes', async () => {
