@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc } from '@/types';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -2651,6 +2651,7 @@ function rowToCloudQuoteEntry(
     workflowDue: (r.workflow_due as CloudQuoteEntry['workflowDue']) ?? undefined,
     workflowSummary: (r.workflow_summary as CloudQuoteEntry['workflowSummary']) ?? undefined,
     paymentSummary: (r.payment_summary as CloudQuoteEntry['paymentSummary']) ?? undefined,
+    share: (r.share as CloudQuoteEntry['share']) ?? undefined,
     linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
     linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
     linkedQuoteTemplate: (r.linked_quote_template as Template) ?? undefined,
@@ -2820,7 +2821,7 @@ async function loadQuoteHistory(
     .from('quotes')
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
-            'linked_quote_id, linked_quote_name, linked_quote_template, ' +
+            'linked_quote_id, linked_quote_name, linked_quote_template, share, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .order('created_at', { ascending: false });
 
@@ -3890,4 +3891,52 @@ export async function sbBackfillPaymentIndex(
     if ((data as unknown[]).length > 0) count++;
   }
   return count;
+}
+
+// ── Báo giá chia sẻ công khai cho khách (public_quotes/{token}) ──
+export async function sbPublishQuote(d: PublicQuoteDoc, client: SupabaseClient = sb): Promise<void> {
+  const { acceptance, ...rest } = d;
+  const { error } = await client.from('public_quotes').upsert({
+    token: d.token,
+    payload: rest,
+    acceptance: acceptance ?? null,
+  }, { onConflict: 'token' });
+  if (error) throw new Error('sbPublishQuote: ' + error.message);
+}
+
+export async function sbGetPublicQuote(token: string, client: SupabaseClient = sb): Promise<PublicQuoteDoc | null> {
+  const { data, error } = await client
+    .from('public_quotes')
+    .select('payload, acceptance')
+    .eq('token', token)
+    .maybeSingle();
+  if (error) throw new Error('sbGetPublicQuote: ' + error.message);
+  if (!data) return null;
+  return {
+    ...(data.payload as Omit<PublicQuoteDoc, 'acceptance'>),
+    acceptance: (data.acceptance as PublicQuoteDoc['acceptance']) ?? undefined,
+  };
+}
+
+export async function sbAcceptPublicQuote(
+  token: string,
+  acceptance: PublicQuoteDoc['acceptance'],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.rpc('accept_public_quote', { p_token: token, p_acceptance: acceptance });
+  if (error) throw new Error('sbAcceptPublicQuote: ' + error.message);
+}
+
+export async function sbUnpublishQuote(token: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('public_quotes').delete().eq('token', token);
+  if (error) throw new Error('sbUnpublishQuote: ' + error.message);
+}
+
+export async function sbSetQuoteShare(
+  cloudId: string,
+  share: CloudQuoteEntry['share'] | null,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('quotes').update({ share: share ?? null }).eq('cloud_id', cloudId);
+  if (error) throw new Error('sbSetQuoteShare: ' + error.message);
 }

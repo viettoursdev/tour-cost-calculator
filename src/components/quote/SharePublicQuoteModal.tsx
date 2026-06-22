@@ -9,7 +9,7 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useAuthStore } from '@/stores/authStore';
-import { fbPublishQuote, fbUnpublishQuote, fbSetQuoteShare, fbGetPublicQuote } from '@/lib/dataBackend';
+import { sbPublishQuote, sbUnpublishQuote, sbSetQuoteShare, sbGetPublicQuote } from '@/lib/supabase';
 import { buildPublicQuote, genShareToken, shareUrl, itineraryToSummary } from '@/lib/publicQuote';
 import { computeTotals, fmtVND } from './calc';
 import { toast } from '@/stores/toastStore';
@@ -53,7 +53,7 @@ export function SharePublicQuoteModal({ open, onClose }: Props) {
     const token = entry?.share?.token;
     if (token) {
       setLink(shareUrl(token));
-      void fbGetPublicQuote(token).then((d) => setAccepted(d?.acceptance ?? null));
+      void sbGetPublicQuote(token).then((d) => setAccepted(d?.acceptance ?? null));
     } else {
       setLink(null); setAccepted(null);
     }
@@ -75,8 +75,8 @@ export function SharePublicQuoteModal({ open, onClose }: Props) {
         publishedBy: currentUser.name, customerName: entry?.customerName ?? draft.customerName,
         itinerary, note: note.trim() || undefined,
       });
-      await fbPublishQuote(docData);
-      await fbSetQuoteShare(currentQuoteId, { token, publishedAt: docData.publishedAt });
+      await sbPublishQuote(docData);
+      await sbSetQuoteShare(currentQuoteId, { token, publishedAt: docData.publishedAt });
       setLink(shareUrl(token));
       setAccepted(null);
       toast('🔗 Đã tạo link chia sẻ báo giá cho khách.');
@@ -90,8 +90,8 @@ export function SharePublicQuoteModal({ open, onClose }: Props) {
     if (!window.confirm('Gỡ link chia sẻ? Khách sẽ không xem được nữa.')) return;
     setBusy(true);
     try {
-      await fbUnpublishQuote(entry.share.token);
-      await fbSetQuoteShare(currentQuoteId, null);
+      await sbUnpublishQuote(entry.share.token);
+      await sbSetQuoteShare(currentQuoteId, null);
       setLink(null); setAccepted(null);
       toast('Đã gỡ link chia sẻ.');
     } catch (e) {

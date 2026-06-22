@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Divider, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { fbGetPublicQuote, fbAcceptPublicQuote } from '@/lib/dataBackend';
+import { sbGetPublicQuote, sbAcceptPublicQuote } from '@/lib/supabase';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { PublicQuoteAcceptance, PublicQuoteDoc } from '@/types';
 
@@ -18,7 +18,7 @@ export function PublicQuoteView({ token }: { token: string }) {
   useEffect(() => {
     let on = true;
     setLoading(true);
-    fbGetPublicQuote(token)
+    sbGetPublicQuote(token)
       .then((d) => { if (!on) return; if (d) setDoc(d); else setError('Không tìm thấy báo giá. Link có thể đã bị gỡ hoặc hết hạn.'); })
       .catch((e) => { if (on) setError('Không tải được báo giá: ' + (e as Error).message); })
       .finally(() => { if (on) setLoading(false); });
@@ -141,7 +141,7 @@ function AcceptBlock({ token, doc, onAccepted }: { token: string; doc: PublicQuo
     setBusy(true); setError(null);
     try {
       const a: PublicQuoteAcceptance = { name: name.trim() || undefined, contact: contact.trim() || undefined, note: note.trim() || undefined, at: new Date().toISOString() };
-      await fbAcceptPublicQuote(token, a);
+      await sbAcceptPublicQuote(token, a);
       onAccepted(a);
     } catch (e) {
       setError('Gửi xác nhận lỗi: ' + (e as Error).message);

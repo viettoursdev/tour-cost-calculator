@@ -66,6 +66,7 @@ const PK_COL: Record<string, string> = {
   email_links: 'one_row',
   notification_thread_members: 'thread_id',
   chat_members: 'chat_id',  // composite PK (chat_id, username) — no id column
+  public_quotes: 'token',
 };
 
 /** Delete all rows from the given tables (service role bypasses RLS). Children first. */

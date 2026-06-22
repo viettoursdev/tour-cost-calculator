@@ -15,7 +15,8 @@ export function showBrowserNotif(title: string, body: string): void {
   }
 }
 
-import { fbGetContracts, fbSendNotification, fbGetPublicQuote } from '@/lib/dataBackend';
+import { fbGetContracts, fbSendNotification } from '@/lib/dataBackend';
+import { sbGetPublicQuote } from '@/lib/supabase';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -271,7 +272,7 @@ export async function checkQuoteAcceptances(user: User): Promise<void> {
     const set = new Set(seen);
     for (const q of quotes) {
       const token = q.share!.token;
-      const pub = await fbGetPublicQuote(token);
+      const pub = await sbGetPublicQuote(token);
       if (!pub?.acceptance) continue;
       const key = `${token}:${pub.acceptance.at}`;
       if (set.has(key)) continue;
