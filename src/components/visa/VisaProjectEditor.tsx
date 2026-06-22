@@ -1,4 +1,4 @@
-import { type ChangeEvent, useState } from 'react';
+import { type ChangeEvent, useEffect, useState } from 'react';
 import {
   Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent,
   DialogTitle, Divider, IconButton, LinearProgress, MenuItem, Stack, TextField, Tooltip, Typography,
@@ -120,8 +120,13 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
       setMilestones(DEFAULT_VISA_MILESTONES.map((l) => newVisaMilestone(l)));
     }
   };
-  // Mẫu quy trình thủ tục theo nước — gợi ý theo quốc gia dự án, đổi tay được.
+  // Mẫu quy trình thủ tục theo nước — gợi ý BÁM theo quốc gia dự án (mỗi bộ đúng
+  // nước riêng), tự cập nhật khi đổi nước cho tới khi người dùng chọn tay.
   const [presetKey, setPresetKey] = useState(() => visaPresetKeyForCountry(doc.country));
+  const [presetTouched, setPresetTouched] = useState(false);
+  useEffect(() => {
+    if (!presetTouched) setPresetKey(visaPresetKeyForCountry(doc.country));
+  }, [doc.country, presetTouched]);
   const applyPreset = () => {
     const preset = VISA_PROC_PRESETS.find((p) => p.key === presetKey);
     if (!preset) return;
@@ -397,7 +402,7 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
               <Box sx={{ flex: 1 }} />
               <TextField
                 select size="small" label="Mẫu quy trình theo nước"
-                value={presetKey} onChange={(e) => setPresetKey(e.target.value)}
+                value={presetKey} onChange={(e) => { setPresetTouched(true); setPresetKey(e.target.value); }}
                 sx={{ minWidth: 200 }}
               >
                 {VISA_PROC_PRESETS.map((p) => <MenuItem key={p.key} value={p.key}>{p.label}</MenuItem>)}
