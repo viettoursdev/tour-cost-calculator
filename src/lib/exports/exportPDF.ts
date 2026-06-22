@@ -135,17 +135,17 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
       .filter((i: Item) => i.name && !i.optional && (calcVND(i, rates, pax) > 0 || i.foc === true || i.included === true));
     if (catItems.length === 0) return;
     const sub = catItems.reduce((s: number, i: Item) => s + calcVND(i, rates, pax), 0);
-    checkPage(10);
+    checkPage(13);
     pdf.setFontSize(10); pdf.setTextColor(...dark); pdf.setFont(FONT, 'bold');
     pdf.text(`${cat.label} / ${cat.labelEn}`, mX, y);
     if (!isPackage) {
       pdf.setTextColor(...teal);
       pdf.text(pax > 0 ? fmtVND(sub / pax) + '/khách' : '', pageW - mX, y, { align: 'right' });
     }
-    y += 5;
+    y += 7;
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
     catItems.forEach((it: Item) => {
-      checkPage(9);
+      checkPage(12);
       const itVnd = calcVND(it, rates, pax);
       pdf.setTextColor(...dark);
       const nameText = `• ${(it.name || '').slice(0, 55)}`;
@@ -162,16 +162,16 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
         pdf.setTextColor(...teal);
         pdf.text(fmtVND(itVnd), pageW - mX, y, { align: 'right' });
       }
-      y += 4;
+      y += 5.4;
       if (it.note) {
-        checkPage(5);
+        checkPage(6);
         pdf.setTextColor(...gray); pdf.setFontSize(8);
         const noteOneLine = plainNote(it.note).replace(/\s*\n\s*/g, ' · ');
         pdf.text(`   ${noteOneLine.slice(0, 70)}`, mX + 6, y);
-        y += 4; pdf.setFontSize(9);
+        y += 5; pdf.setFontSize(9);
       }
     });
-    y += 2;
+    y += 4.5;
   });
 
   // Optional add-on items (not counted in the total).
@@ -193,12 +193,12 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     y += 6;
     pdf.setFont(FONT, 'normal'); pdf.setFontSize(9);
     optItems.forEach((o) => {
-      checkPage(6);
+      checkPage(7);
       pdf.setTextColor(...dark);
       pdf.text(`• ${o.name.slice(0, 55)}`, mX + 4, y);
       pdf.setTextColor(194, 65, 12);
       pdf.text(fmtVND(o.vnd), pageW - mX, y, { align: 'right' });
-      y += 5;
+      y += 5.4;
     });
   }
 
