@@ -85,10 +85,11 @@ type NavItem = { v?: QuoteViewKey; label: string; icon?: ReactNode; action?: () 
 type NavNode = NavItem | { group: string; icon?: ReactNode; items: NavItem[] };
 
 const navBtnSx = (active: boolean) => ({
-  textTransform: 'none' as const, fontSize: 13.5, fontWeight: active ? 800 : 600, minHeight: 44, px: 1.5, borderRadius: 0,
+  textTransform: 'none' as const, fontSize: 13, fontWeight: active ? 800 : 600, minHeight: 40, px: 1, borderRadius: 0,
   color: active ? LEGACY.teal : 'rgba(15,58,74,0.6)', borderBottom: active ? `3px solid ${LEGACY.teal}` : '3px solid transparent',
-  whiteSpace: 'nowrap', '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' },
-  '& .MuiButton-startIcon svg': { fontSize: 18 }, '& .MuiButton-startIcon': { mr: 0.6 },
+  whiteSpace: 'nowrap', minWidth: 0, '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' },
+  '& .MuiButton-startIcon svg': { fontSize: 17 }, '& .MuiButton-startIcon': { mr: 0.4 },
+  '& .MuiButton-endIcon': { ml: 0.2 },
 });
 
 /** Nút điều hướng phẳng (tab đơn). */
@@ -335,12 +336,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const item = (v: QuoteViewKey, label: string, icon?: ReactNode) => ({ v, label, icon });
   // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
   const NAV: NavNode[] = isDMC
-    ? [item('cost', 'Bảng chi phí Breakdown', <BarChartOutlinedIcon />), item('history', 'Lịch sử Breakdown', <HistoryIcon />)]
+    ? [item('cost', 'Breakdown', <BarChartOutlinedIcon />), item('history', 'Lịch sử', <HistoryIcon />)]
     : [
         item('home', 'Hôm nay', <TodayOutlinedIcon />),
         item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
         item('cockpit', 'Hồ sơ tour', <RouteOutlinedIcon />),
-        item('history', 'Lịch sử báo giá', <HistoryIcon />),
+        item('history', 'Lịch sử', <HistoryIcon />),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),
           ...(isMgr ? [item('execboard', 'Tổng quan điều hành')] : []),
