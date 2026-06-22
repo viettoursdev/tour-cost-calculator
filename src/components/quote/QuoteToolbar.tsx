@@ -324,6 +324,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const canNcc = hasPerm(currentUser, 'manageNCC');
   const canHR = hasPerm(currentUser, 'viewHR');
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
+  const isCEO = currentUser?.role === 'CEO';
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
   const hidePrice = !canSeePrices(currentUser);
   const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
@@ -344,9 +345,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         item('history', 'Lịch sử', <HistoryIcon />),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),
-          ...(isMgr ? [item('execboard', 'Tổng quan điều hành')] : []),
-          item('pipeline', 'Pipeline bán hàng'),
-          item('salesanalytics', 'Phân tích bán hàng'),
+          // Bảng điều hành cấp cao — chỉ CEO.
+          ...(isCEO ? [
+            item('execboard', 'Tổng quan điều hành'),
+            item('pipeline', 'Pipeline bán hàng'),
+            item('salesanalytics', 'Phân tích bán hàng'),
+          ] : []),
         ] },
         { group: 'Vận hành', icon: <EngineeringOutlinedIcon />, items: [
           item('todo', 'Việc cần làm'),
