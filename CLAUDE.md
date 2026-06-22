@@ -22,7 +22,9 @@ npm run preview      # serve the built dist/
 npm run format       # Prettier on src/**/*.{ts,tsx,css}
 ```
 
-There is no test runner configured.
+Tests: `npm test` (Vitest unit), `npm run test:integration` (against the local Supabase stack), `npx supabase test db` (pgTAP).
+
+**Editor diagnostics in this repo emit false `Cannot find module '@/...'` path-alias errors** — trust `npm run typecheck` (exit 0) as ground truth, not the inline diagnostics.
 
 ## Architecture
 
@@ -102,7 +104,9 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 
 **R2 `pg_dump` backup.** `.github/workflows/backup.yml` runs every UTC hour: dumps the production DB and uploads to Cloudflare R2 with a 14-day lifecycle policy. Worst-case data-loss window: ~1 hour.
 
-**Local dev.** Run `npx supabase start` (Docker required) to spin up a local Postgres stack with all migrations applied. See `docs/supabase-setup.md` for the full workflow.
+**Local dev.** Run `npx supabase start` (Docker required) for a local Postgres stack with all migrations applied. After adding a migration, run `npx supabase db reset` to apply it to the running stack before `npm run test:integration`. pgTAP runs via `npx supabase test db` (fresh shadow DB — auto-applies all migrations). Privileged remote CLI calls need `SUPABASE_ACCESS_TOKEN="$(cat ~/.supabase_token)"` (interactive `supabase login` fails non-TTY). See `docs/supabase-setup.md` for the full workflow.
+
+**Shared single-row tables** (rate-card meta, `guide_schedule`, `email_links`, `todos`): `one_row boolean primary key default true check (one_row)`, read via `.eq('one_row', true).maybeSingle()`, written via `upsert({ one_row: true, … }, { onConflict: 'one_row' })`. Register any non-`id` primary key in `tests/supabase/_setup.ts` `PK_COL` or `truncate()` won't clear the table in integration tests.
 
 ### Postgres Table Map
 
@@ -187,6 +191,8 @@ GitHub Pages via `.github/workflows/deploy.yml` on push to `main`:
 6. `actions/upload-pages-artifact` + `actions/deploy-pages`
 
 Vite `base: '/tour-cost-calculator/'` — any absolute URL/asset construction must respect this. MUI is split into its own vendor chunk; export libs (jspdf/docx/xlsx/etc.) use dynamic imports and are loaded on demand (see `vite.config.ts:manualChunks`).
+
+**Pushing to `origin` and `gh workflow run` require the `viettoursdev` gh account** (the default `vitahoang` lacks org write/admin → 403). Switch with `gh auth switch --user viettoursdev` (push with a credential-helper override — see the project memory for the exact command), then switch back.
 
 ## Conventions
 
