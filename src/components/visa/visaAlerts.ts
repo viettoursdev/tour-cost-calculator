@@ -13,6 +13,8 @@ export type VisaAlertSeverity = 'high' | 'medium';
 export interface VisaAlert {
   projectId: string;
   projectName: string;
+  country: string;       // nước của bộ hồ sơ
+  requestName: string;   // yêu cầu/báo giá liên kết (linkedQuoteName)
   kind: VisaAlertKind;
   severity: VisaAlertSeverity;
   message: string;
@@ -39,7 +41,7 @@ export function projectAlerts(p: VisaProjectDoc, todayISO: string): VisaAlert[] 
   const out: VisaAlert[] = [];
   const name = p.name || p.code;
   const mk = (kind: VisaAlertKind, severity: VisaAlertSeverity, message: string): VisaAlert =>
-    ({ projectId: p.id, projectName: name, kind, severity, message });
+    ({ projectId: p.id, projectName: name, country: p.country ?? '', requestName: p.linkedQuoteName ?? '', kind, severity, message });
 
   const depDays = dayDiff(todayISO, p.departureDate); // ngày tới lúc khởi hành
   const refISO = p.departureDate ?? todayISO;          // mốc tính hiệu lực hộ chiếu

@@ -26,11 +26,11 @@ export function VisaAlerts({ onOpenProject }: { onOpenProject: (id: string) => v
   );
   const counts = alertCounts(alerts);
 
-  // Gom cảnh báo theo dự án để hiển thị gọn.
+  // Gom cảnh báo theo bộ hồ sơ (dự án) để hiển thị gọn.
   const byProject = useMemo(() => {
-    const m = new Map<string, { name: string; items: VisaAlert[] }>();
+    const m = new Map<string, { name: string; country: string; requestName: string; items: VisaAlert[] }>();
     for (const a of alerts) {
-      const g = m.get(a.projectId) ?? { name: a.projectName, items: [] };
+      const g = m.get(a.projectId) ?? { name: a.projectName, country: a.country, requestName: a.requestName, items: [] };
       g.items.push(a);
       m.set(a.projectId, g);
     }
@@ -51,7 +51,11 @@ export function VisaAlerts({ onOpenProject }: { onOpenProject: (id: string) => v
         <Stack spacing={1.25}>
           {byProject.map(([id, g]) => (
             <Paper key={id} variant="outlined" sx={{ p: 1.5, cursor: 'pointer', '&:hover': { boxShadow: 2 } }} onClick={() => onOpenProject(id)}>
-              <Typography fontWeight={800} fontSize={14} sx={{ mb: 0.75 }}>{g.name}</Typography>
+              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }} flexWrap="wrap" useFlexGap>
+                <Typography fontWeight={800} fontSize={14}>{g.name}</Typography>
+                {g.country && <Chip size="small" label={g.country} sx={{ height: 18, fontSize: 11 }} />}
+                {g.requestName && <Chip size="small" label={`📋 ${g.requestName}`} sx={{ height: 18, fontSize: 11 }} />}
+              </Stack>
               <Stack spacing={0.5}>
                 {g.items.map((a, i) => (
                   <Stack key={i} direction="row" spacing={1} alignItems="center">
