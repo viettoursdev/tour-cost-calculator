@@ -12,6 +12,9 @@ type State = {
   init: () => Unsubscribe;
   save: (proj: VisaProjectDoc) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  /** Tạo dự án visa liên kết một báo giá (idempotent — trả về dự án đã có nếu
+   *  báo giá đã được gắn). Dùng cho "Hồ sơ tour" (Deal Cockpit). */
+  spawnFromQuote: (q: { quoteId: string; quoteName: string; country?: string; departDate?: string | null }) => Promise<VisaProjectDoc | null>;
 };
 
 export const useVisaProjectStore = create<State>()(
@@ -47,6 +50,27 @@ export const useVisaProjectStore = create<State>()(
       } finally {
         set({ syncing: false });
       }
+    },
+
+    spawnFromQuote: async ({ quoteId, quoteName, country, departDate }) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return null;
+      const existing = get().projects.find((p) => p.linkedQuoteId === quoteId);
+      if (existing) return existing; // đã gắn → không tạo trùng
+      // Lazy-import factory để không kéo visa/constants vào bundle của store.
+      const { newVisaProject } = await import('@/components/visa/constants');
+      const proj: VisaProjectDoc = {
+        ...newVisaProject(u),
+        name: quoteName,
+        country: country?.trim() ?? '',
+        status: 'planning',
+        linkedQuoteId: quoteId,
+        linkedQuoteName: quoteName,
+        startDate: new Date().toISOString().slice(0, 10),
+        departureDate: departDate ?? null,
+      };
+      await get().save(proj);
+      return proj;
     },
 
     remove: async (id) => {

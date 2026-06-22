@@ -7,7 +7,10 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useCustomerStore } from '@/stores/customerStore';
+import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useLinkNavStore } from '@/stores/linkNavStore';
 import { canSeePrices } from '@/auth/quotePerms';
+import { VISA_STATUS_META } from '@/components/visa/constants';
 import { computeTotals, fmtVND } from './calc';
 import { workflowProgress } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
@@ -36,6 +39,7 @@ export function DealCockpit() {
   const setStatus = useQuoteStore((s) => s.setStatus);
   const contracts = useContractStore((s) => s.contracts);
   const customers = useCustomerStore((s) => s.customers);
+  const visaProjects = useVisaProjectStore((s) => s.projects);
   const showPrice = canSeePrices(useAuthStore((s) => s.currentUser));
 
   const cid = draft.currentQuoteId;
@@ -48,6 +52,10 @@ export function DealCockpit() {
   const customer = useMemo(
     () => (draft.customerId ? customers.find((c) => c.id === draft.customerId) : undefined),
     [customers, draft.customerId],
+  );
+  const linkedVisa = useMemo(
+    () => (cid ? visaProjects.find((p) => p.linkedQuoteId === cid) : undefined),
+    [visaProjects, cid],
   );
 
   const input: DealInput = useMemo(
@@ -75,6 +83,21 @@ export function DealCockpit() {
   }
 
   const go = (v: QuoteViewKey) => setView(v);
+  const openVisa = (id: string) => {
+    if (!window.confirm('Rời báo giá để mở dự án visa? Thay đổi chưa lưu có thể mất.')) return;
+    useLinkNavStore.getState().request('visaProject', id);
+    useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'visa' }, view: 'cost' }));
+  };
+  const createVisa = async () => {
+    if (!cid) { window.alert('Hãy lưu báo giá lên cloud trước khi tạo dự án visa.'); return; }
+    const p = await useVisaProjectStore.getState().spawnFromQuote({
+      quoteId: cid,
+      quoteName: draft.info.name || 'Dự án visa',
+      country: draft.info.dest,
+      departDate: draft.info.startDate ? draft.info.startDate.slice(0, 10) : undefined,
+    });
+    if (p) openVisa(p.id);
+  };
   const markWon = () => {
     if (window.confirm('Đánh dấu báo giá này là "Thành công" (chốt deal)? Hệ thống sẽ tự tạo bộ việc vận hành.')) {
       setStatus('won');
@@ -262,6 +285,27 @@ export function DealCockpit() {
             </Typography>
           )}
         </CockpitCard>
+
+        {tpl === 'intl' && (
+          <CockpitCard title="🛂 Visa" onOpen={linkedVisa ? () => openVisa(linkedVisa.id) : undefined}>
+            {linkedVisa ? (
+              <>
+                <Chip
+                  size="small"
+                  label={VISA_STATUS_META[linkedVisa.status].label}
+                  sx={{ bgcolor: `${VISA_STATUS_META[linkedVisa.status].color}1a`, color: VISA_STATUS_META[linkedVisa.status].color, fontWeight: 700 }}
+                />
+                <Line label="Hồ sơ" value={`${linkedVisa.passedCount + linkedVisa.haveVisaCount}/${linkedVisa.applyCount || (linkedVisa.applicants?.length ?? 0)} đậu`} />
+                {linkedVisa.country && <Line label="Quốc gia" value={linkedVisa.country} />}
+              </>
+            ) : (
+              <Stack spacing={0.75} alignItems="flex-start">
+                <Typography variant="body2" color="text.secondary">Chưa có dự án visa liên kết.</Typography>
+                <Button size="small" variant="outlined" onClick={() => void createVisa()}>Tạo dự án visa</Button>
+              </Stack>
+            )}
+          </CockpitCard>
+        )}
       </Box>
     </Box>
   );
@@ -278,12 +322,12 @@ function Line({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CockpitCard({ title, onOpen, children }: { title: string; onOpen: () => void; children: React.ReactNode }) {
+function CockpitCard({ title, onOpen, children }: { title: string; onOpen?: () => void; children: React.ReactNode }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', flexDirection: 'column' }}>
       <Stack direction="row" alignItems="center" sx={{ mb: 0.75 }}>
         <Typography fontWeight={800} fontSize={13.5} sx={{ flex: 1 }}>{title}</Typography>
-        <Button size="small" startIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />} onClick={onOpen} sx={{ minWidth: 0 }}>Mở</Button>
+        {onOpen && <Button size="small" startIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />} onClick={onOpen} sx={{ minWidth: 0 }}>Mở</Button>}
       </Stack>
       <Box sx={{ flex: 1 }}>{children}</Box>
     </Paper>
