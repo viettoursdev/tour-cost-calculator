@@ -235,7 +235,7 @@ export type QuoteDraft = {
   excelFiles?: FileAttachment[]; // Lịch sử file Excel báo giá đã upload (cũ → mới)
   locked?: boolean;        // Khoá trang báo giá (chỉ xem file Excel)
   flights?: QuoteFlight[]; // Thông tin chuyến bay của báo giá
-  workflow?: WorkflowStep[]; // Quy trình vận hành của báo giá
+  workflow?: WorkflowStep[]; // Quy trình điều hành của báo giá
   passengers?: Passenger[]; // Danh sách khách đoàn (manifest + rooming)
   catOrder?: CategoryId[];  // Thứ tự hiển thị hạng mục (kéo-thả); thiếu = thứ tự mặc định
 

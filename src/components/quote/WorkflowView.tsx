@@ -156,7 +156,7 @@ export function WorkflowView() {
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}>
           <Box sx={{ flex: 1, minWidth: 260 }}>
-            <Typography fontWeight={900} fontSize={16}>🗂️ Quy trình vận hành</Typography>
+            <Typography fontWeight={900} fontSize={16}>🗂️ Quy trình điều hành</Typography>
             <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mt: 0.75 }}>
               <Box sx={{ flex: 1, maxWidth: 320 }}>
                 <LinearProgress variant="determinate" value={prog.pct} sx={{ height: 8, borderRadius: 4, '& .MuiLinearProgress-bar': { bgcolor: '#27ae60' } }} />

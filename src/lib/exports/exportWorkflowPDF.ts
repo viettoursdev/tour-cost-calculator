@@ -1,5 +1,5 @@
 /**
- * Xuất checklist Quy trình vận hành của một báo giá ra PDF (để bàn giao điều hành /
+ * Xuất checklist Quy trình điều hành của một báo giá ra PDF (để bàn giao điều hành /
  * in ký). Dùng DejaVu (loadVNFont) cho tiếng Việt. Bố cục theo exportVisaProjectPDF.
  */
 import { jsPDF } from 'jspdf';
@@ -44,7 +44,7 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
   y = logoBottom + 6;
 
   setF('normal'); pdf.setFontSize(9.5); pdf.setTextColor(...MUTE);
-  pdf.text('QUY TRÌNH VẬN HÀNH', PW / 2, y, { align: 'center' });
+  pdf.text('QUY TRÌNH ĐIỀU HÀNH', PW / 2, y, { align: 'center' });
   y += 7;
   setF('bold'); pdf.setFontSize(18); pdf.setTextColor(...NAVY);
   pdf.text(pdf.splitTextToSize((info.name || 'Báo giá').toUpperCase(), CW), PW / 2, y, { align: 'center' });

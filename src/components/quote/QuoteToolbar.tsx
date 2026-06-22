@@ -357,7 +357,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         { group: 'Vận hành', icon: <EngineeringOutlinedIcon />, items: [
           item('todo', 'Việc cần làm'),
           item('process', 'Quy trình phòng ban'),
-          item('workflow', 'Quy trình vận hành'),
+          item('workflow', 'Quy trình điều hành'),
           item('passengers', 'Khách đoàn'),
           item('opsboard', 'Điều phối'),
           item('departures', 'Lịch khởi hành'),

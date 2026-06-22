@@ -24,7 +24,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   { icon: '🍽️', title: 'Thực đơn & nhà hàng', tags: ['menu'], image: 'menu.png', body: 'Trình tạo Thực đơn theo ngày/bữa & set menu, bật-tắt "Kèm giá", liên kết Chương trình, xuất Word/PDF. Thư viện nhà hàng có địa chỉ/file/đánh giá, lọc theo khu vực + nút "AI từ thực đơn" để tự thêm nhà hàng & set menu từ ảnh/file.' },
   { icon: '🛂', title: 'Visa & Dịch hồ sơ', tags: ['visa', 'doctranslate'], image: 'visa.png', body: 'Quản lý Visa: bảng giá visa theo nước + hồ sơ thủ tục. Dịch hồ sơ: dịch giấy tờ Việt → Anh chuẩn lãnh sự, GIỮ NGUYÊN bố cục, OCR được ảnh/PDF scan.' },
   { icon: '📇', title: 'NCC & Khách hàng', tags: ['ncc', 'customer'], image: 'ncc.png', body: 'Form có "AI nhập & phân tích" (dán văn bản / ảnh danh thiếp). NCC: tìm theo tên + người liên hệ, tìm THEO TOUR, tự suy Quốc gia/Châu lục từ địa điểm, GỘP NCC trùng, đánh giá dịch vụ, lĩnh vực gồm Du thuyền/Tham quan.' },
-  { icon: '🗂️', title: 'Quy trình vận hành', tags: ['workflow'], image: 'workflow.png', body: 'Theo dõi tiến độ tour bằng Kanban / List / Gantt; kéo-thả bước qua các trạng thái (gồm "Không thực hiện"); nút "🔄 Đồng bộ" tự cập nhật bước từ dữ liệu thật. Hệ thống tự nhắc bước sắp/đã quá hạn.' },
+  { icon: '🗂️', title: 'Quy trình điều hành', tags: ['workflow'], image: 'workflow.png', body: 'Theo dõi tiến độ tour bằng Kanban / List / Gantt; kéo-thả bước qua các trạng thái (gồm "Không thực hiện"); nút "🔄 Đồng bộ" tự cập nhật bước từ dữ liệu thật. Hệ thống tự nhắc bước sắp/đã quá hạn.' },
   { icon: '🚌', title: 'Điều phối · Khách đoàn · Công nợ', tags: ['opsboard', 'passengers', 'payboard', 'departures', 'payment', 'flights'], image: 'ops.png', body: 'Khách đoàn: danh sách khách + phân phòng. Điều phối & Lịch khởi hành: nhìn toàn bộ tour theo bảng/lịch. Công nợ tổng: tổng hợp phải trả NCC. Chuyến bay: dán code GDS/PNR hoặc ảnh vé → AI nhận diện chặng bay.' },
   { icon: '📈', title: 'Bán hàng & biên lợi', tags: ['pipeline', 'salesanalytics', 'dashboard', 'summary'], image: 'sales.png', body: 'Pipeline bán hàng theo trạng thái deal (đã gửi / deal giá / thắng / thua + lý do); Phân tích bán hàng theo nguồn & tỷ lệ thắng; Dashboard biên lợi xem lãi gộp/biên theo báo giá.' },
   { icon: '🔐', title: 'Phân quyền theo phòng ban', tags: ['home'], image: 'permissions.png', body: 'Mỗi phòng chỉ TẠO/SỬA báo giá thuộc khu vực của mình (nội địa / nước ngoài…), vẫn xem được phần khác. Phòng Hướng dẫn viên (HDV) được ẩn giá để cầm chương trình mà không lộ giá vốn.' },
@@ -37,7 +37,7 @@ export const GUIDE_STEPS: GuideStep[] = [
 export const CONTEXT_LABEL: Record<string, string> = {
   home: 'Trang chủ', cost: 'Bảng báo giá', history: 'Lịch sử báo giá', advance: 'Đề nghị tạm ứng',
   itinerary: 'Chương trình tour', menu: 'Thực đơn', visa: 'Quản lý Visa', doctranslate: 'Dịch hồ sơ',
-  ncc: 'Nhà cung cấp', customer: 'Khách hàng', contract: 'Hợp đồng', workflow: 'Quy trình vận hành',
+  ncc: 'Nhà cung cấp', customer: 'Khách hàng', contract: 'Hợp đồng', workflow: 'Quy trình điều hành',
   opsboard: 'Điều phối', passengers: 'Khách đoàn', payboard: 'Công nợ', departures: 'Lịch khởi hành',
   payment: 'Thanh toán', flights: 'Chuyến bay', pipeline: 'Pipeline bán hàng',
   salesanalytics: 'Phân tích bán hàng', dashboard: 'Dashboard biên lợi', summary: 'Tổng kết',

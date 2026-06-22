@@ -103,7 +103,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
       { v: 'summary', label: 'Tổng kết & định giá', icon: '💰' },
       { v: 'pipeline', label: 'Pipeline bán hàng', icon: '🧲' },
       { v: 'salesanalytics', label: 'Phân tích bán hàng', icon: '📊' },
-      { v: 'workflow', label: 'Quy trình vận hành', icon: '🗂️' },
+      { v: 'workflow', label: 'Quy trình điều hành', icon: '🗂️' },
       { v: 'opsboard', label: 'Điều phối', icon: '🧭' },
       { v: 'departures', label: 'Lịch khởi hành', icon: '📅' },
       { v: 'payboard', label: 'Công nợ tổng', icon: '💰' },
