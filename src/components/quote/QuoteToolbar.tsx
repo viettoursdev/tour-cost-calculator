@@ -316,6 +316,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
   const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
+  const canHR = hasPerm(currentUser, 'viewHR');
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
   const hidePrice = !canSeePrices(currentUser);
@@ -361,6 +362,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           ...(canCust ? [item('customer', 'Khách hàng')] : []),
           ...(canNcc ? [item('ncc', 'Nhà Cung Cấp')] : []),
           ...(canNcc ? [item('nccProducts', 'Sản phẩm NCC')] : []),
+          ...(canHR ? [item('hr', 'Nhân sự')] : []),
         ] },
       ]
         .map((n) => (hidePrice && 'group' in n

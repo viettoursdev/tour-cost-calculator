@@ -4097,3 +4097,119 @@ export async function sbSetQuoteShare(
   const { error } = await client.from('quotes').update({ share: share ?? null }).eq('cloud_id', cloudId);
   if (error) throw new Error('sbSetQuoteShare: ' + error.message);
 }
+
+// ── HR (Nhân sự) ──────────────────────────────────────────────────────────────
+
+import type { HrEmployee, HrDocument, EmploymentStatus } from '@/types/hr';
+
+const rowToHrDocument = (r: Record<string, unknown>): HrDocument => ({
+  id: (r.legacy_id as string) ?? (r.id as string),
+  kind: (r.kind as string) ?? '',
+  name: (r.name as string) ?? '',
+  fileUrl: (r.file_url as string) ?? undefined,
+  issuedAt: (r.issued_at as string) ?? undefined,
+  expiresAt: (r.expires_at as string) ?? undefined,
+  notes: (r.notes as string) ?? undefined,
+});
+
+const rowToHrEmployee = (
+  r: Record<string, unknown>,
+  documents: HrDocument[],
+): HrEmployee => ({
+  id: r.legacy_id as string,
+  employeeCode: (r.employee_code as string) ?? '',
+  fullName: (r.full_name as string) ?? '',
+  email: (r.email as string) ?? '',
+  phone: (r.phone as string) ?? '',
+  dob: (r.dob as string) ?? undefined,
+  gender: (r.gender as HrEmployee['gender']) ?? '',
+  avatarUrl: (r.avatar_url as string) ?? undefined,
+  department: (r.department as HrEmployee['department']) ?? '',
+  title: (r.title as string) ?? '',
+  level: (r.level as string) ?? '',
+  managerId: (r.manager_legacy_id as string) ?? undefined,
+  status: (r.status as EmploymentStatus) ?? 'probation',
+  joinDate: (r.join_date as string) ?? undefined,
+  resignDate: (r.resign_date as string) ?? undefined,
+  emergencyContact: (r.emergency_contact as HrEmployee['emergencyContact']) ?? undefined,
+  careerPathId: (r.career_path_id as string) ?? undefined,
+  profileEmail: (r.profile_email as string) ?? undefined,
+  notes: (r.notes as string) ?? '',
+  documents,
+  createdAt: r.created_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeHrEmployees(cb: (list: HrEmployee[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'hr_employees', async (cl) => {
+    const { data: rows, error } = await cl.from('hr_employees').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    const ids = (rows ?? []).map((r) => r.id as string);
+    const { data: docs } = ids.length
+      ? await cl.from('hr_documents').select('*').in('employee_id', ids).order('sort_order')
+      : { data: [] as Record<string, unknown>[] };
+    const byEmp = new Map<string, HrDocument[]>();
+    for (const d of docs ?? []) {
+      const arr = byEmp.get(d.employee_id as string) ?? [];
+      arr.push(rowToHrDocument(d));
+      byEmp.set(d.employee_id as string, arr);
+    }
+    return (rows ?? []).map((r) => rowToHrEmployee(r, byEmp.get(r.id as string) ?? []));
+  }, cb);
+}
+
+export async function sbPushHrEmployees(
+  list: HrEmployee[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const emp of list) {
+    const { data: up, error: upErr } = await client.from('hr_employees').upsert({
+      legacy_id: emp.id,
+      employee_code: emp.employeeCode ?? '',
+      full_name: emp.fullName ?? '',
+      email: emp.email ?? '',
+      phone: emp.phone ?? '',
+      dob: emp.dob || null,
+      gender: emp.gender || null,
+      avatar_url: emp.avatarUrl ?? null,
+      department: emp.department ?? '',
+      title: emp.title ?? '',
+      level: emp.level ?? '',
+      manager_legacy_id: emp.managerId || null,
+      status: emp.status ?? 'probation',
+      join_date: emp.joinDate || null,
+      resign_date: emp.resignDate || null,
+      emergency_contact: emp.emergencyContact ?? {},
+      career_path_id: emp.careerPathId ?? null,
+      profile_email: emp.profileEmail ?? null,
+      notes: emp.notes ?? '',
+      created_by_name: emp.createdBy, created_at: emp.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' }).select('id').single();
+    if (upErr) throw new Error('sbPushHrEmployees upsert: ' + upErr.message);
+    await replaceChildren(client, 'hr_documents', 'employee_id', up!.id, (emp.documents ?? []).map((d, i) => ({
+      employee_id: up!.id, legacy_id: d.id, kind: d.kind, name: d.name,
+      file_url: d.fileUrl ?? null, issued_at: d.issuedAt || null, expires_at: d.expiresAt || null,
+      notes: d.notes ?? '', sort_order: i,
+    })));
+  }
+  // Full-overwrite: xoá nhân viên đã bị loại khỏi danh sách (fetch-then-delete an toàn).
+  const keepIds = list.map((e) => e.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('hr_employees').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushHrEmployees fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('hr_employees').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushHrEmployees delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('hr_employees').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushHrEmployees delete all: ' + del.error.message);
+  }
+}

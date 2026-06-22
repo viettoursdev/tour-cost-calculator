@@ -16,3 +16,4 @@ export * from './email';
 export * from './publicQuote';
 export * from './todo';
 export * from './process';
+export * from './hr';

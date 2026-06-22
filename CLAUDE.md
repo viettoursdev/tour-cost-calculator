@@ -131,6 +131,8 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 | `public_quotes` | Báo giá chia sẻ công khai cho khách (token-based, anon-readable) |
 | `app_config` | Application configuration (e.g. CEO bootstrap, feature flags) |
 | `chat_messages` | AI assistant conversation history |
+| `hr_employees` | Hồ sơ nhân sự in-house (master, KHÔNG đồng nhất với `profiles`); `manager_legacy_id` tự tham chiếu → org chart. Tab "👥 Nhân sự" (view `hr`, gate `viewHR`/`manageHR`). |
+| `hr_documents` | Giấy tờ nhân viên (HĐLĐ/bằng cấp/chứng chỉ), `expires_at` để nhắc hết hạn 90/30 ngày; cascade theo `hr_employees`. |
 
 **Per-quote draft fields (no new table).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
 

@@ -47,6 +47,8 @@ export type PermissionKey =
   | 'manageContracts'
   | 'viewContracts'
   | 'manageMenu'
-  | 'manageVisa';
+  | 'manageVisa'
+  | 'viewHR'
+  | 'manageHR';
 
 export type Permissions = Record<PermissionKey, boolean>;
