@@ -35,4 +35,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy cloudflare-worker/viettours-ai-worker.js --name tour-cost-calculator --compatibility-date 2025-06-01
+          # --keep-vars: GIỮ các biến môi trường đặt trên Cloudflare dashboard
+          # (vd SUPABASE_PROJECT_REF, GOOGLE_MAPS_API_KEY). KHÔNG có cờ này thì
+          # `wrangler deploy` trần sẽ XOÁ mọi plaintext var mỗi lần deploy → auth tắt.
+          # (Secret như ANTHROPIC_API_KEY và binding R2 vẫn được giữ kể cả không có cờ.)
+          command: deploy cloudflare-worker/viettours-ai-worker.js --name tour-cost-calculator --compatibility-date 2025-06-01 --keep-vars
