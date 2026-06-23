@@ -32,6 +32,43 @@ import SwapVertOutlinedIcon from '@mui/icons-material/SwapVertOutlined';
 
 type ModalState = { ncc: Ncc | null } | null;
 
+/**
+ * Gộp `source` vào `target`, giữ `target` làm bản chính. Các trường gộp được
+ * (lĩnh vực, tour, liên hệ, ghi chú, đánh giá, file) được hợp nhất; trường vô hướng
+ * (địa chỉ, website, MST, ngân hàng…) chỉ điền khi bản chính còn trống → không
+ * ghi đè dữ liệu sẵn có. Dùng chung cho gộp trùng & gộp khi lưu trùng tên.
+ */
+function mergeNccInto(target: Ncc, source: Ncc): Ncc {
+  const contacts = [...target.contacts];
+  (source.contacts ?? []).forEach((c) => {
+    if (!contacts.some((tc) => tc.name === c.name && tc.phone === c.phone)) contacts.push(c);
+  });
+  const files = [...(target.files ?? [])];
+  (source.files ?? []).forEach((f) => {
+    if (!files.some((tf) => tf.key === f.key)) files.push(f);
+  });
+  return {
+    ...target,
+    sectors: [...new Set([...(target.sectors ?? []), ...(source.sectors ?? [])])],
+    tours: [...new Set([...(target.tours ?? []), ...(source.tours ?? [])])],
+    contacts,
+    files,
+    note: [target.note, source.note].filter((x) => x && x.trim()).join('\n'),
+    ratings: [...(target.ratings ?? []), ...(source.ratings ?? [])],
+    location: target.location || source.location,
+    address: target.address || source.address,
+    website: target.website || source.website,
+    taxCode: target.taxCode || source.taxCode,
+    country: target.country || source.country,
+    continent: target.continent || source.continent,
+    paymentTerms: target.paymentTerms || source.paymentTerms,
+    commission: target.commission || source.commission,
+    creditLimit: target.creditLimit || source.creditLimit,
+    status: target.status || source.status,
+    bank: { ...(source.bank ?? {}), ...(target.bank ?? {}) },
+  };
+}
+
 export function NCCView() {
   const suppliers = useNccStore((s) => s.suppliers);
   const loading = useNccStore((s) => s.loading);
@@ -57,6 +94,8 @@ export function NCCView() {
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
   const [modal, setModal] = useState<ModalState>(null);
+  // Khi lưu mà phát hiện trùng tên: hỏi 3 lựa chọn (gộp / tạo mới / huỷ).
+  const [dupPrompt, setDupPrompt] = useState<{ form: Ncc; dup: Ncc } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const importMany = useNccStore((s) => s.importMany);
   // Chuyển sang Khách hàng: cần quyền quản lý Khách hàng để thêm vào danh sách đích.
@@ -113,9 +152,33 @@ export function NCCView() {
   const handleSave = async (form: Ncc) => {
     const norm = normalizeVN(form.name);
     const dup = suppliers.find((s) => s.id !== form.id && normalizeVN(s.name) === norm);
-    if (dup && !window.confirm(`⚠ Đã có nhà cung cấp trùng tên "${dup.name}". Vẫn lưu?`)) return;
+    // Trùng tên → hỏi: gộp vào bản đã có / vẫn tạo NCC mới / huỷ.
+    if (dup) {
+      setDupPrompt({ form, dup });
+      return;
+    }
     await save(form);
     setModal(null);
+  };
+
+  // Người dùng chọn "Vẫn tạo NCC mới" trong hộp thoại trùng tên.
+  const handleDupCreate = async () => {
+    if (!dupPrompt) return;
+    await save(dupPrompt.form);
+    setDupPrompt(null);
+    setModal(null);
+  };
+
+  // Người dùng chọn "Gộp vào bản đã có": dồn thông tin vừa nhập vào NCC trùng tên.
+  // Nếu đang sửa một bản đã lưu (form.id != dup.id) thì xoá bản đó sau khi gộp.
+  const handleDupMerge = async () => {
+    if (!dupPrompt) return;
+    const { form, dup } = dupPrompt;
+    await save(mergeNccInto(dup, form));
+    if (form.id && form.id !== dup.id) await del(form.id);
+    setDupPrompt(null);
+    setModal(null);
+    toast(`✅ Đã gộp thông tin vào "${dup.name}".`);
   };
 
   const handleDeleteNow = (s: Ncc) => {
@@ -127,22 +190,7 @@ export function NCCView() {
   const handleMerge = async (source: Ncc, targetId: string) => {
     const target = suppliers.find((s) => s.id === targetId);
     if (!target || target.id === source.id) return;
-    const dedupeContacts = [...target.contacts];
-    (source.contacts ?? []).forEach((c) => {
-      if (!dedupeContacts.some((tc) => tc.name === c.name && tc.phone === c.phone)) dedupeContacts.push(c);
-    });
-    const merged: Ncc = {
-      ...target,
-      sectors: [...new Set([...(target.sectors ?? []), ...(source.sectors ?? [])])],
-      tours: [...new Set([...(target.tours ?? []), ...(source.tours ?? [])])],
-      contacts: dedupeContacts,
-      note: [target.note, source.note].filter((x) => x && x.trim()).join('\n'),
-      ratings: [...(target.ratings ?? []), ...(source.ratings ?? [])],
-      location: target.location || source.location,
-      country: target.country || source.country,
-      continent: target.continent || source.continent,
-    };
-    await save(merged);
+    await save(mergeNccInto(target, source));
     await del(source.id);
     setModal(null);
     toast(`✅ Đã gộp "${source.name}" vào "${target.name}".`);
@@ -378,6 +426,32 @@ export function NCCView() {
           note: r.note || '', createdAt: '', createdBy: '',
         })))}
       />
+
+      {/* Trùng tên khi lưu → 3 lựa chọn: gộp / tạo mới / huỷ */}
+      <Dialog open={!!dupPrompt} onClose={() => setDupPrompt(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Nhà cung cấp trùng tên</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            Đã có nhà cung cấp tên <strong>"{dupPrompt?.dup.name}"</strong>. Bạn muốn xử lý thế nào?
+          </Alert>
+          <Typography variant="body2" color="text.secondary">
+            <strong>Gộp vào bản đã có</strong>: dồn thông tin vừa nhập (liên hệ, lĩnh vực, tour,
+            ghi chú, file…) vào NCC sẵn có — các ô đang trống của bản cũ sẽ được điền thêm, không
+            ghi đè dữ liệu cũ.<br />
+            <strong>Vẫn tạo NCC mới</strong>: lưu thành một nhà cung cấp riêng (chấp nhận trùng tên).
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Button onClick={() => setDupPrompt(null)}>Huỷ</Button>
+          <Box sx={{ flex: 1 }} />
+          <Button onClick={() => void handleDupCreate()} startIcon={<PersonAddAlt1Icon />}>
+            Vẫn tạo NCC mới
+          </Button>
+          <Button variant="contained" onClick={() => void handleDupMerge()} startIcon={<MergeTypeIcon />}>
+            Gộp vào bản đã có
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Convert → Customer confirm */}
       <Dialog open={!!convertTarget} onClose={() => setConvertTarget(null)}>
