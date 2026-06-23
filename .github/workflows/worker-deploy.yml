@@ -1,0 +1,38 @@
+name: Deploy Worker
+# Auto-deploys the Cloudflare AI worker when its code (or wrangler config) changes
+# on main. Replaces the manual "Edit code → paste → Deploy" step in
+# cloudflare-worker/README.md. The deploy command matches that README exactly.
+#
+# ANTHROPIC_API_KEY is a Cloudflare-side secret (set once in the dashboard) and
+# persists across deploys — this workflow does NOT manage it.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   — token with "Edit Cloudflare Workers" permission.
+#   CLOUDFLARE_ACCOUNT_ID  — your Cloudflare account id (Workers & Pages → account id).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare-worker/**'
+      - 'wrangler.toml'
+      - '.github/workflows/worker-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy cloudflare-worker/viettours-ai-worker.js --name tour-cost-calculator --compatibility-date 2025-06-01

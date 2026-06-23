@@ -1,0 +1,41 @@
+name: Apply DB Migrations
+# Applies pending Supabase migrations to PRODUCTION via `supabase db push`.
+# Triggers when migration files change on main, but the job is pinned to the
+# `production-db` GitHub Environment — configure that environment with
+# "Required reviewers" so every run PAUSES for a manual approval before it
+# touches the database. (workflow_dispatch lets you also run it by hand.)
+#
+# >>> One-time setup: Settings → Environments → New environment → "production-db"
+#     → enable "Required reviewers" and add yourself. Until you do this, runs are
+#     NOT gated and will apply automatically.
+#
+# Reuses the SUPABASE_DB_URL repo secret already used by backup.yml (the IPv4
+# Session pooler URI — Direct connection is IPv6-only and unreachable here).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production-db
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Push migrations to production
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: supabase db push --db-url "$SUPABASE_DB_URL"

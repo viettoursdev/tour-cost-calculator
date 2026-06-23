@@ -1,0 +1,30 @@
+name: CI
+# Pull-request gate: lint + unit tests + typecheck + build before merge to main.
+# Mirrors the build half of deploy.yml (which only runs on push to main), so
+# problems are caught in the PR instead of after merge. pgTAP DB tests live in
+# supabase-ci.yml (path-filtered to supabase/**); no overlap.
+on:
+  pull_request:
+    branches: [main]
+
+# Same Node 24 pin as deploy.yml (see note there re: the 2026-06-16 cutover).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
