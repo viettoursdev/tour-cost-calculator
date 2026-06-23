@@ -1,0 +1,43 @@
+name: Link Outlook email → email_links
+# Gắn email tìm qua Connector Outlook (Claude) vào bảng email_links — KHÔNG dùng Azure App.
+# Claude tạo payload {target,emails,linkedBy}; workflow này dùng SUPABASE_DB_URL (bypass RLS,
+# secret nằm trong GitHub — không đổ ra máy/chat) để upsert qua psql.
+#
+# Pinned vào Environment 'production-db' (giống migrate.yml) → mỗi lần chạy PAUSE chờ duyệt
+# nếu environment đã bật "Required reviewers".
+on:
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'JSON {"target":{"type","id","name"},"emails":[…],"linkedBy":"…"} từ Claude'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: email-links-write
+  cancel-in-progress: false
+
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    environment: production-db
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dựng mảng EmailLink từ payload
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+        run: |
+          printf '%s' "$PAYLOAD" > payload.json
+          node scripts/link-email.mjs payload.json --emit links.json
+      - name: Upsert vào email_links (psql)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          [ -n "$SUPABASE_DB_URL" ] || { echo "::error::Thiếu secret SUPABASE_DB_URL"; exit 1; }
+          psql "$SUPABASE_DB_URL" -v links="$(cat links.json)" -f scripts/link-email-upsert.sql

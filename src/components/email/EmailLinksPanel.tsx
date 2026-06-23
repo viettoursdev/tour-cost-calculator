@@ -8,8 +8,11 @@ import LinkIcon from '@mui/icons-material/Link';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SearchIcon from '@mui/icons-material/Search';
+import SendIcon from '@mui/icons-material/Send';
+import CallMadeIcon from '@mui/icons-material/CallMade';
 import { useEmailStore } from '@/stores/emailStore';
 import { emailProvider, isMockEmail } from '@/lib/email/provider';
+import { SendEmailDialog, type SendEmailDefaults } from './SendEmailDialog';
 import { LEGACY } from '@/theme';
 import type { EmailLinkTarget, EmailMessage } from '@/types';
 
@@ -39,13 +42,17 @@ export function ConnectOutlookButton() {
 }
 
 /** Khu vực email gắn vào một khách hàng / báo giá. */
-export function EmailLinksPanel({ targetType, targetId, targetName, searchHint }: {
+export function EmailLinksPanel({ targetType, targetId, targetName, searchHint, composeDefaults }: {
   targetType: EmailLinkTarget; targetId: string; targetName?: string; searchHint?: string;
+  /** Có giá trị → hiện nút "Soạn email" gửi thẳng báo giá/hợp đồng (prefill sẵn). */
+  composeDefaults?: SendEmailDefaults;
 }) {
   const connected = useEmailStore((s) => s.connected);
+  const canSend = useEmailStore((s) => s.canSend);
   const links = useEmailStore((s) => s.links);
   const unlink = useEmailStore((s) => s.unlink);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const myLinks = links
     .filter((l) => l.targetType === targetType && l.targetId === targetId)
@@ -58,10 +65,17 @@ export function EmailLinksPanel({ targetType, targetId, targetName, searchHint }
           Email (Outlook){myLinks.length ? ` (${myLinks.length})` : ''}
         </Typography>
         <Box sx={{ flex: 1 }} />
-        {connected
-          ? <Button size="small" variant="contained" startIcon={<LinkIcon />} onClick={() => setSearchOpen(true)}
+        {connected ? (
+          <>
+            {composeDefaults && canSend && (
+              <Button size="small" variant="outlined" startIcon={<SendIcon />} onClick={() => setComposeOpen(true)}>
+                Soạn email
+              </Button>
+            )}
+            <Button size="small" variant="contained" startIcon={<LinkIcon />} onClick={() => setSearchOpen(true)}
               sx={{ background: 'linear-gradient(135deg,#0369a1,#0ea5e9)' }}>Gắn email</Button>
-          : <ConnectOutlookButton />}
+          </>
+        ) : <ConnectOutlookButton />}
       </Stack>
 
       {isMockEmail && (
@@ -74,13 +88,20 @@ export function EmailLinksPanel({ targetType, targetId, targetName, searchHint }
         <Typography variant="caption" color="text.disabled">Chưa gắn email nào cho mục này.</Typography>
       ) : (
         <Stack spacing={0.75}>
-          {myLinks.map((l) => (
-            <Paper key={l.id} variant="outlined" sx={{ p: 1, borderLeft: '4px solid #0ea5e9' }}>
+          {myLinks.map((l) => {
+            const isOut = l.direction === 'out';
+            return (
+            <Paper key={l.id} variant="outlined" sx={{ p: 1, borderLeft: `4px solid ${isOut ? '#16a34a' : '#0ea5e9'}` }}>
               <Stack direction="row" alignItems="flex-start" spacing={1}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography fontSize={13} fontWeight={700} noWrap>{l.subject || '(không tiêu đề)'}</Typography>
+                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                    {isOut && <CallMadeIcon sx={{ fontSize: 14, color: '#16a34a' }} />}
+                    <Typography fontSize={13} fontWeight={700} noWrap>{l.subject || '(không tiêu đề)'}</Typography>
+                  </Stack>
                   <Typography variant="caption" color="text.secondary" noWrap>
-                    {l.fromName} &lt;{l.fromAddress}&gt; · {fmtDate(l.receivedAt)} · gắn bởi {l.linkedBy}
+                    {isOut
+                      ? `Gửi tới ${l.toAddress ?? '—'} · ${fmtDate(l.receivedAt)} · bởi ${l.linkedBy}`
+                      : `${l.fromName} <${l.fromAddress}> · ${fmtDate(l.receivedAt)} · gắn bởi ${l.linkedBy}`}
                   </Typography>
                 </Box>
                 {l.webLink && (
@@ -93,8 +114,17 @@ export function EmailLinksPanel({ targetType, targetId, targetName, searchHint }
                 </Tooltip>
               </Stack>
             </Paper>
-          ))}
+            );
+          })}
         </Stack>
+      )}
+
+      {composeOpen && (
+        <SendEmailDialog
+          target={{ type: targetType, id: targetId, name: targetName }}
+          defaults={composeDefaults}
+          onClose={() => setComposeOpen(false)}
+        />
       )}
 
       {searchOpen && (

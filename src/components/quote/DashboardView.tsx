@@ -3,6 +3,7 @@ import { Box, Divider, Paper, Stack, Typography } from '@mui/material';
 import { catTotal, computeTotals, fmtVND } from './calc';
 import { getCATS } from './constants';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { EmailLinksPanel } from '@/components/email/EmailLinksPanel';
 import type { CategoryId, Template } from '@/types';
 
 type KpiPalette = { from: string; to: string };
@@ -16,6 +17,8 @@ const KPI_GRADIENTS: Record<'cost' | 'sc' | 'vat' | 'sell', KpiPalette> = {
 
 export function DashboardView() {
   const template = useQuoteStore((s) => s.draft.template) as Template;
+  const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
+  const quoteName = useQuoteStore((s) => s.draft.info?.name);
   const items = useQuoteStore((s) => s.draft.items);
   const catEnabled = useQuoteStore((s) => s.draft.catEnabled);
   const pax = useQuoteStore((s) => s.draft.pax);
@@ -210,6 +213,16 @@ export function DashboardView() {
           />
         </Box>
       </Paper>
+
+      {/* E. Email liên quan (hiện khi báo giá đã lưu đám mây) */}
+      {currentQuoteId && (
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, mt: 3 }}>
+          <EmailLinksPanel
+            targetType="quote" targetId={currentQuoteId} targetName={quoteName || undefined}
+            searchHint={quoteName || ''}
+          />
+        </Paper>
+      )}
     </Box>
   );
 }

@@ -11,6 +11,7 @@ import { userLabel } from '@/auth/ROLES';
 import { useTodoStore } from '@/stores/todoStore';
 import { allTags } from '@/lib/todoFilter';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import { EmailLinksPanel } from '@/components/email/EmailLinksPanel';
 import type { CloudQuoteEntry, NotifLink, Todo, TodoChecklistItem, TodoRecurring, TodoStatus, User } from '@/types';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -199,6 +200,16 @@ export function TodoModal({ todo, prefill, onClose }: { todo: Todo | null; prefi
             ))}
             <Button size="small" startIcon={<AddIcon />} onClick={addCheck} sx={{ alignSelf: 'flex-start' }}>Thêm việc con</Button>
           </Stack>
+
+          {todo && (
+            <>
+              <Divider>Email liên quan</Divider>
+              <EmailLinksPanel
+                targetType="todo" targetId={todo.id} targetName={todo.title}
+                searchHint={todo.title}
+              />
+            </>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

@@ -165,6 +165,11 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
         <EmailLinksPanel
           targetType="customer" targetId={customer.id} targetName={customer.name}
           searchHint={contact?.email || customer.name}
+          composeDefaults={contact?.email ? {
+            to: [contact.email],
+            subject: `Viettours · ${customer.name}`,
+            bodyHtml: `Kính gửi Anh/Chị,\n\nViettours xin gửi tới Anh/Chị thông tin theo trao đổi.\n\nTrân trọng,\nViettours`,
+          } : undefined}
         />
 
         {canDocs && (
