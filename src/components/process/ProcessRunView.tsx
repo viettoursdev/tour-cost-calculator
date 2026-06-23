@@ -5,6 +5,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
+import ViewTimelineIcon from '@mui/icons-material/ViewTimeline';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,13 +16,14 @@ import {
 } from '@/components/quote/workflowConstants';
 import { WorkflowChecklist } from '@/components/quote/WorkflowChecklist';
 import { WorkflowKanban } from '@/components/quote/WorkflowKanban';
+import { WorkflowGantt } from '@/components/quote/WorkflowGantt';
 import { WorkflowStepDialog } from '@/components/quote/WorkflowStepDialog';
 import { DEPT_COLOR, DEPT_ICON } from './processSeed';
 import { isRunComplete } from './processRun';
 import { DEPARTMENTS } from '@/auth/departments';
 import type { ProcessRun, WorkflowStatus, WorkflowStep } from '@/types';
 
-type Mode = 'checklist' | 'kanban';
+type Mode = 'checklist' | 'kanban' | 'gantt';
 const REF_ICON = { quote: '📄', customer: '🧑', visa: '🛂' } as const;
 
 /** Trang theo dõi 1 phiên chạy quy trình — tick subtask, đổi trạng thái, đóng phiên. */
@@ -104,12 +106,13 @@ export function ProcessRunView({ run, onBack }: { run: ProcessRun; onBack: () =>
         <ToggleButtonGroup size="small" exclusive value={mode} onChange={(_, v: Mode | null) => v && setMode(v)}>
           <ToggleButton value="checklist"><ChecklistIcon fontSize="small" sx={{ mr: 0.5 }} />Checklist</ToggleButton>
           <ToggleButton value="kanban"><ViewKanbanIcon fontSize="small" sx={{ mr: 0.5 }} />Kanban</ToggleButton>
+          <ToggleButton value="gantt"><ViewTimelineIcon fontSize="small" sx={{ mr: 0.5 }} />Timeline</ToggleButton>
         </ToggleButtonGroup>
       </Stack>
 
-      {mode === 'checklist'
-        ? <WorkflowChecklist steps={steps} users={users} onSetStatus={setStatus} />
-        : <WorkflowKanban steps={steps} users={users} onMove={setStatus} onOpen={setEditing} />}
+      {mode === 'checklist' && <WorkflowChecklist steps={steps} users={users} onSetStatus={setStatus} />}
+      {mode === 'kanban' && <WorkflowKanban steps={steps} users={users} onMove={setStatus} onOpen={setEditing} />}
+      {mode === 'gantt' && <WorkflowGantt steps={steps} onOpen={setEditing} />}
 
       {editing && (
         <WorkflowStepDialog step={editing} users={users} onClose={() => setEditing(null)}

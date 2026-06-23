@@ -21,6 +21,7 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useTodoStore } from '@/stores/todoStore';
+import { useProcessStore } from '@/stores/processStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { daysUntil } from '@/lib/dateUtils';
@@ -163,6 +164,45 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
     try { localStorage.setItem(WF_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkWorkflowDeadlines failed:', (e as Error).message);
+  }
+}
+
+const PROC_DDL_KEY = 'vte_process_deadline_notified';
+
+/**
+ * Nhắc các bước CỦA PHIÊN CHẠY QUY TRÌNH (process_runs) sắp/đã đến hạn trong 7
+ * ngày tới — gửi cho người phụ trách bước (hoặc người phụ trách phiên). Mỗi
+ * (phiên, bước, hạn) chỉ nhắc 1 lần (dedup qua localStorage). Mirror checkWorkflowDeadlines.
+ */
+export async function checkProcessDeadlines(user: User): Promise<void> {
+  try {
+    const runs = useProcessStore.getState().runs;
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(PROC_DDL_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+    for (const r of runs) {
+      if (r.status !== 'active') continue;
+      for (const s of r.steps) {
+        if (!s.dueDate || s.status === 'done' || s.status === 'skipped') continue;
+        const target = s.assignee || r.assignee || r.createdByUsername;
+        if (target !== user.u) continue;
+        const d = daysUntil(s.dueDate);
+        if (d == null || d > 7) continue; // gồm cả quá hạn (d < 0)
+        const key = `${r.id}:${s.id}:${s.dueDate}`;
+        if (set.has(key)) continue;
+        set.add(key);
+        const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
+        await sbSendNotification(user.u, {
+          type: 'task',
+          title: d < 0 ? '🔴 Bước quy trình quá hạn' : '⏰ Bước quy trình sắp đến hạn',
+          message: `Quy trình "${r.title}" — ${s.label}: ${when} (${new Date(s.dueDate).toLocaleDateString('vi-VN')})`,
+          createdBy: 'Hệ thống',
+        });
+      }
+    }
+    try { localStorage.setItem(PROC_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkProcessDeadlines failed:', (e as Error).message);
   }
 }
 

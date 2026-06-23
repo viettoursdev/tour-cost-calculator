@@ -6,10 +6,12 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { SortableList } from '@/components/itinerary/SortableList';
 import { useAuthStore } from '@/stores/authStore';
 import { useProcessStore, newProcessId } from '@/stores/processStore';
 import { toast } from '@/stores/toastStore';
+import { suggestProcessSteps } from '@/lib/processStepSuggest';
 import { DEPARTMENTS } from '@/auth/departments';
 import { DEPT_COLOR, DEPT_ICON } from './processSeed';
 import type { Department, ProcessTemplate, WorkflowStep } from '@/types';
@@ -40,6 +42,27 @@ export function ProcessTemplateEditor({ initial, department, onClose }: Props) {
   const [icon, setIcon] = useState(initial?.icon ?? DEPT_ICON[initial?.department ?? department]);
   const [color, setColor] = useState(initial?.color ?? DEPT_COLOR[initial?.department ?? department]);
   const [steps, setSteps] = useState<WorkflowStep[]>(initial ? initial.steps.map((s) => ({ ...s })) : [blankStep()]);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const aiSuggest = async () => {
+    if (!name.trim()) { toast('Nhập tên quy trình trước để AI gợi ý bước', 'warning'); return; }
+    setAiLoading(true);
+    try {
+      const suggested = await suggestProcessSteps(name, dept);
+      if (!suggested.length) { toast('AI chưa gợi ý được bước nào, thử lại nhé', 'info'); return; }
+      const newSteps: WorkflowStep[] = suggested.map((s) => ({
+        id: newProcessId('ps'), label: s.label, status: 'todo',
+        ownerDept: dept, output: s.output, risk: s.risk, dueRule: s.dueRule,
+      }));
+      // Giữ các bước đã nhập (có tên), thêm gợi ý vào sau; bỏ ô trống placeholder.
+      setSteps((prev) => [...prev.filter((s) => s.label.trim()), ...newSteps]);
+      toast(`AI đã gợi ý ${newSteps.length} bước`, 'success');
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const patchStep = (id: string, patch: Partial<WorkflowStep>) =>
     setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -112,6 +135,9 @@ export function ProcessTemplateEditor({ initial, department, onClose }: Props) {
           <Box>
             <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}>
               <Typography fontWeight={800} fontSize={14} sx={{ flex: 1 }}>Các bước ({cleanSteps.length})</Typography>
+              <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={() => void aiSuggest()} disabled={aiLoading}>
+                {aiLoading ? 'Đang gợi ý…' : 'AI gợi ý bước'}
+              </Button>
               <Button size="small" startIcon={<AddIcon />} onClick={addStep}>Thêm bước</Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
