@@ -102,11 +102,18 @@ in-app + OS notification nếu app đang mở).
 
 1. **Cron Trigger:** Worker → **Settings → Triggers → Cron Triggers → Add** →
    `0 1 * * *` (01:00 UTC = **08:00 giờ Việt Nam**).
-2. **2 Secret mới** (Settings → Variables and Secrets → Add, Type **Secret**):
-   - `SUPABASE_URL` = `https://zkzrvctqwnhzklvsoahk.supabase.co`
-   - `SUPABASE_SERVICE_ROLE_KEY` = service-role key (Supabase → Project Settings → API
-     → `service_role`). **Bí mật tuyệt đối** — bypass RLS để đọc quotes/profiles và ghi
-     notification cho người khác. Thiếu 1 trong 2 biến → handler **no-op** (log cảnh báo).
+2. **2 biến môi trường mới** (Worker → **Settings → Variables and Secrets → Add**):
+   - `SUPABASE_URL` = `https://zkzrvctqwnhzklvsoahk.supabase.co` (Type **Text** cũng được).
+   - `SUPABASE_SERVICE_ROLE_KEY` = service-role key (Type **Secret**). **Bí mật tuyệt đối** —
+     bypass toàn bộ RLS để đọc quotes/profiles và ghi notification cho người khác. KHÔNG dán
+     vào frontend, KHÔNG commit vào git.
+   - Thiếu 1 trong 2 biến → handler **no-op** (log cảnh báo), không gãy các endpoint khác.
+   - Sau khi thêm xong bấm **Deploy** để worker nạp lại.
+
+   **Lấy `service_role` key:** https://supabase.com/dashboard → project `zkzrvctqwnhzklvsoahk`
+   → **Project Settings** (bánh răng) → **API** → mục **Project API keys** → dòng
+   **`service_role`** → **Reveal** → **Copy**. (UI mới có thể nằm ở **Settings → API Keys**
+   → tab *Legacy / Secret keys* → `service_role`.)
 
 **Test thủ công:**
 - Cục bộ: `npx wrangler dev --test-scheduled` rồi `curl "http://localhost:8787/__scheduled"`.
