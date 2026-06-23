@@ -380,6 +380,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           ...(canNcc ? [item('ncc', 'Nhà Cung Cấp')] : []),
           ...(canNcc ? [item('nccProducts', 'Sản phẩm NCC')] : []),
           ...(canHR ? [item('hr', 'Nhân sự')] : []),
+          ...(canHR ? [item('recruit', 'Tuyển dụng')] : []),
         ] },
       ]
         .map((n) => (hidePrice && 'group' in n

@@ -26,8 +26,10 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useProcessStore } from '@/stores/processStore';
 import { useHrStore } from '@/stores/hrStore';
 import { useHrGuideStore } from '@/stores/hrGuideStore';
+import { useHrEvalStore } from '@/stores/hrEvalStore';
+import { useHrRecruitStore } from '@/stores/hrRecruitStore';
 import { usePoiStore } from '@/stores/poiStore';
-import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders } from '@/lib/notifications';
+import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders } from '@/lib/notifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
 import { AppShell } from './AppShell';
 import { ToastHost } from '@/components/common/ToastHost';
@@ -91,6 +93,8 @@ export function MainApp() {
     const processUnsub = useProcessStore.getState().init();
     const hrUnsub = useHrStore.getState().init();
     const hrGuideUnsub = useHrGuideStore.getState().init();
+    const hrEvalUnsub = useHrEvalStore.getState().init();
+    const hrRecruitUnsub = useHrRecruitStore.getState().init();
 
     const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
     const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
@@ -106,6 +110,7 @@ export function MainApp() {
     setTimeout(() => { void checkContractDeadlines(currentUser); }, 3000);
     setTimeout(() => { void checkVisaDeadlines(currentUser); }, 4000);
     setTimeout(() => { void checkWorkflowDeadlines(currentUser); }, 5000);
+    setTimeout(() => { void checkProcessDeadlines(currentUser); }, 5200);
     setTimeout(() => { void checkQuoteDeadlines(currentUser); }, 5500);
     setTimeout(() => { void checkNccPayments(currentUser); }, 5800);
     setTimeout(() => { void checkQuoteAcceptances(currentUser); }, 6200);
@@ -146,6 +151,8 @@ export function MainApp() {
       processUnsub?.();
       hrUnsub?.();
       hrGuideUnsub?.();
+      hrEvalUnsub?.();
+      hrRecruitUnsub?.();
     };
   }, [currentUser]);
 

@@ -16,6 +16,7 @@ import { normalizeVN } from '@/lib/search';
 import { EMPLOYMENT_STATUS_LABEL, type EmploymentStatus, type HrEmployee } from '@/types';
 import { EmployeeModal } from './EmployeeModal';
 import { OrgChart } from './OrgChart';
+import { EvaluationsPanel } from './EvaluationsPanel';
 
 const STATUS_COLOR: Record<EmploymentStatus, 'default' | 'success' | 'warning'> = {
   probation: 'warning', official: 'success', resigned: 'default',
@@ -38,7 +39,7 @@ export function HRView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = hasPerm(currentUser, 'manageHR');
 
-  const [tab, setTab] = useState<'list' | 'org'>('list');
+  const [tab, setTab] = useState<'list' | 'org' | 'eval'>('list');
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
   const [status, setStatus] = useState<'' | EmploymentStatus>('');
@@ -79,6 +80,7 @@ export function HRView() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1.5 }}>
         <Tab value="list" label="Danh sách" />
         <Tab value="org" label="Sơ đồ tổ chức" />
+        <Tab value="eval" label="Đánh giá" />
       </Tabs>
 
       {tab === 'list' && (
@@ -131,6 +133,7 @@ export function HRView() {
       )}
 
       {tab === 'org' && <OrgChart employees={employees} onPick={(e) => setModal({ employee: e })} />}
+      {tab === 'eval' && <EvaluationsPanel employees={employees} />}
 
       {modal && (
         <EmployeeModal

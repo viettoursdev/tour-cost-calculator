@@ -136,6 +136,8 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 | `hr_employees` | Hồ sơ nhân sự in-house (master, KHÔNG đồng nhất với `profiles`); `manager_legacy_id` tự tham chiếu → org chart. Tab "👥 Nhân sự" (view `hr`, gate `viewHR`/`manageHR`). |
 | `hr_documents` | Giấy tờ nhân viên (HĐLĐ/bằng cấp/chứng chỉ), `expires_at` để nhắc hết hạn 90/30 ngày; cascade theo `hr_employees`. |
 | `hr_guides` | Pool HDV cộng tác viên (freelance, không đăng nhập); thẻ HDV `guide_card_expires` nhắc hạn, `languages`/`regions` để lọc xếp tour, `rating` + `status` (active/paused/blacklist). View `hrguides` ("HDV cộng tác viên", gate `manageNCC`, nhóm Vận hành). |
+| `hr_evaluations` | Đánh giá/KPI/lộ trình theo kỳ (`period`) cho 1 nhân viên; `competencies`/`kpis` jsonb, `overall_score`, `promotion`. Tab "Đánh giá" trong HRView (gate `viewHR`/`manageHR`). |
+| `hr_job_postings` / `hr_candidates` | ATS tuyển dụng: tin tuyển dụng + ứng viên (Kanban `stage`, `interview_notes` jsonb). "Nhận việc" tạo `hr_employees` + ghi `converted_employee_id`. View `recruit` ("Tuyển dụng", gate `viewHR`/`manageHR`). |
 
 **Per-quote draft fields (no new table).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
 

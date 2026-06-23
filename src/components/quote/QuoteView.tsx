@@ -39,6 +39,7 @@ const NCCView = lazy(() => import('@/components/ncc/NCCView').then((m) => ({ def
 const NccProductView = lazy(() => import('@/components/ncc/NccProductView').then((m) => ({ default: m.NccProductView })));
 const HRView = lazy(() => import('@/components/hr/HRView').then((m) => ({ default: m.HRView })));
 const GuidePoolView = lazy(() => import('@/components/hr/GuidePoolView').then((m) => ({ default: m.GuidePoolView })));
+const RecruitView = lazy(() => import('@/components/hr/RecruitView').then((m) => ({ default: m.RecruitView })));
 const TodoView = lazy(() => import('@/components/todo/TodoView').then((m) => ({ default: m.TodoView })));
 const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').then((m) => ({ default: m.ItineraryApp })));
 const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
@@ -138,6 +139,7 @@ export function QuoteView() {
             {view === 'nccProducts' && <NccProductView />}
             {view === 'hr' && <HRView />}
             {view === 'hrguides' && <GuidePoolView />}
+            {view === 'recruit' && <RecruitView />}
             {view === 'todo' && <TodoView />}
            </Suspense>
           </Box>

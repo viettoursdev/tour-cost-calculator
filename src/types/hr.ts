@@ -26,6 +26,128 @@ export type EmergencyContact = {
   relation?: string;     // quan hệ (vợ/chồng/bố/mẹ…)
 };
 
+// ── Đợt 3: Đánh giá / KPI / Lộ trình ──────────────────────────────────────────
+
+/** Một tiêu chí năng lực được chấm điểm trong kỳ đánh giá. */
+export type EvalCompetency = {
+  id: string;
+  name: string;       // tên năng lực (vd "Kỹ năng điều hành tour")
+  score: number;      // 0–5
+  weight?: number;    // trọng số (%) — tùy chọn
+  comment?: string;
+};
+
+/** Một chỉ tiêu KPI: mục tiêu vs thực đạt. */
+export type EvalKpi = {
+  id: string;
+  name: string;
+  target: string;     // mục tiêu (số/chuỗi)
+  actual: string;     // thực đạt
+  score?: number;     // 0–5 quy đổi
+  comment?: string;
+};
+
+export type EvalStatus = 'draft' | 'finalized';
+
+export const EVAL_STATUS_LABEL: Record<EvalStatus, string> = {
+  draft: 'Nháp',
+  finalized: 'Đã chốt',
+};
+
+/** Một kỳ đánh giá nhân sự (quý/năm). Gắn vào một `HrEmployee` qua employeeId. */
+export type HrEvaluation = {
+  id: string;            // legacy_id
+  employeeId: string;    // HrEmployee.id (legacy_id)
+  period: string;        // vd "2026-Q2" hoặc "2026"
+  reviewDate?: string;   // ISO
+  reviewerName: string;  // người đánh giá
+  competencies: EvalCompetency[];
+  kpis: EvalKpi[];
+  overallScore?: number; // 0–5 tổng hợp
+  strengths: string;     // điểm mạnh
+  improvements: string;  // cần cải thiện
+  nextGoals: string;     // mục tiêu kỳ tới
+  promotion: string;     // đề xuất thăng tiến / lộ trình
+  status: EvalStatus;
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
+// ── Đợt 4: Tuyển dụng (ATS) ───────────────────────────────────────────────────
+
+export type JobStatus = 'open' | 'onhold' | 'closed';
+
+export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
+  open: 'Đang tuyển',
+  onhold: 'Tạm dừng',
+  closed: 'Đã đóng',
+};
+
+/** Tin tuyển dụng (job requisition). */
+export type HrJobPosting = {
+  id: string;            // legacy_id
+  title: string;
+  department: Department | '';
+  level: string;
+  headcount: number;     // số lượng cần tuyển
+  salaryRange: string;   // mức lương dự kiến (chuỗi tự do)
+  status: JobStatus;
+  description: string;   // JD / mô tả
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
+/** Giai đoạn của ứng viên trong pipeline (Kanban). */
+export type CandidateStage = 'new' | 'screening' | 'interview1' | 'interview2' | 'offer' | 'hired' | 'rejected';
+
+export const CANDIDATE_STAGE_ORDER: CandidateStage[] = ['new', 'screening', 'interview1', 'interview2', 'offer', 'hired', 'rejected'];
+
+export const CANDIDATE_STAGE_LABEL: Record<CandidateStage, string> = {
+  new: 'Mới',
+  screening: 'Sàng lọc CV',
+  interview1: 'Phỏng vấn 1',
+  interview2: 'Phỏng vấn 2',
+  offer: 'Offer',
+  hired: 'Nhận việc',
+  rejected: 'Loại',
+};
+
+/** Một ghi chú đánh giá theo vòng phỏng vấn. */
+export type CandidateNote = {
+  id: string;
+  at: string;        // ISO
+  byName: string;
+  stage: CandidateStage;
+  text: string;
+};
+
+/** Hồ sơ ứng viên trong ATS. */
+export type HrCandidate = {
+  id: string;            // legacy_id
+  postingId?: string;    // HrJobPosting.id (legacy_id) — tùy chọn
+  fullName: string;
+  phone: string;
+  email: string;
+  source: string;        // nguồn ứng tuyển
+  position: string;      // vị trí ứng tuyển (free text nếu không gắn posting)
+  department: Department | '';
+  cvUrl?: string;        // link CV (R2/ngoài)
+  stage: CandidateStage;
+  rating?: number;       // 0–5
+  appliedDate?: string;  // ISO
+  notes: string;
+  interviewNotes: CandidateNote[];
+  convertedEmployeeId?: string; // HrEmployee.id sau khi "Nhận việc"
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 /** Trạng thái HDV cộng tác viên trong pool. */
 export type GuideStatus = 'active' | 'paused' | 'blacklist';
 

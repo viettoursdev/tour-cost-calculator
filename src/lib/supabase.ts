@@ -4341,3 +4341,180 @@ export async function sbPushHrGuides(
     if (del.error) throw new Error('sbPushHrGuides delete all: ' + del.error.message);
   }
 }
+
+// ── HR Evaluations (Đánh giá / KPI) ───────────────────────────────────────────
+
+import type { HrEvaluation, EvalStatus, EvalCompetency, EvalKpi } from '@/types/hr';
+
+const rowToHrEvaluation = (r: Record<string, unknown>): HrEvaluation => ({
+  id: r.legacy_id as string,
+  employeeId: (r.employee_legacy_id as string) ?? '',
+  period: (r.period as string) ?? '',
+  reviewDate: (r.review_date as string) ?? undefined,
+  reviewerName: (r.reviewer_name as string) ?? '',
+  competencies: (r.competencies as EvalCompetency[]) ?? [],
+  kpis: (r.kpis as EvalKpi[]) ?? [],
+  overallScore: (r.overall_score as number) ?? undefined,
+  strengths: (r.strengths as string) ?? '',
+  improvements: (r.improvements as string) ?? '',
+  nextGoals: (r.next_goals as string) ?? '',
+  promotion: (r.promotion as string) ?? '',
+  status: (r.status as EvalStatus) ?? 'draft',
+  createdAt: r.created_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeHrEvaluations(cb: (list: HrEvaluation[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'hr_evaluations', async (cl) => {
+    const { data, error } = await cl.from('hr_evaluations').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(rowToHrEvaluation);
+  }, cb);
+}
+
+export async function sbPushHrEvaluations(
+  list: HrEvaluation[], pushedBy: { name: string; role: string }, client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const e of list) {
+    const { error } = await client.from('hr_evaluations').upsert({
+      legacy_id: e.id, employee_legacy_id: e.employeeId, period: e.period,
+      review_date: e.reviewDate || null, reviewer_name: e.reviewerName,
+      competencies: e.competencies ?? [], kpis: e.kpis ?? [],
+      overall_score: e.overallScore ?? null, strengths: e.strengths ?? '',
+      improvements: e.improvements ?? '', next_goals: e.nextGoals ?? '',
+      promotion: e.promotion ?? '', status: e.status ?? 'draft',
+      created_by_name: e.createdBy, created_at: e.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' });
+    if (error) throw new Error('sbPushHrEvaluations upsert: ' + error.message);
+  }
+  const keepIds = list.map((e) => e.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('hr_evaluations').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushHrEvaluations fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? []).map((r) => r.legacy_id as string).filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('hr_evaluations').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushHrEvaluations delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('hr_evaluations').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushHrEvaluations delete all: ' + del.error.message);
+  }
+}
+
+// ── HR Recruitment (ATS: tin tuyển dụng + ứng viên) ───────────────────────────
+
+import type { HrJobPosting, JobStatus, HrCandidate, CandidateStage, CandidateNote } from '@/types/hr';
+
+const rowToHrJobPosting = (r: Record<string, unknown>): HrJobPosting => ({
+  id: r.legacy_id as string,
+  title: (r.title as string) ?? '',
+  department: (r.department as HrJobPosting['department']) ?? '',
+  level: (r.level as string) ?? '',
+  headcount: (r.headcount as number) ?? 1,
+  salaryRange: (r.salary_range as string) ?? '',
+  status: (r.status as JobStatus) ?? 'open',
+  description: (r.description as string) ?? '',
+  createdAt: r.created_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeHrJobPostings(cb: (list: HrJobPosting[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'hr_job_postings', async (cl) => {
+    const { data, error } = await cl.from('hr_job_postings').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(rowToHrJobPosting);
+  }, cb);
+}
+
+export async function sbPushHrJobPostings(
+  list: HrJobPosting[], pushedBy: { name: string; role: string }, client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const p of list) {
+    const { error } = await client.from('hr_job_postings').upsert({
+      legacy_id: p.id, title: p.title, department: p.department ?? '', level: p.level ?? '',
+      headcount: p.headcount ?? 1, salary_range: p.salaryRange ?? '', status: p.status ?? 'open',
+      description: p.description ?? '', created_by_name: p.createdBy, created_at: p.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' });
+    if (error) throw new Error('sbPushHrJobPostings upsert: ' + error.message);
+  }
+  const keepIds = list.map((p) => p.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('hr_job_postings').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushHrJobPostings fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? []).map((r) => r.legacy_id as string).filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('hr_job_postings').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushHrJobPostings delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('hr_job_postings').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushHrJobPostings delete all: ' + del.error.message);
+  }
+}
+
+const rowToHrCandidate = (r: Record<string, unknown>): HrCandidate => ({
+  id: r.legacy_id as string,
+  postingId: (r.posting_legacy_id as string) ?? undefined,
+  fullName: (r.full_name as string) ?? '',
+  phone: (r.phone as string) ?? '',
+  email: (r.email as string) ?? '',
+  source: (r.source as string) ?? '',
+  position: (r.position as string) ?? '',
+  department: (r.department as HrCandidate['department']) ?? '',
+  cvUrl: (r.cv_url as string) ?? undefined,
+  stage: (r.stage as CandidateStage) ?? 'new',
+  rating: (r.rating as number) ?? undefined,
+  appliedDate: (r.applied_date as string) ?? undefined,
+  notes: (r.notes as string) ?? '',
+  interviewNotes: (r.interview_notes as CandidateNote[]) ?? [],
+  convertedEmployeeId: (r.converted_employee_id as string) ?? undefined,
+  createdAt: r.created_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeHrCandidates(cb: (list: HrCandidate[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'hr_candidates', async (cl) => {
+    const { data, error } = await cl.from('hr_candidates').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(rowToHrCandidate);
+  }, cb);
+}
+
+export async function sbPushHrCandidates(
+  list: HrCandidate[], pushedBy: { name: string; role: string }, client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const c of list) {
+    const { error } = await client.from('hr_candidates').upsert({
+      legacy_id: c.id, posting_legacy_id: c.postingId || null, full_name: c.fullName,
+      phone: c.phone ?? '', email: c.email ?? '', source: c.source ?? '', position: c.position ?? '',
+      department: c.department ?? '', cv_url: c.cvUrl ?? null, stage: c.stage ?? 'new',
+      rating: c.rating ?? null, applied_date: c.appliedDate || null, notes: c.notes ?? '',
+      interview_notes: c.interviewNotes ?? [], converted_employee_id: c.convertedEmployeeId || null,
+      created_by_name: c.createdBy, created_at: c.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' });
+    if (error) throw new Error('sbPushHrCandidates upsert: ' + error.message);
+  }
+  const keepIds = list.map((c) => c.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('hr_candidates').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushHrCandidates fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? []).map((r) => r.legacy_id as string).filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('hr_candidates').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushHrCandidates delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('hr_candidates').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushHrCandidates delete all: ' + del.error.message);
+  }
+}
