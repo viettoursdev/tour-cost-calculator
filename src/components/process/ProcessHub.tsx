@@ -8,12 +8,15 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { useProcessStore, newProcessId } from '@/stores/processStore';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from '@/stores/toastStore';
 import { DEPARTMENTS } from '@/auth/departments';
 import { PROCESS_SEED, DEPT_COLOR, DEPT_ICON } from './processSeed';
 import { RunCreateDialog } from './RunCreateDialog';
+import { ProcessTemplateEditor } from './ProcessTemplateEditor';
 import { ProcessRunView } from './ProcessRunView';
 import { runProgress, currentStep } from './processRun';
 import type { Department, ProcessTemplate } from '@/types';
@@ -33,6 +36,8 @@ export function ProcessHub() {
   const [dept, setDept] = useState<Department>('dh_noidia');
   const [open, setOpen] = useState<ProcessTemplate | null>(null);
   const [starting, setStarting] = useState<ProcessTemplate | null>(null);
+  // null = đóng; { tpl: undefined } = tạo mới; { tpl } = sửa.
+  const [editor, setEditor] = useState<{ tpl?: ProcessTemplate } | null>(null);
 
   const openRun = runs.find((r) => r.id === openRunId);
   if (openRun) return <ProcessRunView run={openRun} onBack={() => setOpenRun(null)} />;
@@ -137,7 +142,10 @@ export function ProcessHub() {
       )}
 
       {/* Danh sách quy trình của phòng đang chọn */}
-      <Typography fontWeight={800} fontSize={13.5} sx={{ mb: 0.75 }}>📚 Thư viện quy trình</Typography>
+      <Stack direction="row" alignItems="center" sx={{ mb: 0.75 }}>
+        <Typography fontWeight={800} fontSize={13.5} sx={{ flex: 1 }}>📚 Thư viện quy trình</Typography>
+        <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={() => setEditor({})}>Tạo quy trình mới</Button>
+      </Stack>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
         {list.map((t) => (
           <Paper key={t.id} variant="outlined" onClick={() => setOpen(t)}
@@ -214,16 +222,25 @@ export function ProcessHub() {
                       <Button variant="outlined" startIcon={<LibraryAddCheckIcon />} onClick={() => void cloneSeed(open)}>
                         Nhân bản
                       </Button>
+                      <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => { setEditor({ tpl: open }); setOpen(null); }}>
+                        Sửa
+                      </Button>
                     </>
                   )}
                 </Stack>
               </Stack>
+              <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 1.5 }}>
+                {open.isSeed
+                  ? 'Mẫu dựng sẵn (chỉ đọc). Bấm "Dùng mẫu" để có bản chỉnh được.'
+                  : `Phiên bản v${open.version}${open.updatedBy ? ` · cập nhật bởi ${open.updatedBy}` : ''}`}
+              </Typography>
             </DialogContent>
           </>
         )}
       </Dialog>
 
       {starting && <RunCreateDialog template={starting} onClose={() => setStarting(null)} />}
+      {editor && <ProcessTemplateEditor initial={editor.tpl} department={dept} onClose={() => setEditor(null)} />}
     </Box>
   );
 }
