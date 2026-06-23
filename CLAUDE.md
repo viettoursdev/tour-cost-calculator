@@ -88,7 +88,7 @@ Defined in `src/components/quote/constants.ts:TEMPLATES`.
 
 **Dual quote history:** local `HistPanel` (fast, per-user localStorage) + cloud history (versioned, cross-device, collaborative). DMC quotes share the unified `quotes` / `quote_versions` tables, distinguished by `template = 'dmc'`.
 
-**AI features via Cloudflare Worker.** `src/lib/aiWorker.ts:callAIWorker(path, body)` proxies to `cloudflare-worker/viettours-ai-worker.js` (holds `ANTHROPIC_API_KEY` + R2). Endpoints: `/ai` (tour program, Haiku), `/ocr` (structure-preserving Markdown, Sonnet), `/translate` (visa-grade VI→EN, Sonnet), `/chat` (assistant tool-use, Sonnet, optional `web_search`). **The worker is NOT auto-deployed by CI — redeploy manually** after editing it.
+**AI features via Cloudflare Worker.** `src/lib/aiWorker.ts:callAIWorker(path, body)` proxies to `cloudflare-worker/viettours-ai-worker.js` (holds `ANTHROPIC_API_KEY` + R2). Endpoints: `/ai` (tour program, Haiku), `/ocr` (structure-preserving Markdown, Sonnet), `/translate` (visa-grade VI→EN, Sonnet), `/chat` (assistant tool-use, Sonnet, optional `web_search`). The worker auto-deploys via `worker-deploy.yml` when `cloudflare-worker/**` or `wrangler.toml` changes on `main`.
 
 **Trợ lý ảo (AI assistant).** `src/components/assistant/AssistantPanel.tsx` (header "🤖 Trợ lý") runs a client-side tool-use loop (`src/lib/assistant/agent.ts`) against permission-filtered data (`assistant/data.ts` → reuses `visibleQuotes`/`canViewAll`/`visibleVisaProjects`). Tools (`assistant/tools.ts`) only READ; `propose_itinerary`/`propose_quote` stage a draft the user opens 1-click (`assistant/draftBuilders.ts`). Unified search index extracted to `src/lib/searchIndex.ts` (shared with `GlobalSearch`).
 
@@ -186,16 +186,17 @@ rateCard, ncc, customers. `ROLE_RANK` gives seniority (CEO 8 … Standard 0).
   `createdBy` matches their own name. Applied in NCCView, CustomerView,
   ContractView, MenuHome, ItineraryHome.
 
-## Deploy
+## CI/CD
 
-GitHub Pages via `.github/workflows/deploy.yml` on push to `main`:
+Five GitHub Actions workflows. Node 24 pinned across all via `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
 
-1. `npm ci`
-2. `npm run lint` (zero-warnings)
-3. `npm run typecheck`
-4. `npm run build` (Vite → `dist/`)
-5. `cp public/legacy.html dist/legacy.html` (preserves `/legacy.html` URL)
-6. `actions/upload-pages-artifact` + `actions/deploy-pages`
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `ci.yml` | PR → `main` | lint + unit tests + typecheck + build (PR gate — same checks as deploy, catches errors before merge) |
+| `deploy.yml` | push `main` | lint → test → typecheck → build → GitHub Pages. `cp public/legacy.html dist/legacy.html` preserves `/legacy.html`. |
+| `migrate.yml` | push `main` (paths: `supabase/migrations/**`) | `supabase db push` to production. Gated by `production-db` GitHub Environment — configure "Required reviewers" or migrations apply automatically without approval. |
+| `worker-deploy.yml` | push `main` (paths: `cloudflare-worker/**`, `wrangler.toml`) | Deploys Cloudflare AI worker via Wrangler. Passes `--keep-vars` to preserve dashboard-set vars and `--var SUPABASE_PROJECT_REF:...` to set auth config. Requires `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` repo secrets. `ANTHROPIC_API_KEY` is a Cloudflare-side secret — not managed here. |
+| `supabase-ci.yml` | push/PR touching `supabase/**` | `supabase start` + `supabase test db` (pgTAP). Separate from unit tests (`npm test`). |
 
 Vite `base: '/tour-cost-calculator/'` — any absolute URL/asset construction must respect this. MUI is split into its own vendor chunk; export libs (jspdf/docx/xlsx/etc.) use dynamic imports and are loaded on demand (see `vite.config.ts:manualChunks`).
 
