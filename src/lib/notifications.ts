@@ -6,14 +6,31 @@ export async function requestBrowserNotifPermission(): Promise<boolean> {
   return result === 'granted';
 }
 
-export function showBrowserNotif(title: string, body: string): void {
+/**
+ * Hiện OS notification (kể cả khi tab chạy nền). Ưu tiên service worker
+ * `registration.showNotification` (bắt buộc trên Chrome Android), fallback
+ * `new Notification` cho desktop. No-op nếu chưa được cấp quyền.
+ */
+export function showPushNotif(title: string, body: string, tag?: string): void {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opts = { body, tag, icon: `${import.meta.env.BASE_URL}favicon.ico` };
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready
+      .then((reg) => reg.showNotification(title, opts))
+      .catch(() => {
+        try { new Notification(title, opts); } catch { /* ignore */ }
+      });
+    return;
+  }
   try {
-    new Notification(title, { body });
+    new Notification(title, opts);
   } catch {
     /* ignore — browser/OS may suppress */
   }
 }
+
+/** @deprecated dùng {@link showPushNotif}. Giữ alias để tương thích. */
+export const showBrowserNotif = (title: string, body: string): void => showPushNotif(title, body);
 
 import { sbGetContracts, sbSendNotification } from '@/lib/supabase';
 import { sbGetPublicQuote } from '@/lib/supabase';
@@ -23,7 +40,7 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useTodoStore } from '@/stores/todoStore';
 import { useProcessStore } from '@/stores/processStore';
 import { useAuthStore } from '@/stores/authStore';
-import { ROLE_RANK } from '@/auth/ROLES';
+import { ROLE_RANK, canReceivePush } from '@/auth/ROLES';
 import { daysUntil } from '@/lib/dateUtils';
 import type { User } from '@/types';
 
@@ -51,13 +68,15 @@ export async function checkContractDeadlines(user: User): Promise<void> {
         if (isNaN(due.getTime())) continue;
         if (due <= in7days && due >= today) {
           const daysLeft = Math.ceil((due.getTime() - today.getTime()) / 86400000);
+          const msg = `HĐ #${c.contractNo || c.id} - "${p.label}": ${(+p.amount || 0).toLocaleString('vi-VN')} đ - còn ${daysLeft} ngày`;
           await sbSendNotification(user.u, {
             type: 'payment_due',
             title: '⏰ Sắp đến hạn thanh toán',
-            message: `HĐ #${c.contractNo || c.id} - "${p.label}": ${(+p.amount || 0).toLocaleString('vi-VN')} đ - còn ${daysLeft} ngày`,
+            message: msg,
             createdBy: 'Hệ thống',
             data: { contractId: c.id, paymentId: p.id },
           });
+          if (canReceivePush(user)) showPushNotif('⏰ Sắp đến hạn thanh toán', msg, `pay:${c.id}:${p.id}`);
         }
       }
     }
@@ -280,13 +299,16 @@ export async function checkNccPayments(user: User): Promise<void> {
         set.add(key);
         const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
         const amount = (due.amount || 0).toLocaleString('vi-VN');
+        const title = d < 0 ? '🔴 Quá hạn thanh toán NCC' : '⏰ Sắp đến hạn thanh toán NCC';
+        const msg = `Báo giá "${q.name}" — ${due.supplier ? due.supplier + ' · ' : ''}${due.label}: ${amount} đ · ${when} (${new Date(due.dueDate).toLocaleDateString('vi-VN')})`;
         await sbSendNotification(user.u, {
           type: 'payment_due',
-          title: d < 0 ? '🔴 Quá hạn thanh toán NCC' : '⏰ Sắp đến hạn thanh toán NCC',
-          message: `Báo giá "${q.name}" — ${due.supplier ? due.supplier + ' · ' : ''}${due.label}: ${amount} đ · ${when} (${new Date(due.dueDate).toLocaleDateString('vi-VN')})`,
+          title,
+          message: msg,
           createdBy: 'Hệ thống',
           data: { cloudId: q.cloudId },
         });
+        if (canReceivePush(user)) showPushNotif(title, msg, key);
       }
     }
     try { localStorage.setItem(NCC_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
@@ -318,13 +340,15 @@ export async function checkQuoteAcceptances(user: User): Promise<void> {
       const key = `${token}:${pub.acceptance.at}`;
       if (set.has(key)) continue;
       set.add(key);
+      const msg = `Báo giá "${q.name}"${pub.acceptance.name ? ` — ${pub.acceptance.name}` : ''} đã đồng ý chốt${pub.acceptance.note ? `: “${pub.acceptance.note}”` : ''}. Liên hệ xác nhận & chuyển trạng thái Thắng.`;
       await sbSendNotification(user.u, {
         type: 'task',
         title: '🎉 Khách đã đồng ý báo giá',
-        message: `Báo giá "${q.name}"${pub.acceptance.name ? ` — ${pub.acceptance.name}` : ''} đã đồng ý chốt${pub.acceptance.note ? `: “${pub.acceptance.note}”` : ''}. Liên hệ xác nhận & chuyển trạng thái Thắng.`,
+        message: msg,
         createdBy: 'Hệ thống',
         data: { cloudId: q.cloudId },
       });
+      if (canReceivePush(user)) showPushNotif('🎉 Khách đã đồng ý báo giá', msg, key);
     }
     try { localStorage.setItem(SHARE_ACCEPT_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
   } catch (e) {

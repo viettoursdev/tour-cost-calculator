@@ -38,6 +38,13 @@ export const ROLE_RANK: Record<Role, number> = {
   Standard: 0,
 };
 
+/**
+ * True if the user is "cấp phó phòng trở lên" — rank ≥ Operations (Operations,
+ * Trưởng Phòng, Ban Giám Đốc, CEO). Gates Web Push + bản tin sáng tự động.
+ */
+export const canReceivePush = (user: User | null | undefined): boolean =>
+  !!user && ROLE_RANK[user.role] >= ROLE_RANK.Operations;
+
 /** Shared data areas synced + permission-gated across the Báo giá workspace. */
 export type SharedArea = 'contracts' | 'menu' | 'itinerary' | 'rateCard' | 'ncc' | 'customers';
 

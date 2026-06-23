@@ -14,8 +14,10 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { useAuthStore } from '@/stores/authStore';
-import { userLabel } from '@/auth/ROLES';
+import { userLabel, canReceivePush } from '@/auth/ROLES';
+import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import {
@@ -95,6 +97,9 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
   const [taskPrefill, setTaskPrefill] = useState<Partial<Todo> | null>(null);
+  const [pushPerm, setPushPerm] = useState<NotificationPermission | 'unsupported'>(
+    'Notification' in window ? Notification.permission : 'unsupported',
+  );
 
   const mineCount = useMemo(() => notifications.filter(needsMyAction).length, [notifications]);
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
@@ -159,6 +164,23 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
       <Stack direction="row" alignItems="center" sx={{ px: 2, py: 1.25, background: LEGACY.headerGradient, color: '#fff' }}>
         <CampaignIcon sx={{ mr: 1 }} />
         <Typography variant="h6" fontWeight={800} sx={{ flex: 1 }}>Trung tâm thông báo</Typography>
+        {canReceivePush(currentUser) && pushPerm === 'default' && (
+          <Button
+            startIcon={<NotificationsActiveIcon />}
+            onClick={async () => {
+              await requestBrowserNotifPermission();
+              setPushPerm('Notification' in window ? Notification.permission : 'unsupported');
+            }}
+            sx={{ color: '#fff', fontWeight: 700, border: '1px solid rgba(255,255,255,0.4)', mr: 1 }}
+          >
+            🔔 Bật thông báo đẩy
+          </Button>
+        )}
+        {canReceivePush(currentUser) && pushPerm === 'denied' && (
+          <Tooltip title="Trình duyệt đang chặn thông báo. Mở cài đặt site để cho phép.">
+            <Typography fontSize={12} sx={{ color: '#fff', opacity: 0.85, mr: 1.5 }}>🔕 Thông báo bị chặn</Typography>
+          </Tooltip>
+        )}
         <Button startIcon={<SendIcon />} onClick={() => setComposing(true)} sx={{ color: '#fff', fontWeight: 700, border: '1px solid rgba(255,255,255,0.4)', mr: 1 }}>
           Soạn thông báo
         </Button>

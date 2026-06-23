@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, DEFAULT_USERS, USER_COLORS } from './ROLES';
+import { ROLES, DEFAULT_USERS, USER_COLORS, canReceivePush } from './ROLES';
+import type { Role, User } from '@/types';
+
+const user = (role: Role): User => ({ u: 'x', email: 'x@viettours.com.vn', role, name: 'X', color: '#000000' });
 
 describe('ROLES', () => {
   it('matches the documented hierarchy order', () => {
@@ -45,6 +48,25 @@ describe('DEFAULT_USERS', () => {
       expect(u.email).toBeDefined();
       expect(u.email!.toLowerCase()).toMatch(/@viettours\.com\.vn$/);
     }
+  });
+});
+
+describe('canReceivePush', () => {
+  it('cho phép cấp ≥ Operations (phó phòng trở lên)', () => {
+    for (const r of ['Operations', 'Trưởng Phòng', 'Ban Giám Đốc', 'CEO'] as Role[]) {
+      expect(canReceivePush(user(r))).toBe(true);
+    }
+  });
+
+  it('chặn cấp dưới Operations', () => {
+    for (const r of ['Sales', 'Marketing', 'Admin', 'Accountant', 'Standard'] as Role[]) {
+      expect(canReceivePush(user(r))).toBe(false);
+    }
+  });
+
+  it('false khi không có user', () => {
+    expect(canReceivePush(null)).toBe(false);
+    expect(canReceivePush(undefined)).toBe(false);
   });
 });
 

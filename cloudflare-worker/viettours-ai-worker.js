@@ -303,7 +303,145 @@ async function requireAuth(request, env) {
   catch (e) { return json({ error: 'Xác thực thất bại: ' + (e.message || e) }, 401); }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// BẢN TIN SÁNG (Worker Cron) — chạy mỗi sáng (cron "0 1 * * *" = 08:00 ICT). Quét
+// Supabase tìm: (1) báo giá cần follow-up, (2) tour khởi hành trong tuần; nhờ Claude
+// soạn digest tiếng Việt; ghi notification cho cấp ≥ Operations. Cần 2 secret:
+// SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (service-role để bypass RLS). Thiếu → no-op.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Cấp ≥ Operations ("phó phòng trở lên") — mirror src/auth/ROLES.ts ROLE_RANK.
+const ROLE_RANK = {
+  CEO: 8, 'Ban Giám Đốc': 7, 'Trưởng Phòng': 6, Operations: 5,
+  Sales: 4, Marketing: 3, Admin: 2, Accountant: 1, Standard: 0,
+};
+const DIGEST_MIN_RANK = ROLE_RANK.Operations;
+const FOLLOWUP_DAYS = { sent: 4, negotiating: 3 }; // mirror notifications.ts
+const TOUR_WINDOW_DAYS = 7;
+
+// Ngày theo giờ Việt Nam (ICT = UTC+7) dạng YYYY-MM-DD.
+const ictDate = (offsetDays = 0) =>
+  new Date(Date.now() + 7 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10);
+
+async function sbRest(env, path) {
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!r.ok) throw new Error(`Supabase GET ${path}: ${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+async function sbInsert(env, table, rows) {
+  if (!rows.length) return;
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(rows),
+  });
+  if (!r.ok) throw new Error(`Supabase POST ${table}: ${r.status} ${await r.text()}`);
+}
+
+const DIGEST_PROMPT = (name, data) =>
+  `Bạn là Trợ lý AI nội bộ của công ty du lịch Viettours. Soạn "Bản tin sáng" NGẮN GỌN ` +
+  `bằng tiếng Việt gửi cho ${name} (cấp quản lý). Văn phong thân thiện, chuyên nghiệp, có emoji. ` +
+  `CHỈ trả về nội dung tin nhắn (không tiêu đề "Bản tin sáng", không markdown heading, không lời chào dài dòng).\n\n` +
+  `Dữ liệu hôm nay (${ictDate()}):\n` +
+  `- Báo giá cần follow-up (đã gửi/đang deal nhưng lâu chưa cập nhật):\n${JSON.stringify(data.followups, null, 0)}\n` +
+  `- Tour khởi hành trong 7 ngày tới:\n${JSON.stringify(data.tours, null, 0)}\n\n` +
+  `Hãy tóm tắt thành 1–2 đoạn ngắn + gạch đầu dòng những việc cần ưu tiên hôm nay. ` +
+  `Nếu một mục trống thì bỏ qua, đừng bịa.`;
+
+async function runMorningDigest(env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('Bản tin sáng: thiếu SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY → bỏ qua.');
+    return;
+  }
+  const today = ictDate();
+  const weekEnd = ictDate(TOUR_WINDOW_DAYS);
+
+  // 1) Người nhận đủ quyền (≥ Operations).
+  const profiles = await sbRest(env, 'profiles?select=id,username,name,role');
+  const recipients = profiles.filter((p) => (ROLE_RANK[p.role] ?? 0) >= DIGEST_MIN_RANK && p.username);
+  if (!recipients.length) return;
+
+  // 2) Báo giá liên quan: follow-up (sent/negotiating) HOẶC sắp khởi hành.
+  const quotes = await sbRest(
+    env,
+    'quotes?select=id,cloud_id,name,status,depart_date,created_by_username,customer_name,updated_at' +
+      `&or=(status.in.(sent,negotiating),depart_date.gte.${today})`,
+  );
+  // 3) Cộng tác viên → map quote uuid → [username].
+  const collabRows = quotes.length
+    ? await sbRest(env, `quote_collaborators?select=quote_id,username&quote_id=in.(${quotes.map((q) => q.id).join(',')})`)
+    : [];
+  const collabByQuote = new Map();
+  for (const c of collabRows) {
+    if (!c.username) continue;
+    if (!collabByQuote.has(c.quote_id)) collabByQuote.set(c.quote_id, []);
+    collabByQuote.get(c.quote_id).push(c.username);
+  }
+
+  // 4) Chống chạy trùng: bỏ user đã có "Bản tin sáng" trong 12h gần nhất.
+  const since = new Date(Date.now() - 12 * 3600000).toISOString();
+  const recentDigests = await sbRest(
+    env,
+    `notifications?select=user_id&title=ilike.*Bản%20tin%20sáng*&created_at=gte.${since}`,
+  );
+  const alreadySent = new Set(recentDigests.map((r) => r.user_id));
+
+  const dayAgo = (iso) => (iso ? Math.floor((Date.now() - Date.parse(iso)) / 86400000) : null);
+  const fmtQuote = (q) => ({ name: q.name, customer: q.customer_name || '', status: q.status, depart: q.depart_date });
+
+  const rows = [];
+  for (const u of recipients) {
+    if (alreadySent.has(u.id)) continue;
+    const followups = quotes
+      .filter((q) => q.created_by_username === u.username
+        && FOLLOWUP_DAYS[q.status] != null
+        && (dayAgo(q.updated_at) ?? 0) >= FOLLOWUP_DAYS[q.status])
+      .map((q) => ({ ...fmtQuote(q), staleDays: dayAgo(q.updated_at) }));
+    const tours = quotes
+      .filter((q) => q.depart_date && q.depart_date >= today && q.depart_date <= weekEnd
+        && q.status !== 'cancelled' && q.status !== 'not_selected'
+        && (q.created_by_username === u.username || (collabByQuote.get(q.id) ?? []).includes(u.username)))
+      .map(fmtQuote);
+    if (!followups.length && !tours.length) continue; // không có gì để báo
+
+    let message;
+    try {
+      message = await callClaude(env, [{ type: 'text', text: DIGEST_PROMPT(u.name || u.username, { followups, tours }) }], 1200, MODEL_ASSISTANT);
+    } catch (e) {
+      console.warn(`Bản tin sáng: Claude lỗi cho ${u.username}:`, e.message || e);
+      continue;
+    }
+    if (!message) continue;
+    rows.push({
+      legacy_id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      user_id: u.id,
+      type: 'announcement',
+      title: '🌅 Bản tin sáng',
+      message,
+      created_by_name: 'Trợ lý AI',
+      read: false,
+    });
+  }
+  await sbInsert(env, 'notifications', rows);
+  console.log(`Bản tin sáng: đã gửi ${rows.length}/${recipients.length} người.`);
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runMorningDigest(env).catch((e) => console.error('Bản tin sáng lỗi:', e.message || e)));
+  },
+
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 

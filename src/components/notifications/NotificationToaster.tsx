@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Snackbar } from '@mui/material';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useAuthStore } from '@/stores/authStore';
+import { canReceivePush } from '@/auth/ROLES';
+import { showPushNotif } from '@/lib/notifications';
 
 const TYPE_ICON: Record<string, string> = {
   payment_approval: '🧾', payment_due: '💰', announcement: '📢',
@@ -41,6 +44,7 @@ function playPing(): void {
 export function NotificationToaster() {
   const notifications = useNotificationStore((s) => s.notifications);
   const setCenterOpen = useNotificationStore((s) => s.setCenterOpen);
+  const currentUser = useAuthStore((s) => s.currentUser);
   const [toast, setToast] = useState<{ id: string; title: string; type: string } | null>(null);
   const seen = useRef<Set<string>>(new Set());
   const primed = useRef(false);
@@ -58,8 +62,14 @@ export function NotificationToaster() {
     if (fresh) {
       setToast({ id: fresh.id, title: fresh.title, type: fresh.type });
       playPing();
+      // Bản tin sáng (digest từ Worker Cron) đến qua realtime → hiện OS notification
+      // cho cấp ≥ Operations, kể cả khi app đang ở tab nền. Các sự kiện push khác đã
+      // được dispatch tại nguồn (notifications.ts) nên không bắn lại ở đây.
+      if (canReceivePush(currentUser) && fresh.title.includes('Bản tin sáng')) {
+        showPushNotif(fresh.title, fresh.message ?? '', fresh.id);
+      }
     }
-  }, [notifications]);
+  }, [notifications, currentUser]);
 
   if (!toast) return null;
   const icon = TYPE_ICON[toast.type] ?? '🔔';

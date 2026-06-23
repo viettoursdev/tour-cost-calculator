@@ -91,6 +91,28 @@ R2 (URL worker là công khai trong bundle). App tự đính kèm token (header
 > link tải nên không gắn được header). Rủi ro thấp; nếu cần siết, chuyển sang signed URL —
 > báo để bổ sung. Sau khi đổi worker phải **redeploy thủ công** (CI không tự deploy).
 
+## 🌅 Bản tin sáng tự động (Cron Trigger)
+
+Worker có handler `scheduled` soạn **"Bản tin sáng"** mỗi sáng cho cấp **≥ Operations**
+("phó phòng trở lên"): tổng hợp **báo giá cần follow-up** + **tour khởi hành trong tuần**,
+nhờ Claude (Sonnet) viết tiếng Việt, rồi ghi vào bảng `notifications` (người dùng nhận
+in-app + OS notification nếu app đang mở).
+
+**Thiết lập (sau khi dán lại `viettours-ai-worker.js`):**
+
+1. **Cron Trigger:** Worker → **Settings → Triggers → Cron Triggers → Add** →
+   `0 1 * * *` (01:00 UTC = **08:00 giờ Việt Nam**).
+2. **2 Secret mới** (Settings → Variables and Secrets → Add, Type **Secret**):
+   - `SUPABASE_URL` = `https://zkzrvctqwnhzklvsoahk.supabase.co`
+   - `SUPABASE_SERVICE_ROLE_KEY` = service-role key (Supabase → Project Settings → API
+     → `service_role`). **Bí mật tuyệt đối** — bypass RLS để đọc quotes/profiles và ghi
+     notification cho người khác. Thiếu 1 trong 2 biến → handler **no-op** (log cảnh báo).
+
+**Test thủ công:**
+- Cục bộ: `npx wrangler dev --test-scheduled` rồi `curl "http://localhost:8787/__scheduled"`.
+- Production: nút **Trigger** cạnh Cron trong dashboard, hoặc chờ 08:00. Đã có cơ chế chống
+  chạy trùng (bỏ qua người đã nhận "Bản tin sáng" trong 12h gần nhất).
+
 ## Ghi chú
 
 - **Model:** mặc định `claude-haiku-4-5-20251001` (rẻ & nhanh nhất). Đổi hằng `MODEL` thành
