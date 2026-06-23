@@ -3,14 +3,22 @@ name: Link Outlook email → email_links
 # Claude tạo payload {target,emails,linkedBy}; workflow này dùng SUPABASE_DB_URL (bypass RLS,
 # secret nằm trong GitHub — không đổ ra máy/chat) để upsert qua psql.
 #
+# mode=list  → in Việc/Báo giá gần đây + id (để chọn targetId).
+# mode=link  → ghi email vào target (cần input payload).
+#
 # Pinned vào Environment 'production-db' (giống migrate.yml) → mỗi lần chạy PAUSE chờ duyệt
 # nếu environment đã bật "Required reviewers".
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'list (in id Việc/Báo giá) hoặc link (ghi email vào target)'
+        type: choice
+        options: [list, link]
+        default: list
       payload:
-        description: 'JSON {"target":{"type","id","name"},"emails":[…],"linkedBy":"…"} từ Claude'
-        required: true
+        description: 'JSON {"target":{"type","id","name"},"emails":[…],"linkedBy":"…"} — chỉ cần khi mode=link'
+        required: false
 
 permissions:
   contents: read
@@ -20,24 +28,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  link:
+  run:
     runs-on: ubuntu-latest
     environment: production-db
     timeout-minutes: 10
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Kiểm tra secret
+        run: '[ -n "$SUPABASE_DB_URL" ] || { echo "::error::Thiếu secret SUPABASE_DB_URL"; exit 1; }'
+
+      # ── mode=list ──────────────────────────────────────────────────────────
+      - name: Liệt kê Việc / Báo giá gần đây
+        if: ${{ inputs.mode == 'list' }}
+        run: psql "$SUPABASE_DB_URL" -f scripts/list-targets.sql
+
+      # ── mode=link ──────────────────────────────────────────────────────────
       - uses: actions/setup-node@v4
+        if: ${{ inputs.mode == 'link' }}
         with:
           node-version: '20'
       - name: Dựng mảng EmailLink từ payload
+        if: ${{ inputs.mode == 'link' }}
         env:
           PAYLOAD: ${{ inputs.payload }}
         run: |
+          [ -n "$PAYLOAD" ] || { echo "::error::mode=link cần input payload"; exit 1; }
           printf '%s' "$PAYLOAD" > payload.json
           node scripts/link-email.mjs payload.json --emit links.json
       - name: Upsert vào email_links (psql)
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          [ -n "$SUPABASE_DB_URL" ] || { echo "::error::Thiếu secret SUPABASE_DB_URL"; exit 1; }
-          psql "$SUPABASE_DB_URL" -v links="$(cat links.json)" -f scripts/link-email-upsert.sql
+        if: ${{ inputs.mode == 'link' }}
+        run: psql "$SUPABASE_DB_URL" -v links="$(cat links.json)" -f scripts/link-email-upsert.sql
