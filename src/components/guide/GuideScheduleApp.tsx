@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type HTMLAttributes } from 'react';
 import {
   Alert, Autocomplete, Avatar, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent,
-  DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Paper, Stack, Tab, Tabs, TextField,
+  DialogTitle, Divider, FormControlLabel, IconButton, MenuItem, Paper, Rating, Stack, Tab, Tabs, TextField,
   ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -19,14 +19,48 @@ import ChecklistIcon from '@mui/icons-material/Checklist';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
+import { useHrGuideStore } from '@/stores/hrGuideStore';
 import { detectConflicts, conflictedLegIds, colorFor, DEFAULT_BUFFER_MINS } from '@/lib/guideSchedule';
 import { ROLE_RANK } from '@/auth/ROLES';
+import { daysUntil } from '@/lib/dateUtils';
 import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
 import type { FC } from 'react';
-import type { CloudQuoteEntry, GuideFlightLeg, GuideRef, TourGuideAssignment } from '@/types';
+import type { CloudQuoteEntry, GuideFlightLeg, GuideRef, HrGuide, TourGuideAssignment } from '@/types';
 
 const newId = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/** Thẻ HDV sắp/đã hết hạn (≤90 ngày) → cảnh báo khi xếp tour. */
+const guideCardExpiringSoon = (g: HrGuide): boolean => {
+  const n = g.guideCardExpires ? daysUntil(g.guideCardExpires) : null;
+  return n !== null && n <= 90;
+};
+
+/** renderOption dùng chung cho picker HDV: hiện rating · ngôn ngữ · tuyến + cảnh báo thẻ
+ *  cho HDV lấy từ pool cộng tác viên (đề xuất đi tour). */
+function renderGuideOption(
+  props: HTMLAttributes<HTMLLIElement>,
+  g: GuideRef,
+  poolById: Map<string, HrGuide>,
+) {
+  const pg = poolById.get(g.id);
+  return (
+    <li {...props} key={g.id}>
+      <Stack sx={{ width: '100%' }}>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+          <Typography variant="body2" fontWeight={600}>{g.name}</Typography>
+          {g.kind === 'staff' && <Chip size="small" variant="outlined" label="Nhân sự" />}
+          {pg && <Chip size="small" color="info" variant="outlined" label="Pool HDV" />}
+          {pg?.rating ? <Rating size="small" value={pg.rating} precision={0.5} readOnly /> : null}
+          {pg && guideCardExpiringSoon(pg) ? <Chip size="small" color="warning" label="Thẻ sắp hết hạn" /> : null}
+        </Stack>
+        {pg && (pg.languages.length > 0 || pg.regions.length > 0) ? (
+          <Typography variant="caption" color="text.secondary">{[...pg.languages, ...pg.regions].join(' · ')}</Typography>
+        ) : null}
+      </Stack>
+    </li>
+  );
+}
 const pad = (n: number) => String(n).padStart(2, '0');
 const ms = (iso: string) => new Date(iso).getTime();
 const toLocalInput = (iso: string) => {
@@ -73,6 +107,7 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
   const me = useAuthStore((s) => s.currentUser);
   const users = useAuthStore((s) => s.users);
   const freelancers = useGuideScheduleStore((s) => s.freelancers);
+  const hrGuides = useHrGuideStore((s) => s.guides);
   const assignments = useGuideScheduleStore((s) => s.assignments);
   const addFreelancer = useGuideScheduleStore((s) => s.addFreelancer);
   const setGuides = useGuideScheduleStore((s) => s.setGuides);
@@ -98,10 +133,21 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
 
   const canManage = me ? ROLE_RANK[me.role] >= ROLE_RANK.Operations : false;
 
-  const guideOptions: GuideRef[] = useMemo(() => [
-    ...users.map((u) => ({ kind: 'staff' as const, id: u.u, name: u.name })),
-    ...freelancers.map((f) => ({ kind: 'freelance' as const, id: f.id, name: f.name })),
-  ], [users, freelancers]);
+  // Tra cứu HDV pool theo id (legacy_id) → hiện rating/ngôn ngữ/tuyến + cảnh báo thẻ.
+  const poolById = useMemo(() => new Map(hrGuides.map((g) => [g.id, g])), [hrGuides]);
+  const guideOptions: GuideRef[] = useMemo(() => {
+    const flIds = new Set(freelancers.map((f) => f.id));
+    // Pool HDV (đang cộng tác) bổ sung vào danh sách chọn — đề xuất đi tour theo
+    // rating/ngôn ngữ/tuyến; bỏ blacklist + tránh trùng id với freelancer ad-hoc.
+    const pool = hrGuides
+      .filter((g) => g.status !== 'blacklist' && !flIds.has(g.id))
+      .map((g) => ({ kind: 'freelance' as const, id: g.id, name: g.fullName }));
+    return [
+      ...users.map((u) => ({ kind: 'staff' as const, id: u.u, name: u.name })),
+      ...freelancers.map((f) => ({ kind: 'freelance' as const, id: f.id, name: f.name })),
+      ...pool,
+    ];
+  }, [users, freelancers, hrGuides]);
   const guideNameOf = (id: string) => guideOptions.find((g) => g.id === id)?.name
     ?? Object.values(assignments).flatMap((a) => a.guides).find((g) => g.id === id)?.name ?? id;
   const tourNameOf = (cloudId: string) => assignments[cloudId]?.tourName ?? cloudId;
@@ -363,7 +409,7 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
       </Box>
 
       {addTourOpen && (
-        <AddTourDialog existing={new Set(Object.keys(assignments))} tours={visibleQuotes()} guideOptions={guideOptions}
+        <AddTourDialog existing={new Set(Object.keys(assignments))} tours={visibleQuotes()} guideOptions={guideOptions} poolById={poolById}
           onClose={() => setAddTourOpen(false)}
           onConfirm={async (tour, guides) => {
             await setGuides(tour.cloudId, { tourName: tour.name, departDate: tour.departDate }, guides);
@@ -578,8 +624,8 @@ function ListView({ tourList, groupBy, legFilter, guideNameOf, canManage, LegRow
 }
 
 // ── Thêm tour vào lịch ──
-function AddTourDialog({ existing, tours, guideOptions, onClose, onConfirm }: {
-  existing: Set<string>; tours: CloudQuoteEntry[]; guideOptions: GuideRef[];
+function AddTourDialog({ existing, tours, guideOptions, poolById, onClose, onConfirm }: {
+  existing: Set<string>; tours: CloudQuoteEntry[]; guideOptions: GuideRef[]; poolById: Map<string, HrGuide>;
   onClose: () => void; onConfirm: (tour: CloudQuoteEntry, guides: GuideRef[]) => Promise<void>;
 }) {
   const [tour, setTour] = useState<CloudQuoteEntry | null>(null);
@@ -605,7 +651,8 @@ function AddTourDialog({ existing, tours, guideOptions, onClose, onConfirm }: {
             )} />
           <Autocomplete multiple options={guideOptions} value={guides} onChange={(_, v) => setGuides(v)}
             getOptionLabel={(g) => `${g.name}${g.kind === 'freelance' ? ' (FL)' : ''}`} isOptionEqualToValue={(a, b) => a.id === b.id}
-            renderInput={(p) => <TextField {...p} label="HDV phụ trách" placeholder="Chọn nhân sự / freelance" />} />
+            renderOption={(p, g) => renderGuideOption(p, g, poolById)}
+            renderInput={(p) => <TextField {...p} label="HDV phụ trách" placeholder="Chọn nhân sự / pool HDV / freelance" />} />
           <Typography variant="caption" color="text.secondary">Lịch bay sẽ tự lấy từ chuyến bay của báo giá; sau đó bạn chọn lại từng chặng hoặc chỉnh tay được.</Typography>
         </Stack>
       </DialogContent>
