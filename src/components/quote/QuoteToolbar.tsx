@@ -325,6 +325,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
   const canHR = hasPerm(currentUser, 'viewHR');
+  const canGuides = hasPerm(currentUser, 'manageNCC');
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
   const isCEO = currentUser?.role === 'CEO';
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
@@ -369,6 +370,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           { label: 'Chương trình tour', icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') },
           { label: 'Thực đơn', icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') },
           { label: 'Lịch đi tour HDV', icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') },
+          ...(canGuides ? [item('hrguides', 'HDV cộng tác viên')] : []),
         ] },
         { group: 'Danh mục', icon: <CategoryOutlinedIcon />, items: [
           item('advance', 'Đề nghị tạm ứng'),

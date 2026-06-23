@@ -4268,3 +4268,76 @@ export async function sbPushHrEmployees(
     if (del.error) throw new Error('sbPushHrEmployees delete all: ' + del.error.message);
   }
 }
+
+// ── HR Guides (Pool HDV cộng tác viên) ────────────────────────────────────────
+
+import type { HrGuide, GuideStatus } from '@/types/hr';
+
+const rowToHrGuide = (r: Record<string, unknown>): HrGuide => ({
+  id: r.legacy_id as string,
+  fullName: (r.full_name as string) ?? '',
+  phone: (r.phone as string) ?? '',
+  email: (r.email as string) ?? '',
+  guideCardNo: (r.guide_card_no as string) ?? '',
+  guideCardExpires: (r.guide_card_expires as string) ?? undefined,
+  languages: (r.languages as string[]) ?? [],
+  regions: (r.regions as string[]) ?? [],
+  rating: (r.rating as number) ?? undefined,
+  status: (r.status as GuideStatus) ?? 'active',
+  dayRate: (r.day_rate as number) ?? undefined,
+  notes: (r.notes as string) ?? '',
+  createdAt: r.created_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeHrGuides(cb: (list: HrGuide[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'hr_guides', async (cl) => {
+    const { data: rows, error } = await cl.from('hr_guides').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (rows ?? []).map(rowToHrGuide);
+  }, cb);
+}
+
+export async function sbPushHrGuides(
+  list: HrGuide[],
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const g of list) {
+    const { error: upErr } = await client.from('hr_guides').upsert({
+      legacy_id: g.id,
+      full_name: g.fullName ?? '',
+      phone: g.phone ?? '',
+      email: g.email ?? '',
+      guide_card_no: g.guideCardNo ?? '',
+      guide_card_expires: g.guideCardExpires || null,
+      languages: g.languages ?? [],
+      regions: g.regions ?? [],
+      rating: g.rating ?? null,
+      status: g.status ?? 'active',
+      day_rate: g.dayRate ?? null,
+      notes: g.notes ?? '',
+      created_by_name: g.createdBy, created_at: g.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' });
+    if (upErr) throw new Error('sbPushHrGuides upsert: ' + upErr.message);
+  }
+  // Full-overwrite: xoá HDV đã bị loại khỏi danh sách (fetch-then-delete an toàn).
+  const keepIds = list.map((g) => g.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('hr_guides').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushHrGuides fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? [])
+      .map((r) => r.legacy_id as string)
+      .filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('hr_guides').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushHrGuides delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('hr_guides').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushHrGuides delete all: ' + del.error.message);
+  }
+}
