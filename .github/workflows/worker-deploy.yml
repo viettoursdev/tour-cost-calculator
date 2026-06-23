@@ -35,8 +35,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # --keep-vars: GIỮ các biến môi trường đặt trên Cloudflare dashboard
-          # (vd SUPABASE_PROJECT_REF, GOOGLE_MAPS_API_KEY). KHÔNG có cờ này thì
-          # `wrangler deploy` trần sẽ XOÁ mọi plaintext var mỗi lần deploy → auth tắt.
+          # --var SUPABASE_PROJECT_REF:... — CI tự đặt biến bật auth mỗi lần deploy,
+          #   khỏi phụ thuộc thao tác tay trên dashboard. Project ref KHÔNG phải secret
+          #   (đã công khai trong bundle client qua VITE_SUPABASE_URL).
+          # --keep-vars — GIỮ các plaintext var khác đặt trên dashboard (vd
+          #   GOOGLE_MAPS_API_KEY); không có cờ này thì `wrangler deploy` trần xoá sạch.
           # (Secret như ANTHROPIC_API_KEY và binding R2 vẫn được giữ kể cả không có cờ.)
-          command: deploy cloudflare-worker/viettours-ai-worker.js --name tour-cost-calculator --compatibility-date 2025-06-01 --keep-vars
+          command: deploy cloudflare-worker/viettours-ai-worker.js --name tour-cost-calculator --compatibility-date 2025-06-01 --keep-vars --var SUPABASE_PROJECT_REF:zkzrvctqwnhzklvsoahk
