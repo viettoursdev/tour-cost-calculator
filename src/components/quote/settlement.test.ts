@@ -70,6 +70,26 @@ describe('computeSettlement', () => {
     expect(s.netRevenue).toBe(s.grandTotal - s.totalVAT);
   });
 
+  it('doanh thu thực (override) đổi biên lợi cột THỰC, giữ nguyên cột dự kiến', () => {
+    const d = draft({
+      pax: 1,
+      catEnabled: { ...Object.fromEntries(cats.map((c) => [c.id, false])), hotel: true } as Record<CategoryId, boolean>,
+      items: { hotel: [item({ id: 1, name: 'KS', qtyMode: 'per_group', price: 1000 })] }, // budget 1000, netRevenue 1000
+    });
+    // Không nhập → actualRevenue = netRevenue
+    const base = computeSettlement(d, cats, {}, []);
+    expect(base.actualRevenue).toBe(base.netRevenue);
+    expect(base.revenueOverridden).toBe(false);
+
+    // Nhập doanh thu thực 1500 → lãi thật = 1500 − 1000 = 500; dự kiến vẫn theo netRevenue.
+    const over = computeSettlement(d, cats, {}, [], { actualRevenue: 1500 });
+    expect(over.revenueOverridden).toBe(true);
+    expect(over.actualRevenue).toBe(1500);
+    expect(over.actualProfit).toBe(500);
+    expect(over.plannedProfit).toBe(base.plannedProfit); // không đổi
+    expect(over.actualMarginPct).toBeCloseTo((500 / 1500) * 100, 6);
+  });
+
   it('không có dữ liệu → byCat rỗng, biên lợi 0', () => {
     const s = computeSettlement(draft(), cats, {}, []);
     expect(s.byCat).toHaveLength(0);

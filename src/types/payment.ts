@@ -37,9 +37,36 @@ export interface CustomCostItem {
   amount: number;
 }
 
+/** Ảnh chụp đông cứng các số quyết toán tại thời điểm CHỐT (để kế toán dùng làm căn cứ). */
+export interface SettlementSnapshot {
+  budgetCost: number;
+  actualCost: number;
+  paidCost: number;
+  netRevenue: number;
+  actualRevenue: number;
+  plannedProfit: number;
+  actualProfit: number;
+  plannedMarginPct: number;
+  actualMarginPct: number;
+}
+
+/** Trạng thái quyết toán của 1 tour: doanh thu thực (tuỳ chọn) + chốt/khoá. */
+export interface SettlementMeta {
+  /** Doanh thu thuần THỰC (VND) — ghi đè giá bán báo giá khi đối chiếu. Trống = dùng giá báo giá. */
+  actualRevenue?: number;
+  /** Đã chốt quyết toán lúc nào (ISO). Có giá trị = đang khoá. */
+  lockedAt?: string;
+  /** Người chốt. */
+  lockedBy?: string;
+  /** Số liệu đông cứng tại thời điểm chốt. */
+  frozen?: SettlementSnapshot;
+}
+
 export interface TourPayments {
   payments: Record<string, PaymentRecord>;
   customItems: CustomCostItem[];
+  /** Quyết toán: doanh thu thực + chốt/khoá. Tuỳ chọn, có thể chưa có. */
+  settlement?: SettlementMeta;
 }
 
 export interface PaymentItem {

@@ -2602,7 +2602,7 @@ const assembleTourPayments = async (
   tourKey: string,
 ): Promise<TourPayments | null> => {
   const { data: parent } = await cl.from('tour_payments')
-    .select('id').eq('tour_key', tourKey).maybeSingle();
+    .select('id, settlement').eq('tour_key', tourKey).maybeSingle();
   if (!parent) return null;
   const parentId = parent.id as string;
 
@@ -2635,22 +2635,31 @@ const assembleTourPayments = async (
     amount: r.amount as number,
   }));
 
-  return { payments, customItems };
+  return {
+    payments,
+    customItems,
+    settlement: (parent.settlement as TourPayments['settlement']) ?? undefined,
+  };
 };
 
 /**
- * Full-overwrite push of a tour's payments + customItems.
+ * Full-overwrite push of a tour's payments + customItems (+ settlement meta).
  */
 export async function sbSaveTourPayments(
   tourKey: string,
   payments: Record<string, PaymentRecord>,
   customItems: CustomCostItem[],
   savedBy: string,
+  settlement?: TourPayments['settlement'] | null,
   client: SupabaseClient = sb,
 ): Promise<void> {
   const now = new Date().toISOString();
+  // `settlement === undefined` → KHÔNG đụng cột (giữ nguyên bản đã chốt khi chỉ lưu
+  // payments). Chỉ ghi khi truyền tường minh (kể cả null để xoá khi mở khoá).
+  const parentRow: Record<string, unknown> = { tour_key: tourKey, updated_at: now, updated_by: savedBy || 'unknown' };
+  if (settlement !== undefined) parentRow.settlement = (settlement as unknown as Record<string, unknown>) ?? null;
   const { data: parent, error: upErr } = await client.from('tour_payments')
-    .upsert({ tour_key: tourKey, updated_at: now, updated_by: savedBy || 'unknown' }, { onConflict: 'tour_key' })
+    .upsert(parentRow, { onConflict: 'tour_key' })
     .select('id').single();
   if (upErr) throw new Error('sbSaveTourPayments upsert parent: ' + upErr.message);
   const parentId = parent!.id as string;
@@ -2889,6 +2898,7 @@ function rowToCloudQuoteEntry(
     workflowDue: (r.workflow_due as CloudQuoteEntry['workflowDue']) ?? undefined,
     workflowSummary: (r.workflow_summary as CloudQuoteEntry['workflowSummary']) ?? undefined,
     paymentSummary: (r.payment_summary as CloudQuoteEntry['paymentSummary']) ?? undefined,
+    settlementSummary: (r.settlement_summary as CloudQuoteEntry['settlementSummary']) ?? undefined,
     nccDue: (r.ncc_due as CloudQuoteEntry['nccDue']) ?? undefined,
     share: (r.share as CloudQuoteEntry['share']) ?? undefined,
     linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
@@ -3008,7 +3018,7 @@ async function saveSingleQuoteEntry(
     .from('quotes')
     .upsert(row, { onConflict: 'cloud_id' })
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
-            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ' +
+            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .single();
@@ -3059,7 +3069,7 @@ async function loadQuoteHistory(
   let q = client
     .from('quotes')
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
-            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, ncc_due, ' +
+            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ncc_due, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, share, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .order('created_at', { ascending: false });
@@ -4078,6 +4088,22 @@ export async function sbSetQuotePaymentSummary(
     updated_at: new Date().toISOString(),
   }).eq('cloud_id', cloudId);
   if (error) throw new Error('sbSetQuotePaymentSummary: ' + error.message);
+}
+
+/**
+ * Index biên lợi THẬT (quyết toán) cho 1 báo giá theo cloud_id — để ExecBoard &
+ * bảng điều hành đọc nhanh. Ghi riêng, KHÔNG qua save_quote_state RPC.
+ */
+export async function sbSetQuoteSettlementSummary(
+  cloudId: string,
+  settlementSummary: CloudQuoteEntry['settlementSummary'],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('quotes').update({
+    settlement_summary: (settlementSummary as unknown as Record<string, unknown>) ?? null,
+    updated_at: new Date().toISOString(),
+  }).eq('cloud_id', cloudId);
+  if (error) throw new Error('sbSetQuoteSettlementSummary: ' + error.message);
 }
 
 /**

@@ -165,13 +165,17 @@ export interface SettlementResult {
   actualCost: number;
   /** Tổng đã thực chi tiền. */
   paidCost: number;
-  /** Doanh thu thuần (giá bán cả đoàn trừ VAT). */
+  /** Doanh thu thuần theo BÁO GIÁ (giá bán cả đoàn trừ VAT). */
   netRevenue: number;
+  /** Doanh thu thuần dùng cho cột THỰC: doanh thu thực nếu nhập, không thì = netRevenue. */
+  actualRevenue: number;
+  /** Người dùng có nhập doanh thu thực khác báo giá không. */
+  revenueOverridden: boolean;
   grandTotal: number;
   totalVAT: number;
   /** Lãi gộp dự kiến = netRevenue − budgetCost. */
   plannedProfit: number;
-  /** Lãi gộp thật = netRevenue − actualCost. */
+  /** Lãi gộp thật = actualRevenue − actualCost. */
   actualProfit: number;
   /** Chênh lệch giá vốn = actualCost − budgetCost (>0 = bội chi). */
   costVariance: number;
@@ -185,6 +189,7 @@ export function computeSettlement(
   activeCats: readonly CategoryDef[],
   payments: Record<string, PaymentRecord>,
   customItems: CustomCostItem[],
+  opts?: { actualRevenue?: number },
 ): SettlementResult {
   const totals = computeTotals(draft);
   const allItems = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems);
@@ -227,8 +232,10 @@ export function computeSettlement(
   const actualCost = byCat.reduce((s, c) => s + c.actual, 0);
   const paidCost = byCat.reduce((s, c) => s + c.paid, 0);
   const netRevenue = totals.grandTotal - totals.totalVAT;
+  const hasActualRev = opts?.actualRevenue != null && opts.actualRevenue > 0;
+  const actualRevenue = hasActualRev ? (opts!.actualRevenue as number) : netRevenue;
   const plannedProfit = netRevenue - budgetCost;
-  const actualProfit = netRevenue - actualCost;
+  const actualProfit = actualRevenue - actualCost;
 
   return {
     byCat,
@@ -236,13 +243,15 @@ export function computeSettlement(
     actualCost,
     paidCost,
     netRevenue,
+    actualRevenue,
+    revenueOverridden: hasActualRev,
     grandTotal: totals.grandTotal,
     totalVAT: totals.totalVAT,
     plannedProfit,
     actualProfit,
     costVariance: actualCost - budgetCost,
     plannedMarginPct: netRevenue > 0 ? (plannedProfit / netRevenue) * 100 : 0,
-    actualMarginPct: netRevenue > 0 ? (actualProfit / netRevenue) * 100 : 0,
+    actualMarginPct: actualRevenue > 0 ? (actualProfit / actualRevenue) * 100 : 0,
     pax: draft.pax,
   };
 }

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sbSaveTourPayments, sbSubscribeTourPayments } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
-import type { CustomCostItem, PaymentRecord, TourPayments } from '@/types';
+import type { CustomCostItem, PaymentRecord, SettlementMeta, TourPayments } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type Slot = {
@@ -19,6 +19,7 @@ type PaymentState = {
   releaseSubscription: (tourKey: string) => void;
   setPayments: (tourKey: string, next: Record<string, PaymentRecord>) => void;
   setCustomItems: (tourKey: string, next: CustomCostItem[]) => void;
+  setSettlement: (tourKey: string, next: SettlementMeta | undefined) => void;
   getTour: (tourKey: string) => TourPayments;
 };
 
@@ -26,6 +27,7 @@ const EMPTY: TourPayments = { payments: {}, customItems: [] };
 
 const LS_PAYMENTS_PREFIX = 'vte_payments_';
 const LS_CUSTOM_PREFIX = 'vte_pay_custom_';
+const LS_SETTLEMENT_PREFIX = 'vte_pay_settle_';
 
 function readLocal<T>(key: string, fallback: T): T {
   try {
@@ -65,6 +67,11 @@ export const usePaymentStore = create<PaymentState>()(
             const customItems = readLocal<CustomCostItem[]>(key, []);
             slots[tourKey] = slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
             slots[tourKey].data = { ...slots[tourKey].data, customItems };
+          } else if (key.startsWith(LS_SETTLEMENT_PREFIX)) {
+            const tourKey = key.slice(LS_SETTLEMENT_PREFIX.length);
+            const settlement = readLocal<SettlementMeta | undefined>(key, undefined);
+            slots[tourKey] = slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
+            slots[tourKey].data = { ...slots[tourKey].data, settlement };
           }
         }
       } catch {
@@ -90,10 +97,12 @@ export const usePaymentStore = create<PaymentState>()(
           const merged: TourPayments = {
             payments: data.payments ?? {},
             customItems: data.customItems ?? [],
+            settlement: data.settlement,
           };
           cur.data = merged;
           writeLocal(LS_PAYMENTS_PREFIX + tourKey, merged.payments);
           writeLocal(LS_CUSTOM_PREFIX + tourKey, merged.customItems);
+          writeLocal(LS_SETTLEMENT_PREFIX + tourKey, merged.settlement ?? null);
           set({ slots: { ...get().slots, [tourKey]: { ...cur } } });
         });
       }
@@ -144,6 +153,23 @@ export const usePaymentStore = create<PaymentState>()(
         });
       }, 1000);
       const slot: Slot = { ...prev, data: { ...prev.data, customItems: next }, pushTimer };
+      set({ slots: { ...get().slots, [tourKey]: slot } });
+    },
+
+    setSettlement: (tourKey, next) => {
+      const prev = get().slots[tourKey] ?? { data: { ...EMPTY }, unsub: null, refCount: 0, pushTimer: null };
+      writeLocal(LS_SETTLEMENT_PREFIX + tourKey, next ?? null);
+      if (prev.pushTimer) clearTimeout(prev.pushTimer);
+      const pushTimer = setTimeout(() => {
+        const u = useAuthStore.getState().currentUser;
+        const savedBy = u?.name ?? 'unknown';
+        const latest = get().slots[tourKey]?.data ?? EMPTY;
+        // Truyền settlement tường minh (kể cả undefined→null khi mở khoá) để ghi cột.
+        sbSaveTourPayments(tourKey, latest.payments, latest.customItems, savedBy, latest.settlement ?? null).catch(() => {
+          /* swallow — local state giữ chỉnh sửa; last-write-wins */
+        });
+      }, 1000);
+      const slot: Slot = { ...prev, data: { ...prev.data, settlement: next }, pushTimer };
       set({ slots: { ...get().slots, [tourKey]: slot } });
     },
 

@@ -80,6 +80,15 @@ export function ExecBoard() {
 
     const overdue = all.filter((q) => (q.workflowSummary?.overdue ?? 0) > 0);
 
+    // Quyết toán: biên lợi THẬT toàn danh mục (chỉ tour đã có chỉ mục settlement).
+    const settled = all.filter((q) => q.settlementSummary);
+    const realProfit = settled.reduce((s, q) => s + (q.settlementSummary!.actualProfit ?? 0), 0);
+    const realCost = settled.reduce((s, q) => s + (q.settlementSummary!.actualCost ?? 0), 0);
+    const realMarginPct = realProfit + realCost > 0 ? (realProfit / (realProfit + realCost)) * 100 : 0;
+    const lowMargin = [...settled]
+      .sort((a, b) => (a.settlementSummary!.actualMarginPct ?? 0) - (b.settlementSummary!.actualMarginPct ?? 0))
+      .slice(0, 5);
+
     const saleMap = new Map<string, { value: number; count: number }>();
     for (const q of won) {
       const k = q.createdByName || '—';
@@ -98,6 +107,7 @@ export function ExecBoard() {
       winRate: decided ? Math.round((won.length / decided) * 100) : 0,
       decided,
       byStatus, maxStatus, owing, owingTotal, upcoming, overdue, bySale, maxSale,
+      realProfit, realMarginPct, lowMargin, settledCount: settled.length,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes]);
@@ -116,6 +126,9 @@ export function ExecBoard() {
         <Kpi label="Công nợ NCC còn lại" value={fmtShort(d.owingTotal)} sub={`${d.owing.length} tour`} color={d.owingTotal > 0 ? '#dc3250' : '#64748b'} />
         <Kpi label="Tour khởi hành ≤30 ngày" value={String(d.upcoming.length)} color="#14a08c" />
         <Kpi label="Tour có việc quá hạn" value={String(d.overdue.length)} color={d.overdue.length ? '#dc3250' : '#64748b'} />
+        <Kpi label="Biên lợi THẬT (đã quyết toán)" value={d.settledCount ? `${d.realMarginPct.toFixed(1)}%` : '—'}
+          sub={d.settledCount ? `${fmtShort(d.realProfit)} lãi · ${d.settledCount} tour` : 'chưa có tour quyết toán'}
+          color={d.realMarginPct < 0 ? '#dc3250' : d.realMarginPct < 10 ? '#e67e22' : '#0d7a6a'} />
       </Stack>
 
       <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
@@ -192,6 +205,30 @@ export function ExecBoard() {
                     sx={{ height: 5, borderRadius: 3, mt: 0.25, bgcolor: 'rgba(0,0,0,0.06)', '& .MuiLinearProgress-bar': { bgcolor: '#7c3aed' } }} />
                 </Box>
               ))}
+            </Stack>
+          )}
+        </Panel>
+        <Panel title="Tour biên lợi thật thấp/âm" color="#e67e22">
+          {d.lowMargin.length === 0 ? <Typography variant="caption" color="text.disabled">Chưa có tour nào quyết toán.</Typography> : (
+            <Stack spacing={0.75}>
+              {d.lowMargin.map((q) => {
+                const m = q.settlementSummary!.actualMarginPct ?? 0;
+                const mc = m < 0 ? '#dc3250' : m < 10 ? '#e67e22' : '#27ae60';
+                return (
+                  <Paper key={q.cloudId} variant="outlined" sx={{ p: 1, cursor: 'pointer', '&:hover': { boxShadow: 1 } }} onClick={() => void openTour(q, 'settlement')}>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography fontSize={13} fontWeight={600} noWrap>{q.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {q.customerName || q.createdByName} · lãi {fmtShort(q.settlementSummary!.actualProfit ?? 0)}
+                          {q.settlementSummary!.locked ? ' · đã chốt' : ''}
+                        </Typography>
+                      </Box>
+                      <Typography fontSize={14} fontWeight={800} sx={{ color: mc }}>{m.toFixed(1)}%</Typography>
+                    </Stack>
+                  </Paper>
+                );
+              })}
             </Stack>
           )}
         </Panel>
