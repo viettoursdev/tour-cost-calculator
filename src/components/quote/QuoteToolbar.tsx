@@ -330,7 +330,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const isCEO = currentUser?.role === 'CEO';
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
   const hidePrice = !canSeePrices(currentUser);
-  const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment']);
+  const PRICE_ONLY_VIEWS = new Set<QuoteViewKey>(['summary', 'dashboard', 'payboard', 'payment', 'settlement']);
   // Mở app Chương trình tour / Thực đơn (template riêng) từ dropdown Vận hành.
   const gotoApp = (tpl: 'itinerary' | 'menu' | 'guideschedule') => {
     const what = tpl === 'itinerary' ? 'Chương trình tour' : tpl === 'menu' ? 'Thực đơn' : 'Lịch đi tour HDV';
@@ -366,6 +366,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           item('payment', 'Quản lý thanh toán'),
           item('flights', 'Chuyến bay'),
           item('dashboard', 'Dashboard biên lợi'),
+          item('settlement', 'Quyết toán tour'),
           ...(isMgr ? [item('audit', 'Nhật ký')] : []),
           { label: 'Chương trình tour', icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') },
           { label: 'Thực đơn', icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') },
