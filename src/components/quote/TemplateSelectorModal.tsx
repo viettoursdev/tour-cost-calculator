@@ -7,6 +7,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -34,9 +35,10 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
 
   const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
-  // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC). Cần có draft để render —
-  // chưa có thì tạo nháp báo giá nội địa (dữ liệu KH/NCC độc lập với báo giá).
-  const gotoManage = (v: 'customer' | 'ncc') => {
+  const canHR = hasPerm(currentUser, 'viewHR');
+  // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC / Nhân sự). Cần có draft để
+  // render — chưa có thì tạo nháp báo giá nội địa (dữ liệu này độc lập với báo giá).
+  const gotoManage = (v: 'customer' | 'ncc' | 'hr') => {
     if (!hasDraft) newDraft('domestic');
     setView(v);
     onClose?.();
@@ -215,7 +217,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           })}
         </Box>
 
-        {(canCust || canNcc) && (
+        {(canCust || canNcc || canHR) && (
           <Box sx={{ maxWidth: 1200, mx: 'auto', mb: 5 }}>
             <Typography sx={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'rgba(15,58,74,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, mb: 1.5 }}>
               Quản lý danh mục
@@ -235,6 +237,14 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
                     color: '#7c3aed', border: '1.5px solid rgba(124,58,237,0.35)', bgcolor: '#fff',
                     '&:hover': { bgcolor: 'rgba(124,58,237,0.06)', borderColor: '#7c3aed' } }}>
                   Quản lý NCC
+                </Button>
+              )}
+              {canHR && (
+                <Button onClick={() => gotoManage('hr')} startIcon={<BadgeOutlinedIcon />}
+                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
+                    color: '#0369a1', border: '1.5px solid rgba(3,105,161,0.35)', bgcolor: '#fff',
+                    '&:hover': { bgcolor: 'rgba(3,105,161,0.06)', borderColor: '#0369a1' } }}>
+                  Nhân sự
                 </Button>
               )}
             </Stack>

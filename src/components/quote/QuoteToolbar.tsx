@@ -47,7 +47,6 @@ import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
-import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -324,7 +323,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   // Unified nav tabs (legacy order + icons). DMC shows only Breakdown + history.
   const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
   const canNcc = hasPerm(currentUser, 'manageNCC');
-  const canHR = hasPerm(currentUser, 'viewHR');
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
   const isCEO = currentUser?.role === 'CEO';
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
@@ -345,7 +343,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         item('cockpit', 'Hồ sơ tour', <RouteOutlinedIcon />),
         item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
         item('history', 'Lịch sử', <HistoryIcon />),
-        ...(canHR ? [item('hr', 'Nhân sự', <BadgeOutlinedIcon />)] : []),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),
           item('payboard', 'Công nợ tổng'),
