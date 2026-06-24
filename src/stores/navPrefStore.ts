@@ -25,6 +25,9 @@ function readLayout(username?: string | null): NavLayout | null {
 interface NavPrefState {
   /** Layout thô đã lưu của user hiện tại (null = dùng mặc định). */
   raw: NavLayout | null;
+  /** Mở hộp thoại tùy chỉnh (nút bấm ở header, modal render trong QuoteToolbar). */
+  customizeOpen: boolean;
+  setCustomizeOpen: (open: boolean) => void;
   load: (username?: string | null) => void;
   save: (username: string | null | undefined, layout: NavLayout) => void;
   reset: (username?: string | null) => void;
@@ -32,6 +35,8 @@ interface NavPrefState {
 
 export const useNavPrefStore = create<NavPrefState>((set) => ({
   raw: null,
+  customizeOpen: false,
+  setCustomizeOpen: (open) => set({ customizeOpen: open }),
   load: (username) => set({ raw: readLayout(username) }),
   save: (username, layout) => {
     try { localStorage.setItem(keyFor(username), JSON.stringify(layout)); } catch { /* quota */ }

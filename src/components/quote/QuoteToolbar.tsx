@@ -47,7 +47,6 @@ import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
-import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { NavCustomizeModal } from './NavCustomizeModal';
 import { useNavPrefStore } from '@/stores/navPrefStore';
@@ -182,9 +181,10 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   // Tùy biến thanh điều hướng theo từng user (lưu localStorage).
   const navRaw = useNavPrefStore((s) => s.raw);
   const loadNavPref = useNavPrefStore((s) => s.load);
+  const navCustomizeOpen = useNavPrefStore((s) => s.customizeOpen);
+  const setNavCustomizeOpen = useNavPrefStore((s) => s.setCustomizeOpen);
   const username = currentUser?.u;
   useEffect(() => { loadNavPref(username); }, [username, loadNavPref]);
-  const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
 
   const isDMC = template === 'dmc';
   const canExport = !!(template && template !== 'dmc' && currentUser);
@@ -569,17 +569,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         </Box>
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* Tùy chỉnh thanh điều hướng (kéo-thả / nhóm / ẩn-hiện theo từng user) */}
-        {!isDMC && (
-          <Tooltip title="Tùy chỉnh thanh điều hướng">
-            <IconButton size="small" onClick={() => setNavCustomizeOpen(true)}
-              sx={{ color: '#0d7a6a', border: '1px solid rgba(20,150,140,0.4)', borderRadius: 1.5, px: 0.75,
-                '&:hover': { borderColor: '#0d7a6a', background: 'rgba(20,150,140,0.08)' } }}>
-              <TuneOutlinedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        )}
-
         {/* Rate Card dropdown (legacy "📋 Rate Card") */}
         <Tooltip title="Rate Card">
           <IconButton size="small" onClick={(e) => setRateAnchor(e.currentTarget)}
@@ -845,7 +834,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           label={rateModal.label}
         />
       )}
-      {navCustomizeOpen && (
+      {navCustomizeOpen && !isDMC && (
         <NavCustomizeModal
           open
           onClose={() => setNavCustomizeOpen(false)}

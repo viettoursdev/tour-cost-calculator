@@ -7,6 +7,7 @@ import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import { QuoteView } from '@/components/quote/QuoteView';
@@ -27,6 +28,7 @@ import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { useNavPrefStore } from '@/stores/navPrefStore';
 import { tagForContext } from '@/components/shell/guideSteps';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewStaffRole } from '@/auth/ROLES';
@@ -62,6 +64,9 @@ export function AppShell() {
   const [onboardContext, setOnboardContext] = useState<string | undefined>(undefined);
   const tplForGuide = useQuoteStore((s) => s.draft.template);
   const viewForGuide = useQuoteStore((s) => s.view);
+  // Nút tùy chỉnh thanh điều hướng — chỉ hiện với báo giá thường (nav tùy biến nằm ở QuoteToolbar).
+  const openNavCustomize = useNavPrefStore((s) => s.setCustomizeOpen);
+  const canCustomizeNav = tplForGuide === 'domestic' || tplForGuide === 'intl';
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [whatsNewEntries, setWhatsNewEntries] = useState<WhatsNewEntry[] | undefined>(undefined);
   const [unseenNew, setUnseenNew] = useState(0);
@@ -170,6 +175,13 @@ export function AppShell() {
                   ✨ Có gì mới{unseenNew > 0 ? ` (${unseenNew})` : ''}
                 </MenuItem>
               </Menu>
+              {canCustomizeNav && (
+                <Tooltip title="Tùy chỉnh thanh điều hướng">
+                  <IconButton sx={headBtnSx} onClick={() => openNavCustomize(true)}>
+                    <TuneOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               <Tooltip title="Đăng xuất">
                 <IconButton
                   onClick={() => { void signOut(); }}
