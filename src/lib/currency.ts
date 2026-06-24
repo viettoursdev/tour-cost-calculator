@@ -24,6 +24,17 @@ export function fxLabel(code: string): string {
   return code === 'CNY' ? 'RMB' : code;
 }
 
+// Ngoại tệ → VND. `rates[cur]` = số VND của 1 đơn vị ngoại tệ.
+// VND hoặc thiếu tỷ giá → giữ nguyên (coi như đã là VND).
+export function foreignToVND(
+  amount: number,
+  cur: string | undefined,
+  rates: Record<string, number>,
+): number {
+  if (!cur || cur === 'VND' || !rates[cur]) return amount;
+  return amount * rates[cur];
+}
+
 // Source: public/legacy.html:3694-3697
 // VND or missing rate → identity.
 export function toOutputCurrency(

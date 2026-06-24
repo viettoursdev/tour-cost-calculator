@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Divider, IconButton, Stack, TextField, Typography,
+  Alert, Box, Button, Chip, Divider, IconButton, Menu, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import { DMC_CURRENCIES, CURRENCY_FLAGS } from '@/lib/currency';
 import { sbSetQuotePaymentSummary } from '@/lib/supabase';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { usePaymentStore } from '@/stores/paymentStore';
@@ -30,6 +32,10 @@ function defaultRec(): PaymentRecord {
 const groupVN = (n: number): string => (n ? Math.round(n).toLocaleString('vi-VN') : '');
 // Bỏ mọi ký tự không phải chữ số (dấu chấm, khoảng trắng…) → số nguyên.
 const parseAmount = (s: string): number => Number(s.replace(/\D/g, '')) || 0;
+// Hiển thị số ngoại tệ (cho phép 2 số lẻ, nhóm hàng nghìn kiểu en-US).
+const fmtForeign = (n: number): string =>
+  n ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export function PaymentView() {
   const draft = useQuoteStore((s) => s.draft);
@@ -57,9 +63,17 @@ export function PaymentView() {
     [draft, activeCats],
   );
   const allItems = useMemo(
-    () => buildAllItems(sourceItems, payments, customItems),
-    [sourceItems, payments, customItems],
+    () => buildAllItems(sourceItems, payments, customItems, draft.rates),
+    [sourceItems, payments, customItems, draft.rates],
   );
+
+  // Mã tiền có thể chọn cho từng hạng mục: VND + các ngoại tệ có tỷ giá trong báo giá.
+  const currencyOptions = useMemo(() => {
+    const foreign = Object.keys(draft.rates).filter((c) => c !== 'VND' && +draft.rates[c] > 0);
+    const ordered = DMC_CURRENCIES.filter((c) => c !== 'VND' && foreign.includes(c));
+    const extra = foreign.filter((c) => !DMC_CURRENCIES.includes(c as never));
+    return ['VND', ...ordered, ...extra];
+  }, [draft.rates]);
   const trackedItems = allItems.filter((i) => i.tracked);
   const totals = computePaymentTotals(allItems, payments);
   const untracked = allItems.length - trackedItems.length;
@@ -92,6 +106,8 @@ export function PaymentView() {
   }, [trackedItems]);
 
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Buffer chuỗi đang gõ cho ô số ngoại tệ (để gõ được dấu thập phân mượt).
+  const [amtEdit, setAmtEdit] = useState<{ key: string; val: string } | null>(null);
   const [trackModalOpen, setTrackModalOpen] = useState(false);
   const [addCustomOpen, setAddCustomOpen] = useState(false);
   const [reqModal, setReqModal] = useState<
@@ -132,6 +148,7 @@ export function PaymentView() {
   const resetAmount = (key: string) => {
     const rec = { ...(payments[key] ?? {}) };
     delete rec.customAmount;
+    delete rec.cur;
     updateRec(key, rec);
   };
   const setNote = (key: string, v: string) => {
@@ -182,6 +199,38 @@ export function PaymentView() {
   };
   const addCustom = (item: typeof customItems[number]) => {
     usePaymentStore.getState().setCustomItems(tourKey, [...customItems, item]);
+  };
+
+  // Sửa số tiền hạng mục — `v` được hiểu theo mã tiền hiện tại của hạng mục.
+  const setItemAmount = (ci: PaymentItem, v: number) => {
+    if (ci.custom) editCustomAmount(ci.key, v);
+    else setCustomAmount(ci.key, v);
+  };
+
+  // Đổi mã tiền của hạng mục: giữ nguyên giá trị VND, quy đổi sang mã mới qua tỷ giá báo giá.
+  const setItemCurrency = (ci: PaymentItem, newCur: string) => {
+    const foreign = newCur !== 'VND';
+    const rate = foreign ? +draft.rates[newCur] || 0 : 0;
+    const vnd = ci.amount; // VND chuẩn của giá trị đang có
+    if (ci.custom) {
+      const amount = foreign && rate ? round2(vnd / rate) : Math.round(vnd);
+      usePaymentStore.getState().setCustomItems(
+        tourKey,
+        customItems.map((c) => (c.key === ci.key ? { ...c, amount, cur: foreign ? newCur : undefined } : c)),
+      );
+    } else {
+      const rec = { ...(payments[ci.key] ?? {}) };
+      if (foreign) {
+        rec.cur = newCur;
+        rec.customAmount = rate ? round2(vnd / rate) : 0;
+      } else {
+        delete rec.cur;
+        // Về VND: nếu trùng giá vốn thì bỏ override, ngược lại giữ số VND.
+        if (Math.round(vnd) === Math.round(ci.sourceAmount)) delete rec.customAmount;
+        else rec.customAmount = Math.round(vnd);
+      }
+      updateRec(ci.key, rec);
+    }
   };
 
   return (
@@ -306,27 +355,48 @@ export function PaymentView() {
                       />
                     </Box>
                     <Box
-                      sx={{ textAlign: 'right', minWidth: 160 }}
+                      sx={{ textAlign: 'right', minWidth: 180 }}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <TextField
-                        value={groupVN(ci.amount)}
-                        onChange={(e) => {
-                          const v = parseAmount(e.target.value);
-                          if (ci.custom) editCustomAmount(ci.key, v);
-                          else setCustomAmount(ci.key, v);
-                        }}
-                        slotProps={{ htmlInput: { inputMode: 'numeric' } }}
-                        size="small"
-                        variant="standard"
-                        sx={{
-                          width: 140,
-                          '& .MuiInput-input': {
-                            textAlign: 'right', fontWeight: 800, fontSize: 15,
-                            color: ci.isOverridden ? '#8e44ad' : 'text.primary',
-                          },
-                        }}
-                      />
+                      <Stack direction="row" alignItems="center" justifyContent="flex-end" spacing={0.5}>
+                        <TextField
+                          value={
+                            ci.cur
+                              ? (amtEdit?.key === ci.key ? amtEdit.val : fmtForeign(ci.foreignAmount ?? 0))
+                              : groupVN(ci.amount)
+                          }
+                          onChange={(e) => {
+                            if (ci.cur) {
+                              const clean = e.target.value.replace(/[^\d.]/g, '');
+                              setAmtEdit({ key: ci.key, val: clean });
+                              setItemAmount(ci, Number(clean) || 0);
+                            } else {
+                              setItemAmount(ci, parseAmount(e.target.value));
+                            }
+                          }}
+                          onBlur={() => setAmtEdit(null)}
+                          slotProps={{ htmlInput: { inputMode: ci.cur ? 'decimal' : 'numeric' } }}
+                          size="small"
+                          variant="standard"
+                          sx={{
+                            width: ci.cur ? 110 : 140,
+                            '& .MuiInput-input': {
+                              textAlign: 'right', fontWeight: 800, fontSize: 15,
+                              color: ci.isOverridden ? '#8e44ad' : 'text.primary',
+                            },
+                          }}
+                        />
+                        <CatCurrencyMenu
+                          value={ci.cur ?? 'VND'}
+                          options={currencyOptions}
+                          onChange={(c) => setItemCurrency(ci, c)}
+                        />
+                      </Stack>
+                      {ci.cur && (
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: 'text.secondary' }}>
+                          ≈ {fmtVND(ci.amount)}
+                        </Typography>
+                      )}
                       <Typography
                         variant="caption"
                         sx={{
@@ -336,7 +406,7 @@ export function PaymentView() {
                       >
                         {remaining <= 0 ? '✅ Đã trả đủ' : paidSum > 0 ? `Còn thiếu ${fmtVND(remaining)}` : 'Chưa thanh toán'}
                       </Typography>
-                      {ci.isOverridden && (
+                      {ci.isOverridden && !ci.custom && (
                         <Button
                           size="small"
                           onClick={() => resetAmount(ci.key)}
@@ -539,6 +609,41 @@ export function PaymentView() {
         />
       )}
     </Box>
+  );
+}
+
+function CatCurrencyMenu({
+  value, options, onChange,
+}: { value: string; options: string[]; onChange: (cur: string) => void }) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const flag = (c: string) => CURRENCY_FLAGS[c as keyof typeof CURRENCY_FLAGS] ?? '💱';
+  return (
+    <>
+      <Button
+        size="small"
+        onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+        endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 14 }} />}
+        sx={{
+          minWidth: 0, px: 0.75, py: 0.25, fontSize: 11, fontWeight: 700,
+          textTransform: 'none', color: value === 'VND' ? 'text.secondary' : '#0d7a6a',
+          bgcolor: value === 'VND' ? 'transparent' : 'rgba(13,122,106,0.08)',
+        }}
+      >
+        {flag(value)} {value}
+      </Button>
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+        {options.map((c) => (
+          <MenuItem
+            key={c}
+            selected={c === value}
+            onClick={() => { onChange(c); setAnchorEl(null); }}
+            sx={{ fontSize: 13, minWidth: 130, fontWeight: c === value ? 700 : 400 }}
+          >
+            {flag(c)} {c}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 }
 

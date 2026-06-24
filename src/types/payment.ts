@@ -22,7 +22,10 @@ export interface NccDueItem {
 export interface PaymentRecord {
   supplier?: string;
   tracked?: boolean;
+  /** Số tiền hạng mục đã chỉnh tay. Diễn giải theo `cur` (VND nếu `cur` trống). */
   customAmount?: number;
+  /** Mã ngoại tệ của `customAmount` (vd USD). Trống = VND. Quy đổi qua draft.rates. */
+  cur?: string;
   installments?: Installment[];
   note?: string;
 }
@@ -34,7 +37,10 @@ export interface CustomCostItem {
   catIcon: string;
   catColor: string;
   name: string;
+  /** Số tiền theo `cur` (VND nếu `cur` trống). */
   amount: number;
+  /** Mã ngoại tệ của `amount` (vd USD). Trống = VND. Quy đổi qua draft.rates. */
+  cur?: string;
 }
 
 /** Ảnh chụp đông cứng các số quyết toán tại thời điểm CHỐT (để kế toán dùng làm căn cứ). */
@@ -76,8 +82,14 @@ export interface PaymentItem {
   catIcon: string;
   catColor: string;
   name: string;
+  /** Giá vốn dự toán (VND). */
   sourceAmount: number;
+  /** Số tiền hạng mục đã quy về VND (dùng cho mọi tổng hợp). */
   amount: number;
+  /** Mã ngoại tệ đang nhập cho hạng mục (trống = VND). */
+  cur?: string;
+  /** Số tiền theo `cur` khi `cur` là ngoại tệ (để hiển thị/sửa). */
+  foreignAmount?: number;
   tracked: boolean;
   custom: boolean;
   isOverridden: boolean;

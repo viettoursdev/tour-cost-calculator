@@ -77,7 +77,7 @@ export function WorkflowView() {
     let pay = { totalPaid: 0, totalRemaining: 0, totalCost: 0 };
     if (slot && draft.template) {
       const payments = slot.data.payments ?? {};
-      const allItems = buildAllItems(buildSourceItems(draft, getCATS(draft.template)), payments, slot.data.customItems ?? []);
+      const allItems = buildAllItems(buildSourceItems(draft, getCATS(draft.template)), payments, slot.data.customItems ?? [], draft.rates);
       const t = computePaymentTotals(allItems, payments);
       pay = { totalPaid: t.totalPaid, totalRemaining: t.totalRemaining, totalCost: t.totalCost };
     }

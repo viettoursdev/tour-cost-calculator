@@ -1,6 +1,7 @@
 import type {
   CategoryId, CustomCostItem, Installment, NccDueItem, PaymentItem, PaymentRecord, QuoteDraft,
 } from '@/types';
+import { foreignToVND } from '@/lib/currency';
 import { calcVND, catTotal, computeTotals } from './calc';
 import type { CategoryDef } from './constants';
 
@@ -42,17 +43,26 @@ export function buildAllItems(
   source: PaymentItem[],
   payments: Record<string, PaymentRecord>,
   customItems: CustomCostItem[],
+  rates: Record<string, number> = {},
 ): PaymentItem[] {
   const out: PaymentItem[] = source.map((row) => {
     const rec = payments[row.key];
     const tracked = rec?.tracked !== false;
-    const overridden = rec?.customAmount != null && +rec.customAmount !== row.sourceAmount;
-    const amount = rec?.customAmount != null ? +rec.customAmount : row.sourceAmount;
-    return { ...row, tracked, amount, isOverridden: overridden };
+    const cur = rec?.cur && rec.cur !== 'VND' ? rec.cur : undefined;
+    const hasCustom = rec?.customAmount != null;
+    // `customAmount` được nhập theo `cur` (VND nếu cur trống). Quy về VND để tổng hợp.
+    const amount = hasCustom
+      ? foreignToVND(+rec!.customAmount!, cur, rates)
+      : row.sourceAmount;
+    const foreignAmount = cur ? (hasCustom ? +rec!.customAmount! : 0) : undefined;
+    const overridden = (hasCustom && amount !== row.sourceAmount) || !!cur;
+    return { ...row, tracked, amount, cur, foreignAmount, isOverridden: overridden };
   });
   customItems.forEach((ct) => {
     const rec = payments[ct.key];
-    const amount = +ct.amount || 0;
+    const cur = ct.cur && ct.cur !== 'VND' ? ct.cur : undefined;
+    const raw = +ct.amount || 0;
+    const amount = foreignToVND(raw, cur, rates);
     out.push({
       key: ct.key,
       catId: ct.catId as CategoryId,
@@ -62,6 +72,8 @@ export function buildAllItems(
       name: ct.name,
       sourceAmount: amount,
       amount,
+      cur,
+      foreignAmount: cur ? raw : undefined,
       tracked: rec?.tracked !== false,
       custom: true,
       isOverridden: false,
@@ -104,7 +116,7 @@ export function computePaymentSummary(
   payments: Record<string, PaymentRecord>,
   customItems: CustomCostItem[],
 ): PaymentSummaryIndex {
-  const all = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems);
+  const all = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems, draft.rates);
   const t = computePaymentTotals(all, payments);
   return { payable: t.totalCost, paid: t.totalPaid, remaining: t.totalRemaining };
 }
@@ -192,7 +204,7 @@ export function computeSettlement(
   opts?: { actualRevenue?: number },
 ): SettlementResult {
   const totals = computeTotals(draft);
-  const allItems = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems);
+  const allItems = buildAllItems(buildSourceItems(draft, activeCats), payments, customItems, draft.rates);
 
   const paidOf = (key: string): number =>
     (payments[key]?.installments ?? [])
