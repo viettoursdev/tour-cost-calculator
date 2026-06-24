@@ -1,6 +1,7 @@
 export * from './user';
 export * from './rates';
 export * from './quote';
+export * from './tour';
 export * from './customer';
 export * from './ncc';
 export * from './contract';

@@ -5,6 +5,7 @@ import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, Vis
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import type { CloudQuoteEntry, Template, Collaborator } from '@/types/quote';
+import type { TourProfile, TourKind } from '@/types/tour';
 import { subscribeTable, replaceChildren, usernamesToIds, serializeWrites } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -2855,6 +2856,8 @@ type SaveEntry = {
   linkedQuoteId?: string;
   linkedQuoteName?: string;
   linkedQuoteTemplate?: Template;
+  tourProfileId?: string;
+  tourCode?: string;
 };
 
 type SavedBy = { u: string; name: string; role: string };
@@ -2912,6 +2915,8 @@ function rowToCloudQuoteEntry(
     linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
     linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
     linkedQuoteTemplate: (r.linked_quote_template as Template) ?? undefined,
+    tourProfileId: (r.tour_profile_id as string) ?? undefined,
+    tourCode: (r.tour_code as string) ?? undefined,
     createdByUsername: (r.created_by_username as string) ?? '',
     createdByName: (r.created_by_name as string) ?? '',
     collaborators: collabs.map((c) => ({ u: (c.username as string) ?? '', name: (c.name as string) ?? '' })),
@@ -3004,6 +3009,8 @@ async function saveSingleQuoteEntry(
   if (entry.linkedQuoteId !== undefined)    row.linked_quote_id = entry.linkedQuoteId;
   if (entry.linkedQuoteName !== undefined)  row.linked_quote_name = entry.linkedQuoteName;
   if (entry.linkedQuoteTemplate !== undefined) row.linked_quote_template = entry.linkedQuoteTemplate;
+  if (entry.tourProfileId !== undefined)    row.tour_profile_id = entry.tourProfileId;
+  if (entry.tourCode !== undefined)         row.tour_code = entry.tourCode;
 
   // resolve customerId (legacy string) → uuid FK
   if (entry.customerId !== undefined) {
@@ -3027,7 +3034,7 @@ async function saveSingleQuoteEntry(
     .upsert(row, { onConflict: 'cloud_id' })
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ' +
-            'linked_quote_id, linked_quote_name, linked_quote_template, ' +
+            'linked_quote_id, linked_quote_name, linked_quote_template, tour_profile_id, tour_code, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .single();
   if (upErr) throw new Error('sbSaveQuote upsert: ' + upErr.message);
@@ -3078,7 +3085,7 @@ async function loadQuoteHistory(
     .from('quotes')
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ncc_due, ' +
-            'linked_quote_id, linked_quote_name, linked_quote_template, share, ' +
+            'linked_quote_id, linked_quote_name, linked_quote_template, tour_profile_id, tour_code, share, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .order('created_at', { ascending: false });
 
@@ -3177,6 +3184,87 @@ export function sbSubscribeDMCQuoteHistory(
     (cl) => loadQuoteHistory(cl, true),
     cb,
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hồ sơ tour (Tour Profile) — aggregate root MỎNG. Row-per-profile (xem 0043).
+// Functions: sbNextTourCode, sbSubscribe/Upsert/Delete TourProfile.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const rowToTourProfile = (r: Record<string, unknown>): TourProfile => ({
+  id: r.id as string,
+  code: (r.code as string) ?? '',
+  kind: (r.kind as TourKind) ?? 'domestic',
+  name: (r.name as string) ?? '',
+  customerId: (r.customer_id as string) ?? undefined,
+  customerName: (r.customer_name as string) ?? undefined,
+  dest: (r.dest as string) ?? undefined,
+  startDate: r.start_date ? new Date(r.start_date as string).toISOString().slice(0, 10) : null,
+  pax: (r.pax as number) ?? 0,
+  primaryQuoteId: (r.primary_quote_id as string) ?? undefined,
+  status: (r.status as TourProfile['status']) ?? 'open',
+  note: (r.note as string) ?? undefined,
+  collaborators: (r.collaborators as Collaborator[]) ?? [],
+  followers: (r.followers as Collaborator[]) ?? [],
+  createdByU: (r.created_by_username as string) ?? undefined,
+  createdBy: (r.created_by_name as string) ?? undefined,
+  createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : new Date().toISOString(),
+  updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
+  id: p.id,
+  code: p.code,
+  kind: p.kind,
+  name: p.name,
+  customer_id: p.customerId ?? null,
+  customer_name: p.customerName ?? null,
+  dest: p.dest ?? null,
+  start_date: p.startDate ?? null,
+  pax: p.pax ?? 0,
+  primary_quote_id: p.primaryQuoteId ?? null,
+  status: p.status ?? 'open',
+  note: p.note ?? '',
+  collaborators: p.collaborators ?? [],
+  followers: p.followers ?? [],
+  created_by_username: p.createdByU ?? '',
+  created_by_name: p.createdBy ?? '',
+  created_at: p.createdAt,
+  updated_at: p.updatedAt ?? null,
+  updated_by_name: p.updatedBy ?? null,
+});
+
+/** Sinh mã hồ sơ tour ATOMIC ở DB (advisory lock theo ngày → chống trùng STT). */
+export async function sbNextTourCode(kind: TourKind, client: SupabaseClient = sb): Promise<string> {
+  const { data, error } = await client.rpc('next_tour_code', { p_kind: kind });
+  if (error) throw new Error('sbNextTourCode: ' + error.message);
+  return data as string;
+}
+
+export function sbSubscribeTourProfiles(
+  cb: (list: TourProfile[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'tour_profiles', async (cl) => {
+    const { data, error } = await cl
+      .from('tour_profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error('sbSubscribeTourProfiles: ' + error.message);
+    return (data ?? []).map(rowToTourProfile);
+  }, cb);
+}
+
+/** Upsert một hồ sơ (tạo/sửa). Chỉ đụng đúng dòng đó → không ghi đè hồ sơ khác. */
+export async function sbUpsertTourProfile(p: TourProfile, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('tour_profiles').upsert(tourProfileToRow(p), { onConflict: 'id' });
+  if (error) throw new Error('sbUpsertTourProfile: ' + error.message);
+}
+
+export async function sbDeleteTourProfile(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('tour_profiles').delete().eq('id', id);
+  if (error) throw new Error('sbDeleteTourProfile: ' + error.message);
 }
 
 // ── Phase 2 Task 5 — Quote Project State ────────────────────────────────────

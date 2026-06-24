@@ -1,0 +1,150 @@
+import { create } from 'zustand';
+import { subscribeWithSelector } from 'zustand/middleware';
+import {
+  sbSubscribeTourProfiles,
+  sbUpsertTourProfile,
+  sbDeleteTourProfile,
+  sbNextTourCode,
+} from '@/lib/supabase';
+import { useAuthStore } from './authStore';
+import { generateTourCode, visibleTourProfiles } from '@/lib/tourProfile';
+import type { Collaborator, TourKind, TourProfile } from '@/types';
+import type { Unsubscribe } from '@/lib/supabase/helpers';
+
+const newId = (): string => 'tp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/** Thông tin tối thiểu để mở một hồ sơ tour mới. */
+export type NewTourProfileInput = {
+  kind: TourKind;
+  name: string;
+  customerId?: string;
+  customerName?: string;
+  dest?: string;
+  startDate?: string | null;
+  pax?: number;
+  primaryQuoteId?: string;
+  collaborators?: Collaborator[];
+};
+
+type State = {
+  profiles: TourProfile[];
+  loading: boolean;
+  error: string | null;
+  init: () => Unsubscribe;
+  /** Hồ sơ user được phép xem (creator / collab / follower / TP-PP cùng phòng / BGĐ-CEO). */
+  visibleProfiles: () => TourProfile[];
+  /** Tạo hồ sơ mới — sinh mã atomic ở DB (fallback client nếu RPC lỗi). */
+  create: (input: NewTourProfileInput) => Promise<TourProfile | null>;
+  save: (p: TourProfile) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  setPrimaryQuote: (id: string, quoteId: string) => Promise<void>;
+  addCollaborator: (id: string, c: Collaborator) => Promise<void>;
+  addFollower: (id: string, c: Collaborator) => Promise<void>;
+  archive: (id: string, on: boolean) => Promise<void>;
+};
+
+export const useTourProfileStore = create<State>()(
+  subscribeWithSelector((set, get) => ({
+    profiles: [],
+    loading: true,
+    error: null,
+
+    init: () => sbSubscribeTourProfiles((profiles) => set({ profiles, loading: false })),
+
+    visibleProfiles: () => {
+      const u = useAuthStore.getState().currentUser;
+      const users = useAuthStore.getState().users;
+      return visibleTourProfiles(u, get().profiles, users);
+    },
+
+    create: async (input) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return null;
+      // Mã sinh atomic ở DB; nếu RPC lỗi thì đoán client từ danh sách đang có.
+      let code: string;
+      try {
+        code = await sbNextTourCode(input.kind);
+      } catch {
+        code = generateTourCode(input.kind, get().profiles);
+      }
+      const now = new Date().toISOString();
+      const profile: TourProfile = {
+        id: newId(),
+        code,
+        kind: input.kind,
+        name: input.name.trim(),
+        customerId: input.customerId,
+        customerName: input.customerName,
+        dest: input.dest,
+        startDate: input.startDate ?? null,
+        pax: input.pax ?? 0,
+        primaryQuoteId: input.primaryQuoteId,
+        status: 'open',
+        collaborators: input.collaborators ?? [],
+        followers: [],
+        createdByU: u.u,
+        createdBy: u.name,
+        createdAt: now,
+      };
+      const prev = get().profiles;
+      set({ profiles: [profile, ...prev] });
+      try {
+        await sbUpsertTourProfile(profile);
+      } catch (e) {
+        set({ profiles: prev, error: (e as Error).message });
+        return null;
+      }
+      return profile;
+    },
+
+    save: async (p) => {
+      const u = useAuthStore.getState().currentUser;
+      const next: TourProfile = {
+        ...p,
+        updatedAt: new Date().toISOString(),
+        updatedBy: u ? `${u.name} (${u.role})` : p.updatedBy,
+      };
+      const prev = get().profiles;
+      set({ profiles: prev.map((x) => (x.id === p.id ? next : x)) });
+      try {
+        await sbUpsertTourProfile(next);
+      } catch (e) {
+        set({ profiles: prev, error: (e as Error).message });
+      }
+    },
+
+    remove: async (id) => {
+      const prev = get().profiles;
+      set({ profiles: prev.filter((x) => x.id !== id) });
+      try {
+        await sbDeleteTourProfile(id);
+      } catch (e) {
+        set({ profiles: prev, error: (e as Error).message });
+      }
+    },
+
+    setPrimaryQuote: async (id, quoteId) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (p) await get().save({ ...p, primaryQuoteId: quoteId });
+    },
+
+    addCollaborator: async (id, c) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      if ((p.collaborators ?? []).some((x) => x.u === c.u)) return;
+      await get().save({ ...p, collaborators: [...(p.collaborators ?? []), c] });
+    },
+
+    addFollower: async (id, c) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      if ((p.followers ?? []).some((x) => x.u === c.u)) return;
+      await get().save({ ...p, followers: [...(p.followers ?? []), c] });
+    },
+
+    archive: async (id, on) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (p) await get().save({ ...p, status: on ? 'archived' : 'open' });
+    },
+  })),
+);

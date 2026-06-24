@@ -111,6 +111,8 @@ export type NewQuoteMeta = {
   startDate?: string | null;
   deadline?: string;
   collaborators?: Collaborator[];
+  /** Gắn báo giá vào hồ sơ tour CÓ SẴN (trống = tự tạo hồ sơ mới khi lưu). */
+  tourProfileId?: string;
   /** File Excel báo giá lúc tạo (option "Upload Excel" / "Upload Excel + AI"). */
   excelFile?: FileAttachment;
   /** Khoá trang báo giá (chỉ xem file Excel, không nhập trên app). */
@@ -240,6 +242,10 @@ export type QuoteDraft = {
   items: Partial<Record<CategoryId, Item[]>>;
   catEnabled: Record<CategoryId, boolean>;
   currentQuoteId: string | null;
+  /** Hồ sơ tour (Tour Profile) mà báo giá này thuộc về — 1 hồ sơ : N báo giá.
+   *  Suy ra qua đường dẫn nếu trống; round-trip qua import/export. */
+  tourProfileId?: string;
+  tourCode?: string;       // mã hồ sơ tour (tiện hiển thị, suy từ profile)
   status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
   lossReason?: string;     // Lý do thua (khi status = not_selected/cancelled)
   request?: QuoteRequestKind; // Loại yêu cầu (Request tour / Thầu) — nhập khi tạo
@@ -362,6 +368,9 @@ export type CloudQuoteEntry = {
   template: Template;
   pax: number;
   totalCost: number;
+  /** Hồ sơ tour mà báo giá thuộc về (1 hồ sơ : N báo giá). */
+  tourProfileId?: string;
+  tourCode?: string;
   customerId?: string;
   customerName?: string;
   /** Điểm đến của tour (info.dest) — index cho lịch sử báo giá. */

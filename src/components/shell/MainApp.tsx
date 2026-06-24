@@ -6,6 +6,7 @@ import { sbSubscribeFxRates } from '@/lib/supabase';
 import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useNccProductsStore } from '@/stores/nccProductsStore';
@@ -66,6 +67,7 @@ export function MainApp() {
 
     useQuoteStore.getState().init(currentUser);
     const qhUnsub = useQuoteHistoryStore.getState().init(currentUser);
+    const tpUnsub = useTourProfileStore.getState().init();
     // FX rates are shared across ALL accounts (not gated by syncsSharedData).
     const fxUnsub = sbSubscribeFxRates((d) => {
       if (d.rates) useQuoteStore.getState().setRatesSynced(d.rates, d._meta?.pushedAt, d._meta?.pushedBy);
@@ -135,6 +137,7 @@ export function MainApp() {
       fxUnsub?.();
       rcUnsub?.();
       qhUnsub?.();
+      tpUnsub?.();
       custUnsub?.();
       nccUnsub?.();
       nccProdUnsub?.();
