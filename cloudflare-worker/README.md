@@ -98,11 +98,15 @@ Worker có handler `scheduled` soạn **"Bản tin sáng"** mỗi sáng cho cấ
 nhờ Claude (Sonnet) viết tiếng Việt, rồi ghi vào bảng `notifications` (người dùng nhận
 in-app + OS notification nếu app đang mở).
 
-**Thiết lập (sau khi dán lại `viettours-ai-worker.js`):**
+Worker **tự deploy qua CI** (`.github/workflows/worker-deploy.yml`) mỗi khi push đụng
+`cloudflare-worker/**` hoặc `wrangler.toml` → handler `scheduled` lên live tự động.
 
-1. **Cron Trigger:** Worker → **Settings → Triggers → Cron Triggers → Add** →
-   `0 1 * * *` (01:00 UTC = **08:00 giờ Việt Nam**).
-2. **2 biến môi trường mới** (Worker → **Settings → Variables and Secrets → Add**):
+**Thiết lập còn lại:**
+
+1. **Cron Trigger:** ĐÃ khai báo trong [`wrangler.toml`](../wrangler.toml) `[triggers] crons = ["0 1 * * *"]`
+   → `wrangler deploy` của CI **tự áp** mỗi lần deploy, không cần set tay dashboard (và không
+   bị mất sau deploy). `0 1 * * *` = 01:00 UTC = **08:00 giờ Việt Nam**.
+2. **2 biến môi trường** (Worker → **Settings → Variables and Secrets → Add** — CI KHÔNG quản 2 cái này):
    - `SUPABASE_URL` = `https://zkzrvctqwnhzklvsoahk.supabase.co` (Type **Text** cũng được).
    - `SUPABASE_SERVICE_ROLE_KEY` = service-role key (Type **Secret**). **Bí mật tuyệt đối** —
      bypass toàn bộ RLS để đọc quotes/profiles và ghi notification cho người khác. KHÔNG dán

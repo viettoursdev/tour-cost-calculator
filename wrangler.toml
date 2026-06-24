@@ -4,6 +4,13 @@
 name = "tour-cost-calculator"
 compatibility_date = "2025-06-01"
 
+# Cron cho "Bản tin sáng" (handler `scheduled` trong viettours-ai-worker.js).
+# Khai báo ở đây để mỗi lần worker-deploy.yml chạy `wrangler deploy` là cron tự
+# được áp — KHÔNG cần set tay trong Cloudflare dashboard, và không bị mất sau deploy.
+# "0 1 * * *" = 01:00 UTC = 08:00 giờ Việt Nam.
+[triggers]
+crons = ["0 1 * * *"]
+
 # R2 bucket lưu file đính kèm (endpoint /upload, /file). Tạo bucket tên "viettours-files"
 # trong Cloudflare → R2. Nếu deploy qua Git mà binding không áp dụng, thêm thủ công ở
 # Worker → Settings → Bindings → R2 (Variable name = FILES).
