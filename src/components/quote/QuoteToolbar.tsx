@@ -342,8 +342,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
     ? [item('cost', 'Breakdown', <BarChartOutlinedIcon />), item('history', 'Lịch sử', <HistoryIcon />)]
     : [
         item('home', 'Hôm nay', <TodayOutlinedIcon />),
-        item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
         item('cockpit', 'Hồ sơ tour', <RouteOutlinedIcon />),
+        item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
         item('history', 'Lịch sử', <HistoryIcon />),
         ...(canHR ? [item('hr', 'Nhân sự', <BadgeOutlinedIcon />)] : []),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
