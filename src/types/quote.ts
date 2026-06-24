@@ -291,6 +291,23 @@ export interface AdvanceLine {
 /** draft → tam_ung (đã gửi duyệt, chờ/đã tạm ứng) → quyet_toan (đã quyết toán, đóng case). */
 export type AdvanceStatus = 'draft' | 'tam_ung' | 'quyet_toan';
 
+/** Cách thanh toán cho 1 khoản chi khi quyết toán tạm ứng. */
+export type AdvancePayMethod = 'cash' | 'company_card' | 'personal_card' | 'other_card' | 'transfer' | 'other';
+
+/** Một khoản chi THỰC TẾ khi quyết toán tạm ứng — có phương thức & ngoại tệ riêng. */
+export interface AdvanceSettlePay {
+  id: string;
+  /** Nội dung khoản chi. */
+  name: string;
+  note?: string;
+  /** Phương thức thanh toán (tiền mặt, thẻ công ty, thẻ cá nhân…). */
+  method: AdvancePayMethod;
+  /** Mã ngoại tệ của số tiền (vd USD). Trống = VND. Quy đổi qua draft.rates. */
+  cur?: string;
+  /** Số tiền theo `cur`. */
+  amount: number;
+}
+
 export interface TourAdvance {
   status: AdvanceStatus;
   /** Chi phí đi tour (có rate card). */
@@ -299,6 +316,8 @@ export interface TourAdvance {
   otherCosts: AdvanceLine[];
   /** Số tiền đề nghị tạm ứng (VND). */
   advanceRequested: number;
+  /** Quyết toán CP tạm ứng — các khoản chi thực tế (đa ngoại tệ / đa phương thức). */
+  settlements?: AdvanceSettlePay[];
   note?: string;
   /** Hai người duyệt — chỉnh được cả sau khi đã gửi yêu cầu duyệt. */
   approver1?: { u: string; name: string };

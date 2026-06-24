@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { lineAmount, lineActual, advanceTotals } from './advanceCalc';
-import type { AdvanceLine, TourAdvance } from '@/types';
+import { lineAmount, lineActual, advanceTotals, settlePayVND, settleSummary } from './advanceCalc';
+import type { AdvanceLine, AdvanceSettlePay, TourAdvance } from '@/types';
 
 const L = (over: Partial<AdvanceLine>): AdvanceLine => ({ id: 'x', name: 'a', qty: 1, price: 0, ...over });
 
@@ -43,5 +43,59 @@ describe('advanceTotals', () => {
       otherCosts: [L({ qty: 1, price: 200_000 })],
     };
     expect(advanceTotals(adv, { USD: 25_000 }).grandTotal).toBe(2_500_000 + 200_000);
+  });
+});
+
+const SP = (over: Partial<AdvanceSettlePay>): AdvanceSettlePay =>
+  ({ id: 's', name: '', method: 'cash', amount: 0, ...over });
+
+describe('settlePayVND', () => {
+  it('quy đổi theo ngoại tệ, sàn 0', () => {
+    expect(settlePayVND(SP({ amount: 100, cur: 'USD' }), { USD: 25_000 })).toBe(2_500_000);
+    expect(settlePayVND(SP({ amount: 500_000 }))).toBe(500_000);
+    expect(settlePayVND(SP({ amount: -5 }))).toBe(0);
+  });
+});
+
+describe('settleSummary', () => {
+  const rates = { USD: 25_000 };
+  const adv: TourAdvance = {
+    status: 'tam_ung', tourCosts: [], otherCosts: [], advanceRequested: 10_000_000,
+    settlements: [
+      SP({ amount: 3_000_000, method: 'cash' }),
+      SP({ amount: 100, cur: 'USD', method: 'company_card' }),     // 2,500,000
+      SP({ amount: 1_500_000, method: 'cash' }),
+    ],
+  };
+
+  it('tổng đã chi + số dư (dư → hoàn lại)', () => {
+    const s = settleSummary(adv, rates);
+    expect(s.totalSettled).toBe(3_000_000 + 2_500_000 + 1_500_000); // 7,000,000
+    expect(s.advanced).toBe(10_000_000);
+    expect(s.balance).toBe(3_000_000); // dư, hoàn lại công ty
+  });
+
+  it('gộp theo phương thức (giữ thứ tự PAY_METHODS)', () => {
+    const s = settleSummary(adv, rates);
+    expect(s.byMethod).toEqual([
+      { method: 'cash', vnd: 4_500_000 },
+      { method: 'company_card', vnd: 2_500_000 },
+    ]);
+  });
+
+  it('gộp theo ngoại tệ (số gốc + quy VND)', () => {
+    const s = settleSummary(adv, rates);
+    expect(s.byCurrency).toContainEqual({ cur: 'VND', raw: 4_500_000, vnd: 4_500_000 });
+    expect(s.byCurrency).toContainEqual({ cur: 'USD', raw: 100, vnd: 2_500_000 });
+  });
+
+  it('chi vượt → balance âm (thiếu, trả công nợ)', () => {
+    const over: TourAdvance = { ...adv, advanceRequested: 5_000_000 };
+    expect(settleSummary(over, rates).balance).toBe(-2_000_000);
+  });
+
+  it('undefined / rỗng → 0', () => {
+    expect(settleSummary(undefined).totalSettled).toBe(0);
+    expect(settleSummary(undefined).balance).toBe(0);
   });
 });
