@@ -3,7 +3,7 @@
  * công ty, chữ ký email, đoạn giới thiệu…) hoặc ẢNH → JSON điền sẵn form.
  * Dùng /chat (Sonnet) như flightParse.
  */
-import { callAIWorker, type ContentBlock } from '@/lib/aiWorker';
+import { callAIWorker, markExtract, type ContentBlock } from '@/lib/aiWorker';
 
 export type ParsedContact = { name?: string; phone?: string; email?: string; position?: string };
 export type ParsedNcc = { name?: string; sectors?: string[]; location?: string; contacts?: ParsedContact[]; note?: string; analysis?: string };
@@ -72,7 +72,7 @@ async function callParty(system: string, input: { text?: string; imageB64?: stri
   const content: ContentBlock[] = [];
   if (input.imageB64) content.push({ type: 'image', source: { type: 'base64', media_type: mediaTypeFromB64(input.imageB64), data: input.imageB64 } } as unknown as ContentBlock);
   content.push({ type: 'text', text: input.text?.trim() || 'Trích xuất thông tin trong ảnh.' });
-  const res = await callAIWorker('/chat', { system, messages: [{ role: 'user', content }] });
+  const res = await callAIWorker('/chat', { system: markExtract(system), messages: [{ role: 'user', content }] });
   if (res.error) throw new Error(res.error);
   const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
   const obj = extractObject(raw);

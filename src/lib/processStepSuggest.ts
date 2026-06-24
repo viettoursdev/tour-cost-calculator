@@ -1,4 +1,4 @@
-import { callAIWorker, type ContentBlock } from '@/lib/aiWorker';
+import { callAIWorker, markExtract, type ContentBlock } from '@/lib/aiWorker';
 import { DEPT_LABEL } from '@/auth/departments';
 import type { Department } from '@/types';
 
@@ -28,7 +28,7 @@ export async function suggestProcessSteps(name: string, department: Department):
   const content: ContentBlock[] = [
     { type: 'text', text: `Quy trình: "${name.trim()}"\nPhòng ban: ${DEPT_LABEL[department] ?? department}` },
   ];
-  const res = await callAIWorker('/chat', { system: SYSTEM, messages: [{ role: 'user', content }] });
+  const res = await callAIWorker('/chat', { system: markExtract(SYSTEM), messages: [{ role: 'user', content }] });
   const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
   let arr: unknown;
   try { arr = JSON.parse(extractJsonArray(raw)); } catch { throw new Error('AI trả về dữ liệu không đọc được. Hãy thử lại hoặc nhập tay.'); }

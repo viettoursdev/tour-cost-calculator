@@ -1,4 +1,4 @@
-import { callAIWorker } from '@/lib/aiWorker';
+import { callAIWorker, markExtract } from '@/lib/aiWorker';
 import type { Contract } from '@/types';
 
 const fmtV = (n: number) => Math.round(n || 0).toLocaleString('vi-VN') + ' đ';
@@ -74,7 +74,7 @@ export function parseReview(text: string): ContractReview | null {
 
 /** Gọi AI rà soát hợp đồng → trả về review có cấu trúc. */
 export async function reviewContractAI(c: Contract): Promise<ContractReview> {
-  const res = await callAIWorker('/chat', { system: SYSTEM, messages: [{ role: 'user', content: buildContractText(c) }] });
+  const res = await callAIWorker('/chat', { system: markExtract(SYSTEM), messages: [{ role: 'user', content: buildContractText(c) }] });
   if (res.error) throw new Error(res.error);
   const text = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('\n').trim() || res.text || '';
   const review = parseReview(text);

@@ -2,7 +2,7 @@
  * AI phân tích file/ảnh THỰC ĐƠN nhà hàng → thông tin nhà hàng + các set menu.
  * Tái dùng extractFileContent (đọc Excel/PDF/Word/CSV/ảnh) + /chat (Sonnet).
  */
-import { callAIWorker, type ContentBlock } from '@/lib/aiWorker';
+import { callAIWorker, markExtract, type ContentBlock } from '@/lib/aiWorker';
 import { extractObject } from '@/lib/partyParse';
 import { extractFileContent } from '@/lib/quoteFileParse';
 import { parseAmountVN } from '@/lib/numParse';
@@ -79,7 +79,7 @@ export async function parseRestaurantsAI(input: { text?: string; imageB64?: stri
   const content: ContentBlock[] = [];
   if (input.imageB64) content.push({ type: 'image', source: { type: 'base64', media_type: mediaTypeFromB64(input.imageB64), data: input.imageB64 } } as unknown as ContentBlock);
   content.push({ type: 'text', text: input.text?.trim() || 'Phân tích các thực đơn nhà hàng trong ảnh.' });
-  const res = await callAIWorker('/chat', { system: SYSTEM_MULTI, messages: [{ role: 'user', content }] });
+  const res = await callAIWorker('/chat', { system: markExtract(SYSTEM_MULTI), messages: [{ role: 'user', content }] });
   if (res.error) throw new Error(res.error);
   const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
   const obj = extractObject(raw);

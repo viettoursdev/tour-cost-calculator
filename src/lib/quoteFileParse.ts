@@ -2,7 +2,7 @@
  * AI phân tích FILE báo giá (Excel/CSV/ảnh/text) → các dòng chi phí đã phân loại
  * vào hạng mục của bảng giá. Dùng /chat (Sonnet, hỗ trợ ảnh).
  */
-import { callAIWorker, type ContentBlock } from '@/lib/aiWorker';
+import { callAIWorker, markExtract, type ContentBlock } from '@/lib/aiWorker';
 import { parseAmountVN } from '@/lib/numParse';
 import { guessItemMeta } from '@/components/quote/guessMeta';
 import type { CategoryId, QtyMode } from '@/types';
@@ -170,7 +170,7 @@ export async function parseQuoteAI(input: { text?: string; imageB64?: string }, 
   const content: ContentBlock[] = [];
   if (input.imageB64) content.push({ type: 'image', source: { type: 'base64', media_type: mediaTypeFromB64(input.imageB64), data: input.imageB64 } } as unknown as ContentBlock);
   content.push({ type: 'text', text: input.text?.trim() || 'Phân tích báo giá trong ảnh.' });
-  const res = await callAIWorker('/chat', { system: buildPrompt(cats), messages: [{ role: 'user', content }] });
+  const res = await callAIWorker('/chat', { system: markExtract(buildPrompt(cats)), messages: [{ role: 'user', content }] });
   if (res.error) throw new Error(res.error);
   const raw = ((res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim()) || (res.text ?? '').trim();
   const arr = extractArray(raw);

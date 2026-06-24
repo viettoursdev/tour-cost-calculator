@@ -2,7 +2,7 @@
  * Phân tích thông tin chuyến bay từ dòng code (GDS/vé) hoặc ảnh bằng AI (/chat,
  * Sonnet vision) → mảng QuoteFlight để người dùng duyệt trong FlightEditor.
  */
-import { callAIWorker, type ContentBlock } from '@/lib/aiWorker';
+import { callAIWorker, markExtract, type ContentBlock } from '@/lib/aiWorker';
 import { newFlight, newFare, newSegment, enrichSegment } from '@/components/quote/flightConstants';
 import type { FlightSegment, QuoteFlight } from '@/types';
 
@@ -87,7 +87,7 @@ export async function parseFlights(input: { text?: string; imageB64?: string }):
   }
   content.push({ type: 'text', text: input.text?.trim() || 'Phân tích thông tin chuyến bay trong ảnh.' });
 
-  const res = await callAIWorker('/chat', { system: FLIGHT_PARSE_PROMPT, messages: [{ role: 'user', content }] });
+  const res = await callAIWorker('/chat', { system: markExtract(FLIGHT_PARSE_PROMPT), messages: [{ role: 'user', content }] });
   const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
   let arr: unknown;
   try { arr = JSON.parse(extractFlightJson(raw)); } catch { throw new Error('AI trả về dữ liệu không đọc được. Hãy thử lại hoặc nhập tay.'); }

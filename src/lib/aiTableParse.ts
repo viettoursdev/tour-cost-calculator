@@ -2,7 +2,7 @@
  * AI quét danh sách lộn xộn (không header chuẩn, nhiều dòng/mục, dán từ chat…)
  * → mảng bản ghi theo đúng các cột yêu cầu. Dùng /chat (Sonnet).
  */
-import { callAIWorker } from '@/lib/aiWorker';
+import { callAIWorker, markExtract } from '@/lib/aiWorker';
 
 export type TableCol = { key: string; label: string; aliases?: string[] };
 
@@ -43,7 +43,7 @@ export function buildTablePrompt(cols: TableCol[]): string {
 }
 
 export async function parseTableAI(text: string, cols: TableCol[]): Promise<Record<string, string>[]> {
-  const res = await callAIWorker('/chat', { system: buildTablePrompt(cols), messages: [{ role: 'user', content: text }] });
+  const res = await callAIWorker('/chat', { system: markExtract(buildTablePrompt(cols)), messages: [{ role: 'user', content: text }] });
   if (res.error) throw new Error(res.error);
   const raw = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('').trim();
   const arr = extractArray(raw);

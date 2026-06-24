@@ -219,6 +219,12 @@ const CHAT_MAX_TEXT = 200000;       // tổng ký tự text (KHÔNG tính base64
 const CHAT_MAX_ATTACH = 8;          // số block ảnh/PDF tối đa
 const CHAT_REFUSAL = 'Tôi là trợ lý nội bộ Viettours, chỉ hỗ trợ nghiệp vụ du lịch/MICE và dữ liệu nội bộ của công ty. Câu hỏi này nằm ngoài phạm vi đó nên tôi không hỗ trợ.';
 
+// Marker đứng đầu system prompt cho các tác vụ TRÍCH XUẤT có cấu trúc (text/ảnh →
+// JSON theo schema cố định: danh thiếp, báo giá, chuyến bay, thực đơn…). Các tác vụ
+// này không phải hội thoại tự do nên được CHO QUA cổng chủ đề. PHẢI khớp hằng
+// `EXTRACT_MARKER` trong src/lib/aiWorker.ts. Marker được gỡ trước khi gửi model.
+const EXTRACT_MARKER = '[VTE:EXTRACT]';
+
 function chatShapeError(messages) {
   if (messages.length > CHAT_MAX_MESSAGES) return 'Hội thoại quá dài.';
   let textLen = 0; let attach = 0;
@@ -544,10 +550,14 @@ export default {
         // ── Siết: giới hạn hình dạng request ──
         const shapeErr = chatShapeError(body.messages);
         if (shapeErr) return json({ error: shapeErr }, 400);
+        // Tác vụ trích xuất có cấu trúc (đánh dấu EXTRACT_MARKER ở đầu system) → CHO QUA
+        // cổng chủ đề; gỡ marker để không lọt vào prompt gửi model.
+        const isExtract = typeof body.system === 'string' && body.system.startsWith(EXTRACT_MARKER);
+        if (isExtract) body.system = body.system.slice(EXTRACT_MARKER.length).trimStart();
         // ── Cổng chủ đề: chỉ ở lượt hỏi đầu, có text, không kèm tệp (tệp coi như nghiệp vụ).
         // Off-topic → từ chối NGAY bằng Haiku, KHÔNG gọi model đắt. Trả JSON (client tự
         // hiển thị; streamAIChat fallback đọc content như thường).
-        if (isInitialUserTurn(body.messages) && !lastTurnHasAttachment(body.messages)) {
+        if (!isExtract && isInitialUserTurn(body.messages) && !lastTurnHasAttachment(body.messages)) {
           const q = lastUserText(body.messages).trim();
           if (q && !(await classifyOnTopic(env, q))) {
             return json({ content: [{ type: 'text', text: CHAT_REFUSAL }], stop_reason: 'end_turn', usage: {} });

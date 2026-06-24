@@ -51,6 +51,17 @@ export function setAIWorker(url: string): void {
   }
 }
 
+/**
+ * Marker đứng đầu system prompt cho các tác vụ TRÍCH XUẤT có cấu trúc
+ * (text/ảnh → JSON theo schema cố định: danh thiếp, báo giá, chuyến bay…).
+ * Worker dùng marker này để CHO QUA cổng chủ đề (`/chat`): đây không phải hội
+ * thoại tự do nên không bị coi là "LLM vạn năng". Trợ lý ảo KHÔNG gắn marker →
+ * vẫn bị cổng chủ đề kiểm soát như cũ. PHẢI khớp hằng `EXTRACT_MARKER` trong
+ * `cloudflare-worker/viettours-ai-worker.js`.
+ */
+export const EXTRACT_MARKER = '[VTE:EXTRACT]';
+export const markExtract = (system: string): string => `${EXTRACT_MARKER} ${system}`;
+
 // ── Trợ lý ảo (Anthropic Messages, tool-use) ──
 export interface Citation { type?: string; url?: string; title?: string; cited_text?: string }
 export interface ContentBlock {

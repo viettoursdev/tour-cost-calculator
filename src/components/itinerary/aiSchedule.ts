@@ -1,4 +1,4 @@
-import { callAIWorker } from '@/lib/aiWorker';
+import { callAIWorker, markExtract } from '@/lib/aiWorker';
 import { newActivity, newDay, newSegment } from './constants';
 import type { Day } from '@/types';
 
@@ -50,7 +50,7 @@ export function genToDays(gen: GenDay[], startNum: number): Day[] {
 
 export async function generateSchedule(input: { destination: string; days: number; style?: string }): Promise<GenDay[]> {
   const content = `Điểm đến: ${input.destination || '(chưa rõ)'}\nSố ngày: ${input.days}\nPhong cách: ${input.style?.trim() || 'tiêu chuẩn'}\nTạo đúng ${input.days} ngày.`;
-  const res = await callAIWorker('/chat', { system: SYSTEM, messages: [{ role: 'user', content }] });
+  const res = await callAIWorker('/chat', { system: markExtract(SYSTEM), messages: [{ role: 'user', content }] });
   if (res.error) throw new Error(res.error);
   const text = (res.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('\n').trim() || res.text || '';
   const gen = parseSchedule(text);
