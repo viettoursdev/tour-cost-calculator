@@ -24,7 +24,7 @@ const STAGE_COLOR: Partial<Record<CandidateStage, string>> = {
 };
 const newEmpId = () => 'hr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-export function RecruitView() {
+export function RecruitView({ embedded = false }: { embedded?: boolean } = {}) {
   const { postings, candidates, loading, syncing } = useHrRecruitStore();
   const savePosting = useHrRecruitStore((s) => s.savePosting);
   const deletePosting = useHrRecruitStore((s) => s.deletePosting);
@@ -68,7 +68,7 @@ export function RecruitView() {
   };
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ p: embedded ? 0 : 2 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5} flexWrap="wrap" gap={1}>
         <Typography variant="h6" fontWeight={800}>🧑‍💼 Tuyển dụng</Typography>
         {canEdit && tab === 'jobs' && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setJobModal({ posting: null })}>Tin tuyển dụng</Button>}

@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { useHrGuideStore } from '@/stores/hrGuideStore';
+import { GuidePoolView } from '@/components/hr/GuidePoolView';
 import { detectConflicts, conflictedLegIds, colorFor, DEFAULT_BUFFER_MINS } from '@/lib/guideSchedule';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { daysUntil } from '@/lib/dateUtils';
@@ -117,7 +118,7 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
   const visibleQuotes = useQuoteHistoryStore((s) => s.visibleQuotes);
   useQuoteHistoryStore((s) => s.quotes); // re-render khi index báo giá đồng bộ
 
-  const [tab, setTab] = useState<'gantt' | 'list'>('gantt');
+  const [tab, setTab] = useState<'gantt' | 'list' | 'pool'>('gantt');
   const [groupBy, setGroupBy] = useState<'tour' | 'guide'>('guide');
   const [barMode, setBarMode] = useState<'engagement' | 'leg'>('engagement');
   const [ym, setYm] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
@@ -334,10 +335,12 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
         <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mt: 0.5, minHeight: 40, '& .MuiTab-root': { color: 'rgba(255,255,255,0.8)', textTransform: 'none', fontWeight: 700, minHeight: 40 }, '& .Mui-selected': { color: '#fff !important' }, '& .MuiTabs-indicator': { bgcolor: '#fff', height: 3 } }}>
           <Tab value="gantt" label="Biểu đồ Gantt" />
           <Tab value="list" label="Danh sách chi tiết" />
+          <Tab value="pool" label="HDV cộng tác viên" />
         </Tabs>
       </Box>
 
-      {/* Toolbar (filters) */}
+      {/* Toolbar (filters) — không áp dụng cho tab pool HDV */}
+      {tab !== 'pool' && (
       <Box sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1, borderBottom: '1px solid rgba(0,0,0,0.08)', bgcolor: '#fff' }}>
         <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
           {tab === 'gantt' && (
@@ -376,7 +379,15 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
           )}
         </Stack>
       </Box>
+      )}
 
+      {tab === 'pool' ? (
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+            <GuidePoolView />
+          </Box>
+        </Box>
+      ) : (
       <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1.5, sm: 2.5 } }}>
         <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
           {conflicts.length > 0 && (
@@ -407,6 +418,7 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
           )}
         </Box>
       </Box>
+      )}
 
       {addTourOpen && (
         <AddTourDialog existing={new Set(Object.keys(assignments))} tours={visibleQuotes()} guideOptions={guideOptions} poolById={poolById}

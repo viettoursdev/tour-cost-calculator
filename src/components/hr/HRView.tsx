@@ -17,6 +17,7 @@ import { EMPLOYMENT_STATUS_LABEL, type EmploymentStatus, type HrEmployee } from 
 import { EmployeeModal } from './EmployeeModal';
 import { OrgChart } from './OrgChart';
 import { EvaluationsPanel } from './EvaluationsPanel';
+import { RecruitView } from './RecruitView';
 
 const STATUS_COLOR: Record<EmploymentStatus, 'default' | 'success' | 'warning'> = {
   probation: 'warning', official: 'success', resigned: 'default',
@@ -39,7 +40,7 @@ export function HRView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = hasPerm(currentUser, 'manageHR');
 
-  const [tab, setTab] = useState<'list' | 'org' | 'eval'>('list');
+  const [tab, setTab] = useState<'list' | 'org' | 'eval' | 'recruit'>('list');
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
   const [status, setStatus] = useState<'' | EmploymentStatus>('');
@@ -66,12 +67,12 @@ export function HRView() {
     <Box sx={{ p: 2 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5} flexWrap="wrap" gap={1}>
         <Typography variant="h6" fontWeight={800}>👥 Nhân sự {employees.length ? `(${employees.length})` : ''}</Typography>
-        {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModal({ employee: null })}>Thêm nhân sự</Button>}
+        {canEdit && tab !== 'recruit' && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModal({ employee: null })}>Thêm nhân sự</Button>}
       </Stack>
 
       {(loading || syncing) && <LinearProgress sx={{ mb: 1 }} />}
 
-      {totalExpiring > 0 && (
+      {tab !== 'recruit' && totalExpiring > 0 && (
         <Alert severity="warning" icon={<WarningAmberIcon />} sx={{ mb: 1.5 }}>
           Có <b>{totalExpiring}</b> giấy tờ sắp hoặc đã hết hạn (≤90 ngày). Mở từng hồ sơ để cập nhật.
         </Alert>
@@ -81,6 +82,7 @@ export function HRView() {
         <Tab value="list" label="Danh sách" />
         <Tab value="org" label="Sơ đồ tổ chức" />
         <Tab value="eval" label="Đánh giá" />
+        <Tab value="recruit" label="Tuyển dụng" />
       </Tabs>
 
       {tab === 'list' && (
@@ -134,6 +136,7 @@ export function HRView() {
 
       {tab === 'org' && <OrgChart employees={employees} onPick={(e) => setModal({ employee: e })} />}
       {tab === 'eval' && <EvaluationsPanel employees={employees} />}
+      {tab === 'recruit' && <RecruitView embedded />}
 
       {modal && (
         <EmployeeModal

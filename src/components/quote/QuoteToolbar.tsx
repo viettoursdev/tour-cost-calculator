@@ -47,6 +47,7 @@ import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
@@ -322,10 +323,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   // Pill button in the teal hero band (Trang chủ).
   // Unified nav tabs (legacy order + icons). DMC shows only Breakdown + history.
   const canContract = hasPerm(currentUser, 'manageContracts') || hasPerm(currentUser, 'viewContracts');
-  const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
   const canHR = hasPerm(currentUser, 'viewHR');
-  const canGuides = hasPerm(currentUser, 'manageNCC');
   const isMgr = !!currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Trưởng Phòng'];
   const isCEO = currentUser?.role === 'CEO';
   // Phòng HDV bị ẩn giá: bỏ luôn các tab thuần về giá/tài chính & thẻ giá ở header.
@@ -346,8 +345,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
         item('cockpit', 'Hồ sơ tour', <RouteOutlinedIcon />),
         item('history', 'Lịch sử', <HistoryIcon />),
+        ...(canHR ? [item('hr', 'Nhân sự', <BadgeOutlinedIcon />)] : []),
         { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
           item('summary', 'Tổng kết'),
+          item('payboard', 'Công nợ tổng'),
+          item('payment', 'Quản lý thanh toán'),
+          item('dashboard', 'Dashboard bán hàng'),
           // Bảng điều hành cấp cao — chỉ CEO.
           ...(isCEO ? [
             item('execboard', 'Tổng quan điều hành'),
@@ -362,25 +365,16 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           item('passengers', 'Khách đoàn'),
           item('opsboard', 'Điều phối'),
           item('departures', 'Lịch khởi hành'),
-          item('payboard', 'Công nợ tổng'),
-          item('payment', 'Quản lý thanh toán'),
           item('flights', 'Chuyến bay'),
-          item('dashboard', 'Dashboard biên lợi'),
-          item('settlement', 'Quyết toán tour'),
           ...(isMgr ? [item('audit', 'Nhật ký')] : []),
           { label: 'Chương trình tour', icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') },
           { label: 'Thực đơn', icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') },
           { label: 'Lịch đi tour HDV', icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') },
-          ...(canGuides ? [item('hrguides', 'HDV cộng tác viên')] : []),
         ] },
         { group: 'Danh mục', icon: <CategoryOutlinedIcon />, items: [
-          item('advance', 'Đề nghị tạm ứng'),
+          item('advsettle', 'Tạm ứng - Quyết toán'),
           ...(canContract ? [item('contract', 'Hợp đồng')] : []),
-          ...(canCust ? [item('customer', 'Khách hàng')] : []),
-          ...(canNcc ? [item('ncc', 'Nhà Cung Cấp')] : []),
           ...(canNcc ? [item('nccProducts', 'Sản phẩm NCC')] : []),
-          ...(canHR ? [item('hr', 'Nhân sự')] : []),
-          ...(canHR ? [item('recruit', 'Tuyển dụng')] : []),
         ] },
       ]
         .map((n) => (hidePrice && 'group' in n

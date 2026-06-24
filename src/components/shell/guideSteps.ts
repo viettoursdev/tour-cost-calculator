@@ -19,7 +19,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   { icon: '🤖', title: 'AI nhập báo giá từ file', tags: ['cost'], image: 'ai-import.png', body: 'Trong tab Báo giá → "Nhập từ file (AI)": tải Excel/PDF/Word/ảnh báo giá, AI tự bóc từng dòng chi phí, phân loại vào hạng mục, đoán cách tính SL. Xem trước & sửa trước khi thêm.' },
   { icon: '📄', title: 'Xuất & hợp đồng', tags: ['cost', 'contract'], image: 'export.png', body: 'Nút "Xuất" cho PDF/Word/Excel báo giá (kèm bản trọn gói). Trong Hợp đồng: menu Xuất (xem trước PDF) + "AI rà soát hợp đồng" kiểm tra rủi ro & số liệu trước khi gửi.' },
   { icon: '🕐', title: 'Lịch sử & phiên bản', tags: ['history', 'cost'], image: 'history.png', body: 'Mỗi lần Lưu cloud là một phiên bản — bấm 🕘 cạnh nút Lưu để xem & KHÔI PHỤC bản cũ (giữ 20 bản). Lịch sử báo giá lọc theo khách/quốc gia, ghim cột Mã + Tên khi cuộn; có thể ghi đè lên báo giá cũ.' },
-  { icon: '💵', title: 'Đề nghị tạm ứng & quyết toán', tags: ['advance'], image: 'advance.png', body: 'Trong Danh mục → "Đề nghị tạm ứng": tính chi phí đi tour (có Rate card) + chi phí khác + số tạm ứng (hỗ trợ ngoại tệ). Chọn 2 người duyệt → gửi duyệt trong app (Duyệt/Từ chối ngay ở chuông) → xuất PDF. Sau tour làm Quyết toán để đóng case.' },
+  { icon: '💵', title: 'Đề nghị tạm ứng & quyết toán', tags: ['advance', 'advsettle'], image: 'advance.png', body: 'Trong Danh mục → "Tạm ứng - Quyết toán": tính chi phí đi tour (có Rate card) + chi phí khác + số tạm ứng (hỗ trợ ngoại tệ). Chọn 2 người duyệt → gửi duyệt trong app (Duyệt/Từ chối ngay ở chuông) → xuất PDF. Sau tour làm Quyết toán để đóng case.' },
   { icon: '🗺️', title: 'Chương trình tour', tags: ['itinerary'], image: 'itinerary.png', body: 'Mã tự sinh, gắn khách hàng. Chọn ngày khởi hành ra đúng Thứ + tịnh tiến; kéo-thả hoạt động giữa các ngày; ô hoạt động xuống dòng / **đậm** / *nghiêng*; vận hành nhập song song theo ngày; "AI lịch trình" dựng khung + "Tạo bằng AI" thuyết minh điểm. Xuất Word. Mở nhanh từ menu Vận hành.' },
   { icon: '🍽️', title: 'Thực đơn & nhà hàng', tags: ['menu'], image: 'menu.png', body: 'Trình tạo Thực đơn theo ngày/bữa & set menu, bật-tắt "Kèm giá", liên kết Chương trình, xuất Word/PDF. Thư viện nhà hàng có địa chỉ/file/đánh giá, lọc theo khu vực + nút "AI từ thực đơn" để tự thêm nhà hàng & set menu từ ảnh/file.' },
   { icon: '🛂', title: 'Visa & Dịch hồ sơ', tags: ['visa', 'doctranslate'], image: 'visa.png', body: 'Quản lý Visa: bảng giá visa theo nước + hồ sơ thủ tục. Dịch hồ sơ: dịch giấy tờ Việt → Anh chuẩn lãnh sự, GIỮ NGUYÊN bố cục, OCR được ảnh/PDF scan.' },
@@ -36,11 +36,12 @@ export const GUIDE_STEPS: GuideStep[] = [
 /** Nhãn màn hình cho tiêu đề guide ngữ cảnh. */
 export const CONTEXT_LABEL: Record<string, string> = {
   home: 'Trang chủ', cost: 'Bảng báo giá', history: 'Lịch sử báo giá', advance: 'Đề nghị tạm ứng',
+  advsettle: 'Tạm ứng - Quyết toán',
   itinerary: 'Chương trình tour', menu: 'Thực đơn', visa: 'Quản lý Visa', doctranslate: 'Dịch hồ sơ',
   ncc: 'Nhà cung cấp', customer: 'Khách hàng', contract: 'Hợp đồng', workflow: 'Quy trình điều hành',
   opsboard: 'Điều phối', passengers: 'Khách đoàn', payboard: 'Công nợ', departures: 'Lịch khởi hành',
   payment: 'Thanh toán', flights: 'Chuyến bay', pipeline: 'Pipeline bán hàng',
-  salesanalytics: 'Phân tích bán hàng', dashboard: 'Dashboard biên lợi', summary: 'Tổng kết',
+  salesanalytics: 'Phân tích bán hàng', dashboard: 'Dashboard bán hàng', summary: 'Tổng kết',
 };
 
 /** Suy ra tag ngữ cảnh từ template + view hiện tại của báo giá. */
