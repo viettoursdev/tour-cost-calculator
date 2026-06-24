@@ -585,7 +585,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           ))}
         </Menu>
 
-        <Tooltip title="Báo giá mới">
+        <Tooltip title={template === 'domestic' || template === 'intl' ? 'Tạo báo giá và tour mới' : 'Báo giá mới'}>
           <IconButton size="small"
             onClick={template === 'domestic' || template === 'intl' ? onOpenNewQuote : onOpenSelector}
             sx={{ border: '1px solid rgba(20,150,140,0.4)', borderRadius: 1.5, color: '#0d7a6a' }}>

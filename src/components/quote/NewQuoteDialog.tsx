@@ -10,13 +10,16 @@ import AlarmIcon from '@mui/icons-material/Alarm';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { userLabel } from '@/auth/ROLES';
 import { useCustomerStore } from '@/stores/customerStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
+import { visibleTourProfiles } from '@/lib/tourProfile';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { TPL_ACCENT } from './templateStyle';
 import { LEGACY } from '@/theme';
-import type { Customer, NewQuoteMeta, QuoteRequestKind, User } from '@/types';
+import type { Customer, NewQuoteMeta, QuoteRequestKind, TourProfile, User } from '@/types';
 
 export type NewQuoteMode = 'app' | 'excel' | 'ai';
 
@@ -50,6 +53,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const currentUser = useAuthStore((s) => s.currentUser);
   const customers = useCustomerStore((s) => s.customers);
   const saveCustomer = useCustomerStore((s) => s.save);
+  const allProfiles = useTourProfileStore((s) => s.profiles);
 
   const [template, setTemplate] = useState<'domestic' | 'intl'>(initialTemplate);
   const [request, setRequest] = useState<QuoteRequestKind>('request');
@@ -63,6 +67,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
   const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
   const [collabUsers, setCollabUsers] = useState<User[]>([]);
+  const [existingProfile, setExistingProfile] = useState<TourProfile | null>(null);
   const [mode, setMode] = useState<NewQuoteMode>('app');
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -82,6 +87,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setStartDate('');
     setDeadline('');
     setCollabUsers([]);
+    setExistingProfile(null);
     setMode('app');
     setFile(null);
     setBusy(false);
@@ -91,6 +97,14 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     () => users.filter((u) => u.u !== currentUser?.u),
     [users, currentUser?.u],
   );
+
+  // Hồ sơ tour có thể gắn vào: user được xem + còn mở (open). Hồ sơ cùng loại lên đầu.
+  const profileOptions = useMemo(() => {
+    const wantKind = template === 'intl' ? 'intl' : 'domestic';
+    return visibleTourProfiles(currentUser, allProfiles, users)
+      .filter((p) => p.status === 'open')
+      .sort((a, b) => (a.kind === wantKind ? -1 : 1) - (b.kind === wantKind ? -1 : 1));
+  }, [allProfiles, currentUser, users, template]);
 
   const handleDays = (v: number) => {
     const d = Math.max(1, v || 1);
@@ -144,6 +158,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
         startDate: startDate || null,
         deadline: deadline || undefined,
         collaborators: collabUsers.map((u) => ({ u: u.u, name: u.name })),
+        ...(existingProfile ? { tourProfileId: existingProfile.id } : {}),
         ...(excelFile ? { excelFile } : {}),
         ...(mode === 'excel' ? { locked: true } : {}),
       };
@@ -168,10 +183,10 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
           </Box>
           <Box>
             <Typography sx={{ fontWeight: 900, fontSize: 18, color: LEGACY.navy, lineHeight: 1.2 }}>
-              Tạo báo giá mới
+              Tạo báo giá và tour mới
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Nhập thông tin báo giá — hệ thống tự nhắc deadline
+              Tự mở hồ sơ tour (mã NĐ/NN) làm trung tâm — hoặc gắn vào hồ sơ có sẵn
             </Typography>
           </Box>
         </Stack>
@@ -328,6 +343,39 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
             helperText="Hệ thống tự nhắc trước 1 ngày và trước 6 giờ. (Nhắc theo bản đã lưu cloud)"
           />
 
+          <Divider flexItem />
+
+          {/* Gắn vào hồ sơ tour có sẵn (trống = tự tạo hồ sơ mới khi lưu) */}
+          <Autocomplete
+            options={profileOptions} value={existingProfile}
+            onChange={(_, v) => setExistingProfile(v)}
+            getOptionLabel={(p) => `${p.code} — ${p.name || '(chưa đặt tên)'}`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            groupBy={(p) => (p.kind === 'intl' ? 'Nước ngoài' : 'Nội địa')}
+            renderOption={(props, p) => (
+              <li {...props} key={p.id}>
+                <Box>
+                  <Typography variant="body2" fontWeight={700}>{p.code}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {p.name || '(chưa đặt tên)'}{p.customerName ? ` · ${p.customerName}` : ''}
+                  </Typography>
+                </Box>
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params} label="Gắn vào hồ sơ tour có sẵn (tuỳ chọn)"
+                placeholder="Để trống = tự tạo hồ sơ tour mới"
+                helperText={existingProfile
+                  ? `Báo giá sẽ là một phương án trong hồ sơ ${existingProfile.code}.`
+                  : 'Mặc định: hệ thống tự mở hồ sơ tour mới (mã NĐ/NN) cho báo giá này.'}
+                InputProps={{ ...params.InputProps, startAdornment: (
+                  <><InputAdornment position="start"><RouteOutlinedIcon fontSize="small" /></InputAdornment>{params.InputProps.startAdornment}</>
+                ) }}
+              />
+            )}
+          />
+
           {/* Thêm nhân sự collab */}
           <Autocomplete
             multiple options={otherUsers} value={collabUsers}
@@ -352,7 +400,7 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
           variant="contained" disabled={!name.trim() || busy || (mode !== 'app' && !file)} onClick={() => void submit()}
           sx={{ background: LEGACY.headerGradient, fontWeight: 800, px: 3 }}
         >
-          {busy ? (mode === 'app' ? 'Đang tạo…' : 'Đang tải lên…') : mode === 'ai' ? 'Tạo & phân tích AI' : 'Tạo báo giá'}
+          {busy ? (mode === 'app' ? 'Đang tạo…' : 'Đang tải lên…') : mode === 'ai' ? 'Tạo & phân tích AI' : existingProfile ? 'Tạo báo giá' : 'Tạo báo giá & tour'}
         </Button>
       </DialogActions>
     </Dialog>

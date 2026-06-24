@@ -18,6 +18,7 @@ import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/wor
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
+import { useTourProfileStore } from './tourProfileStore';
 import { useTodoStore } from './todoStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, FileAttachment, Item, OutputCurrency,
@@ -319,6 +320,7 @@ export const useQuoteStore = create<QuoteState>()(
                 ...(meta.customerId ? { customerId: meta.customerId } : {}),
                 ...(meta.customerName ? { customerName: meta.customerName } : {}),
                 ...(meta.collaborators?.length ? { pendingCollaborators: meta.collaborators } : {}),
+                ...(meta.tourProfileId ? { tourProfileId: meta.tourProfileId } : {}),
                 ...(meta.excelFile ? { excelFiles: [meta.excelFile] } : {}),
                 ...(meta.locked ? { locked: true } : {}),
               }
@@ -779,6 +781,43 @@ export const useQuoteStore = create<QuoteState>()(
           const existingEntry = existing.find((q) => q.cloudId === cloudId);
           const id = overwrite?.id ?? existingEntry?.id ?? Date.now();
           const quoteCode = isNew ? generateQuoteCode(draft.template, existing) : undefined;
+
+          // ── Hồ sơ tour (Tour Profile) ──────────────────────────────────────
+          // Gắn báo giá vào hồ sơ CÓ SẴN (chọn lúc tạo / báo giá đã thuộc hồ sơ),
+          // hoặc TỰ TẠO hồ sơ mới khi báo giá mới (trừ DMC — link chéo, không là tour).
+          let tourProfileId: string | undefined;
+          let tourCode: string | undefined;
+          if (!isDmc) {
+            const tps = useTourProfileStore.getState();
+            const linkedId = draft.tourProfileId ?? existingEntry?.tourProfileId;
+            if (linkedId) {
+              const prof = tps.profiles.find((p) => p.id === linkedId);
+              tourProfileId = linkedId;
+              tourCode = prof?.code ?? existingEntry?.tourCode ?? draft.tourCode;
+              // Hồ sơ chưa có báo giá chính → đặt báo giá này làm chính.
+              if (prof && !prof.primaryQuoteId) {
+                try { await tps.setPrimaryQuote(prof.id, cloudId); } catch { /* non-blocking */ }
+              }
+            } else if (isNew) {
+              try {
+                const created = await tps.create({
+                  kind: draft.template === 'intl' ? 'intl' : 'domestic',
+                  name: name.trim() || draft.info.name || 'Báo giá không tên',
+                  customerId: customer?.id,
+                  customerName: customer?.name,
+                  dest: draft.info.dest || undefined,
+                  startDate: draft.info.startDate ?? null,
+                  pax: draft.pax,
+                  primaryQuoteId: cloudId,
+                  collaborators,
+                });
+                if (created) { tourProfileId = created.id; tourCode = created.code; }
+              } catch (e) {
+                console.warn('saveCloud: tạo hồ sơ tour lỗi:', (e as Error).message);
+              }
+            }
+          }
+
           const entry = await _save(
             {
               id,
@@ -803,11 +842,12 @@ export const useQuoteStore = create<QuoteState>()(
               ...(linkedForeign
                 ? { linkedQuoteId: linkedForeign.id, linkedQuoteName: linkedForeign.name, linkedQuoteTemplate: linkedForeign.template }
                 : {}),
+              ...(tourProfileId ? { tourProfileId, tourCode } : {}),
             },
             { u: u.u, name: u.name, role: u.role },
           );
           await _saveS(cloudId, draft, note, { name: u.name, role: u.role });
-          set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId } }));
+          set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId, tourProfileId: tourProfileId ?? s.draft.tourProfileId, tourCode: tourCode ?? s.draft.tourCode } }));
           set({ cloudDirty: false }); // vừa lưu cloud → sạch
           logAudit(isNew ? 'create' : 'update', isDmc ? 'Breakdown DMC' : 'Báo giá', entry.name, entry.quoteCode);
 
@@ -874,9 +914,16 @@ export const useQuoteStore = create<QuoteState>()(
           // Trạng thái lấy từ bản ghi lịch sử (cập nhật tức thì qua setStatus có thể mới
           // hơn currentState đã lưu); fallback về currentState rồi 'in_progress'.
           const idxList = isDmc ? useQuoteHistoryStore.getState().dmcQuotes : useQuoteHistoryStore.getState().quotes;
-          const status = idxList.find((q) => q.cloudId === cloudId)?.status ?? project.currentState.status ?? 'in_progress';
+          const idxEntry = idxList.find((q) => q.cloudId === cloudId);
+          const status = idxEntry?.status ?? project.currentState.status ?? 'in_progress';
+          // Hồ sơ tour lấy từ index entry (chuẩn — phủ cả báo giá cũ đã backfill mà
+          // state lưu chưa có field). Lần lưu sau sẽ tái dùng đúng hồ sơ.
           muted(() => set(() => ({
-            draft: { ...project.currentState, currentQuoteId: cloudId, rates, status },
+            draft: {
+              ...project.currentState, currentQuoteId: cloudId, rates, status,
+              tourProfileId: idxEntry?.tourProfileId ?? project.currentState.tourProfileId,
+              tourCode: idxEntry?.tourCode ?? project.currentState.tourCode,
+            },
             view: 'cost', cloudDirty: false,
             ...CLEAR_HIST,
           })));
