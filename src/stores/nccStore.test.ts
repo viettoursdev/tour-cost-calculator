@@ -56,7 +56,9 @@ describe('nccStore', () => {
     expect(list[0].name).toBe('B');
     expect(list[0].createdBy).toBe('Tony');
     expect(list[0].id.length).toBeGreaterThan(0);
-    expect(vi.mocked(sb.sbPushNcc).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
+    // Saves the single edited row (not the whole list) for fast, real-time writes.
+    expect(vi.mocked(sb.sbUpsertNcc).mock.calls[0][0].name).toBe('B');
+    expect(vi.mocked(sb.sbUpsertNcc).mock.calls[0][1]).toEqual({ name: 'Tony', role: 'CEO' });
   });
 
   it('save updates existing supplier and stamps updatedBy', async () => {
@@ -71,7 +73,7 @@ describe('nccStore', () => {
     useAuthStore.setState({ currentUser: null }, false);
     await useNccStore.getState().save(ncc({ id: 'x' }));
     expect(useNccStore.getState().suppliers).toEqual([]);
-    expect(sb.sbPushNcc).not.toHaveBeenCalled();
+    expect(sb.sbUpsertNcc).not.toHaveBeenCalled();
   });
 
   it('delete removes by id and pushes', async () => {
@@ -80,6 +82,7 @@ describe('nccStore', () => {
     }, false);
     await useNccStore.getState().delete('n1');
     expect(useNccStore.getState().suppliers).toEqual([ncc({ id: 'n2' })]);
-    expect(sb.sbPushNcc).toHaveBeenCalledTimes(1);
+    expect(sb.sbDeleteNcc).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbDeleteNcc).mock.calls[0][0]).toBe('n1');
   });
 });

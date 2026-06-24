@@ -4611,3 +4611,43 @@ export async function sbPushHrLeaves(
     if (del.error) throw new Error('sbPushHrLeaves delete all: ' + del.error.message);
   }
 }
+
+// ── NCC upsert/delete (khôi phục từ work concurrent NCC concurrency-safe) ──
+const nccToRow = (ncc: Ncc, stamp: Record<string, unknown>) => ({
+  legacy_id: ncc.id, name: ncc.name, sectors: ncc.sectors,
+  continent: ncc.continent ?? null, country: ncc.country ?? null,
+  location: ncc.location, address: ncc.address ?? null,
+  website: ncc.website ?? null, tax_code: ncc.taxCode ?? null,
+  status: ncc.status ?? null, bank: ncc.bank ?? null,
+  payment_terms: ncc.paymentTerms ?? null, commission: ncc.commission ?? null,
+  credit_limit: ncc.creditLimit ?? null, files: ncc.files ?? [],
+  tours: ncc.tours ?? [], note: ncc.note ?? '',
+  ai_analysis: ncc.aiAnalysis ?? null, ratings: ncc.ratings ?? [],
+  created_by_name: ncc.createdBy, created_by_u: ncc.createdByU ?? null,
+  collaborators: ncc.collaborators ?? [], created_at: ncc.createdAt, ...stamp,
+});
+
+/** Upsert/Delete MỘT NCC (serialize, không đua push toàn-danh-sách). */
+export function sbUpsertNcc(
+  ncc: Ncc,
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return serializeWrites('suppliers', async () => {
+    const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+    const { data: up, error: upErr } = await client.from('suppliers')
+      .upsert(nccToRow(ncc, stamp), { onConflict: 'legacy_id' }).select('id').single();
+    if (upErr) throw new Error('sbUpsertNcc upsert: ' + upErr.message);
+    await replaceChildren(client, 'supplier_contacts', 'supplier_id', up!.id, ncc.contacts.map((ct, i) => ({
+      supplier_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, sort_order: i,
+    })));
+  });
+}
+
+/** Xoá đúng MỘT NCC theo legacy_id (supplier_contacts cascade theo FK). */
+export function sbDeleteNcc(id: string, client: SupabaseClient = sb): Promise<void> {
+  return serializeWrites('suppliers', async () => {
+    const del = await client.from('suppliers').delete().eq('legacy_id', id);
+    if (del.error) throw new Error('sbDeleteNcc: ' + del.error.message);
+  });
+}

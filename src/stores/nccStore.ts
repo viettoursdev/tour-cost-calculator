@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeNcc, sbPushNcc } from '@/lib/supabase';
+import { sbSubscribeNcc, sbUpsertNcc, sbDeleteNcc } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { Ncc, NccContact } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -36,22 +36,21 @@ export const useNccStore = create<NccState>()(
       const { suppliers } = get();
       const isNew = !suppliers.find((s) => s.id === form.id);
       const now = new Date().toISOString();
+      const saved: Ncc = isNew
+        ? {
+            ...form,
+            id: form.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            createdAt: now,
+            createdBy: u.name, createdByU: u.u,
+          }
+        : { ...form, updatedAt: now, updatedBy: u.name };
       const next = isNew
-        ? [
-            ...suppliers,
-            {
-              ...form,
-              id: form.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-              createdAt: now,
-              createdBy: u.name, createdByU: u.u,
-            },
-          ]
-        : suppliers.map((s) =>
-            s.id === form.id ? { ...form, updatedAt: now, updatedBy: u.name } : s,
-          );
+        ? [...suppliers, saved]
+        : suppliers.map((s) => (s.id === form.id ? saved : s));
       set({ suppliers: next, syncing: true });
       try {
-        await sbPushNcc(next, { name: u.name, role: u.role });
+        // Ghi đúng MỘT dòng → nhanh, real-time, không đụng NCC của người khác.
+        await sbUpsertNcc(saved, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -81,7 +80,8 @@ export const useNccStore = create<NccState>()(
       const next = [...suppliers, ...toAdd];
       set({ suppliers: next, syncing: true });
       try {
-        await sbPushNcc(next, { name: u.name, role: u.role });
+        // Chỉ thêm các dòng mới — không ghi đè NCC sẵn có.
+        for (const r of toAdd) await sbUpsertNcc(r, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
       } finally {
@@ -96,7 +96,7 @@ export const useNccStore = create<NccState>()(
       const next = get().suppliers.filter((s) => s.id !== id);
       set({ suppliers: next, syncing: true });
       try {
-        await sbPushNcc(next, { name: u.name, role: u.role });
+        await sbDeleteNcc(id);
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
       } finally {
@@ -145,7 +145,9 @@ export const useNccStore = create<NccState>()(
         .map((s) => (s.id === primary.id ? merged : s));
       set({ suppliers: next, syncing: true });
       try {
-        await sbPushNcc(next, { name: u.name, role: u.role });
+        // Cập nhật bản chính rồi xoá các bản gộp — chỉ đụng đúng các dòng liên quan.
+        await sbUpsertNcc(merged, { name: u.name, role: u.role });
+        for (const s of rest) await sbDeleteNcc(s.id);
       } catch (e) {
         window.alert('❌ Lỗi gộp: ' + (e as Error).message);
       } finally {

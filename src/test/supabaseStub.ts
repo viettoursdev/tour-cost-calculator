@@ -55,6 +55,8 @@ export const sbPushCustomers = vi.fn(async () => {});
 // ── NCC ──
 export const sbSubscribeNcc = vi.fn(() => () => {});
 export const sbPushNcc = vi.fn(async () => {});
+export const sbUpsertNcc = vi.fn(async () => {});
+export const sbDeleteNcc = vi.fn(async () => {});
 
 // ── Contracts ──
 export const sbSubscribeContracts = vi.fn(() => () => {});
