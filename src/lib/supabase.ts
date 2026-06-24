@@ -4552,3 +4552,62 @@ export async function sbPushHrCandidates(
     if (del.error) throw new Error('sbPushHrCandidates delete all: ' + del.error.message);
   }
 }
+
+// ── HR Leaves (Nghỉ phép) ─────────────────────────────────────────────────────
+
+import type { HrLeave, LeaveType, LeaveStatus } from '@/types/hr';
+
+const rowToHrLeave = (r: Record<string, unknown>): HrLeave => ({
+  id: r.legacy_id as string,
+  employeeId: (r.employee_legacy_id as string) ?? '',
+  type: (r.type as LeaveType) ?? 'annual',
+  startDate: (r.start_date as string) ?? undefined,
+  endDate: (r.end_date as string) ?? undefined,
+  days: (r.days as number) ?? 0,
+  reason: (r.reason as string) ?? '',
+  status: (r.status as LeaveStatus) ?? 'pending',
+  approverName: (r.approver_name as string) ?? '',
+  decidedAt: (r.decided_at as string) ?? undefined,
+  decisionNote: (r.decision_note as string) ?? '',
+  createdAt: r.created_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+export function sbSubscribeHrLeaves(cb: (list: HrLeave[]) => void, client: SupabaseClient = sb): () => void {
+  return subscribeTable(client, 'hr_leaves', async (cl) => {
+    const { data, error } = await cl.from('hr_leaves').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(rowToHrLeave);
+  }, cb);
+}
+
+export async function sbPushHrLeaves(
+  list: HrLeave[], pushedBy: { name: string; role: string }, client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
+  for (const lv of list) {
+    const { error } = await client.from('hr_leaves').upsert({
+      legacy_id: lv.id, employee_legacy_id: lv.employeeId, type: lv.type,
+      start_date: lv.startDate || null, end_date: lv.endDate || null, days: lv.days ?? 0,
+      reason: lv.reason ?? '', status: lv.status ?? 'pending', approver_name: lv.approverName ?? '',
+      decided_at: lv.decidedAt || null, decision_note: lv.decisionNote ?? '',
+      created_by_name: lv.createdBy, created_at: lv.createdAt, ...stamp,
+    }, { onConflict: 'legacy_id' });
+    if (error) throw new Error('sbPushHrLeaves upsert: ' + error.message);
+  }
+  const keepIds = list.map((l) => l.id);
+  if (keepIds.length > 0) {
+    const { data: existing, error: fetchErr } = await client.from('hr_leaves').select('legacy_id');
+    if (fetchErr) throw new Error('sbPushHrLeaves fetch: ' + fetchErr.message);
+    const toDelete = (existing ?? []).map((r) => r.legacy_id as string).filter((lid) => lid && !keepIds.includes(lid));
+    if (toDelete.length > 0) {
+      const del = await client.from('hr_leaves').delete().in('legacy_id', toDelete);
+      if (del.error) throw new Error('sbPushHrLeaves delete: ' + del.error.message);
+    }
+  } else {
+    const del = await client.from('hr_leaves').delete().not('legacy_id', 'is', null);
+    if (del.error) throw new Error('sbPushHrLeaves delete all: ' + del.error.message);
+  }
+}

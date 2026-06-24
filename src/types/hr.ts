@@ -75,6 +75,44 @@ export type HrEvaluation = {
   updatedBy?: string;
 };
 
+// ── Đợt 7: Nghỉ phép ──────────────────────────────────────────────────────────
+
+export type LeaveType = 'annual' | 'unpaid' | 'sick' | 'other';
+export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
+  annual: 'Phép năm',
+  unpaid: 'Không lương',
+  sick: 'Nghỉ ốm',
+  other: 'Khác',
+};
+
+export const LEAVE_STATUS_LABEL: Record<LeaveStatus, string> = {
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Từ chối',
+  cancelled: 'Đã huỷ',
+};
+
+/** Một đơn nghỉ phép của nhân viên. */
+export type HrLeave = {
+  id: string;            // legacy_id
+  employeeId: string;    // HrEmployee.id
+  type: LeaveType;
+  startDate?: string;    // ISO
+  endDate?: string;      // ISO
+  days: number;          // số ngày nghỉ (0.5 = nửa ngày)
+  reason: string;
+  status: LeaveStatus;
+  approverName: string;
+  decidedAt?: string;
+  decisionNote: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
 // ── Đợt 4: Tuyển dụng (ATS) ───────────────────────────────────────────────────
 
 export type JobStatus = 'open' | 'onhold' | 'closed';

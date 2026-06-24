@@ -18,6 +18,7 @@ import { EMPLOYMENT_STATUS_LABEL, type EmploymentStatus, type HrEmployee } from 
 import { EmployeeModal } from './EmployeeModal';
 import { OrgChart } from './OrgChart';
 import { EvaluationsPanel } from './EvaluationsPanel';
+import { LeavesPanel } from './LeavesPanel';
 import { HrOverviewPanel } from './HrOverviewPanel';
 import { Employee360 } from './Employee360';
 import { RecruitView } from './RecruitView';
@@ -43,7 +44,7 @@ export function HRView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = hasPerm(currentUser, 'manageHR');
 
-  const [tab, setTab] = useState<'overview' | 'list' | 'org' | 'eval' | 'recruit'>('overview');
+  const [tab, setTab] = useState<'overview' | 'list' | 'org' | 'eval' | 'leave' | 'recruit'>('overview');
   const [detail, setDetail] = useState<HrEmployee | null>(null);
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
@@ -87,6 +88,7 @@ export function HRView() {
         <Tab value="list" label="Danh sách" />
         <Tab value="org" label="Sơ đồ tổ chức" />
         <Tab value="eval" label="Đánh giá" />
+        <Tab value="leave" label="Nghỉ phép" />
         <Tab value="recruit" label="Tuyển dụng" />
       </Tabs>
 
@@ -143,6 +145,7 @@ export function HRView() {
       {tab === 'overview' && <HrOverviewPanel employees={employees} />}
       {tab === 'org' && <OrgChart employees={employees} onPick={(e) => setModal({ employee: e })} />}
       {tab === 'eval' && <EvaluationsPanel employees={employees} />}
+      {tab === 'leave' && <LeavesPanel employees={employees} />}
       {tab === 'recruit' && <RecruitView embedded />}
 
       {modal && (
