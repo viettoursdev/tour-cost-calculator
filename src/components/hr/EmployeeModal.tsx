@@ -5,8 +5,13 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { DEPARTMENTS } from '@/auth/departments';
 import { daysUntil } from '@/lib/dateUtils';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
+import { toast } from '@/stores/toastStore';
 import { EMPLOYMENT_STATUS_LABEL, type EmploymentStatus, type HrDocument, type HrEmployee } from '@/types';
 
 const STATUSES: EmploymentStatus[] = ['probation', 'official', 'resigned'];
@@ -48,6 +53,20 @@ export function EmployeeModal({ employee, all, canEdit, onClose, onSave }: Props
     () => all.filter((e) => e.id !== form.id).sort((a, b) => a.fullName.localeCompare(b.fullName)),
     [all, form.id],
   );
+
+  const [uploading, setUploading] = useState<number | null>(null);
+  const uploadDoc = async (i: number, file: File) => {
+    setUploading(i);
+    try {
+      const up = await uploadFileToWorker(file);
+      setForm((f) => ({ ...f, documents: f.documents.map((d, j) => (j === i ? { ...d, fileUrl: up.key, name: d.name || up.name } : d)) }));
+      toast('📎 Đã tải lên giấy tờ.');
+    } catch (e) {
+      window.alert('❌ Lỗi tải lên: ' + (e as Error).message);
+    } finally {
+      setUploading(null);
+    }
+  };
 
   const setDoc = (i: number, patch: Partial<HrDocument>) =>
     setForm((f) => ({ ...f, documents: f.documents.map((d, j) => (j === i ? { ...d, ...patch } : d)) }));
@@ -132,6 +151,15 @@ export function EmployeeModal({ employee, all, canEdit, onClose, onSave }: Props
                   <TextField size="small" label="Ngày cấp" type="date" value={d.issuedAt ?? ''} onChange={(e) => setDoc(i, { issuedAt: e.target.value || undefined })} InputLabelProps={{ shrink: true }} sx={{ width: 150 }} disabled={!canEdit} />
                   <TextField size="small" label="Hết hạn" type="date" value={d.expiresAt ?? ''} onChange={(e) => setDoc(i, { expiresAt: e.target.value || undefined })} InputLabelProps={{ shrink: true }} sx={{ width: 150 }} disabled={!canEdit} />
                   <ExpiryBadge expiresAt={d.expiresAt} />
+                  {d.fileUrl && (
+                    <IconButton size="small" title="Xem file" onClick={() => openFilePreview({ key: d.fileUrl, name: d.name || d.kind })}><OpenInNewIcon fontSize="small" /></IconButton>
+                  )}
+                  {canEdit && (
+                    <IconButton size="small" component="label" title="Tải lên file" disabled={uploading === i}>
+                      <UploadFileIcon fontSize="small" />
+                      <input type="file" hidden accept=".pdf,.jpg,.jpeg,.png,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadDoc(i, f); e.target.value = ''; }} />
+                    </IconButton>
+                  )}
                   {canEdit && <IconButton size="small" color="error" onClick={() => removeDoc(i)}><DeleteOutlineIcon fontSize="small" /></IconButton>}
                 </Stack>
               ))}

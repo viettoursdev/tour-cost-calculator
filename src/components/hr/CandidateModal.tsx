@@ -7,8 +7,13 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import PersonRemoveAlt1Icon from '@mui/icons-material/PersonRemoveAlt1';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { DEPARTMENTS } from '@/auth/departments';
 import { fmtDate } from '@/lib/dateUtils';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
+import { toast } from '@/stores/toastStore';
 import {
   CANDIDATE_STAGE_LABEL, CANDIDATE_STAGE_ORDER, type CandidateNote, type CandidateStage,
   type HrCandidate, type HrJobPosting,
@@ -38,6 +43,20 @@ export function CandidateModal({ candidate, postings, canEdit, reviewerName, onC
   );
   const set = <K extends keyof HrCandidate>(k: K, v: HrCandidate[K]) => setForm((f) => ({ ...f, [k]: v }));
   const [noteText, setNoteText] = useState('');
+  const [uploadingCv, setUploadingCv] = useState(false);
+
+  const uploadCv = async (file: File) => {
+    setUploadingCv(true);
+    try {
+      const up = await uploadFileToWorker(file);
+      set('cvUrl', up.key);
+      toast('📎 Đã tải lên CV.');
+    } catch (e) {
+      window.alert('❌ Lỗi tải lên CV: ' + (e as Error).message);
+    } finally {
+      setUploadingCv(false);
+    }
+  };
 
   const addNote = () => {
     if (!noteText.trim()) return;
@@ -89,7 +108,14 @@ export function CandidateModal({ candidate, postings, canEdit, reviewerName, onC
           </Stack>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
-            <TextField label="Link CV" value={form.cvUrl ?? ''} onChange={(e) => set('cvUrl', e.target.value || undefined)} fullWidth disabled={!canEdit} />
+            <TextField label="CV (link hoặc tải lên)" value={form.cvUrl ?? ''} onChange={(e) => set('cvUrl', e.target.value || undefined)} fullWidth disabled={!canEdit} />
+            {form.cvUrl && <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => { const v = form.cvUrl!; openFilePreview(/^https?:\/\//.test(v) ? { url: v, name: `CV ${form.fullName}` } : { key: v, name: `CV ${form.fullName}` }); }}>Xem</Button>}
+            {canEdit && (
+              <Button size="small" component="label" startIcon={<UploadFileIcon />} disabled={uploadingCv}>
+                {uploadingCv ? 'Đang tải…' : 'Tải CV'}
+                <input type="file" hidden accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadCv(f); e.target.value = ''; }} />
+              </Button>
+            )}
             <Stack direction="row" spacing={1} alignItems="center">
               <Typography variant="body2" color="text.secondary">Đánh giá:</Typography>
               <Rating value={form.rating ?? 0} precision={0.5} onChange={(_, v) => set('rating', v ?? undefined)} disabled={!canEdit} />

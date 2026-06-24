@@ -7,6 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { useHrStore } from '@/stores/hrStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -17,6 +18,8 @@ import { EMPLOYMENT_STATUS_LABEL, type EmploymentStatus, type HrEmployee } from 
 import { EmployeeModal } from './EmployeeModal';
 import { OrgChart } from './OrgChart';
 import { EvaluationsPanel } from './EvaluationsPanel';
+import { HrOverviewPanel } from './HrOverviewPanel';
+import { Employee360 } from './Employee360';
 import { RecruitView } from './RecruitView';
 
 const STATUS_COLOR: Record<EmploymentStatus, 'default' | 'success' | 'warning'> = {
@@ -40,7 +43,8 @@ export function HRView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = hasPerm(currentUser, 'manageHR');
 
-  const [tab, setTab] = useState<'list' | 'org' | 'eval' | 'recruit'>('list');
+  const [tab, setTab] = useState<'overview' | 'list' | 'org' | 'eval' | 'recruit'>('overview');
+  const [detail, setDetail] = useState<HrEmployee | null>(null);
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
   const [status, setStatus] = useState<'' | EmploymentStatus>('');
@@ -79,6 +83,7 @@ export function HRView() {
       )}
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1.5 }}>
+        <Tab value="overview" label="Tổng quan" />
         <Tab value="list" label="Danh sách" />
         <Tab value="org" label="Sơ đồ tổ chức" />
         <Tab value="eval" label="Đánh giá" />
@@ -124,6 +129,7 @@ export function HRView() {
                       </Tooltip>
                     )}
                     <Chip size="small" color={STATUS_COLOR[e.status]} label={EMPLOYMENT_STATUS_LABEL[e.status]} />
+                    <Tooltip title="Hồ sơ 360"><IconButton size="small" onClick={() => setDetail(e)}><VisibilityOutlinedIcon fontSize="small" /></IconButton></Tooltip>
                     <IconButton size="small" onClick={() => setModal({ employee: e })}><EditIcon fontSize="small" /></IconButton>
                     {canEdit && <IconButton size="small" color="error" onClick={() => handleDelete(e)}><DeleteOutlineIcon fontSize="small" /></IconButton>}
                   </Stack>
@@ -134,6 +140,7 @@ export function HRView() {
         </>
       )}
 
+      {tab === 'overview' && <HrOverviewPanel employees={employees} />}
       {tab === 'org' && <OrgChart employees={employees} onPick={(e) => setModal({ employee: e })} />}
       {tab === 'eval' && <EvaluationsPanel employees={employees} />}
       {tab === 'recruit' && <RecruitView embedded />}
@@ -147,6 +154,7 @@ export function HRView() {
           onSave={handleSave}
         />
       )}
+      {detail && <Employee360 employee={detail} onClose={() => setDetail(null)} />}
     </Box>
   );
 }
