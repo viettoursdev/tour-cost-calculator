@@ -27,6 +27,8 @@ import {
   deadlineMeta, DEFAULT_VISA_MILESTONES, newVisaApplicant, newVisaMilestone,
   VISA_COUNTRIES, VISA_PROC_PRESETS, visaPresetKeyForCountry, VISA_STATUS_META, VISA_STATUS_ORDER,
 } from './constants';
+import { GuestDashboard } from '../quote/GuestListTable';
+import { applicantsToPassengers } from './guestAdapters';
 import type {
   User, VisaApplicant, VisaMilestone, VisaProcIndexEntry, VisaProjectDoc, VisaProjectStatus,
 } from '@/types';
@@ -269,6 +271,10 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
           <Divider textAlign="left">
             <Typography variant="caption" fontWeight={700} color="text.secondary">DANH SÁCH KHÁCH (CHECKLIST)</Typography>
           </Divider>
+          {applicants.length > 0 && <GuestDashboard pax={applicantsToPassengers(applicants)} />}
+          <Typography variant="caption" color="text.disabled">
+            Nhập nhanh tại đây; sắp phòng, công ty, chuyến bay, hồ sơ chi tiết chỉnh ở màn “Danh sách khách”.
+          </Typography>
           <Stack spacing={0.75}>
             {applicants.map((a, i) => (
               <Stack key={a.id} direction="row" spacing={0.5} alignItems="center">
@@ -277,6 +283,13 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
                   onChange={(e) => updApplicant(a.id, { name: e.target.value })} sx={{ flex: 1 }} />
                 <TextField size="small" placeholder="Số hộ chiếu" value={a.passport ?? ''}
                   onChange={(e) => updApplicant(a.id, { passport: e.target.value })} sx={{ width: 130 }} />
+                <TextField select size="small" value={a.gender ?? ''} sx={{ width: 90 }}
+                  onChange={(e) => updApplicant(a.id, { gender: e.target.value as VisaApplicant['gender'] })}>
+                  <MenuItem value="">—</MenuItem>
+                  <MenuItem value="Nam">Nam</MenuItem>
+                  <MenuItem value="Nữ">Nữ</MenuItem>
+                  <MenuItem value="Khác">Khác</MenuItem>
+                </TextField>
                 <TextField select size="small" value={a.docStatus} sx={{ width: 130 }}
                   onChange={(e) => updApplicant(a.id, { docStatus: e.target.value as VisaApplicant['docStatus'] })}>
                   {(Object.keys(APPLICANT_DOC_META) as VisaApplicant['docStatus'][]).map((k) => (
