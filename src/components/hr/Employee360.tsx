@@ -11,6 +11,7 @@ import { openFilePreview } from '@/stores/filePreviewStore';
 import {
   EMPLOYMENT_STATUS_LABEL, EVAL_STATUS_LABEL, type HrEmployee,
 } from '@/types';
+import { CAREER_LADDERS } from './hrSeed';
 
 const deptLabel = (d: string) => (d ? (DEPT_LABEL[d as keyof typeof DEPT_LABEL] ?? d) : '—');
 
@@ -29,6 +30,16 @@ export function Employee360({ employee, onClose }: { employee: HrEmployee; onClo
     () => allEvals.filter((e) => e.employeeId === employee.id).sort((a, b) => (a.period < b.period ? 1 : -1)),
     [allEvals, employee.id],
   );
+
+  // Lộ trình thăng tiến theo phòng ban; xác định bậc hiện tại theo cấp bậc/chức danh.
+  const ladder = useMemo(
+    () => (employee.department && CAREER_LADDERS[employee.department]) || [],
+    [employee.department],
+  );
+  const curLadderIdx = useMemo(() => {
+    const hay = `${employee.level} ${employee.title}`.toLowerCase();
+    return ladder.findIndex((s) => hay.includes(s.toLowerCase()));
+  }, [ladder, employee.level, employee.title]);
 
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
@@ -49,6 +60,28 @@ export function Employee360({ employee, onClose }: { employee: HrEmployee; onClo
             <Typography variant="body2" color="text.secondary">
               Liên hệ khẩn cấp: {employee.emergencyContact.name}{employee.emergencyContact.phone ? ` · ${employee.emergencyContact.phone}` : ''}{employee.emergencyContact.relation ? ` (${employee.emergencyContact.relation})` : ''}
             </Typography>
+          )}
+
+          {ladder.length > 0 && (
+            <>
+              <Divider />
+              <Box>
+                <Typography fontWeight={700} mb={1}>🪜 Lộ trình thăng tiến</Typography>
+                <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center">
+                  {ladder.map((step, i) => (
+                    <Stack key={step} direction="row" spacing={0.75} alignItems="center">
+                      <Chip size="small" color={i === curLadderIdx ? 'primary' : 'default'} variant={i === curLadderIdx ? 'filled' : 'outlined'}
+                        label={step} />
+                      {i < ladder.length - 1 && <Typography color="text.disabled">→</Typography>}
+                    </Stack>
+                  ))}
+                </Stack>
+                {curLadderIdx < 0 && <Typography variant="caption" color="text.secondary">Chưa xác định bậc hiện tại (cập nhật “Cấp bậc” trong hồ sơ để gợi ý bậc kế tiếp).</Typography>}
+                {curLadderIdx >= 0 && curLadderIdx < ladder.length - 1 && (
+                  <Typography variant="caption" color="text.secondary">Bậc kế tiếp: <b>{ladder[curLadderIdx + 1]}</b></Typography>
+                )}
+              </Box>
+            </>
           )}
 
           <Divider />

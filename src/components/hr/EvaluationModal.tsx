@@ -9,6 +9,7 @@ import {
   EVAL_STATUS_LABEL, type EvalCompetency, type EvalKpi, type EvalStatus,
   type HrEmployee, type HrEvaluation,
 } from '@/types';
+import { COMPETENCY_TEMPLATES } from './hrSeed';
 
 const STATUSES: EvalStatus[] = ['draft', 'finalized'];
 const rid = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
@@ -46,6 +47,18 @@ export function EvaluationModal({ evaluation, employees, canEdit, defaultReviewe
   const setComp = (i: number, patch: Partial<EvalCompetency>) =>
     setForm((f) => ({ ...f, competencies: f.competencies.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
   const addComp = () => setForm((f) => ({ ...f, competencies: [...f.competencies, { id: rid('cp'), name: '', score: 0 }] }));
+  // Nạp khung năng lực mẫu: thêm các tiêu chí chưa có (không ghi đè điểm đã chấm).
+  const applyTemplate = (id: string) => {
+    const tpl = COMPETENCY_TEMPLATES.find((t) => t.id === id);
+    if (!tpl) return;
+    setForm((f) => {
+      const existing = new Set(f.competencies.map((c) => c.name.trim().toLowerCase()));
+      const add = tpl.competencies
+        .filter((n) => !existing.has(n.trim().toLowerCase()))
+        .map((n) => ({ id: rid('cp'), name: n, score: 0 }));
+      return { ...f, competencies: [...f.competencies, ...add] };
+    });
+  };
   const rmComp = (i: number) => setForm((f) => ({ ...f, competencies: f.competencies.filter((_, j) => j !== i) }));
 
   const setKpi = (i: number, patch: Partial<EvalKpi>) =>
@@ -90,7 +103,14 @@ export function EvaluationModal({ evaluation, employees, canEdit, defaultReviewe
           <Box>
             <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
               <Typography fontWeight={700}>🎯 Khung năng lực ({form.competencies.length})</Typography>
-              {canEdit && <Button size="small" startIcon={<AddIcon />} onClick={addComp}>Thêm tiêu chí</Button>}
+              {canEdit && (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <TextField select size="small" label="Dùng mẫu" value="" onChange={(e) => applyTemplate(e.target.value)} sx={{ minWidth: 170 }}>
+                    {COMPETENCY_TEMPLATES.map((t) => <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>)}
+                  </TextField>
+                  <Button size="small" startIcon={<AddIcon />} onClick={addComp}>Thêm tiêu chí</Button>
+                </Stack>
+              )}
             </Stack>
             <Stack spacing={1.25}>
               {form.competencies.map((c, i) => (

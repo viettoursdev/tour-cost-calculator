@@ -14,15 +14,19 @@ import { DEPT_LABEL } from '@/auth/departments';
 import { toast } from '@/stores/toastStore';
 import {
   CANDIDATE_STAGE_LABEL, CANDIDATE_STAGE_ORDER, JOB_STATUS_LABEL,
-  type CandidateStage, type HrCandidate, type HrEmployee, type HrJobPosting,
+  type CandidateStage, type Department, type HrCandidate, type HrEmployee, type HrJobPosting,
+  type ProcessRun, type WorkflowStep,
 } from '@/types';
+import { useProcessStore } from '@/stores/processStore';
 import { JobPostingModal } from './JobPostingModal';
 import { CandidateModal } from './CandidateModal';
+import { ONBOARDING_STEPS } from './hrSeed';
 
 const STAGE_COLOR: Partial<Record<CandidateStage, string>> = {
   hired: '#14a08c', rejected: '#dc3250', offer: '#f5a623',
 };
 const newEmpId = () => 'hr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const newRunId = () => 'run' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 export function RecruitView({ embedded = false }: { embedded?: boolean } = {}) {
   const { postings, candidates, loading, syncing } = useHrRecruitStore();
@@ -32,6 +36,7 @@ export function RecruitView({ embedded = false }: { embedded?: boolean } = {}) {
   const deleteCandidate = useHrRecruitStore((s) => s.deleteCandidate);
   const moveCandidate = useHrRecruitStore((s) => s.moveCandidate);
   const saveEmployee = useHrStore((s) => s.save);
+  const saveRun = useProcessStore((s) => s.saveRun);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = hasPerm(currentUser, 'manageHR');
 
@@ -59,8 +64,26 @@ export function RecruitView({ embedded = false }: { embedded?: boolean } = {}) {
     };
     void saveEmployee(emp);
     void saveCandidate({ ...c, stage: 'hired', convertedEmployeeId: empId });
+
+    // Tự sinh quy trình Onboarding cho nhân viên mới (tái dùng feature SOP).
+    if (currentUser) {
+      const steps: WorkflowStep[] = ONBOARDING_STEPS.map((s, i) => ({
+        id: `ob${i}`, label: s.label, status: 'todo', output: s.output,
+      }));
+      const run: ProcessRun = {
+        id: newRunId(),
+        department: (c.department || 'dh_noidia') as Department,
+        title: `Onboarding — ${c.fullName}`,
+        steps,
+        status: 'active',
+        assignee: currentUser.u,
+        startDate: new Date().toISOString().slice(0, 10),
+      };
+      void saveRun(run, currentUser.name);
+    }
+
     setCandModal(null);
-    toast(`✅ Đã tạo hồ sơ nhân sự cho ${c.fullName}. Mở tab Nhân sự để bổ sung thông tin.`);
+    toast(`✅ Đã tạo hồ sơ NV + quy trình onboarding cho ${c.fullName}.`);
   };
 
   const onDrop = (stage: CandidateStage) => {
