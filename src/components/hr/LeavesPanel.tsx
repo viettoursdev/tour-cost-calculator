@@ -8,6 +8,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
+import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { isApprover } from '@/auth/ROLES';
@@ -22,9 +23,11 @@ const STATUS_COLOR: Record<LeaveStatus, 'warning' | 'success' | 'error' | 'defau
 };
 const today = () => new Date().toISOString().slice(0, 10);
 const overlaps = (l: HrLeave, day: string) => !!l.startDate && (l.startDate <= day) && ((l.endDate || l.startDate) >= day);
+const d10 = (iso?: string) => (iso ? iso.slice(0, 10) : '');
 
 export function LeavesPanel({ employees }: { employees: HrEmployee[] }) {
   const leaves = useHrLeaveStore((s) => s.leaves);
+  const assignments = useGuideScheduleStore((s) => s.assignments);
   const save = useHrLeaveStore((s) => s.save);
   const del = useHrLeaveStore((s) => s.delete);
   const decide = useHrLeaveStore((s) => s.decide);
@@ -63,6 +66,21 @@ export function LeavesPanel({ employees }: { employees: HrEmployee[] }) {
     [leaves, day],
   );
 
+  // Ai đang đi tour ngày được chọn (gộp lịch HDV): tour active nếu `day` nằm trong
+  // khoảng chặng bay (hoặc ngày khởi hành nếu chưa có chặng).
+  const onTour = useMemo(() => {
+    const out: { guide: string; tour: string }[] = [];
+    Object.values(assignments).forEach((a) => {
+      const dates = a.legs.flatMap((l) => [d10(l.startISO), d10(l.endISO)]).filter(Boolean);
+      if (a.departDate) dates.push(d10(a.departDate));
+      if (!dates.length) return;
+      const min = dates.reduce((m, x) => (x < m ? x : m));
+      const max = dates.reduce((m, x) => (x > m ? x : m));
+      if (day >= min && day <= max) a.guides.forEach((g) => out.push({ guide: g.name, tour: a.tourName }));
+    });
+    return out;
+  }, [assignments, day]);
+
   const handleSave = (l: HrLeave) => { void save(l); setModal(null); };
 
   return (
@@ -83,22 +101,42 @@ export function LeavesPanel({ employees }: { employees: HrEmployee[] }) {
       {/* Lịch khả dụng theo ngày */}
       <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" mb={1} flexWrap="wrap">
-          <Typography fontWeight={700} fontSize={14}>📅 Ai nghỉ ngày</Typography>
+          <Typography fontWeight={700} fontSize={14}>📅 Lịch khả dụng ngày</Typography>
           <TextField size="small" type="date" value={day} onChange={(e) => setDay(e.target.value || today())} InputLabelProps={{ shrink: true }} sx={{ width: 160 }} />
-          <Chip size="small" label={`${offToday.length} người`} color={offToday.length ? 'warning' : 'default'} />
+        </Stack>
+
+        {/* Nghỉ phép */}
+        <Stack direction="row" spacing={1} alignItems="center" mb={0.5} flexWrap="wrap">
+          <Typography variant="body2" fontWeight={700} color="warning.main">🏖️ Nghỉ phép</Typography>
+          <Chip size="small" label={`${offToday.length}`} color={offToday.length ? 'warning' : 'default'} />
         </Stack>
         {offToday.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">Không ai nghỉ ngày này.</Typography>
+          <Typography variant="body2" color="text.secondary" mb={1}>Không ai nghỉ ngày này.</Typography>
         ) : (
-          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap mb={1}>
             {offToday.map((l) => (
               <Chip key={l.id} size="small" variant={l.status === 'approved' ? 'filled' : 'outlined'} color={l.status === 'approved' ? 'warning' : 'default'}
                 label={`${nameOf(l.employeeId)} · ${LEAVE_TYPE_LABEL[l.type]}${l.status === 'pending' ? ' (chờ)' : ''}`} />
             ))}
           </Stack>
         )}
+
+        {/* Đang đi tour (gộp từ Lịch đi tour HDV) */}
+        <Stack direction="row" spacing={1} alignItems="center" mb={0.5} flexWrap="wrap">
+          <Typography variant="body2" fontWeight={700} color="info.main">✈️ Đang đi tour</Typography>
+          <Chip size="small" label={`${onTour.length}`} color={onTour.length ? 'info' : 'default'} />
+        </Stack>
+        {onTour.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">Không có HDV đi tour ngày này.</Typography>
+        ) : (
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            {onTour.map((t, i) => (
+              <Chip key={i} size="small" color="info" variant="outlined" label={`${t.guide} · ${t.tour}`} />
+            ))}
+          </Stack>
+        )}
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-          Lịch đi tour của HDV xem ở mục “Lịch đi tour HDV”. Kết hợp 2 nguồn để biết ai rảnh nhận tour.
+          Gộp nghỉ phép + lịch đi tour HDV để biết ai bận / ai rảnh nhận tour ngày này.
         </Typography>
       </Paper>
 

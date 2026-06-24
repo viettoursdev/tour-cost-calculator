@@ -31,6 +31,7 @@ import { useHrRecruitStore } from '@/stores/hrRecruitStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders } from '@/lib/notifications';
+import { checkHrExpiry } from '@/lib/hrNotifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
 import { AppShell } from './AppShell';
 import { ToastHost } from '@/components/common/ToastHost';
@@ -120,6 +121,7 @@ export function MainApp() {
     setTimeout(() => { void checkCustomerFollowups(currentUser); }, 7000);
     setTimeout(() => { void checkDormantCustomers(currentUser); }, 8000);
     setTimeout(() => { void checkDocExpiry(currentUser); }, 8500);
+    setTimeout(() => { void checkHrExpiry(currentUser); }, 8800);
     // Nhắc lại lặp lại: kiểm tra ngay + mỗi 5 phút khi app mở (gồm cả nhắc việc To-Do).
     const remindOnce = () => {
       checkNotifReminders(useNotificationStore.getState().notifications, currentUser.u);
