@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AppBar, Box, Button, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem,
   Stack, TextField, Toolbar, Tooltip, Typography,
@@ -47,7 +47,14 @@ import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { TPL_ACCENT } from './templateStyle';
+import { NavCustomizeModal } from './NavCustomizeModal';
+import { useNavPrefStore } from '@/stores/navPrefStore';
+import {
+  GROUP_IDS, GROUP_LABELS, reconcileLayout,
+  type GroupId, type NavCatalogEntry, type NavLayout, type PlaceableContainer,
+} from './navLayout';
 import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
@@ -171,6 +178,13 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const status = useQuoteStore((s) => s.draft.status) ?? 'in_progress';
   const setStatus = useQuoteStore((s) => s.setStatus);
   const currentUser = useAuthStore((s) => s.currentUser);
+
+  // Tùy biến thanh điều hướng theo từng user (lưu localStorage).
+  const navRaw = useNavPrefStore((s) => s.raw);
+  const loadNavPref = useNavPrefStore((s) => s.load);
+  const username = currentUser?.u;
+  useEffect(() => { loadNavPref(username); }, [username, loadNavPref]);
+  const [navCustomizeOpen, setNavCustomizeOpen] = useState(false);
 
   const isDMC = template === 'dmc';
   const canExport = !!(template && template !== 'dmc' && currentUser);
@@ -335,50 +349,69 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
     useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: tpl }, view: 'cost' }));
   };
   const item = (v: QuoteViewKey, label: string, icon?: ReactNode) => ({ v, label, icon });
-  // Điều hướng gom nhóm: ít tab phẳng + các menu nhóm (giảm rối khi nhiều mục).
-  const NAV: NavNode[] = isDMC
-    ? [item('cost', 'Breakdown', <BarChartOutlinedIcon />), item('history', 'Lịch sử', <HistoryIcon />)]
-    : [
-        item('home', 'Hôm nay', <TodayOutlinedIcon />),
-        item('cockpit', 'Hồ sơ tour', <RouteOutlinedIcon />),
-        item('cost', 'Báo giá', <RequestQuoteOutlinedIcon />),
-        item('history', 'Lịch sử', <HistoryIcon />),
-        { group: 'Bán hàng', icon: <StorefrontOutlinedIcon />, items: [
-          item('summary', 'Tổng kết'),
-          item('payboard', 'Công nợ tổng'),
-          item('payment', 'Quản lý thanh toán'),
-          item('dashboard', 'Dashboard bán hàng'),
-          // Bảng điều hành cấp cao — chỉ CEO.
-          ...(isCEO ? [
-            item('execboard', 'Tổng quan điều hành'),
-            item('pipeline', 'Pipeline bán hàng'),
-            item('salesanalytics', 'Phân tích bán hàng'),
-          ] : []),
-        ] },
-        { group: 'Vận hành', icon: <EngineeringOutlinedIcon />, items: [
-          item('todo', 'Việc cần làm'),
-          item('process', 'Quy trình phòng ban'),
-          item('workflow', 'Quy trình điều hành'),
-          item('passengers', 'Khách đoàn'),
-          item('opsboard', 'Điều phối'),
-          item('departures', 'Lịch khởi hành'),
-          item('flights', 'Chuyến bay'),
-          ...(isMgr ? [item('audit', 'Nhật ký')] : []),
-          { label: 'Chương trình tour', icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') },
-          { label: 'Thực đơn', icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') },
-          { label: 'Lịch đi tour HDV', icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') },
-        ] },
-        { group: 'Danh mục', icon: <CategoryOutlinedIcon />, items: [
-          item('advsettle', 'Tạm ứng - Quyết toán'),
-          ...(canContract ? [item('contract', 'Hợp đồng')] : []),
-          ...(canNcc ? [item('nccProducts', 'Sản phẩm NCC')] : []),
-        ] },
-      ]
-        .map((n) => (hidePrice && 'group' in n
-          ? { ...n, items: n.items.filter((it) => !('v' in it && it.v && PRICE_ONLY_VIEWS.has(it.v))) }
-          : n))
-        .filter((n) => (hidePrice && !('group' in n) ? !PRICE_ONLY_VIEWS.has(n.v) : true))
-        .filter((n) => !('group' in n) || n.items.length > 0);
+
+  // ── Thanh điều hướng tùy biến theo user ──
+  // Catalog = mọi mục khả dụng (đã lọc quyền) + container mặc định + id ổn định.
+  type CatItem = NavCatalogEntry & { label: string; icon?: ReactNode; v?: QuoteViewKey; action?: () => void };
+  const GROUP_ICONS: Record<GroupId, ReactNode> = {
+    'grp:sales': <StorefrontOutlinedIcon />,
+    'grp:ops': <EngineeringOutlinedIcon />,
+    'grp:catalog': <CategoryOutlinedIcon />,
+  };
+  const cat = (id: string, container: PlaceableContainer, label: string, opts: Partial<CatItem> = {}): CatItem =>
+    ({ id, container, label, ...opts });
+  const navCatalog: CatItem[] = isDMC ? [] : (() => {
+    const c: CatItem[] = [
+      cat('home', 'top', 'Hôm nay', { v: 'home', icon: <TodayOutlinedIcon /> }),
+      cat('cockpit', 'top', 'Hồ sơ tour', { v: 'cockpit', icon: <RouteOutlinedIcon /> }),
+      cat('cost', 'top', 'Báo giá', { v: 'cost', icon: <RequestQuoteOutlinedIcon /> }),
+      cat('history', 'top', 'Lịch sử', { v: 'history', icon: <HistoryIcon /> }),
+      cat('summary', 'grp:sales', 'Tổng kết', { v: 'summary' }),
+      cat('payboard', 'grp:sales', 'Công nợ tổng', { v: 'payboard' }),
+      cat('payment', 'grp:sales', 'Quản lý thanh toán', { v: 'payment' }),
+      cat('dashboard', 'grp:sales', 'Dashboard bán hàng', { v: 'dashboard' }),
+      ...(isCEO ? [
+        cat('execboard', 'grp:sales', 'Tổng quan điều hành', { v: 'execboard' }),
+        cat('pipeline', 'grp:sales', 'Pipeline bán hàng', { v: 'pipeline' }),
+        cat('salesanalytics', 'grp:sales', 'Phân tích bán hàng', { v: 'salesanalytics' }),
+      ] : []),
+      cat('todo', 'grp:ops', 'Việc cần làm', { v: 'todo' }),
+      cat('process', 'grp:ops', 'Quy trình phòng ban', { v: 'process' }),
+      cat('workflow', 'grp:ops', 'Quy trình điều hành', { v: 'workflow' }),
+      cat('passengers', 'grp:ops', 'Khách đoàn', { v: 'passengers' }),
+      cat('opsboard', 'grp:ops', 'Điều phối', { v: 'opsboard' }),
+      cat('departures', 'grp:ops', 'Lịch khởi hành', { v: 'departures' }),
+      cat('flights', 'grp:ops', 'Chuyến bay', { v: 'flights' }),
+      ...(isMgr ? [cat('audit', 'grp:ops', 'Nhật ký', { v: 'audit' })] : []),
+      cat('app:itinerary', 'grp:ops', 'Chương trình tour', { icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') }),
+      cat('app:menu', 'grp:ops', 'Thực đơn', { icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') }),
+      cat('app:guideschedule', 'grp:ops', 'Lịch đi tour HDV', { icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') }),
+      cat('advsettle', 'grp:catalog', 'Tạm ứng - Quyết toán', { v: 'advsettle' }),
+      ...(canContract ? [cat('contract', 'grp:catalog', 'Hợp đồng', { v: 'contract' })] : []),
+      ...(canNcc ? [cat('nccProducts', 'grp:catalog', 'Sản phẩm NCC', { v: 'nccProducts' })] : []),
+    ];
+    // Phòng HDV ẩn giá: loại hẳn các view thuần tài chính khỏi catalog.
+    return hidePrice ? c.filter((it) => !(it.v && PRICE_ONLY_VIEWS.has(it.v))) : c;
+  })();
+
+  const navLayout: NavLayout = reconcileLayout(navCatalog, navRaw);
+  const navLabels: Record<string, string> = Object.fromEntries(navCatalog.map((c) => [c.id, c.label] as const));
+
+  // Dựng NavNode[] từ layout: tab phẳng (top) trước, rồi các nhóm theo thứ tự cố định.
+  const NAV: NavNode[] = (() => {
+    if (isDMC) return [item('cost', 'Breakdown', <BarChartOutlinedIcon />), item('history', 'Lịch sử', <HistoryIcon />)];
+    const byId = new Map(navCatalog.map((c) => [c.id, c]));
+    const toItem = (id: string): NavItem | null => {
+      const c = byId.get(id);
+      return c ? { v: c.v, label: c.label, icon: c.icon, action: c.action } : null;
+    };
+    const nodes: NavNode[] = navLayout.top.map(toItem).filter((x): x is NavItem => !!x);
+    for (const gid of GROUP_IDS) {
+      const items = navLayout[gid].map(toItem).filter((x): x is NavItem => !!x);
+      if (items.length) nodes.push({ group: GROUP_LABELS[gid], icon: GROUP_ICONS[gid], items });
+    }
+    return nodes;
+  })();
 
   return (
     <AppBar
@@ -535,6 +568,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           ))}
         </Box>
         <Box sx={{ flexGrow: 1 }} />
+
+        {/* Tùy chỉnh thanh điều hướng (kéo-thả / nhóm / ẩn-hiện theo từng user) */}
+        {!isDMC && (
+          <Tooltip title="Tùy chỉnh thanh điều hướng">
+            <IconButton size="small" onClick={() => setNavCustomizeOpen(true)}
+              sx={{ color: '#0d7a6a', border: '1px solid rgba(20,150,140,0.4)', borderRadius: 1.5, px: 0.75,
+                '&:hover': { borderColor: '#0d7a6a', background: 'rgba(20,150,140,0.08)' } }}>
+              <TuneOutlinedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
 
         {/* Rate Card dropdown (legacy "📋 Rate Card") */}
         <Tooltip title="Rate Card">
@@ -799,6 +843,17 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           onClose={() => setRateModal({ kind: 'none' })}
           type={rateModal.type}
           label={rateModal.label}
+        />
+      )}
+      {navCustomizeOpen && (
+        <NavCustomizeModal
+          open
+          onClose={() => setNavCustomizeOpen(false)}
+          catalog={navCatalog}
+          labels={navLabels}
+          layout={navLayout}
+          onChange={(l) => useNavPrefStore.getState().save(username, l)}
+          onReset={() => useNavPrefStore.getState().reset(username)}
         />
       )}
     </AppBar>
