@@ -1,4 +1,5 @@
 import type { Department } from './user';
+import type { ApplicantDoc, PassportRecord } from './visa';
 
 export type CategoryId =
   | 'flight' | 'hotel' | 'transport' | 'meal' | 'sight' | 'meeting'
@@ -158,7 +159,10 @@ export type LegacyQuoteFlight = {
   note?: string;
 };
 
-/** Một khách trong đoàn (manifest + rooming list của báo giá). */
+/** Loại phòng — đôi/twin/đơn/triple + nâng hạng VIP/Upgrade. */
+export type RoomType = 'single' | 'double' | 'twin' | 'triple' | 'vip' | 'upgrade' | '';
+
+/** Một khách trong đoàn (manifest + rooming list của báo giá; dùng chung cho hồ sơ visa). */
 export type Passenger = {
   id: string;
   name: string;
@@ -167,12 +171,26 @@ export type Passenger = {
   idType?: 'passport' | 'cccd' | '';
   idNo?: string;         // số hộ chiếu / CCCD
   nationality?: string;
-  roomType?: 'single' | 'double' | 'twin' | 'triple' | '';
+  roomType?: RoomType;
   roomNo?: string;       // nhãn/số phòng để ghép khách ở chung
   dietary?: string;      // ăn kiêng / dị ứng
   phone?: string;
   emergency?: string;    // liên hệ khẩn cấp (tên + sđt)
   note?: string;
+  // ── Bổ sung dùng chung Visa ↔ Báo giá ──
+  company?: string;        // Công ty / đơn vị
+  departurePoint?: string; // Địa điểm khởi hành (vd Hà Nội, TP.HCM)
+  otherFlight?: string;    // Chuyến bay khác (khách bay riêng) — nhập tự do
+  // ── Trường hồ sơ visa (optional → báo giá thuần không dùng) ──
+  nameNoAccent?: string;      // Họ tên không dấu
+  passportIssue?: string;     // Ngày cấp hộ chiếu
+  passportExpiry?: string;    // Ngày hết hạn hộ chiếu
+  countriesVisited?: string;  // Các quốc gia đã từng đi
+  docStatus?: 'missing' | 'submitted' | 'complete';
+  result?: 'pending' | 'passed' | 'failed' | 'have_visa';
+  failReason?: string;        // Lý do rớt (khi result = failed)
+  docs?: ApplicantDoc[];      // Checklist hồ sơ visa
+  passportHistory?: PassportRecord[]; // Hộ chiếu cũ đã thay
 };
 
 /** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */

@@ -7,9 +7,17 @@ import { saveAs } from 'file-saver';
 import { loadVNFont } from './vnFont';
 import { BRAND_TEAL, BRAND_TEAL_ARGB, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
+import { ROOM_KEYS, ROOM_LABELS, summarizeGuests } from '@/components/quote/guestStats';
 import type { Passenger, QuoteInfo } from '@/types';
 
-const ROOM_LABEL: Record<string, string> = { single: 'Đơn', double: 'Đôi', twin: 'Twin', triple: 'Triple', '': '' };
+const ROOM_LABEL: Record<string, string> = { single: 'Đơn', double: 'Đôi', twin: 'Twin', triple: 'Triple', vip: 'VIP', upgrade: 'Nâng hạng', '': '' };
+
+/** Một dòng tóm tắt sắp phòng + giới tính cho cuối file. */
+function roomingSummaryLine(pax: Passenger[]): string {
+  const s = summarizeGuests(pax);
+  const rooms = ROOM_KEYS.filter((k) => s.roomsByRoom[k]).map((k) => `${ROOM_LABELS[k]}: ${s.roomsByRoom[k]}`).join('  ·  ');
+  return `Tổng ${s.total} khách (Nam ${s.male} · Nữ ${s.female})  —  ${s.totalRooms} phòng` + (rooms ? `  ·  ${rooms}` : '');
+}
 const GENDER_LABEL: Record<string, string> = { M: 'Nam', F: 'Nữ', '': '' };
 const idLabel = (p: Passenger) => (p.idType === 'cccd' ? 'CCCD ' : '') + (p.idNo ?? '');
 
@@ -48,8 +56,8 @@ export function exportManifestPDF(info: QuoteInfo, pax: Passenger[]): void {
   pdf.text(`Điểm đến: ${info.dest || '—'}   ·   Khởi hành: ${fmtDate(info.startDate) || '—'}   ·   ${info.days || '?'} ngày`, M, y);
   y += 6;
 
-  const cols = ['#', 'Họ và tên', 'GT', 'Ngày sinh', 'Hộ chiếu/CCCD', 'Quốc tịch', 'Phòng', 'Ghép', 'Ăn kiêng/Dị ứng', 'Điện thoại', 'Liên hệ khẩn'];
-  const w = [8, CW * 0.16, 12, CW * 0.09, CW * 0.13, CW * 0.08, CW * 0.06, CW * 0.06, CW * 0.14, CW * 0.09];
+  const cols = ['#', 'Họ và tên', 'GT', 'Ngày sinh', 'Hộ chiếu/CCCD', 'Công ty', 'Khởi hành', 'Phòng', 'Ghép', 'Chuyến bay khác', 'Điện thoại', 'Liên hệ khẩn'];
+  const w = [7, CW * 0.14, 9, CW * 0.07, CW * 0.11, CW * 0.10, CW * 0.08, CW * 0.05, CW * 0.04, CW * 0.10, CW * 0.07];
   w.push(CW - w.reduce((a, b) => a + b, 0));
 
   const row = (cells: string[], opt: { head?: boolean; fill?: RGB }) => {
@@ -70,9 +78,14 @@ export function exportManifestPDF(info: QuoteInfo, pax: Passenger[]): void {
 
   row(cols, { head: true, fill: TEAL });
   pax.forEach((p, i) => row([
-    String(i + 1), p.name || '', GENDER_LABEL[p.gender ?? ''] || '', p.dob || '', idLabel(p), p.nationality || '',
-    ROOM_LABEL[p.roomType ?? ''] || '', p.roomNo || '', p.dietary || '', p.phone || '', p.emergency || '',
+    String(i + 1), p.name || '', GENDER_LABEL[p.gender ?? ''] || '', p.dob || '', idLabel(p), p.company || '',
+    p.departurePoint || '', ROOM_LABEL[p.roomType ?? ''] || '', p.roomNo || '', p.otherFlight || '', p.phone || '', p.emergency || '',
   ], { fill: i % 2 ? ZEBRA : WHITE }));
+
+  y += 3;
+  ensure(8);
+  setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...NAVY);
+  pdf.text(roomingSummaryLine(pax), M, y + 3);
 
   pdf.save(`DanhSachKhach_${slug(info.name)}.pdf`);
 }
@@ -83,7 +96,8 @@ export async function exportManifestExcel(info: QuoteInfo, pax: Passenger[]): Pr
   ws.columns = [
     { header: '#', width: 5 }, { header: 'Họ và tên', width: 26 }, { header: 'Giới tính', width: 9 },
     { header: 'Ngày sinh', width: 13 }, { header: 'Loại giấy tờ', width: 12 }, { header: 'Số hộ chiếu/CCCD', width: 20 },
-    { header: 'Quốc tịch', width: 14 }, { header: 'Loại phòng', width: 11 }, { header: 'Ghép phòng', width: 11 },
+    { header: 'Công ty', width: 20 }, { header: 'Quốc tịch', width: 14 }, { header: 'Địa điểm khởi hành', width: 16 },
+    { header: 'Loại phòng', width: 11 }, { header: 'Ghép phòng', width: 11 }, { header: 'Chuyến bay khác', width: 20 },
     { header: 'Ăn kiêng/Dị ứng', width: 22 }, { header: 'Điện thoại', width: 15 }, { header: 'Liên hệ khẩn cấp', width: 24 },
     { header: 'Ghi chú', width: 22 },
   ];
@@ -94,8 +108,12 @@ export async function exportManifestExcel(info: QuoteInfo, pax: Passenger[]): Pr
   pax.forEach((p, i) => ws.addRow([
     i + 1, p.name || '', GENDER_LABEL[p.gender ?? ''] || '', p.dob || '',
     p.idType === 'cccd' ? 'CCCD' : p.idType === 'passport' ? 'Hộ chiếu' : '', p.idNo || '',
-    p.nationality || '', ROOM_LABEL[p.roomType ?? ''] || '', p.roomNo || '', p.dietary || '', p.phone || '', p.emergency || '', p.note || '',
+    p.company || '', p.nationality || '', p.departurePoint || '', ROOM_LABEL[p.roomType ?? ''] || '', p.roomNo || '',
+    p.otherFlight || '', p.dietary || '', p.phone || '', p.emergency || '', p.note || '',
   ]));
+  ws.addRow([]);
+  const sumRow = ws.addRow([roomingSummaryLine(pax)]);
+  sumRow.font = { bold: true };
   const buf = await wb.xlsx.writeBuffer();
   saveAs(new Blob([buf]), `DanhSachKhach_${slug(info.name)}.xlsx`);
 }

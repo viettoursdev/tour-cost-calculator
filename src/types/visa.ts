@@ -155,6 +155,14 @@ export interface VisaApplicant {
   docs?: ApplicantDoc[];        // Checklist hồ sơ
   passportHistory?: PassportRecord[];   // Hộ chiếu cũ đã thay
   note?: string;                // Lưu ý khác
+  // ── Bổ sung dùng chung Visa ↔ Báo giá ──
+  company?: string;             // Công ty / đơn vị
+  phone?: string;               // Số điện thoại
+  departurePoint?: string;      // Địa điểm khởi hành
+  otherFlight?: string;         // Chuyến bay khác (khách bay riêng)
+  // Sắp xếp phòng (đồng bộ với báo giá)
+  roomType?: 'single' | 'double' | 'twin' | 'triple' | 'vip' | 'upgrade' | '';
+  roomNo?: string;              // Nhãn/số phòng để ghép khách ở chung
 }
 
 export interface VisaProjectDoc {
