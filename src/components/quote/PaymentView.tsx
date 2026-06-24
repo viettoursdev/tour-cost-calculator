@@ -18,7 +18,7 @@ import { PaymentRequestModal } from './PaymentRequestModal';
 import { getCATS } from './constants';
 import { fmtVND } from './calc';
 import {
-  buildAllItems, buildSourceItems, computeNccDue, computePaymentTotals, slugifyTourKey,
+  buildAllItems, buildSourceItems, computeNccDue, computePaymentTotals, itemBudget, slugifyTourKey,
 } from './paymentUtils';
 import { TrackItemsModal } from './TrackItemsModal';
 import { AddCustomCostModal } from './AddCustomCostModal';
@@ -258,33 +258,45 @@ export function PaymentView() {
       >
         <SummaryCard
           gradient="linear-gradient(135deg,#0f1c2d,#16314a)"
-          icon="💰"
-          label="Tổng chi phí quản lý"
-          value={fmtVND(totals.totalCost)}
-          sub={`${trackedItems.length} khoản đang theo dõi`}
+          icon="📋"
+          label="Tổng báo giá"
+          value={fmtVND(totals.totalBudget)}
+          sub={`Giá vốn dự toán · ${trackedItems.length} khoản theo dõi`}
         />
         <SummaryCard
-          gradient="linear-gradient(135deg,#0d7a6a,#14a08c)"
+          gradient="linear-gradient(135deg,#5b3fa0,#8e44ad)"
+          icon="💸"
+          label="Phải thanh toán"
+          value={fmtVND(totals.totalCost)}
+          sub={`${totals.totalBudget > 0 ? Math.round((totals.totalCost / totals.totalBudget) * 100) : 0}% so với báo giá`}
+        />
+        <SummaryCard
+          gradient={totals.profit >= 0
+            ? 'linear-gradient(135deg,#0d7a6a,#14a08c)'
+            : 'linear-gradient(135deg,#dc3250,#c0392b)'}
+          icon={totals.profit >= 0 ? '💰' : '⚠️'}
+          label={totals.profit >= 0 ? 'Lợi nhuận (Báo giá − Phải TT)' : 'Vượt báo giá'}
+          value={`${totals.profit < 0 ? '-' : ''}${fmtVND(Math.abs(totals.profit))}`}
+          sub={totals.profit >= 0
+            ? `Biên ${totals.totalBudget > 0 ? Math.round((totals.profit / totals.totalBudget) * 100) : 0}% trên giá vốn`
+            : 'Chi thực vượt tổng báo giá'}
+        />
+        <SummaryCard
+          gradient="linear-gradient(135deg,#1f6f8b,#2980b9)"
           icon="✅"
           label="Đã thanh toán"
           value={fmtVND(totals.totalPaid)}
-          sub={`${totals.totalCost > 0 ? Math.round((totals.totalPaid / totals.totalCost) * 100) : 0}% tổng chi phí`}
-        />
-        <SummaryCard
-          gradient="linear-gradient(135deg,#dc3250,#c0392b)"
-          icon="⚠️"
-          label="Công nợ còn thiếu"
-          value={fmtVND(totals.totalRemaining)}
-          sub={`${totals.totalCost > 0 ? Math.round((totals.totalRemaining / totals.totalCost) * 100) : 0}% chưa trả`}
-        />
-        <SummaryCard
-          gradient="linear-gradient(135deg,#f5a623,#e67e22)"
-          icon="📅"
-          label="Đã lên lịch TT"
-          value={fmtVND(totals.totalScheduled)}
-          sub="Tổng các đợt đã tạo"
+          sub={`Còn phải trả ${fmtVND(totals.totalRemaining)}`}
         />
       </Box>
+
+      {trackedItems.some((i) => itemBudget(i) - i.amount < 0) && (
+        <Alert severity={totals.profit >= 0 ? 'info' : 'warning'} sx={{ mb: 3 }}>
+          {totals.profit >= 0
+            ? 'Có khoản chi thực VƯỢT báo giá (dấu −) nhưng đã được bù bằng phần tiết kiệm ở các khoản khác — tổng vẫn có lợi nhuận.'
+            : 'Chi thực đang VƯỢT tổng báo giá: phần tiết kiệm ở các khoản khác chưa bù đủ. Cần điều chỉnh để Tổng phải thanh toán ≤ Tổng báo giá.'}
+        </Alert>
+      )}
 
       {trackedItems.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 8, color: 'text.disabled' }}>
@@ -312,6 +324,9 @@ export function PaymentView() {
                 .reduce((s, i) => s + (+i.amount || 0), 0);
               const remaining = ci.amount - paidSum;
               const pct = ci.amount > 0 ? Math.round((paidSum / ci.amount) * 100) : 0;
+              const budget = itemBudget(ci);
+              // Chênh lệch = báo giá − phải thanh toán (>0 tiết kiệm, <0 vượt báo giá → dấu trừ).
+              const diff = budget - ci.amount;
               const isOpen = expanded === ci.key;
               return (
                 <Box
@@ -406,6 +421,21 @@ export function PaymentView() {
                       >
                         {remaining <= 0 ? '✅ Đã trả đủ' : paidSum > 0 ? `Còn thiếu ${fmtVND(remaining)}` : 'Chưa thanh toán'}
                       </Typography>
+                      {diff !== 0 && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: 'block', mt: 0.25, fontWeight: 700,
+                            color: diff > 0 ? '#27ae60' : '#dc3250',
+                          }}
+                        >
+                          {ci.custom
+                            ? `Phát sinh -${fmtVND(Math.abs(diff))}`
+                            : diff > 0
+                              ? `↓ Tiết kiệm ${fmtVND(diff)} (BG ${fmtVND(budget)})`
+                              : `↑ Vượt -${fmtVND(Math.abs(diff))} (BG ${fmtVND(budget)})`}
+                        </Typography>
+                      )}
                       {ci.isOverridden && !ci.custom && (
                         <Button
                           size="small"

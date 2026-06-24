@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAllItems } from './paymentUtils';
+import { buildAllItems, computePaymentTotals } from './paymentUtils';
 import type { CustomCostItem, PaymentItem, PaymentRecord } from '@/types';
 
 const rates = { USD: 25000, EUR: 27000 };
@@ -50,5 +50,47 @@ describe('buildAllItems — quy đổi ngoại tệ theo hạng mục', () => {
     expect(it.cur).toBe('EUR');
     expect(it.foreignAmount).toBe(200);
     expect(it.amount).toBe(5_400_000); // 200 × 27000
+  });
+});
+
+describe('computePaymentTotals — lợi nhuận = báo giá − phải thanh toán', () => {
+  it('bù trừ chéo: khoản vượt được bù bằng khoản tiết kiệm → lợi nhuận = tổng', () => {
+    // A: báo giá 10tr, trả thực 8tr (tiết kiệm +2tr)
+    // B: báo giá 5tr, trả thực 6tr (vượt -1tr)
+    const items = buildAllItems(
+      [src('a', 'A', 10_000_000), src('b', 'B', 5_000_000)],
+      { a: { customAmount: 8_000_000 }, b: { customAmount: 6_000_000 } },
+      [],
+      rates,
+    );
+    const t = computePaymentTotals(items, { a: { customAmount: 8_000_000 }, b: { customAmount: 6_000_000 } });
+    expect(t.totalBudget).toBe(15_000_000);
+    expect(t.totalCost).toBe(14_000_000); // 8 + 6
+    expect(t.profit).toBe(1_000_000);     // 2tr tiết kiệm − 1tr vượt
+  });
+
+  it('khoản tự tạo (phát sinh) tính báo giá = 0 → giảm lợi nhuận', () => {
+    const custom: CustomCostItem[] = [{
+      key: 'c1', catId: 'other' as never, catLabel: 'Khác', catIcon: '➕', catColor: '#000',
+      name: 'Phát sinh', amount: 3_000_000,
+    }];
+    const items = buildAllItems([src('a', 'A', 10_000_000)], {}, custom, rates);
+    const t = computePaymentTotals(items, {});
+    expect(t.totalBudget).toBe(10_000_000); // chỉ A có báo giá
+    expect(t.totalCost).toBe(13_000_000);   // A 10tr + phát sinh 3tr
+    expect(t.profit).toBe(-3_000_000);      // vượt báo giá
+  });
+
+  it('mục chưa theo dõi không tính vào tổng', () => {
+    const items = buildAllItems(
+      [src('a', 'A', 10_000_000), src('b', 'B', 5_000_000)],
+      { b: { tracked: false } },
+      [],
+      rates,
+    );
+    const t = computePaymentTotals(items, { b: { tracked: false } });
+    expect(t.totalBudget).toBe(10_000_000);
+    expect(t.totalCost).toBe(10_000_000);
+    expect(t.profit).toBe(0);
   });
 });

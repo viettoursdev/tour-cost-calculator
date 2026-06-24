@@ -83,10 +83,20 @@ export function buildAllItems(
 }
 
 export interface PaymentTotals {
+  /** Tổng báo giá (giá vốn dự toán) của các hạng mục theo dõi — trần chi phí. */
+  totalBudget: number;
+  /** Tổng chi phí THỰC phải thanh toán (đã chỉnh tay theo từng khoản). */
   totalCost: number;
   totalPaid: number;
   totalScheduled: number;
   totalRemaining: number;
+  /** Lợi nhuận = Tổng báo giá − Tổng phải thanh toán (âm = vượt báo giá). */
+  profit: number;
+}
+
+/** Giá vốn báo giá của 1 hạng mục: khoản tự tạo là phát sinh ngoài báo giá → 0. */
+export function itemBudget(it: PaymentItem): number {
+  return it.custom ? 0 : it.sourceAmount;
 }
 
 export function computePaymentTotals(
@@ -94,6 +104,7 @@ export function computePaymentTotals(
   payments: Record<string, PaymentRecord>,
 ): PaymentTotals {
   const tracked = items.filter((i) => i.tracked);
+  const totalBudget = tracked.reduce((s, i) => s + itemBudget(i), 0);
   const totalCost = tracked.reduce((s, i) => s + i.amount, 0);
   let totalPaid = 0;
   let totalScheduled = 0;
@@ -105,7 +116,14 @@ export function computePaymentTotals(
       if (inst.status === 'paid') totalPaid += amt;
     });
   });
-  return { totalCost, totalPaid, totalScheduled, totalRemaining: totalCost - totalPaid };
+  return {
+    totalBudget,
+    totalCost,
+    totalPaid,
+    totalScheduled,
+    totalRemaining: totalCost - totalPaid,
+    profit: totalBudget - totalCost,
+  };
 }
 
 /** Tóm tắt công nợ phải trả NCC của 1 tour (để index cho Bảng công nợ tổng). */
