@@ -29,6 +29,8 @@ export function isRecordOwner(user: User, rec: OwnedRecord): boolean {
 }
 
 const seesEverything = (user: User): boolean => user.role === 'CEO' || user.role === 'Ban Giám Đốc';
+/** Cấp quản lý phòng (thấy dữ liệu cả phòng ban mình): Trưởng Phòng + Phó Phòng. */
+const isDeptManager = (user: User): boolean => user.role === 'Trưởng Phòng' || user.role === 'Phó Phòng';
 
 /** Quyền XEM một bản ghi theo 4 tầng nguyên tắc vận hành. */
 export function canViewRecord(user: User | null | undefined, rec: OwnedRecord, users: User[]): boolean {
@@ -36,7 +38,7 @@ export function canViewRecord(user: User | null | undefined, rec: OwnedRecord, u
   if (seesEverything(user)) return true;                                   // (4)
   if (isRecordOwner(user, rec)) return true;                               // (1)
   if ((rec.collaborators ?? []).some((c) => c.u === user.u)) return true;  // (2)
-  if (user.role === 'Trưởng Phòng' && user.department && creatorDepartment(rec, users) === user.department) {
+  if (isDeptManager(user) && user.department && creatorDepartment(rec, users) === user.department) {
     return true;                                                           // (3)
   }
   return false;
@@ -54,6 +56,6 @@ export function canShareRecord(user: User | null | undefined, rec: OwnedRecord, 
   if (!user) return false;
   if (seesEverything(user)) return true;
   if (isRecordOwner(user, rec)) return true;
-  if (user.role === 'Trưởng Phòng' && user.department && creatorDepartment(rec, users) === user.department) return true;
+  if (isDeptManager(user) && user.department && creatorDepartment(rec, users) === user.department) return true;
   return false;
 }

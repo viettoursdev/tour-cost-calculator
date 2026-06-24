@@ -4,6 +4,7 @@ export const ROLES: readonly Role[] = [
   'CEO',
   'Ban Giám Đốc',
   'Trưởng Phòng',
+  'Phó Phòng',
   'Sales',
   'Operations',
   'Marketing',
@@ -27,9 +28,10 @@ export const userLabel = (u: { name: string; role: Role }, viewer: User | null |
 
 /** Seniority rank (higher = more senior). Used for "from level X upward" rules. */
 export const ROLE_RANK: Record<Role, number> = {
-  CEO: 8,
-  'Ban Giám Đốc': 7,
-  'Trưởng Phòng': 6,
+  CEO: 9,
+  'Ban Giám Đốc': 8,
+  'Trưởng Phòng': 7,
+  'Phó Phòng': 6,   // trên Operations, dưới Trưởng Phòng
   Operations: 5,
   Sales: 4,
   Marketing: 3,

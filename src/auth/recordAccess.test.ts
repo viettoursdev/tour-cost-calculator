@@ -12,6 +12,8 @@ const USERS: User[] = [
   user('cuong', 'Operations', 'dh_nuocngoai'),
   user('tp_noidia', 'Trưởng Phòng', 'dh_noidia'),
   user('tp_ngoai', 'Trưởng Phòng', 'dh_nuocngoai'),
+  user('pp_noidia', 'Phó Phòng', 'dh_noidia'),
+  user('pp_ngoai', 'Phó Phòng', 'dh_nuocngoai'),
   user('bgd', 'Ban Giám Đốc'),
   user('sep', 'CEO'),
 ];
@@ -40,6 +42,10 @@ describe('canViewRecord — 4 tầng nguyên tắc vận hành', () => {
   });
   it('3) Trưởng phòng KHÁC phòng → không thấy', () => {
     expect(canViewRecord(find('tp_ngoai'), r, USERS)).toBe(false);
+  });
+  it('3b) Phó Phòng cùng phòng → thấy; khác phòng → không', () => {
+    expect(canViewRecord(find('pp_noidia'), r, USERS)).toBe(true);
+    expect(canViewRecord(find('pp_ngoai'), r, USERS)).toBe(false);
   });
   it('4) Ban Giám Đốc & CEO thấy tất cả', () => {
     expect(canViewRecord(find('bgd'), r, USERS)).toBe(true);
