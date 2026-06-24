@@ -129,13 +129,156 @@ export function AdvanceView() {
     setRateModal(null);
   };
 
-  const Section = ({ title, k, rate }: { title: string; k: CostKey; rate?: boolean }) => (
+  return (
+    <Box sx={{ p: 2.5, maxWidth: 1000, mx: 'auto' }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h6" fontWeight={800}>💵 Đề nghị tạm ứng & Quyết toán tour</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {info.name || 'Tour'} · {pax} khách
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Chip label={STATUS_META[adv.status].label} sx={{ bgcolor: STATUS_META[adv.status].color + '22', color: STATUS_META[adv.status].color, fontWeight: 800 }} />
+          {approvalStatus && APPROVAL_META[approvalStatus] && (
+            <Chip label={APPROVAL_META[approvalStatus]!.label}
+              sx={{ bgcolor: APPROVAL_META[approvalStatus]!.color + '22', color: APPROVAL_META[approvalStatus]!.color, fontWeight: 800 }} />
+          )}
+          {(adv.status === 'draft' || (adv.status === 'tam_ung' && approvalStatus === 'rejected')) && (
+            <Button variant="contained" startIcon={<SendIcon />} onClick={() => void sendApproval()}
+              sx={{ background: LEGACY.headerGradient, fontWeight: 700 }}>
+              {adv.status === 'draft' ? 'Gửi duyệt (Tạm ứng)' : 'Gửi lại duyệt'}
+            </Button>
+          )}
+          {adv.status === 'tam_ung' && (
+            <Button variant="contained" color="success" startIcon={<TaskAltIcon />} onClick={closeSettlement}>
+              Quyết toán & đóng
+            </Button>
+          )}
+          {adv.status === 'quyet_toan' && (
+            <Button variant="outlined" onClick={reopen}>Mở lại</Button>
+          )}
+          <Tooltip title="Xuất PDF yêu cầu duyệt">
+            <Button variant="outlined" startIcon={<PictureAsPdfIcon />} onClick={exportPDF}>Xuất PDF</Button>
+          </Tooltip>
+        </Stack>
+      </Stack>
+
+      {adv.status === 'quyet_toan' && (
+        <Paper variant="outlined" sx={{ p: 1.25, mb: 2, bgcolor: 'rgba(39,174,96,0.08)', borderColor: 'rgba(39,174,96,0.4)' }}>
+          <Typography variant="body2" fontWeight={700} sx={{ color: '#1b7f4b' }}>
+            ✅ Đã quyết toán & đóng case{adv.settledBy ? ` · ${adv.settledBy}` : ''}{adv.settledAt ? ` · ${new Date(adv.settledAt).toLocaleString('vi-VN')}` : ''}. Bấm "Mở lại" để chỉnh.
+          </Typography>
+        </Paper>
+      )}
+
+      <Box sx={{ mb: 2 }}><FxRatesPanel /></Box>
+
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>
+          👥 Người duyệt <Typography component="span" variant="caption" color="text.secondary">· có thể chỉnh cả sau khi đã gửi duyệt</Typography>
+        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+          {([1, 2] as const).map((n) => {
+            const key = (n === 1 ? 'approver1' : 'approver2') as 'approver1' | 'approver2';
+            const cur = adv[key];
+            return (
+              <Autocomplete
+                key={n} size="small" options={users}
+                value={users.find((u) => u.u === cur?.u) ?? null}
+                onChange={(_, v) => patch({ [key]: v ? { u: v.u, name: v.name } : undefined })}
+                getOptionLabel={(u) => userLabel(u, currentUser)}
+                isOptionEqualToValue={(a, b) => a.u === b.u}
+                renderInput={(params) => <TextField {...params} label={`Người duyệt ${n}`} placeholder="Chọn người duyệt" />}
+              />
+            );
+          })}
+        </Box>
+      </Paper>
+
+      <CostSection title="① Chi phí đi tour" k="tourCosts" rate adv={adv} rates={rates}
+        currencies={currencies} editable={editable} showActual={showActual}
+        onOpenRate={(el) => setRateAnchor(el)} updLine={updLine} addLine={addLine} delLine={delLine} />
+      <CostSection title="② Chi phí thanh toán khác" k="otherCosts" adv={adv} rates={rates}
+        currencies={currencies} editable={editable} showActual={showActual}
+        onOpenRate={(el) => setRateAnchor(el)} updLine={updLine} addLine={addLine} delLine={delLine} />
+
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack spacing={0.75}>
+          <Row label="Tổng chi phí đi tour" value={fmtVND(t.tourTotal)} />
+          <Row label="Tổng chi phí khác" value={fmtVND(t.otherTotal)} />
+          <Row label="TỔNG DỰ TOÁN" value={fmtVND(t.grandTotal)} bold />
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
+            <Typography fontWeight={700} color="#0f3a4a">Số tiền đề nghị tạm ứng</Typography>
+            <InlineNumberField value={adv.advanceRequested} width={160} bold color="#d18a13" disabled={!editable}
+              placeholder={t.grandTotal.toLocaleString('vi-VN')}
+              onChange={(v) => patch({ advanceRequested: v })} />
+          </Stack>
+          {showActual && (
+            <>
+              <Row label="TỔNG QUYẾT TOÁN (thực tế)" value={fmtVND(t.actualTotal)} bold color="#c2410c" />
+              <Row
+                label={t.balance >= 0 ? 'Hoàn lại công ty' : 'Chi vượt — cần chi thêm'}
+                value={fmtVND(Math.abs(t.balance))}
+                bold color={t.balance >= 0 ? '#1b7f4b' : '#dc3250'}
+              />
+            </>
+          )}
+        </Stack>
+        <TextField fullWidth multiline minRows={2} size="small" sx={{ mt: 1.5 }} label="Ghi chú / Lý do tạm ứng"
+          value={adv.note ?? ''} onChange={(e) => patch({ note: e.target.value })} disabled={!editable} />
+      </Paper>
+
+      <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)}>
+        {RATE_CATEGORIES.filter((c) => isRateCategoryVisible(c.key, template)).map((c) => (
+          <MenuItem key={c.key} onClick={() => { setRateModal({ type: c.key, label: c.label }); setRateAnchor(null); }}>
+            <ListItemIcon><Box component="span">{c.icon}</Box></ListItemIcon>
+            <ListItemText>{c.label}</ListItemText>
+          </MenuItem>
+        ))}
+      </Menu>
+      {rateModal && (
+        <RateCardModal open type={rateModal.type} label={rateModal.label}
+          onClose={() => setRateModal(null)} onPick={onPickRate} />
+      )}
+    </Box>
+  );
+}
+
+function Row({ label, value, bold, color }: { label: string; value: string; bold?: boolean; color?: string }) {
+  return (
+    <Stack direction="row" justifyContent="space-between">
+      <Typography fontSize={14} fontWeight={bold ? 800 : 500} color={color}>{label}</Typography>
+      <Typography fontSize={14} fontWeight={bold ? 800 : 600} color={color}>{value}</Typography>
+    </Stack>
+  );
+}
+
+/** Bảng nhập 1 nhóm chi phí. Component cấp module (KHÔNG định nghĩa trong AdvanceView)
+ *  để ô nhập không bị remount/mất focus mỗi lần gõ. */
+function CostSection({
+  title, k, rate, adv, rates, currencies, editable, showActual, onOpenRate, updLine, addLine, delLine,
+}: {
+  title: string;
+  k: CostKey;
+  rate?: boolean;
+  adv: TourAdvance;
+  rates: Record<string, number> | undefined;
+  currencies: string[];
+  editable: boolean;
+  showActual: boolean;
+  onOpenRate: (el: HTMLElement) => void;
+  updLine: (key: CostKey, id: string, lp: Partial<AdvanceLine>) => void;
+  addLine: (key: CostKey) => void;
+  delLine: (key: CostKey, id: string) => void;
+}) {
+  return (
     <Paper variant="outlined" sx={{ p: 0, mb: 2, overflow: 'hidden' }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between"
         sx={{ px: 2, py: 1, background: 'rgba(20,150,140,0.07)', borderBottom: '1px solid rgba(20,150,140,0.15)' }}>
         <Typography fontWeight={800} fontSize={14}>{title}</Typography>
         {rate && editable && (
-          <Button size="small" onClick={(e) => setRateAnchor(e.currentTarget)}
+          <Button size="small" onClick={(e) => onOpenRate(e.currentTarget)}
             sx={{ color: '#d18a13', fontWeight: 700, fontSize: 12 }}>📋 Rate card</Button>
         )}
       </Stack>
@@ -207,125 +350,5 @@ export function AdvanceView() {
         </Button>
       )}
     </Paper>
-  );
-
-  return (
-    <Box sx={{ p: 2.5, maxWidth: 1000, mx: 'auto' }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h6" fontWeight={800}>💵 Đề nghị tạm ứng & Quyết toán tour</Typography>
-          <Typography variant="caption" color="text.secondary">
-            {info.name || 'Tour'} · {pax} khách
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <Chip label={STATUS_META[adv.status].label} sx={{ bgcolor: STATUS_META[adv.status].color + '22', color: STATUS_META[adv.status].color, fontWeight: 800 }} />
-          {approvalStatus && APPROVAL_META[approvalStatus] && (
-            <Chip label={APPROVAL_META[approvalStatus]!.label}
-              sx={{ bgcolor: APPROVAL_META[approvalStatus]!.color + '22', color: APPROVAL_META[approvalStatus]!.color, fontWeight: 800 }} />
-          )}
-          {(adv.status === 'draft' || (adv.status === 'tam_ung' && approvalStatus === 'rejected')) && (
-            <Button variant="contained" startIcon={<SendIcon />} onClick={() => void sendApproval()}
-              sx={{ background: LEGACY.headerGradient, fontWeight: 700 }}>
-              {adv.status === 'draft' ? 'Gửi duyệt (Tạm ứng)' : 'Gửi lại duyệt'}
-            </Button>
-          )}
-          {adv.status === 'tam_ung' && (
-            <Button variant="contained" color="success" startIcon={<TaskAltIcon />} onClick={closeSettlement}>
-              Quyết toán & đóng
-            </Button>
-          )}
-          {adv.status === 'quyet_toan' && (
-            <Button variant="outlined" onClick={reopen}>Mở lại</Button>
-          )}
-          <Tooltip title="Xuất PDF yêu cầu duyệt">
-            <Button variant="outlined" startIcon={<PictureAsPdfIcon />} onClick={exportPDF}>Xuất PDF</Button>
-          </Tooltip>
-        </Stack>
-      </Stack>
-
-      {adv.status === 'quyet_toan' && (
-        <Paper variant="outlined" sx={{ p: 1.25, mb: 2, bgcolor: 'rgba(39,174,96,0.08)', borderColor: 'rgba(39,174,96,0.4)' }}>
-          <Typography variant="body2" fontWeight={700} sx={{ color: '#1b7f4b' }}>
-            ✅ Đã quyết toán & đóng case{adv.settledBy ? ` · ${adv.settledBy}` : ''}{adv.settledAt ? ` · ${new Date(adv.settledAt).toLocaleString('vi-VN')}` : ''}. Bấm "Mở lại" để chỉnh.
-          </Typography>
-        </Paper>
-      )}
-
-      <Box sx={{ mb: 2 }}><FxRatesPanel /></Box>
-
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>
-          👥 Người duyệt <Typography component="span" variant="caption" color="text.secondary">· có thể chỉnh cả sau khi đã gửi duyệt</Typography>
-        </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-          {([1, 2] as const).map((n) => {
-            const key = (n === 1 ? 'approver1' : 'approver2') as 'approver1' | 'approver2';
-            const cur = adv[key];
-            return (
-              <Autocomplete
-                key={n} size="small" options={users}
-                value={users.find((u) => u.u === cur?.u) ?? null}
-                onChange={(_, v) => patch({ [key]: v ? { u: v.u, name: v.name } : undefined })}
-                getOptionLabel={(u) => userLabel(u, currentUser)}
-                isOptionEqualToValue={(a, b) => a.u === b.u}
-                renderInput={(params) => <TextField {...params} label={`Người duyệt ${n}`} placeholder="Chọn người duyệt" />}
-              />
-            );
-          })}
-        </Box>
-      </Paper>
-
-      <Section title="① Chi phí đi tour" k="tourCosts" rate />
-      <Section title="② Chi phí thanh toán khác" k="otherCosts" />
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={0.75}>
-          <Row label="Tổng chi phí đi tour" value={fmtVND(t.tourTotal)} />
-          <Row label="Tổng chi phí khác" value={fmtVND(t.otherTotal)} />
-          <Row label="TỔNG DỰ TOÁN" value={fmtVND(t.grandTotal)} bold />
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
-            <Typography fontWeight={700} color="#0f3a4a">Số tiền đề nghị tạm ứng</Typography>
-            <InlineNumberField value={adv.advanceRequested} width={160} bold color="#d18a13" disabled={!editable}
-              placeholder={t.grandTotal.toLocaleString('vi-VN')}
-              onChange={(v) => patch({ advanceRequested: v })} />
-          </Stack>
-          {showActual && (
-            <>
-              <Row label="TỔNG QUYẾT TOÁN (thực tế)" value={fmtVND(t.actualTotal)} bold color="#c2410c" />
-              <Row
-                label={t.balance >= 0 ? 'Hoàn lại công ty' : 'Chi vượt — cần chi thêm'}
-                value={fmtVND(Math.abs(t.balance))}
-                bold color={t.balance >= 0 ? '#1b7f4b' : '#dc3250'}
-              />
-            </>
-          )}
-        </Stack>
-        <TextField fullWidth multiline minRows={2} size="small" sx={{ mt: 1.5 }} label="Ghi chú / Lý do tạm ứng"
-          value={adv.note ?? ''} onChange={(e) => patch({ note: e.target.value })} disabled={!editable} />
-      </Paper>
-
-      <Menu anchorEl={rateAnchor} open={!!rateAnchor} onClose={() => setRateAnchor(null)}>
-        {RATE_CATEGORIES.filter((c) => isRateCategoryVisible(c.key, template)).map((c) => (
-          <MenuItem key={c.key} onClick={() => { setRateModal({ type: c.key, label: c.label }); setRateAnchor(null); }}>
-            <ListItemIcon><Box component="span">{c.icon}</Box></ListItemIcon>
-            <ListItemText>{c.label}</ListItemText>
-          </MenuItem>
-        ))}
-      </Menu>
-      {rateModal && (
-        <RateCardModal open type={rateModal.type} label={rateModal.label}
-          onClose={() => setRateModal(null)} onPick={onPickRate} />
-      )}
-    </Box>
-  );
-}
-
-function Row({ label, value, bold, color }: { label: string; value: string; bold?: boolean; color?: string }) {
-  return (
-    <Stack direction="row" justifyContent="space-between">
-      <Typography fontSize={14} fontWeight={bold ? 800 : 500} color={color}>{label}</Typography>
-      <Typography fontSize={14} fontWeight={bold ? 800 : 600} color={color}>{value}</Typography>
-    </Stack>
   );
 }
