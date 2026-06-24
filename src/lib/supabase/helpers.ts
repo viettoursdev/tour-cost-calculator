@@ -25,6 +25,23 @@ export function subscribeTable<T>(
   return () => { active = false; client.removeChannel(channel); };
 }
 
+/**
+ * Per-key write serializer. Chains calls so two pushes to the same logical
+ * resource never overlap. Without this, a full-overwrite push (upsert rows →
+ * insert children → delete-missing) can have its trailing delete run *between*
+ * a concurrent push's parent upsert and that push's child insert, tripping the
+ * child FK constraint (e.g. supplier_contacts_supplier_id_fkey). Errors in one
+ * call don't break the chain for the next.
+ */
+const writeLocks = new Map<string, Promise<unknown>>();
+export function serializeWrites<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = writeLocks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn); // run fn regardless of prior outcome
+  // Keep the chain alive even if this call rejects.
+  writeLocks.set(key, next.then(() => undefined, () => undefined));
+  return next;
+}
+
 /** Delete all child rows for a parent, then insert the provided set. */
 export async function replaceChildren(
   client: SupabaseClient,

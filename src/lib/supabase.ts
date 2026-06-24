@@ -5,7 +5,7 @@ import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, Vis
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import type { CloudQuoteEntry, Template, Collaborator } from '@/types/quote';
-import { subscribeTable, replaceChildren, usernamesToIds } from './supabase/helpers';
+import { subscribeTable, replaceChildren, usernamesToIds, serializeWrites } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -554,11 +554,14 @@ export function sbSubscribeCustomers(cb: (list: Customer[]) => void, client: Sup
   }, cb);
 }
 
-export async function sbPushCustomers(
+export function sbPushCustomers(
   list: Customer[],
   pushedBy: { name: string; role: string },
   client: SupabaseClient = sb,
 ): Promise<void> {
+  // Serialize: overlapping pushes race the trailing delete against each other's
+  // contact/interaction inserts → customer_contacts_customer_id_fkey violation.
+  return serializeWrites('customers', async () => {
   const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
   for (const cust of list) {
     const { data: up, error: upErr } = await client.from('customers').upsert({
@@ -595,6 +598,7 @@ export async function sbPushCustomers(
     const del = await client.from('customers').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushCustomers delete all: ' + del.error.message);
   }
+  });
 }
 
 // ── NCC Products ──────────────────────────────────────────────────────────────
@@ -1167,11 +1171,14 @@ export function sbSubscribeNcc(cb: (list: Ncc[]) => void, client: SupabaseClient
   }, cb);
 }
 
-export async function sbPushNcc(
+export function sbPushNcc(
   list: Ncc[],
   pushedBy: { name: string; role: string },
   client: SupabaseClient = sb,
 ): Promise<void> {
+  // Serialize: overlapping full-overwrite pushes race the trailing delete against
+  // each other's contact inserts → supplier_contacts_supplier_id_fkey violation.
+  return serializeWrites('suppliers', async () => {
   const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
   for (const ncc of list) {
     const { data: up, error: upErr } = await client.from('suppliers').upsert({
@@ -1201,6 +1208,7 @@ export async function sbPushNcc(
     const del = await client.from('suppliers').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushNcc delete all: ' + del.error.message);
   }
+  });
 }
 
 // ── visa_products ──
