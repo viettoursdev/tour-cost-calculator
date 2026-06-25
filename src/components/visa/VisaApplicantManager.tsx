@@ -13,6 +13,7 @@ import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import DocumentScannerIcon from '@mui/icons-material/DocumentScanner';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import HistoryIcon from '@mui/icons-material/History';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
@@ -30,6 +31,7 @@ import { GuestDashboard, GuestListTable } from '../quote/GuestListTable';
 import { RoomingPanel } from '../quote/RoomingPanel';
 import { VisaApplicantTimeline } from './VisaApplicantTimeline';
 import { BulkStatusDialog, ReminderDialog } from './VisaApplicantActions';
+import { VisaCostDialog } from './VisaCostDialog';
 import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, passengersToApplicants } from './guestAdapters';
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
@@ -131,6 +133,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -316,6 +319,9 @@ export function VisaApplicantManager({ project, onClose }: Props) {
           <Button color="inherit" variant="outlined" startIcon={<CampaignOutlinedIcon />} onClick={() => setReminderOpen(true)} disabled={list.length === 0}>
             Nhắc khách
           </Button>
+          <Button color="inherit" variant="outlined" startIcon={<PaidOutlinedIcon />} onClick={() => setCostOpen(true)}>
+            Chi phí
+          </Button>
           <Button color="inherit" variant="outlined" startIcon={<PlaylistRemoveIcon />} onClick={onDedupe}>
             Loại trùng
           </Button>
@@ -452,6 +458,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
 
       {bulkOpen && <BulkStatusDialog applicants={list} onApply={setList} onClose={() => setBulkOpen(false)} />}
       {reminderOpen && <ReminderDialog project={project} applicants={list} onClose={() => setReminderOpen(false)} />}
+      {costOpen && <VisaCostDialog project={project} count={list.length} onClose={() => setCostOpen(false)} />}
 
       <Dialog open={!!guestSeed} onClose={() => setGuestSeed(null)} fullWidth maxWidth="md">
         <DialogTitle sx={{ pr: 6 }}>
