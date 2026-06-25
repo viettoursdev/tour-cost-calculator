@@ -114,7 +114,7 @@ export function QuoteView() {
             onOpenSaveCloud={() => setSaveCloudOpen(true)}
           />
 
-          <Box sx={{ flex: 1, overflowY: 'auto' }}>
+          <Box sx={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}>
            <Suspense fallback={<ViewFallback />}>
             {view === 'home' && <HomeView />}
             {view === 'cost' && (locked ? <LockedQuoteView /> : <CostView />)}

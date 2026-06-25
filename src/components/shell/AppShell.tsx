@@ -194,7 +194,7 @@ export function AppShell() {
           )}
         </Toolbar>
       </AppBar>
-      <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
+      <Box sx={{ flexGrow: 1, overflow: 'auto', overscrollBehavior: 'contain' }}>
         <QuoteView />
       </Box>
       {userMgrOpen && currentUser && (

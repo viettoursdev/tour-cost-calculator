@@ -1,4 +1,7 @@
 html, body, #root { height: 100%; margin: 0; }
+/* Chặn "rubber-band" toàn trang: khi cuộn hết nội dung bên trong rồi kéo tiếp,
+   body không bị nảy lộ khoảng trắng (lỗi "kéo khoảng trắng ở dưới lên trên"). */
+html, body { overscroll-behavior: none; }
 body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
 
 /* Hide native number-input spinners for a clean, professional look (legacy parity). */
