@@ -33,7 +33,11 @@ import { tagForContext } from '@/components/shell/guideSteps';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewStaffRole } from '@/auth/ROLES';
 import { DEPT_LABEL } from '@/auth/departments';
+import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
+
+/** Các template "alt" (app riêng) không có Trang chủ — về Trang chủ phải thoát về màn chọn hồ sơ. */
+const ALT_TEMPLATES = new Set(['itinerary', 'menu', 'visa', 'doctranslate', 'guideschedule']);
 
 /** Viết tắt chữ cái đầu mỗi từ trong tên (tối đa 3 ký tự). VD "Hoàng Anh Tuấn" → "HAT". */
 function initialsOf(name: string): string {
@@ -92,6 +96,15 @@ export function AppShell() {
   };
   const openWhatsNew = () => { setWhatsNewEntries(undefined); setWhatsNewOpen(true); };
 
+  // Logo Viettours trên header = nút Về Trang chủ (hiện trên MỌI màn hình).
+  // Báo giá thường → mở Trang chủ "Hôm nay" (giữ nguyên nháp đang làm).
+  // App mẫu (lịch trình/thực đơn/visa…) không có Trang chủ → thoát về màn chọn hồ sơ.
+  const goHome = () => {
+    const st = useQuoteStore.getState();
+    if (ALT_TEMPLATES.has(st.draft.template ?? '')) st.abandon();
+    else st.setView('home');
+  };
+
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -118,9 +131,24 @@ export function AppShell() {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <AppBar position="static" color="primary" sx={{ background: LEGACY.headerGradient }}>
         <Toolbar variant="dense" sx={{ gap: 1, minHeight: 52 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 800 }} noWrap>
-            Phần mềm quản lý - Viettours
-          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1.25} sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Tooltip title="Về Trang chủ">
+              <Box
+                component="img" src={VTE_LOGO} alt="Về Trang chủ" role="button" tabIndex={0}
+                onClick={goHome}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); } }}
+                sx={{
+                  height: 30, width: 'auto', display: 'block', flexShrink: 0,
+                  filter: 'brightness(0) invert(1)', cursor: 'pointer',
+                  transition: 'opacity .15s, transform .15s',
+                  '&:hover': { opacity: 0.82, transform: 'scale(1.03)' },
+                }}
+              />
+            </Tooltip>
+            <Typography variant="h6" sx={{ fontWeight: 800, display: { xs: 'none', sm: 'block' } }} noWrap>
+              Phần mềm quản lý - Viettours
+            </Typography>
+          </Stack>
           {currentUser && (
             <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
               {/* Tài khoản — gọn: chỉ badge viết tắt chữ cái đầu (VD "HAT"); chức vụ/phòng ban CHỈ CEO mới thấy */}

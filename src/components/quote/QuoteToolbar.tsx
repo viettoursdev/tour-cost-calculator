@@ -74,7 +74,6 @@ import { RateCardModal } from '@/components/rates/RateCardModal';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
 import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
 import { LossReasonDialog } from './LossReasonDialog';
-import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
 import type { Contract, OutputCurrency, QuoteStatus, Todo } from '@/types';
 
@@ -432,17 +431,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       {/* ── Tour info header band (legacy style) ── */}
       <Box sx={{ background: LEGACY.headerGradient, color: '#fff', px: 3, py: 0.85 }}>
         <Stack direction="row" spacing={2.5} alignItems="center" flexWrap="wrap" useFlexGap rowGap={1}>
-          {/* COL1: logo (bấm = về Trang chủ) + template badge (legacy hero) */}
+          {/* COL1: template badge (logo Về Trang chủ giờ nằm ở header chung — AppShell). */}
           <Stack alignItems="center" spacing={0.5} sx={{ flexShrink: 0 }}>
-            <Tooltip title="Về Trang chủ">
-              <Box
-                component="img" src={VTE_LOGO} alt="Về Trang chủ" role="button" tabIndex={0}
-                onClick={onOpenSelector}
-                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSelector(); } }}
-                sx={{ height: 42, width: 'auto', display: 'block', filter: 'brightness(0) invert(1)', cursor: 'pointer',
-                  transition: 'opacity .15s, transform .15s', '&:hover': { opacity: 0.82, transform: 'scale(1.03)' } }}
-              />
-            </Tooltip>
             {tpl && template && (() => { const Ic = TPL_ACCENT[template].Icon; return (
               <Stack direction="row" alignItems="center" spacing={0.6} sx={{
                 background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)',
