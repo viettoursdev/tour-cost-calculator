@@ -7,9 +7,16 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import { APPLICANT_DOC_META, APPLICANT_RESULT_META } from '../visa/constants';
+import {
+  VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, deriveVisaStatus, legacyFromVisaStatus,
+} from '../visa/constants';
 import { ROOM_KEYS, ROOM_LABELS, summarizeGuests } from './guestStats';
-import type { Passenger } from '@/types';
+import type { Passenger, VisaApplicantStatus } from '@/types';
+
+/** Tình trạng visa hiển thị của khách (suy từ dữ liệu cũ nếu chưa đặt). */
+const visaStatusOf = (p: Passenger): VisaApplicantStatus => deriveVisaStatus(p);
+/** Đổi tình trạng visa → đồng bộ ngược docStatus/result cho các chỗ cũ. */
+const patchVisaStatus = (s: VisaApplicantStatus): Partial<Passenger> => ({ visaStatus: s, ...legacyFromVisaStatus(s) });
 
 export type GuestMode = 'tour' | 'visa';
 
@@ -71,7 +78,7 @@ export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) 
       ? { name, nameNoAccent: stripAccentsKeepCase(name) }
       : { name });
 
-  const colCount = (hasExpand ? 1 : 0) + 1 + (isVisa ? 11 : 12) + 1;
+  const colCount = (hasExpand ? 1 : 0) + 1 + (isVisa ? 10 : 12) + 1;
 
   return (
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
@@ -89,8 +96,7 @@ export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) 
                 <TableCell sx={{ minWidth: 110 }}>Số hộ chiếu</TableCell>
                 <TableCell sx={{ width: 120 }}>Ngày cấp</TableCell>
                 <TableCell sx={{ width: 120 }}>Hết hạn</TableCell>
-                <TableCell sx={{ width: 110 }}>Tình trạng HS</TableCell>
-                <TableCell sx={{ width: 100 }}>Kết quả</TableCell>
+                <TableCell sx={{ width: 150 }}>Tình trạng visa</TableCell>
               </>
             ) : (
               <TableCell sx={{ width: 100 }}>Quốc tịch</TableCell>
@@ -139,15 +145,11 @@ export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) 
                         onChange={(e) => upd(p.id, { passportIssue: e.target.value })} /></TableCell>
                       <TableCell><Inp fullWidth type="date" value={p.passportExpiry ?? ''}
                         onChange={(e) => upd(p.id, { passportExpiry: e.target.value })} /></TableCell>
-                      <TableCell><Inp select fullWidth value={p.docStatus ?? 'missing'}
-                        onChange={(e) => upd(p.id, { docStatus: e.target.value as Passenger['docStatus'] })}>
-                        {(Object.keys(APPLICANT_DOC_META) as NonNullable<Passenger['docStatus']>[]).map((k) => (
-                          <MenuItem key={k} value={k} sx={{ color: APPLICANT_DOC_META[k].color }}>{APPLICANT_DOC_META[k].label}</MenuItem>))}
-                      </Inp></TableCell>
-                      <TableCell><Inp select fullWidth value={p.result ?? 'pending'}
-                        onChange={(e) => upd(p.id, { result: e.target.value as Passenger['result'] })}>
-                        {(Object.keys(APPLICANT_RESULT_META) as NonNullable<Passenger['result']>[]).map((k) => (
-                          <MenuItem key={k} value={k} sx={{ color: APPLICANT_RESULT_META[k].color }}>{APPLICANT_RESULT_META[k].label}</MenuItem>))}
+                      <TableCell><Inp select fullWidth value={visaStatusOf(p)}
+                        onChange={(e) => upd(p.id, patchVisaStatus(e.target.value as VisaApplicantStatus))}
+                        sx={{ '& .MuiInputBase-input': { color: VISA_APPLICANT_STATUS_META[visaStatusOf(p)].color, fontWeight: 700 } }}>
+                        {VISA_APPLICANT_STATUS_ORDER.map((k) => (
+                          <MenuItem key={k} value={k} sx={{ color: VISA_APPLICANT_STATUS_META[k].color }}>{VISA_APPLICANT_STATUS_META[k].label}</MenuItem>))}
                       </Inp></TableCell>
                     </>
                   ) : (

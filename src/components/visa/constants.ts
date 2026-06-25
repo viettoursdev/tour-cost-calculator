@@ -1,8 +1,9 @@
 import { daysUntil } from '@/lib/dateUtils';
 import { normalizeVN } from '@/lib/search';
 import type {
-  ApplicantDoc, User, VisaApplicant, VisaFee, VisaMilestone, VisaProcDoc, VisaProcField,
-  VisaProcKind, VisaProcRow, VisaProcSection, VisaProduct, VisaProjectDoc, VisaProjectStatus,
+  ApplicantDoc, User, VisaApplicant, VisaApplicantMilestone, VisaApplicantStatus, VisaFee,
+  VisaMilestone, VisaProcDoc, VisaProcField, VisaProcKind, VisaProcRow, VisaProcSection,
+  VisaProduct, VisaProjectDoc, VisaProjectStatus,
 } from '@/types';
 
 // Source: public/legacy.html:7573-7576.
@@ -182,6 +183,103 @@ export const APPLICANT_RESULT_META: Record<VisaApplicant['result'], { label: str
   have_visa: { label: 'Đã có visa',  color: '#2563eb' },
 };
 
+// ── Tình trạng xin visa của TỪNG khách (8 mốc vòng đời hồ sơ) ────────────────
+export const VISA_APPLICANT_STATUS_META: Record<VisaApplicantStatus, { label: string; color: string }> = {
+  deployed:   { label: 'Đã triển khai',       color: '#2563eb' },
+  collecting: { label: 'Đang thu hồ sơ',      color: '#f5a623' },
+  collected:  { label: 'Đã thu đủ hồ sơ',     color: '#0d9488' },
+  biometrics: { label: 'Đã SLTH / phỏng vấn', color: '#a855f7' },
+  passed:     { label: 'Đậu visa',            color: '#27ae60' },
+  failed:     { label: 'Rớt visa',            color: '#dc3250' },
+  have_visa:  { label: 'Đã có sẵn visa',      color: '#0369a1' },
+  cancelled:  { label: 'Huỷ',                 color: '#64748b' },
+};
+
+export const VISA_APPLICANT_STATUS_ORDER: VisaApplicantStatus[] =
+  ['deployed', 'collecting', 'collected', 'biometrics', 'passed', 'failed', 'have_visa', 'cancelled'];
+
+/** Suy tình trạng visa hợp nhất từ dữ liệu cũ (docStatus + result) khi chưa có
+ *  `visaStatus`. Giúp hồ sơ tạo trước khi có trường mới vẫn hiển thị đúng. */
+export function deriveVisaStatus(a: { visaStatus?: VisaApplicantStatus; docStatus?: VisaApplicant['docStatus']; result?: VisaApplicant['result'] }): VisaApplicantStatus {
+  if (a.visaStatus) return a.visaStatus;
+  switch (a.result) {
+    case 'passed': return 'passed';
+    case 'failed': return 'failed';
+    case 'have_visa': return 'have_visa';
+    default: break;
+  }
+  switch (a.docStatus) {
+    case 'complete': return 'collected';
+    case 'submitted': return 'collecting';
+    default: return 'deployed';
+  }
+}
+
+/** Đồng bộ NGƯỢC về docStatus + result để các chỗ cũ (đếm số liệu/dashboard/cảnh
+ *  báo) tiếp tục chạy đúng khi user đổi `visaStatus`. */
+export function legacyFromVisaStatus(s: VisaApplicantStatus): { docStatus: VisaApplicant['docStatus']; result: VisaApplicant['result'] } {
+  switch (s) {
+    case 'passed':     return { docStatus: 'complete', result: 'passed' };
+    case 'failed':     return { docStatus: 'complete', result: 'failed' };
+    case 'have_visa':  return { docStatus: 'complete', result: 'have_visa' };
+    case 'collected':  return { docStatus: 'complete', result: 'pending' };
+    case 'biometrics': return { docStatus: 'complete', result: 'pending' };
+    case 'collecting': return { docStatus: 'submitted', result: 'pending' };
+    case 'cancelled':  return { docStatus: 'missing', result: 'pending' };
+    case 'deployed':
+    default:           return { docStatus: 'missing', result: 'pending' };
+  }
+}
+
+/** Trạng thái đã "chốt" — không còn coi là trễ hạn. */
+const RESOLVED_APPLICANT_STATUS: VisaApplicantStatus[] = ['passed', 'have_visa', 'cancelled'];
+
+/** Khách có mốc timeline đã QUÁ HẠN mà hồ sơ chưa chốt (đậu/đã có/huỷ)? */
+export function isApplicantOverdue(a: {
+  visaStatus?: VisaApplicantStatus; docStatus?: VisaApplicant['docStatus']; result?: VisaApplicant['result'];
+  timeline?: VisaApplicantMilestone[]; visaTimeline?: VisaApplicantMilestone[];
+}): boolean {
+  if (RESOLVED_APPLICANT_STATUS.includes(deriveVisaStatus(a))) return false;
+  const tl = a.timeline ?? a.visaTimeline ?? [];
+  return tl.some((m) => { const d = daysUntil(m.date ?? null); return d != null && d < 0; });
+}
+
+// ── Timeline RIÊNG của từng khách ────────────────────────────────────────────
+/** Các mốc timeline chuẩn cho mỗi khách (thêm mốc tuỳ biến được). */
+export const DEFAULT_APPLICANT_TIMELINE: { key: string; label: string }[] = [
+  { key: 'deploy', label: 'Ngày triển khai hồ sơ' },
+  { key: 'doc_deadline', label: 'Deadline nhận hồ sơ' },
+  { key: 'biometrics', label: 'Ngày SLTH / phỏng vấn' },
+  { key: 'expected', label: 'Ngày dự kiến có visa' },
+  { key: 'departure', label: 'Ngày khởi hành' },
+];
+
+/** Màu cho từng mốc chuẩn trên biểu đồ timeline (mốc tuỳ biến dùng màu xám). */
+export const APPLICANT_MILESTONE_COLOR: Record<string, string> = {
+  deploy: '#2563eb',
+  doc_deadline: '#f5a623',
+  biometrics: '#a855f7',
+  expected: '#0d9488',
+  departure: '#dc3250',
+};
+export const APPLICANT_MILESTONE_CUSTOM_COLOR = '#64748b';
+
+let applicantMsSeq = 0;
+export function newApplicantMilestone(label = 'Mốc mới', key?: string, date: string | null = null): VisaApplicantMilestone {
+  return {
+    id: 'am' + Date.now().toString(36) + (applicantMsSeq++).toString(36) + Math.random().toString(36).slice(2, 4),
+    label,
+    date,
+    ...(key ? { key } : {}),
+  };
+}
+
+/** Bộ mốc chuẩn ban đầu cho khách mới (ngày khởi hành có thể seed từ dự án). */
+export function defaultApplicantTimeline(departureDate?: string | null): VisaApplicantMilestone[] {
+  return DEFAULT_APPLICANT_TIMELINE.map((m) =>
+    newApplicantMilestone(m.label, m.key, m.key === 'departure' ? (departureDate ?? null) : null));
+}
+
 // Checklist hồ sơ mặc định cho mỗi khách (thêm loại khác được).
 export const DEFAULT_APPLICANT_DOCS = [
   'Hộ chiếu (bản gốc)', 'Hình thẻ', 'Hồ sơ công việc',
@@ -211,6 +309,8 @@ export function newVisaApplicant(): VisaApplicant {
     countriesVisited: '',
     docStatus: 'missing',
     result: 'pending',
+    visaStatus: 'deployed',
+    timeline: defaultApplicantTimeline(),
     failReason: '',
     docs: DEFAULT_APPLICANT_DOCS.map((l) => newApplicantDoc(l)),
     note: '',

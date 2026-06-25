@@ -131,6 +131,25 @@ export interface ApplicantDoc {
   checked: boolean;
 }
 
+/** Tình trạng xin visa của TỪNG khách (vòng đời hồ sơ, 8 mốc). */
+export type VisaApplicantStatus =
+  | 'deployed'    // Đã triển khai
+  | 'collecting'  // Đang thu hồ sơ
+  | 'collected'   // Đã thu đầy đủ hồ sơ
+  | 'biometrics'  // Đã làm sinh trắc học / phỏng vấn
+  | 'passed'      // Đậu visa
+  | 'failed'      // Rớt visa
+  | 'have_visa'   // Đã có sẵn visa
+  | 'cancelled';  // Huỷ
+
+/** Một mốc thời gian trên timeline của RIÊNG một khách (có thể thêm mốc tuỳ biến). */
+export interface VisaApplicantMilestone {
+  id: string;
+  label: string;
+  date: string | null;   // ISO yyyy-mm-dd
+  key?: string;          // khoá ổn định cho mốc chuẩn (deploy/doc_deadline/…)
+}
+
 /** Một bản ghi hộ chiếu cũ (lưu lại khi khách đổi hộ chiếu mới). */
 export interface PassportRecord {
   passport?: string;
@@ -151,6 +170,11 @@ export interface VisaApplicant {
   countriesVisited?: string;    // Các quốc gia đã từng đi
   docStatus: 'missing' | 'submitted' | 'complete';
   result: 'pending' | 'passed' | 'failed' | 'have_visa';
+  // Tình trạng xin visa hợp nhất (8 mốc) — nguồn hiển thị chính; docStatus/result
+  // vẫn được đồng bộ phía sau để tương thích đếm số liệu/dashboard/cảnh báo cũ.
+  visaStatus?: VisaApplicantStatus;
+  // Timeline RIÊNG của khách: ngày triển khai/deadline/SLTH/dự kiến có visa/khởi hành…
+  timeline?: VisaApplicantMilestone[];
   failReason?: string;          // Lý do rớt (khi result = failed)
   docs?: ApplicantDoc[];        // Checklist hồ sơ
   passportHistory?: PassportRecord[];   // Hộ chiếu cũ đã thay

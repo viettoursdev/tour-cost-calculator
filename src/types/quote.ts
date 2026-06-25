@@ -1,5 +1,5 @@
 import type { Department } from './user';
-import type { ApplicantDoc, PassportRecord } from './visa';
+import type { ApplicantDoc, PassportRecord, VisaApplicantMilestone, VisaApplicantStatus } from './visa';
 import type { ContractCancel } from './contract';
 
 export type CategoryId =
@@ -191,6 +191,8 @@ export type Passenger = {
   countriesVisited?: string;  // Các quốc gia đã từng đi
   docStatus?: 'missing' | 'submitted' | 'complete';
   result?: 'pending' | 'passed' | 'failed' | 'have_visa';
+  visaStatus?: VisaApplicantStatus;        // Tình trạng xin visa hợp nhất (8 mốc)
+  visaTimeline?: VisaApplicantMilestone[]; // Timeline riêng của khách
   failReason?: string;        // Lý do rớt (khi result = failed)
   docs?: ApplicantDoc[];      // Checklist hồ sơ visa
   passportHistory?: PassportRecord[]; // Hộ chiếu cũ đã thay

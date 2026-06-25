@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent } from 'react';
 import {
-  AppBar, Box, Button, Checkbox, Dialog, DialogTitle, FormControlLabel, IconButton, Stack,
-  TextField, Toolbar, Tooltip, Typography,
+  AppBar, Box, Button, Checkbox, Chip, Dialog, DialogTitle, FormControlLabel, IconButton, Stack,
+  TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import { toast } from '@/stores/toastStore';
 import AddIcon from '@mui/icons-material/Add';
@@ -17,14 +17,83 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import UploadIcon from '@mui/icons-material/Upload';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { countsFromApplicants, newApplicantDoc, newVisaApplicant } from './constants';
+import {
+  VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, countsFromApplicants,
+  defaultApplicantTimeline, deriveVisaStatus, isApplicantOverdue, newApplicantDoc,
+  newApplicantMilestone, newVisaApplicant,
+} from './constants';
 import { GuestDashboard, GuestListTable } from '../quote/GuestListTable';
 import { RoomingPanel } from '../quote/RoomingPanel';
+import { VisaApplicantTimeline } from './VisaApplicantTimeline';
 import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, passengersToApplicants } from './guestAdapters';
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
 // importVisaApplicants nạp động khi bấm (thư viện Excel nặng).
-import type { ApplicantDoc, Passenger, VisaProjectDoc } from '@/types';
+import type { ApplicantDoc, Passenger, VisaApplicantMilestone, VisaProjectDoc } from '@/types';
+
+/** Bộ sửa timeline RIÊNG của một khách (5 mốc chuẩn + thêm mốc tuỳ biến). */
+function ApplicantTimelineEditor({ timeline, departureDate, onChange }: {
+  timeline: VisaApplicantMilestone[]; departureDate?: string | null;
+  onChange: (t: VisaApplicantMilestone[]) => void;
+}) {
+  const list = timeline.length ? timeline : defaultApplicantTimeline(departureDate);
+  const setDate = (id: string, date: string) => onChange(list.map((m) => (m.id === id ? { ...m, date: date || null } : m)));
+  const setLabel = (id: string, label: string) => onChange(list.map((m) => (m.id === id ? { ...m, label } : m)));
+  const del = (id: string) => onChange(list.filter((m) => m.id !== id));
+  return (
+    <Box>
+      <Typography variant="caption" fontWeight={800} color="text.secondary"
+        sx={{ display: 'block', mb: 0.75, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        🗓️ Timeline hồ sơ khách
+      </Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 1 }}>
+        {list.map((m) => (
+          <Stack key={m.id} direction="row" alignItems="center" spacing={0.5}>
+            {m.key ? (
+              <TextField size="small" type="date" fullWidth label={m.label} value={m.date ?? ''}
+                onChange={(e) => setDate(m.id, e.target.value)} InputLabelProps={{ shrink: true }} />
+            ) : (
+              <>
+                <TextField size="small" value={m.label} placeholder="Tên mốc"
+                  onChange={(e) => setLabel(m.id, e.target.value)} sx={{ width: 130 }} />
+                <TextField size="small" type="date" value={m.date ?? ''}
+                  onChange={(e) => setDate(m.id, e.target.value)} InputLabelProps={{ shrink: true }} sx={{ flex: 1 }} />
+                <IconButton size="small" color="error" onClick={() => del(m.id)}><DeleteOutlineIcon fontSize="inherit" /></IconButton>
+              </>
+            )}
+          </Stack>
+        ))}
+      </Box>
+      <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.75, color: '#0d7a6a' }}
+        onClick={() => onChange([...list, newApplicantMilestone('Mốc khác')])}>
+        Thêm mốc ngày
+      </Button>
+    </Box>
+  );
+}
+
+/** Dải tổng hợp tình trạng visa của đoàn: đếm theo 8 trạng thái + số quá hạn. */
+function StatusSummaryStrip({ rows }: { rows: Passenger[] }) {
+  const counts = VISA_APPLICANT_STATUS_ORDER
+    .map((s) => ({ s, n: rows.filter((p) => deriveVisaStatus(p) === s).length }))
+    .filter((x) => x.n > 0);
+  const overdue = rows.filter((p) => isApplicantOverdue(p)).length;
+  return (
+    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 1.5 }}>
+      <Chip size="small" label={`${rows.length} khách`} sx={{ fontWeight: 800 }} />
+      {counts.map(({ s, n }) => {
+        const meta = VISA_APPLICANT_STATUS_META[s];
+        return (
+          <Chip key={s} size="small" label={`${meta.label}: ${n}`}
+            sx={{ bgcolor: `${meta.color}1a`, color: meta.color, fontWeight: 700 }} />
+        );
+      })}
+      {overdue > 0 && (
+        <Chip size="small" color="error" variant="outlined" label={`⚠ Quá hạn: ${overdue}`} sx={{ fontWeight: 800 }} />
+      )}
+    </Stack>
+  );
+}
 
 type Props = {
   project: VisaProjectDoc;
@@ -43,6 +112,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [list, setList] = useState<Passenger[]>(() => applicantsToPassengers(project.applicants ?? []));
   const [busy, setBusy] = useState(false);
   const [guestSeed, setGuestSeed] = useState<GuestKey | null>(null);
+  const [view, setView] = useState<'list' | 'timeline'>('list');
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -141,6 +211,12 @@ export function VisaApplicantManager({ project, onClose }: Props) {
               {project.name || '(Chưa đặt tên)'} · {project.code} · {list.length} khách
             </Typography>
           </Box>
+          <ToggleButtonGroup
+            exclusive size="small" value={view} onChange={(_, v: 'list' | 'timeline' | null) => v && setView(v)}
+            sx={{ bgcolor: 'rgba(255,255,255,0.16)', '& .MuiToggleButton-root': { color: '#fff', border: 'none', textTransform: 'none', fontWeight: 700, px: 1.5 }, '& .Mui-selected': { bgcolor: 'rgba(255,255,255,0.34) !important', color: '#fff !important' } }}>
+            <ToggleButton value="list">📋 Danh sách</ToggleButton>
+            <ToggleButton value="timeline">🗓️ Timeline</ToggleButton>
+          </ToggleButtonGroup>
           {project.linkedQuoteId && (
             <>
               <Button color="inherit" variant="outlined" startIcon={<DownloadIcon />} onClick={pullFromQuote}>
@@ -181,8 +257,14 @@ export function VisaApplicantManager({ project, onClose }: Props) {
             <Typography variant="subtitle1" fontWeight={600}>Chưa có khách nào</Typography>
             <Typography variant="body2" sx={{ mt: 0.5 }}>Bấm “Thêm khách”, hoặc “Import Excel” để nhập từ file.</Typography>
           </Box>
+        ) : view === 'timeline' ? (
+          <>
+            <StatusSummaryStrip rows={list} />
+            <VisaApplicantTimeline rows={list} onChange={setList} departureDate={project.departureDate} />
+          </>
         ) : (
           <>
+            <StatusSummaryStrip rows={list} />
             <Box sx={{ mb: 1.5 }}><GuestDashboard pax={list} /></Box>
             <RoomingPanel rows={list} onChange={setList} />
             <GuestListTable
@@ -198,11 +280,17 @@ export function VisaApplicantManager({ project, onClose }: Props) {
                       onChange={(e) => patch({ countriesVisited: e.target.value })}
                       placeholder="VD: Nhật Bản, Hàn Quốc, Singapore…" />
 
+                    <ApplicantTimelineEditor
+                      timeline={p.visaTimeline ?? []}
+                      departureDate={project.departureDate}
+                      onChange={(t) => patch({ visaTimeline: t })}
+                    />
+
                     <TextField
                       size="small" fullWidth multiline minRows={2} label="Lý do rớt (nếu khách rớt)"
                       value={p.failReason ?? ''} onChange={(e) => patch({ failReason: e.target.value })}
-                      color={p.result === 'failed' ? 'error' : undefined}
-                      focused={p.result === 'failed' ? true : undefined}
+                      color={deriveVisaStatus(p) === 'failed' ? 'error' : undefined}
+                      focused={deriveVisaStatus(p) === 'failed' ? true : undefined}
                       placeholder="VD: thiếu chứng minh tài chính, hồ sơ công việc chưa thuyết phục…" />
 
                     <Box>
