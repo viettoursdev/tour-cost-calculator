@@ -90,11 +90,12 @@ const profileToUser = (r: Record<string, unknown>): User => ({
   role: r.role as Role,
   name: (r.name as string) ?? '',
   color: (r.color as string) ?? '#888888',
+  department: (r.department as User['department']) ?? undefined,
 });
 
 export async function sbPullUsers(client: SupabaseClient = sb): Promise<User[]> {
   const { data, error } = await client.from('profiles')
-    .select('username, email, phone, role, name, color');
+    .select('username, email, phone, role, name, color, department');
   if (error) throw new Error('sbPullUsers: ' + error.message);
   return (data ?? []).map(profileToUser);
 }
@@ -121,6 +122,7 @@ export async function sbPushUsers(users: User[], client: SupabaseClient = sb): P
       role: u.role,
       name: u.name,
       color: u.color,
+      department: u.department ?? null,
       updated_at: new Date().toISOString(),
     }));
   const skipped = users.filter((u) => !u.email || !idByEmail.has(u.email));
@@ -186,7 +188,7 @@ export function sbOnAuthChange(
 
 export async function sbGetProfileById(uid: string, client: SupabaseClient = sb): Promise<User | null> {
   const { data, error } = await client.from('profiles')
-    .select('username, email, phone, role, name, color').eq('id', uid).maybeSingle();
+    .select('username, email, phone, role, name, color, department').eq('id', uid).maybeSingle();
   if (error) throw new Error('sbGetProfileById: ' + error.message);
   return data ? profileToUser(data) : null;
 }
