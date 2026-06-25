@@ -9,6 +9,7 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import { sbSetQuoteSettlementSummary } from '@/lib/supabase';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { usePaymentStore } from '@/stores/paymentStore';
+import { useInventoryStore, inventoryCostForTour } from '@/stores/inventoryStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { getCATS } from './constants';
@@ -55,6 +56,22 @@ export function SettlementView() {
 
   const currentUser = useAuthStore((s) => s.currentUser);
   const canLock = hasPerm(currentUser, 'exportQuote');
+
+  // Chi phí kho/vật tư đã cấp cho tour này (giá vốn FIFO từ module Quản lý kho).
+  const invMovements = useInventoryStore((s) => s.movements);
+  const invCost = useMemo(
+    () => inventoryCostForTour(invMovements, { tourProfileId: draft.tourProfileId, tourCode: draft.tourCode }),
+    [invMovements, draft.tourProfileId, draft.tourCode],
+  );
+  const INV_KEY = 'inv_auto_kho';
+  const invInSettlement = customItems.find((c) => c.key === INV_KEY)?.amount ?? 0;
+  const syncInvCost = () => {
+    const others = customItems.filter((c) => c.key !== INV_KEY);
+    const next = invCost > 0
+      ? [...others, { key: INV_KEY, catId: 'logistics' as const, catLabel: 'Logistics & Sản xuất', catIcon: '📦', catColor: '#e67e22', name: 'Vật tư kho cấp cho tour', amount: Math.round(invCost) }]
+      : others;
+    usePaymentStore.getState().setCustomItems(tourKey, next);
+  };
 
   useEffect(() => {
     if (!tourName.trim()) return;
@@ -245,6 +262,28 @@ export function SettlementView() {
           Còn phải chi {fmtVND(Math.max(0, s.actualCost - s.paidCost))} cho nhà cung cấp.
         </Typography>
       </Paper>
+
+      {/* C'. Chi phí kho/vật tư cấp cho tour (từ module Quản lý kho) */}
+      {(invCost > 0 || invInSettlement > 0) && (
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, mb: 3, borderLeft: '4px solid #e67e22' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1}>
+            <Box>
+              <Typography variant="subtitle2" fontWeight={800} sx={{ color: '#e67e22' }}>📦 Chi phí kho/vật tư cấp cho tour</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Giá vốn FIFO hàng đã xuất gắn tour này: <b>{fmtVND(invCost)}</b>
+                {invInSettlement > 0 && Math.round(invInSettlement) !== Math.round(invCost) && ` · đang tính trong thực chi: ${fmtVND(invInSettlement)}`}
+              </Typography>
+            </Box>
+            {canLock && (
+              invInSettlement > 0 && Math.round(invInSettlement) === Math.round(invCost)
+                ? <Chip label="✓ Đã vào thực chi" sx={{ fontWeight: 700, bgcolor: 'rgba(39,174,96,0.15)', color: '#27ae60' }} />
+                : <Button size="small" variant="contained" sx={{ bgcolor: '#e67e22' }} onClick={syncInvCost}>
+                    {invInSettlement > 0 ? 'Cập nhật thực chi' : '➕ Đưa vào thực chi'}
+                  </Button>
+            )}
+          </Stack>
+        </Paper>
+      )}
 
       {/* D. Đối chiếu hạng mục */}
       <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, mb: 3 }}>

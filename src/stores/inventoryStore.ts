@@ -45,6 +45,55 @@ export function itemOnHand(itemId: string, stock: StockRow[]): number {
   return stock.filter((s) => s.itemId === itemId).reduce((a, s) => a + s.onHand, 0);
 }
 
+/** Tổng giá vốn (FIFO) hàng đã XUẤT gắn một tour — dùng đưa vào Quyết toán. */
+export function inventoryCostForTour(
+  movements: import('@/types/inventory').InventoryMovement[],
+  opts: { tourProfileId?: string; tourCode?: string },
+): number {
+  return movements
+    .filter((m) => m.type === 'out' && (
+      (opts.tourProfileId && m.tourProfileId === opts.tourProfileId) ||
+      (opts.tourCode && m.tourCode === opts.tourCode)
+    ))
+    .reduce((a, m) => a + m.qty * m.unitCost, 0);
+}
+
+/** Một dòng báo cáo Nhập–Xuất–Tồn theo kỳ (tính trên dòng IN/OUT, không gồm điều chỉnh). */
+export interface NXTRow {
+  itemId: string;
+  opening: number;   // tồn đầu kỳ (số lượng)
+  inQty: number;     // nhập trong kỳ
+  outQty: number;    // xuất trong kỳ
+  closing: number;   // tồn cuối kỳ = đầu + nhập − xuất
+  inValue: number;   // giá trị nhập trong kỳ
+  outValue: number;  // giá vốn xuất trong kỳ (FIFO)
+}
+
+/** Báo cáo NXT theo kỳ [from, to] (YYYY-MM-DD, so theo ngày occurredAt). */
+export function computeNXT(
+  movements: import('@/types/inventory').InventoryMovement[],
+  from: string,
+  to: string,
+): NXTRow[] {
+  const map = new Map<string, NXTRow>();
+  const get = (id: string) =>
+    map.get(id) ?? map.set(id, { itemId: id, opening: 0, inQty: 0, outQty: 0, closing: 0, inValue: 0, outValue: 0 }).get(id)!;
+  for (const m of movements) {
+    if (m.type === 'adjust') continue;
+    const day = (m.occurredAt || '').slice(0, 10);
+    const sign = m.type === 'in' ? 1 : -1;
+    const row = get(m.itemId);
+    if (day < from) {
+      row.opening += sign * m.qty;
+    } else if (day <= to) {
+      if (m.type === 'in') { row.inQty += m.qty; row.inValue += m.qty * m.unitCost; }
+      else { row.outQty += m.qty; row.outValue += m.qty * m.unitCost; }
+    }
+  }
+  for (const row of map.values()) row.closing = row.opening + row.inQty - row.outQty;
+  return Array.from(map.values()).filter((r) => r.opening || r.inQty || r.outQty);
+}
+
 type State = {
   categories: InventoryCategory[];
   items: InventoryItem[];

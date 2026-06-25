@@ -15,9 +15,10 @@ import InputOutlinedIcon from '@mui/icons-material/InputOutlined';
 import OutputOutlinedIcon from '@mui/icons-material/OutputOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
-import { useInventoryStore, computeStock, itemOnHand, colorToCode, ASSET_STATUS } from '@/stores/inventoryStore';
+import { useInventoryStore, computeStock, itemOnHand, colorToCode, ASSET_STATUS, computeNXT } from '@/stores/inventoryStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { fmtVND } from '@/components/quote/calc';
 import type { InventoryItem, InventoryCategory, StockRow, ReceiveLine, InventoryAsset, InventoryMovement, AssetStatus, AssetAction } from '@/types/inventory';
@@ -94,6 +95,7 @@ export function InventoryView() {
         <Tab label={`Thiết bị / Tài sản (${assetItems.length})`} sx={{ minHeight: 38 }} />
         <Tab label="Lịch sử nhập/xuất" sx={{ minHeight: 38 }} />
         <Tab label="📊 Tổng quan" sx={{ minHeight: 38 }} />
+        <Tab label="📑 Báo cáo NXT" sx={{ minHeight: 38 }} />
       </Tabs>
 
       {tab === 0 && (
@@ -124,6 +126,8 @@ export function InventoryView() {
           assets={assets} movements={movements} totalValue={totalValue} catById={catById} isAssetItem={isAssetItem} />
       )}
 
+      {tab === 4 && <NxtReport movements={movements} items={items} catById={catById} />}
+
       {catOpen && <CategoryManager onClose={() => setCatOpen(false)} />}
       {itemDlg && <ItemDialog item={itemDlg === 'new' ? null : itemDlg} categories={consumableCats} asset={false} onClose={() => setItemDlg(null)} />}
       {modelDlg && <ItemDialog item={modelDlg === 'new' ? null : modelDlg} categories={assetCats} asset onClose={() => setModelDlg(null)} />}
@@ -147,9 +151,20 @@ function ItemCard({ item, category, stock, onReceive, onIssue, onEdit }: {
 }) {
   const [open, setOpen] = useState(false);
   const remove = useInventoryStore((s) => s.deleteItem);
+  const me = useAuthStore((s) => s.currentUser);
+  const itemLots = useInventoryStore((s) => s.lots).filter((l) => l.itemId === item.id);
   const rows = stock.filter((s) => s.itemId === item.id).sort((a, b) => a.color.localeCompare(b.color) || a.size.localeCompare(b.size));
   const onHand = itemOnHand(item.id, stock);
   const low = item.minStock > 0 && onHand < item.minStock;
+
+  const printReceipt = async (lot: typeof itemLots[number]) => {
+    const { exportInventoryVoucherPDF } = await import('@/lib/exports/exportInventoryVoucherPDF');
+    exportInventoryVoucherPDF({
+      kind: 'in', code: lot.code, itemCode: item.code, itemName: item.name, unit: item.unit,
+      color: lot.color, supplier: lot.supplier, date: lot.receivedAt, by: me?.name ?? '',
+      rows: lot.lines.map((ll) => ({ size: ll.size, qty: ll.qtyIn, unitCost: lot.unitCost })),
+    });
+  };
 
   return (
     <Paper variant="outlined" sx={{ p: 1.25, borderLeft: low ? '4px solid #dc3250' : `4px solid ${TEAL}` }}>
@@ -196,6 +211,19 @@ function ItemCard({ item, category, stock, onReceive, onIssue, onEdit }: {
               ))}
             </TableBody>
           </Table>
+        )}
+        {itemLots.length > 0 && (
+          <Box sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Lô nhập ({itemLots.length}) — in phiếu nhập:</Typography>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+              {itemLots.slice().sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map((lot) => (
+                <Tooltip key={lot.id} title={`${lot.color || ''} · ${new Date(lot.receivedAt).toLocaleDateString('vi-VN')}${lot.supplier ? ' · ' + lot.supplier : ''}`}>
+                  <Chip size="small" icon={<PrintOutlinedIcon sx={{ fontSize: 15 }} />} label={lot.code}
+                    onClick={() => void printReceipt(lot)} sx={{ cursor: 'pointer' }} variant="outlined" />
+                </Tooltip>
+              ))}
+            </Stack>
+          </Box>
         )}
         {item.note && <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>📝 {item.note}</Typography>}
       </Collapse>
@@ -379,6 +407,7 @@ function ReceiveLotDialog({ item, onClose }: { item: InventoryItem; onClose: () 
 // ── Xuất kho (FIFO) ────────────────────────────────────────────────────────────
 function IssueDialog({ item, stock, onClose }: { item: InventoryItem; stock: StockRow[]; onClose: () => void }) {
   const issue = useInventoryStore((s) => s.issue);
+  const me = useAuthStore((s) => s.currentUser);
   const rows = useMemo(() => stock.filter((s) => s.itemId === item.id && s.onHand > 0), [stock, item.id]);
   const colors = useMemo(() => Array.from(new Set(rows.map((r) => r.color))), [rows]);
   const [color, setColor] = useState(colors[0] ?? '');
@@ -398,6 +427,15 @@ function IssueDialog({ item, stock, onClose }: { item: InventoryItem; stock: Sto
     if (!reason.trim()) { window.alert('Nhập lý do xuất.'); return; }
     try {
       await issue({ itemId: item.id, color, size, qty: n, reason, ref, occurredAt, tourProfileId: tour?.id, tourCode: tour?.code });
+      if (window.confirm('Đã xuất kho. In phiếu xuất kho (PDF)?')) {
+        const { exportInventoryVoucherPDF } = await import('@/lib/exports/exportInventoryVoucherPDF');
+        const code = 'PX-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+        exportInventoryVoucherPDF({
+          kind: 'out', code, itemCode: item.code, itemName: item.name, unit: item.unit,
+          color, reason, receiver: ref, tourCode: tour?.code, date: occurredAt, by: me?.name ?? '',
+          rows: [{ size, qty: n, unitCost: 0 }],
+        });
+      }
       onClose();
     } catch { /* lỗi đã báo trong store */ }
   };
@@ -826,5 +864,67 @@ function InventoryDashboard({ categories, items, stock, assets, movements, total
         </Paper>
       )}
     </Stack>
+  );
+}
+
+// ── Báo cáo Nhập–Xuất–Tồn theo kỳ ──────────────────────────────────────────────
+function NxtReport({ movements, items, catById }: {
+  movements: InventoryMovement[]; items: InventoryItem[]; catById: Map<string, InventoryCategory>;
+}) {
+  const monthStart = new Date(); monthStart.setDate(1);
+  const [from, setFrom] = useState(monthStart.toISOString().slice(0, 10));
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const itemById = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
+  const rows = useMemo(() => computeNXT(movements, from, to)
+    .map((r) => ({ r, it: itemById.get(r.itemId) }))
+    .filter((x) => x.it && catById.get(x.it.categoryId)?.kind !== 'asset')
+    .sort((a, b) => (a.it!.code).localeCompare(b.it!.code)), [movements, from, to, itemById, catById]);
+
+  const doExport = async () => {
+    const { exportNxtExcel } = await import('@/lib/exports/exportInventoryExcel');
+    await exportNxtExcel({ from, to, rows: rows.map((x) => ({ item: x.it!, ...x.r })) });
+  };
+
+  return (
+    <Box>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap>
+        <TextField size="small" label="Từ ngày" type="date" value={from} onChange={(e) => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <TextField size="small" label="Đến ngày" type="date" value={to} onChange={(e) => setTo(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <Box sx={{ flex: 1 }} />
+        <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon />} disabled={rows.length === 0} onClick={() => void doExport()}>Xuất Excel</Button>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+        Tồn đầu kỳ + Nhập − Xuất = Tồn cuối kỳ (tính trên dòng nhập/xuất; điều chỉnh kiểm kê không tính vào báo cáo này).
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ fontWeight: 700 }}>Mã SP</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>Sản phẩm</TableCell>
+            <TableCell sx={{ fontWeight: 700 }} align="right">Tồn đầu</TableCell>
+            <TableCell sx={{ fontWeight: 700 }} align="right">Nhập</TableCell>
+            <TableCell sx={{ fontWeight: 700 }} align="right">Xuất</TableCell>
+            <TableCell sx={{ fontWeight: 700 }} align="right">Tồn cuối</TableCell>
+            <TableCell sx={{ fontWeight: 700 }} align="right">GT nhập</TableCell>
+            <TableCell sx={{ fontWeight: 700 }} align="right">GT xuất (giá vốn)</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map(({ r, it }) => (
+            <TableRow key={r.itemId}>
+              <TableCell sx={{ fontWeight: 700 }}>{it!.code}</TableCell>
+              <TableCell>{it!.name}</TableCell>
+              <TableCell align="right">{r.opening}</TableCell>
+              <TableCell align="right" sx={{ color: TEAL, fontWeight: 700 }}>{r.inQty || ''}</TableCell>
+              <TableCell align="right" sx={{ color: '#dc3250', fontWeight: 700 }}>{r.outQty || ''}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 800 }}>{r.closing}</TableCell>
+              <TableCell align="right">{r.inValue ? fmtVND(r.inValue) : ''}</TableCell>
+              <TableCell align="right">{r.outValue ? fmtVND(r.outValue) : ''}</TableCell>
+            </TableRow>
+          ))}
+          {rows.length === 0 && <TableRow><TableCell colSpan={8}><Typography variant="caption" color="text.disabled">Không có biến động trong kỳ.</Typography></TableCell></TableRow>}
+        </TableBody>
+      </Table>
+    </Box>
   );
 }

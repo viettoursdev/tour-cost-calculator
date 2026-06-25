@@ -105,3 +105,21 @@ export async function exportInventoryExcel({
   const stamp = new Date().toISOString().slice(0, 10);
   saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `Kho-Viettours-${stamp}.xlsx`);
 }
+
+/** Báo cáo Nhập–Xuất–Tồn theo kỳ → Excel 1 sheet. */
+export async function exportNxtExcel({ from, to, rows }: {
+  from: string; to: string;
+  rows: { item: InventoryItem; opening: number; inQty: number; outQty: number; closing: number; inValue: number; outValue: number }[];
+}): Promise<void> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Viettours Tour Cost Calculator';
+  wb.created = new Date();
+  addSheet(wb, `NXT ${from}_${to}`,
+    ['Mã SP', 'Sản phẩm', 'ĐVT', 'Tồn đầu', 'Nhập', 'Xuất', 'Tồn cuối', 'GT nhập', 'GT xuất (giá vốn)'],
+    rows.map(({ item, opening, inQty, outQty, closing, inValue, outValue }) => [
+      item.code, item.name, item.unit, opening, inQty, outQty, closing, Math.round(inValue), Math.round(outValue),
+    ]),
+  );
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `NXT-Kho-${from}_${to}.xlsx`);
+}
