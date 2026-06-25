@@ -19,7 +19,7 @@ import { openFilePreview } from '@/stores/filePreviewStore';
 import { attMeta } from '@/lib/util';
 import type { ParsedNcc } from '@/lib/partyParse';
 import type { NameCardFields } from '@/lib/nameCard';
-import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES, deriveLocation } from './constants';
+import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES, COUNTRY_TO_CONTINENT, deriveLocation } from './constants';
 import MergeOutlinedIcon from '@mui/icons-material/MergeOutlined';
 import type { BankInfo, Ncc, NccContact, NccStatus } from '@/types';
 
@@ -234,11 +234,19 @@ export function NCCModal({ ncc, canEdit, onSave, onClose, allNccs = [], onMerge 
               <MenuItem value=""><em>—</em></MenuItem>
               {NCC_CONTINENTS.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
             </TextField>
-            <TextField select fullWidth label="Quốc gia" value={form.country ?? ''} disabled={!canEdit}
-              onChange={(e) => setF('country', e.target.value)}>
-              <MenuItem value=""><em>—</em></MenuItem>
-              {(form.continent ? (NCC_COUNTRIES[form.continent] ?? []) : NCC_ALL_COUNTRIES).map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-            </TextField>
+            <Autocomplete
+              freeSolo fullWidth disabled={!canEdit}
+              options={form.continent ? (NCC_COUNTRIES[form.continent] ?? []) : NCC_ALL_COUNTRIES}
+              value={form.country ?? ''}
+              onInputChange={(_, v) => {
+                if (!canEdit) return;
+                const cont = COUNTRY_TO_CONTINENT[v.trim().toLowerCase()];
+                setForm((p) => ({ ...p, country: v, continent: cont && !p.continent ? cont : p.continent }));
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="Quốc gia" placeholder="Chọn hoặc gõ quốc gia mới…" />
+              )}
+            />
           </Stack>
 
           {/* Location — tự suy ra Quốc gia + Châu lục khi rời ô (nếu chưa chọn). */}
