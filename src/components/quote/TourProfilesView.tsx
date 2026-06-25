@@ -15,6 +15,8 @@ import StarBorderIcon from '@mui/icons-material/StarBorder';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import AddIcon from '@mui/icons-material/Add';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -32,6 +34,7 @@ import { canSeePrices } from '@/auth/quotePerms';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
 import { DealCockpit } from './DealCockpit';
+import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
 import { LEGACY } from '@/theme';
 import type { CloudQuoteEntry, Collaborator, TourKind, TourProfile, User } from '@/types';
 
@@ -73,6 +76,8 @@ export function TourProfilesView() {
 
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [showDash, setShowDash] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
@@ -140,6 +145,54 @@ export function TourProfilesView() {
     });
     return filterRank(list, search, (p) => [p.code, p.name, p.customerName].filter(Boolean).join(' '));
   }, [visible, profiles, search, showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Tổng quan điều hành (gom theo các hồ sơ đang hiển thị) ──
+  const summary = useMemo(() => {
+    const wonStages = new Set<DealStage>(['won', 'contract', 'operating', 'acceptance', 'closed']);
+    let open = 0, archived = 0, won = 0, lost = 0, value = 0, remaining = 0, profit = 0, profitN = 0;
+    const byStage: Record<string, number> = {};
+    for (const p of rows) {
+      if (p.status === 'archived') archived++; else open++;
+      const mt = metaOf(p.id);
+      byStage[mt.stage] = (byStage[mt.stage] ?? 0) + 1;
+      if (mt.stage === 'lost') lost++; else if (wonStages.has(mt.stage)) won++;
+      value += mt.primary?.totalCost ?? 0;
+      remaining += mt.primary?.paymentSummary?.remaining ?? 0;
+      const ap = mt.primary?.settlementSummary?.actualProfit;
+      if (typeof ap === 'number') { profit += ap; profitN++; }
+    }
+    const decided = won + lost;
+    return { total: rows.length, open, archived, won, lost, byStage, value, remaining, profit, profitN, winRate: decided ? Math.round((won / decided) * 100) : null };
+  }, [rows, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const data: TourProfileExportRow[] = rows.map((p) => {
+        const mt = metaOf(p.id);
+        const pr = mt.primary;
+        return {
+          code: p.code,
+          name: p.name || '(chưa đặt tên)',
+          kind: p.kind === 'intl' ? 'Nước ngoài' : 'Nội địa',
+          customer: pr?.customerName ?? p.customerName ?? '',
+          departDate: (pr?.departDate ?? p.startDate) ? new Date((pr?.departDate ?? p.startDate) as string).toLocaleDateString('vi-VN') : '',
+          pax: pr?.pax ?? p.pax ?? 0,
+          stage: STAGE_META(mt.stage).short,
+          quotes: (quotesByProfile.get(p.id) ?? []).length,
+          contracts: mt.links.contract, visa: mt.links.visa, menus: mt.links.menu, itineraries: mt.links.itinerary, guide: mt.guide,
+          value: pr?.totalCost ?? 0,
+          payableRemaining: pr?.paymentSummary?.remaining ?? 0,
+          actualProfit: typeof pr?.settlementSummary?.actualProfit === 'number' ? pr.settlementSummary.actualProfit : '',
+          owner: p.createdBy ?? '',
+          status: p.status === 'archived' ? 'Lưu trữ' : 'Đang mở',
+        };
+      });
+      await exportTourProfilesExcel(data);
+    } catch (e) {
+      window.alert('❌ Xuất Excel lỗi: ' + (e as Error).message);
+    } finally { setExporting(false); }
+  };
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -218,11 +271,19 @@ export function TourProfilesView() {
           />
           <TextField size="small" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="🔍 Tìm mã, tên tour, khách…" sx={{ minWidth: 220 }} />
+          <Tooltip title="Tổng quan điều hành">
+            <IconButton size="small" color={showDash ? 'primary' : 'default'} onClick={() => setShowDash((v) => !v)}><BarChartIcon /></IconButton>
+          </Tooltip>
+          <Tooltip title="Xuất Excel danh sách hồ sơ">
+            <span><IconButton size="small" disabled={exporting || rows.length === 0} onClick={() => void doExport()}><FileDownloadOutlinedIcon /></IconButton></span>
+          </Tooltip>
           <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
             Hồ sơ trống
           </Button>
         </Stack>
       </Stack>
+
+      {showDash && <DashboardPanel summary={summary} showPrice={showPrice} />}
 
       {rows.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
@@ -301,6 +362,48 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
           sx={{ background: LEGACY.headerGradient }}>{busy ? 'Đang tạo…' : 'Tạo hồ sơ'}</Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+type Summary = {
+  total: number; open: number; archived: number; won: number; lost: number;
+  byStage: Record<string, number>; value: number; remaining: number;
+  profit: number; profitN: number; winRate: number | null;
+};
+
+/** Bảng tổng quan điều hành theo các hồ sơ đang hiển thị. */
+function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: boolean }) {
+  const cards: { label: string; value: string; color?: string }[] = [
+    { label: 'Tổng hồ sơ', value: String(summary.total) },
+    { label: 'Đang mở', value: String(summary.open) },
+    { label: 'Đã chốt', value: String(summary.won), color: '#0d7a6a' },
+    { label: 'Thua / Huỷ', value: String(summary.lost), color: '#dc2626' },
+    { label: 'Win-rate', value: summary.winRate === null ? '—' : `${summary.winRate}%`, color: '#7c3aed' },
+  ];
+  if (showPrice) {
+    cards.push({ label: 'Tổng giá trị', value: fmtVND(summary.value) });
+    cards.push({ label: 'Công nợ còn lại', value: fmtVND(summary.remaining), color: '#d97706' });
+    if (summary.profitN > 0) cards.push({ label: `Biên lợi thực (${summary.profitN})`, value: fmtVND(summary.profit), color: summary.profit >= 0 ? '#16a34a' : '#dc2626' });
+  }
+  const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(4,1fr)', md: 'repeat(8,1fr)' }, gap: 1, mb: 1.5 }}>
+        {cards.map((c) => (
+          <Box key={c.label} sx={{ textAlign: 'center', p: 0.75, borderRadius: 1.5, bgcolor: 'rgba(0,0,0,0.02)' }}>
+            <Typography fontSize={17} fontWeight={900} sx={{ color: c.color ?? 'text.primary', lineHeight: 1.1 }}>{c.value}</Typography>
+            <Typography variant="caption" color="text.secondary">{c.label}</Typography>
+          </Box>
+        ))}
+      </Box>
+      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+        {stageCols.map((s) => {
+          const n = summary.byStage[s.key] ?? 0;
+          if (n === 0) return null;
+          return <Chip key={s.key} size="small" label={`${s.short}: ${n}`} sx={{ height: 22, bgcolor: `${s.color}1a`, color: s.color, fontWeight: 700 }} />;
+        })}
+      </Stack>
+    </Paper>
   );
 }
 
