@@ -14,6 +14,10 @@
 #   R2_ENDPOINT          — https://<accountid>.r2.cloudflarestorage.com (no bucket).
 # The Preflight step below fails fast with a clear message if any of these is
 # missing or wrong, before attempting the dump.
+#
+# Retry logic: the dump + upload step retries up to 5 times with linear backoff
+# (30 s, 60 s, 90 s, 120 s between attempts). Preflight is not retried — if
+# secrets are wrong or the bucket is unreachable, retrying won't help.
 
 name: Supabase Backup
 
@@ -32,7 +36,7 @@ concurrency:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - name: Preflight — verify secrets + connectivity
         env:
@@ -66,24 +70,34 @@ jobs:
           fi
           echo "Preflight OK — secrets present, Supabase reachable, R2 bucket accessible."
 
-      - name: Dump Supabase
+      - name: Dump + Upload (with retry)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          STAMP="$(date -u +%Y/%m/%d/%H%M%SZ)"
-          [ -n "$STAMP" ] || { echo "empty timestamp"; exit 1; }
-          echo "OBJECT_KEY=$STAMP/supabase-dump.sql" >> "$GITHUB_ENV"
-          npx --yes supabase db dump --db-url "$SUPABASE_DB_URL" -f dump.sql
-          gzip -9 dump.sql
-
-      - name: Upload to R2
-        env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
-          aws s3 cp dump.sql.gz "s3://viettours-db-backups/${OBJECT_KEY}.gz" \
-            --endpoint-url "$R2_ENDPOINT"
+          STAMP="$(date -u +%Y/%m/%d/%H%M%SZ)"
+          OBJECT_KEY="$STAMP/supabase-dump.sql"
+          MAX_ATTEMPTS=5
+          for attempt in $(seq 1 $MAX_ATTEMPTS); do
+            echo "--- Attempt $attempt of $MAX_ATTEMPTS ---"
+            rm -f dump.sql dump.sql.gz
+            if npx --yes supabase db dump --db-url "$SUPABASE_DB_URL" -f dump.sql \
+               && gzip -9 dump.sql \
+               && aws s3 cp dump.sql.gz "s3://viettours-db-backups/${OBJECT_KEY}.gz" \
+                    --endpoint-url "$R2_ENDPOINT"; then
+              echo "Backup succeeded on attempt $attempt."
+              exit 0
+            fi
+            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+              backoff=$((attempt * 30))
+              echo "Attempt $attempt failed. Retrying in ${backoff}s..."
+              sleep "$backoff"
+            fi
+          done
+          echo "::error::All $MAX_ATTEMPTS backup attempts failed."
+          exit 1
 
       - name: Scrub
         if: always()
