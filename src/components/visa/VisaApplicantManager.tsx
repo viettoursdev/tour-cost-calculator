@@ -9,6 +9,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
+import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import HistoryIcon from '@mui/icons-material/History';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
@@ -18,8 +19,8 @@ import UploadIcon from '@mui/icons-material/Upload';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import {
-  VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, countsFromApplicants,
-  defaultApplicantTimeline, deriveVisaStatus, isApplicantOverdue, newApplicantDoc,
+  VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, applyTimelineFromDeparture,
+  countsFromApplicants, defaultApplicantTimeline, deriveVisaStatus, isApplicantOverdue, newApplicantDoc,
   newApplicantMilestone, newVisaApplicant,
 } from './constants';
 import { GuestDashboard, GuestListTable } from '../quote/GuestListTable';
@@ -64,10 +65,20 @@ function ApplicantTimelineEditor({ timeline, departureDate, onChange }: {
           </Stack>
         ))}
       </Box>
-      <Button size="small" startIcon={<AddIcon />} sx={{ mt: 0.75, color: '#0d7a6a' }}
-        onClick={() => onChange([...list, newApplicantMilestone('Mốc khác')])}>
-        Thêm mốc ngày
-      </Button>
+      <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
+        <Button size="small" startIcon={<AddIcon />} sx={{ color: '#0d7a6a' }}
+          onClick={() => onChange([...list, newApplicantMilestone('Mốc khác')])}>
+          Thêm mốc ngày
+        </Button>
+        {departureDate && (
+          <Tooltip title="Tự điền các mốc còn trống bằng cách tính ngược từ ngày khởi hành">
+            <Button size="small" startIcon={<EventRepeatIcon />} sx={{ color: '#0369a1' }}
+              onClick={() => onChange(applyTimelineFromDeparture(list, departureDate, false))}>
+              Tính từ ngày khởi hành
+            </Button>
+          </Tooltip>
+        )}
+      </Stack>
     </Box>
   );
 }
@@ -172,6 +183,13 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     }
   };
 
+  // Tính ngược timeline từ ngày khởi hành cho CẢ ĐOÀN (chỉ điền mốc còn trống).
+  const bulkTimelineFromDeparture = () => {
+    if (!project.departureDate) { toast('Dự án chưa có ngày khởi hành (sửa ở thẻ dự án).', 'warning'); return; }
+    setList((prev) => prev.map((p) => ({ ...p, visaTimeline: applyTimelineFromDeparture(p.visaTimeline, project.departureDate, false) })));
+    toast('✅ Đã tính các mốc timeline còn trống cho cả đoàn.');
+  };
+
   // Báo giá liên kết chỉ thao tác được khi nó đang là draft đang mở.
   const draftIsLinked = () => {
     const d = useQuoteStore.getState().draft;
@@ -249,6 +267,13 @@ export function VisaApplicantManager({ project, onClose }: Props) {
             onClick={() => void import('@/lib/exports/importVisaApplicants').then((m) => m.downloadVisaApplicantsTemplate())}>
             Tải mẫu
           </Button>
+          {project.departureDate && (
+            <Tooltip title="Tự điền các mốc timeline còn trống cho cả đoàn (tính ngược từ ngày khởi hành)">
+              <Button color="inherit" variant="outlined" startIcon={<EventRepeatIcon />} onClick={bulkTimelineFromDeparture}>
+                Tính timeline đoàn
+              </Button>
+            </Tooltip>
+          )}
           <Button color="inherit" variant="outlined" startIcon={<FileDownloadIcon />} onClick={(e) => setExportAnchor(e.currentTarget)}>
             Xuất timeline
           </Button>

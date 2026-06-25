@@ -4766,3 +4766,188 @@ export function sbDeleteNcc(id: string, client: SupabaseClient = sb): Promise<vo
     if (del.error) throw new Error('sbDeleteNcc: ' + del.error.message);
   });
 }
+
+// ── Quản lý kho (Inventory) ────────────────────────────────────────────────────
+import type {
+  InventoryCategory, InventoryItem, InventoryLot, InventoryLotLine,
+  InventoryMovement, InventoryKind, MovementType, ReceiveLine,
+} from '@/types/inventory';
+
+export interface InventorySnapshot {
+  categories: InventoryCategory[];
+  items: InventoryItem[];
+  lots: InventoryLot[];        // mỗi lô đã gắn sẵn `lines`
+  movements: InventoryMovement[];
+}
+
+const rowToInvCategory = (r: Record<string, unknown>): InventoryCategory => ({
+  id: r.id as string,
+  code: (r.code as string) ?? '',
+  name: (r.name as string) ?? '',
+  kind: ((r.kind as string) ?? 'consumable') as InventoryKind,
+  seq: (r.seq as number) ?? 0,
+  note: (r.note as string) ?? '',
+  createdBy: (r.created_by_name as string) ?? '',
+  createdAt: r.created_at as string,
+});
+
+const rowToInvItem = (r: Record<string, unknown>): InventoryItem => ({
+  id: r.id as string,
+  code: (r.code as string) ?? '',
+  categoryId: (r.category_id as string) ?? '',
+  name: (r.name as string) ?? '',
+  unit: (r.unit as string) ?? 'cái',
+  sizes: (r.sizes as string[]) ?? [],
+  minStock: (r.min_stock as number) ?? 0,
+  imageUrl: (r.image_url as string) ?? undefined,
+  note: (r.note as string) ?? '',
+  active: (r.active as boolean) ?? true,
+  createdBy: (r.created_by_name as string) ?? '',
+  createdAt: r.created_at as string,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+  updatedAt: (r.updated_at as string) ?? undefined,
+});
+
+const rowToInvLotLine = (r: Record<string, unknown>): InventoryLotLine => ({
+  id: r.id as string,
+  lotId: (r.lot_id as string) ?? '',
+  size: (r.size as string) ?? '',
+  qtyIn: (r.qty_in as number) ?? 0,
+  qtyRemaining: (r.qty_remaining as number) ?? 0,
+});
+
+const rowToInvMovement = (r: Record<string, unknown>): InventoryMovement => ({
+  id: r.id as string,
+  itemId: (r.item_id as string) ?? '',
+  lotId: (r.lot_id as string) ?? undefined,
+  lotLineId: (r.lot_line_id as string) ?? undefined,
+  color: (r.color as string) ?? '',
+  size: (r.size as string) ?? '',
+  type: ((r.type as string) ?? 'in') as MovementType,
+  qty: (r.qty as number) ?? 0,
+  unitCost: (r.unit_cost as number) ?? 0,
+  reason: (r.reason as string) ?? '',
+  ref: (r.ref as string) ?? '',
+  occurredAt: r.occurred_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  createdAt: r.created_at as string,
+});
+
+async function loadInventory(cl: SupabaseClient): Promise<InventorySnapshot> {
+  const [cats, items, lots, lines, moves] = await Promise.all([
+    cl.from('inventory_categories').select('*').order('created_at', { ascending: true }),
+    cl.from('inventory_items').select('*').order('code', { ascending: true }),
+    cl.from('inventory_lots').select('*').order('received_at', { ascending: true }),
+    cl.from('inventory_lot_lines').select('*'),
+    cl.from('inventory_movements').select('*').order('occurred_at', { ascending: false }).limit(1000),
+  ]);
+  for (const res of [cats, items, lots, lines, moves]) if (res.error) throw res.error;
+  const linesByLot = new Map<string, InventoryLotLine[]>();
+  for (const row of lines.data ?? []) {
+    const ll = rowToInvLotLine(row);
+    (linesByLot.get(ll.lotId) ?? linesByLot.set(ll.lotId, []).get(ll.lotId)!).push(ll);
+  }
+  const lotList: InventoryLot[] = (lots.data ?? []).map((r) => ({
+    id: r.id as string,
+    code: (r.code as string) ?? '',
+    itemId: (r.item_id as string) ?? '',
+    color: (r.color as string) ?? '',
+    colorCode: (r.color_code as string) ?? '',
+    unitCost: (r.unit_cost as number) ?? 0,
+    supplier: (r.supplier as string) ?? '',
+    receivedAt: r.received_at as string,
+    note: (r.note as string) ?? '',
+    createdBy: (r.created_by_name as string) ?? '',
+    createdAt: r.created_at as string,
+    lines: linesByLot.get(r.id as string) ?? [],
+  }));
+  return {
+    categories: (cats.data ?? []).map(rowToInvCategory),
+    items: (items.data ?? []).map(rowToInvItem),
+    lots: lotList,
+    movements: (moves.data ?? []).map(rowToInvMovement),
+  };
+}
+
+/** Đăng ký realtime cho toàn bộ kho: bất kỳ bảng nào đổi → nạp lại cả snapshot. */
+export function sbSubscribeInventory(cb: (snap: InventorySnapshot) => void, client: SupabaseClient = sb): () => void {
+  let active = true;
+  const load = () => loadInventory(client).then((v) => { if (active) cb(v); })
+    .catch((e) => console.warn('Supabase inventory load error:', (e as Error).message));
+  load();
+  const tables = ['inventory_categories', 'inventory_items', 'inventory_lots', 'inventory_lot_lines', 'inventory_movements'];
+  const ch = client.channel('inv:' + Math.random().toString(36).slice(2));
+  for (const t of tables) ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => { load(); });
+  ch.subscribe();
+  return () => { active = false; client.removeChannel(ch); };
+}
+
+export async function sbUpsertInventoryCategory(c: InventoryCategory, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('inventory_categories').upsert({
+    id: c.id, code: c.code, name: c.name ?? '', kind: c.kind ?? 'consumable',
+    seq: c.seq ?? 0, note: c.note ?? '', created_by_name: c.createdBy ?? '', created_at: c.createdAt,
+  }, { onConflict: 'id' });
+  if (error) throw new Error('sbUpsertInventoryCategory: ' + error.message);
+}
+
+export async function sbDeleteInventoryCategory(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('inventory_categories').delete().eq('id', id);
+  if (error) throw new Error('sbDeleteInventoryCategory: ' + error.message);
+}
+
+/** Sinh mã sản phẩm kế tiếp theo loại (atomic). */
+export async function sbNextItemCode(categoryId: string, client: SupabaseClient = sb): Promise<string> {
+  const { data, error } = await client.rpc('inventory_next_item_code', { p_category_id: categoryId });
+  if (error) throw new Error('sbNextItemCode: ' + error.message);
+  return data as string;
+}
+
+export async function sbUpsertInventoryItem(it: InventoryItem, by: { name: string; role: string }, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('inventory_items').upsert({
+    id: it.id, code: it.code, category_id: it.categoryId, name: it.name ?? '', unit: it.unit ?? 'cái',
+    sizes: it.sizes ?? [], min_stock: it.minStock ?? 0, image_url: it.imageUrl || null, note: it.note ?? '',
+    active: it.active ?? true, created_by_name: it.createdBy ?? '', created_at: it.createdAt,
+    updated_at: new Date().toISOString(), updated_by_name: `${by.name} (${by.role})`,
+  }, { onConflict: 'id' });
+  if (error) throw new Error('sbUpsertInventoryItem: ' + error.message);
+}
+
+export async function sbDeleteInventoryItem(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('inventory_items').delete().eq('id', id);
+  if (error) throw new Error('sbDeleteInventoryItem: ' + error.message);
+}
+
+/** Nhập một lô (theo màu, nhiều size). Trả về { lotId, lotCode }. */
+export async function sbReceiveLot(args: {
+  itemId: string; color: string; colorCode: string; unitCost: number; supplier: string;
+  receivedAt: string; note: string; lines: ReceiveLine[]; by: string;
+}, client: SupabaseClient = sb): Promise<{ lotId: string; lotCode: string }> {
+  const { data, error } = await client.rpc('inventory_receive_lot', {
+    p_item_id: args.itemId, p_color: args.color, p_color_code: args.colorCode,
+    p_unit_cost: args.unitCost, p_supplier: args.supplier, p_received_at: args.receivedAt,
+    p_note: args.note, p_lines: args.lines, p_by: args.by,
+  });
+  if (error) throw new Error('sbReceiveLot: ' + error.message);
+  const d = data as { lot_id: string; lot_code: string };
+  return { lotId: d.lot_id, lotCode: d.lot_code };
+}
+
+/** Xuất kho FIFO. */
+export async function sbIssueStock(args: {
+  itemId: string; color: string; size: string; qty: number;
+  reason: string; ref: string; occurredAt: string; by: string;
+}, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('inventory_issue', {
+    p_item_id: args.itemId, p_color: args.color, p_size: args.size, p_qty: args.qty,
+    p_reason: args.reason, p_ref: args.ref, p_occurred_at: args.occurredAt, p_by: args.by,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Điều chỉnh tồn một dòng lô (kiểm kê). */
+export async function sbAdjustStock(lotLineId: string, newQty: number, reason: string, by: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('inventory_adjust', {
+    p_lot_line_id: lotLineId, p_new_qty: newQty, p_reason: reason, p_by: by,
+  });
+  if (error) throw new Error(error.message);
+}

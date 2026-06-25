@@ -41,6 +41,7 @@ const HRView = lazy(() => import('@/components/hr/HRView').then((m) => ({ defaul
 const AdvanceSettlementView = lazy(() => import('./AdvanceSettlementView').then((m) => ({ default: m.AdvanceSettlementView })));
 const TodoView = lazy(() => import('@/components/todo/TodoView').then((m) => ({ default: m.TodoView })));
 const TourVisaPanel = lazy(() => import('./TourVisaPanel').then((m) => ({ default: m.TourVisaPanel })));
+const InventoryView = lazy(() => import('@/components/inventory/InventoryView').then((m) => ({ default: m.InventoryView })));
 const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').then((m) => ({ default: m.ItineraryApp })));
 const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
 const VisaApp = lazy(() => import('@/components/visa/VisaApp').then((m) => ({ default: m.VisaApp })));
@@ -143,6 +144,7 @@ export function QuoteView() {
             {view === 'hr' && <HRView />}
             {view === 'todo' && <TodoView />}
             {view === 'tourvisa' && <TourVisaPanel />}
+            {view === 'inventory' && <InventoryView />}
            </Suspense>
           </Box>
 

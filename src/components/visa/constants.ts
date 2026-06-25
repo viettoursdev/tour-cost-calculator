@@ -280,6 +280,44 @@ export function defaultApplicantTimeline(departureDate?: string | null): VisaApp
     newApplicantMilestone(m.label, m.key, m.key === 'departure' ? (departureDate ?? null) : null));
 }
 
+/** Offset MẶC ĐỊNH mỗi mốc chuẩn = số ngày TRƯỚC khởi hành (để tính ngược timeline). */
+export const APPLICANT_TIMELINE_OFFSET: Record<string, number> = {
+  deploy: 60, doc_deadline: 30, biometrics: 20, expected: 7, departure: 0,
+};
+
+const isoMinusDays = (departISO: string, days: number): string => {
+  const d = new Date(departISO);
+  d.setDate(d.getDate() - days);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+/**
+ * Tính NGƯỢC ngày các mốc chuẩn từ ngày khởi hành (theo offset). Giữ nguyên mốc
+ * tuỳ biến. `overwrite=false` chỉ điền mốc chuẩn đang TRỐNG ngày; `true` ghi đè hết.
+ * Mốc chuẩn nào còn thiếu trong timeline cũ sẽ được bổ sung.
+ */
+export function applyTimelineFromDeparture(
+  timeline: VisaApplicantMilestone[] | undefined,
+  departureDate: string | null | undefined,
+  overwrite = false,
+): VisaApplicantMilestone[] {
+  if (!departureDate) return timeline ?? [];
+  const base = (timeline && timeline.length) ? timeline.slice() : defaultApplicantTimeline(departureDate);
+  const out = base.map((m) => {
+    if (!m.key || !(m.key in APPLICANT_TIMELINE_OFFSET)) return m; // mốc tuỳ biến: giữ nguyên
+    if (!overwrite && m.date) return m;                            // đã có ngày → giữ
+    return { ...m, date: isoMinusDays(departureDate, APPLICANT_TIMELINE_OFFSET[m.key]) };
+  });
+  // Bổ sung mốc chuẩn còn thiếu (nếu timeline cũ thiếu).
+  for (const def of DEFAULT_APPLICANT_TIMELINE) {
+    if (!out.some((m) => m.key === def.key)) {
+      out.push(newApplicantMilestone(def.label, def.key, isoMinusDays(departureDate, APPLICANT_TIMELINE_OFFSET[def.key] ?? 0)));
+    }
+  }
+  return out;
+}
+
 // Checklist hồ sơ mặc định cho mỗi khách (thêm loại khác được).
 export const DEFAULT_APPLICANT_DOCS = [
   'Hộ chiếu (bản gốc)', 'Hình thẻ', 'Hồ sơ công việc',
