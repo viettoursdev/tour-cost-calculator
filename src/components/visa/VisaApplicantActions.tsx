@@ -3,7 +3,10 @@ import {
   Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { toast } from '@/stores/toastStore';
+import { useAuthStore } from '@/stores/authStore';
+import { sbSendNotificationMany } from '@/lib/supabase';
 import {
   VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, deriveVisaStatus, legacyFromVisaStatus,
 } from './constants';
@@ -78,11 +81,35 @@ export function ReminderDialog({ project, applicants, onClose }: {
   onClose: () => void;
 }) {
   const [kind, setKind] = useState<ReminderKind>('docs');
+  const [busy, setBusy] = useState(false);
+  const me = useAuthStore((s) => s.currentUser);
   const { text, count } = useMemo(() => buildReminder(kind, project, applicants), [kind, project, applicants]);
+
+  const staff = useMemo(
+    () => [...new Set([...(project.mainStaff ?? []), ...(project.supportStaff ?? []), ...(project.collaborators ?? [])].filter(Boolean))],
+    [project],
+  );
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); toast('✅ Đã copy tin nhắn.'); }
     catch { toast('Không copy được — hãy chọn & sao chép thủ công.', 'warning'); }
+  };
+
+  // Gửi nội dung nhắc thành thông báo in-app cho nhân viên phụ trách dự án.
+  const notifyStaff = async () => {
+    if (!staff.length) { toast('Dự án chưa gán nhân viên phụ trách.', 'warning'); return; }
+    setBusy(true);
+    try {
+      await sbSendNotificationMany(staff, {
+        type: 'announcement',
+        title: `🛂 Nhắc visa: ${REMINDER_META[kind].label}`,
+        message: text,
+        createdBy: me?.name ?? 'Hệ thống',
+      });
+      toast(`✅ Đã gửi thông báo cho ${staff.length} người phụ trách.`);
+    } catch (e) {
+      toast('Lỗi gửi thông báo: ' + (e as Error).message, 'warning');
+    } finally { setBusy(false); }
   };
 
   return (
@@ -101,6 +128,9 @@ export function ReminderDialog({ project, applicants, onClose }: {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Đóng</Button>
+        <Button startIcon={<NotificationsActiveIcon />} disabled={busy || staff.length === 0} onClick={() => void notifyStaff()}>
+          Gửi cho phụ trách ({staff.length})
+        </Button>
         <Button variant="contained" startIcon={<ContentCopyIcon />} onClick={() => void copy()}
           sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
           Copy tin nhắn
