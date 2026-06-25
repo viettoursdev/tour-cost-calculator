@@ -18,8 +18,9 @@ import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { useInventoryStore, computeStock, itemOnHand, colorToCode, ASSET_STATUS } from '@/stores/inventoryStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { fmtVND } from '@/components/quote/calc';
-import type { InventoryItem, InventoryCategory, StockRow, ReceiveLine, InventoryAsset, AssetStatus, AssetAction } from '@/types/inventory';
+import type { InventoryItem, InventoryCategory, StockRow, ReceiveLine, InventoryAsset, InventoryMovement, AssetStatus, AssetAction } from '@/types/inventory';
 
 const TEAL = '#0d7a6a';
 
@@ -120,7 +121,7 @@ export function InventoryView() {
 
       {tab === 3 && (
         <InventoryDashboard categories={categories} items={items} stock={stock}
-          assets={assets} totalValue={totalValue} catById={catById} isAssetItem={isAssetItem} />
+          assets={assets} movements={movements} totalValue={totalValue} catById={catById} isAssetItem={isAssetItem} />
       )}
 
       {catOpen && <CategoryManager onClose={() => setCatOpen(false)} />}
@@ -388,6 +389,7 @@ function IssueDialog({ item, stock, onClose }: { item: InventoryItem; stock: Sto
   const [reason, setReason] = useState('');
   const [ref, setRef] = useState('');
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
+  const [tour, setTour] = useState<TourRef | null>(null);
 
   const submit = async () => {
     const n = Number(qty) || 0;
@@ -395,7 +397,7 @@ function IssueDialog({ item, stock, onClose }: { item: InventoryItem; stock: Sto
     if (n > avail) { window.alert(`Vượt tồn (còn ${avail}).`); return; }
     if (!reason.trim()) { window.alert('Nhập lý do xuất.'); return; }
     try {
-      await issue({ itemId: item.id, color, size, qty: n, reason, ref, occurredAt });
+      await issue({ itemId: item.id, color, size, qty: n, reason, ref, occurredAt, tourProfileId: tour?.id, tourCode: tour?.code });
       onClose();
     } catch { /* lỗi đã báo trong store */ }
   };
@@ -419,8 +421,9 @@ function IssueDialog({ item, stock, onClose }: { item: InventoryItem; stock: Sto
               <TextField size="small" label={`Số lượng (tồn ${avail})`} type="number" value={qty} onChange={(e) => setQty(e.target.value)} sx={{ flex: 1 }} inputProps={{ max: avail, min: 1 }} />
               <TextField size="small" label="Ngày xuất" type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} sx={{ width: 170 }} InputLabelProps={{ shrink: true }} />
             </Stack>
+            <TourPicker value={tour} onChange={setTour} label="Gắn tour (tuỳ chọn)" />
             <TextField size="small" label="Lý do xuất" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="vd Cấp đồng phục tour NĐ.25.06.25.01" />
-            <TextField size="small" label="Tham chiếu (tour / người nhận)" value={ref} onChange={(e) => setRef(e.target.value)} />
+            <TextField size="small" label="Tham chiếu (người nhận)" value={ref} onChange={(e) => setRef(e.target.value)} />
           </Stack>
         )}
       </DialogContent>
@@ -429,6 +432,24 @@ function IssueDialog({ item, stock, onClose }: { item: InventoryItem; stock: Sto
         <Button variant="contained" color="error" disabled={rows.length === 0} onClick={() => void submit()}>Xuất kho</Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+// ── Bộ chọn hồ sơ tour (dùng chung cho xuất kho & cấp thiết bị) ─────────────────
+type TourRef = { id: string; code: string; name: string };
+function TourPicker({ value, onChange, label }: { value: TourRef | null; onChange: (t: TourRef | null) => void; label: string }) {
+  const profiles = useTourProfileStore((s) => s.profiles);
+  const options: TourRef[] = useMemo(
+    () => profiles.filter((p) => p.status !== 'archived').map((p) => ({ id: p.id, code: p.code, name: p.name || p.customerName || '' })),
+    [profiles],
+  );
+  return (
+    <Autocomplete
+      size="small" options={options} value={value} onChange={(_, v) => onChange(v)}
+      getOptionLabel={(o) => `${o.code}${o.name ? ' · ' + o.name : ''}`}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      renderInput={(p) => <TextField {...p} label={label} placeholder="Mã/tên tour" />}
+    />
   );
 }
 
@@ -472,7 +493,7 @@ function MovementsTab() {
                 <TableCell>{it?.name ?? '—'} <Typography component="span" variant="caption" color="text.secondary">{it?.code}</Typography></TableCell>
                 <TableCell>{(m.color || '—')} / {(m.size || '—')}</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, color: color(m.type) }}>{m.type === 'out' ? '−' : '+'}{m.qty}</TableCell>
-                <TableCell><Typography variant="caption">{m.reason}{m.ref ? ` · ${m.ref}` : ''}</Typography></TableCell>
+                <TableCell><Typography variant="caption">{m.tourCode ? `🧳 ${m.tourCode} · ` : ''}{m.reason}{m.ref ? ` · ${m.ref}` : ''}</Typography></TableCell>
                 <TableCell><Typography variant="caption">{m.createdBy}</Typography></TableCell>
               </TableRow>
             );
@@ -646,11 +667,12 @@ function AssetActionDialog({ asset, action, onClose }: { asset: InventoryAsset; 
   const [reason, setReason] = useState('');
   const [ref, setRef] = useState('');
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
+  const [tour, setTour] = useState<TourRef | null>(null);
 
   const submit = async () => {
     if (cfg.needHolder && !holder.trim()) { window.alert('Nhập người nhận.'); return; }
     try {
-      await doAction({ assetId: asset.id, action, toStatus: cfg.toStatus, holder, reason, ref, occurredAt });
+      await doAction({ assetId: asset.id, action, toStatus: cfg.toStatus, holder, reason, ref, occurredAt, tourProfileId: tour?.id, tourCode: tour?.code });
       onClose();
     } catch { /* lỗi đã báo */ }
   };
@@ -661,8 +683,9 @@ function AssetActionDialog({ asset, action, onClose }: { asset: InventoryAsset; 
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           {cfg.needHolder && <TextField size="small" label="Người nhận" value={holder} onChange={(e) => setHolder(e.target.value)} autoFocus />}
+          {action === 'checkout' && <TourPicker value={tour} onChange={setTour} label="Gắn tour (tuỳ chọn)" />}
           <TextField size="small" label="Lý do / Ghi chú" value={reason} onChange={(e) => setReason(e.target.value)} multiline minRows={2} />
-          <TextField size="small" label="Tham chiếu (tour / dự án)" value={ref} onChange={(e) => setRef(e.target.value)} />
+          <TextField size="small" label="Tham chiếu (dự án)" value={ref} onChange={(e) => setRef(e.target.value)} />
           <TextField size="small" label="Thời gian" type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} InputLabelProps={{ shrink: true }} />
           {action === 'retire' && <Typography variant="caption" color="error">Thiết bị sẽ chuyển sang trạng thái Thanh lý.</Typography>}
         </Stack>
@@ -676,17 +699,31 @@ function AssetActionDialog({ asset, action, onClose }: { asset: InventoryAsset; 
 }
 
 // ── Tổng quan kho ──────────────────────────────────────────────────────────────
-function InventoryDashboard({ categories, items, stock, assets, totalValue, catById, isAssetItem }: {
+function InventoryDashboard({ categories, items, stock, assets, movements, totalValue, catById, isAssetItem }: {
   categories: InventoryCategory[];
   items: InventoryItem[];
   stock: StockRow[];
   assets: InventoryAsset[];
+  movements: InventoryMovement[];
   totalValue: number;
   catById: Map<string, InventoryCategory>;
   isAssetItem: (it: InventoryItem) => boolean;
 }) {
   const consumable = items.filter((it) => !isAssetItem(it));
   const lowItems = consumable.filter((it) => it.minStock > 0 && itemOnHand(it.id, stock) < it.minStock);
+
+  // Chi phí kho theo tour: gộp giá vốn các lần XUẤT có gắn tour.
+  const byTour = useMemo(() => {
+    const m = new Map<string, { code: string; value: number; qty: number }>();
+    for (const mv of movements) {
+      if (mv.type !== 'out' || !mv.tourCode) continue;
+      const row = m.get(mv.tourCode) ?? { code: mv.tourCode, value: 0, qty: 0 };
+      row.value += mv.qty * mv.unitCost;
+      row.qty += mv.qty;
+      m.set(mv.tourCode, row);
+    }
+    return Array.from(m.values()).sort((a, b) => b.value - a.value);
+  }, [movements]);
 
   // Giá trị tồn theo từng sản phẩm → top 5.
   const valueByItem = new Map<string, number>();
@@ -748,6 +785,32 @@ function InventoryDashboard({ categories, items, stock, assets, totalValue, catB
           )}
         </Paper>
       </Box>
+
+      <Paper variant="outlined" sx={{ p: 1.5 }}>
+        <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>🧳 Chi phí kho theo tour</Typography>
+        {byTour.length === 0 ? (
+          <Typography variant="caption" color="text.disabled">Chưa có lần xuất nào gắn tour. Khi xuất kho, chọn "Gắn tour" để thống kê tại đây.</Typography>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Mã tour</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Số lượng xuất</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Giá trị (FIFO)</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {byTour.map((t) => (
+                <TableRow key={t.code}>
+                  <TableCell sx={{ fontWeight: 700 }}>{t.code}</TableCell>
+                  <TableCell align="right">{t.qty}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, color: TEAL }}>{fmtVND(t.value)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Paper>
 
       {lowItems.length > 0 && (
         <Paper variant="outlined" sx={{ p: 1.5, borderLeft: '4px solid #dc3250' }}>

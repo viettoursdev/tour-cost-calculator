@@ -63,11 +63,11 @@ type State = {
     itemId: string; color: string; unitCost: number; supplier: string;
     receivedAt: string; note: string; lines: ReceiveLine[];
   }) => Promise<void>;
-  issue: (args: { itemId: string; color: string; size: string; qty: number; reason: string; ref: string; occurredAt: string }) => Promise<void>;
+  issue: (args: { itemId: string; color: string; size: string; qty: number; reason: string; ref: string; occurredAt: string; tourProfileId?: string; tourCode?: string }) => Promise<void>;
   adjust: (lotLineId: string, newQty: number, reason: string) => Promise<void>;
   saveAsset: (a: Partial<InventoryAsset> & { itemId: string }) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
-  assetAction: (args: { assetId: string; action: AssetAction; toStatus: AssetStatus; holder: string; reason: string; ref: string; occurredAt: string }) => Promise<void>;
+  assetAction: (args: { assetId: string; action: AssetAction; toStatus: AssetStatus; holder: string; reason: string; ref: string; occurredAt: string; tourProfileId?: string; tourCode?: string }) => Promise<void>;
 };
 
 export const useInventoryStore = create<State>()(

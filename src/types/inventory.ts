@@ -77,6 +77,8 @@ export interface InventoryMovement {
   occurredAt: string;
   createdBy: string;
   createdAt: string;
+  tourProfileId?: string;
+  tourCode?: string;
 }
 
 /** Tồn hiện tại theo (sản phẩm, màu, size) — suy ra ở client từ lot_lines. */
@@ -131,4 +133,6 @@ export interface InventoryAssetLog {
   occurredAt: string;
   createdBy: string;
   createdAt: string;
+  tourProfileId?: string;
+  tourCode?: string;
 }

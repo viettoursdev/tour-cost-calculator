@@ -4834,6 +4834,8 @@ const rowToInvMovement = (r: Record<string, unknown>): InventoryMovement => ({
   occurredAt: r.occurred_at as string,
   createdBy: (r.created_by_name as string) ?? '',
   createdAt: r.created_at as string,
+  tourProfileId: (r.tour_profile_id as string) ?? undefined,
+  tourCode: (r.tour_code as string) ?? undefined,
 });
 
 const rowToAsset = (r: Record<string, unknown>): InventoryAsset => ({
@@ -4867,6 +4869,8 @@ const rowToAssetLog = (r: Record<string, unknown>): InventoryAssetLog => ({
   occurredAt: r.occurred_at as string,
   createdBy: (r.created_by_name as string) ?? '',
   createdAt: r.created_at as string,
+  tourProfileId: (r.tour_profile_id as string) ?? undefined,
+  tourCode: (r.tour_code as string) ?? undefined,
 });
 
 async function loadInventory(cl: SupabaseClient): Promise<InventorySnapshot> {
@@ -4976,10 +4980,12 @@ export async function sbReceiveLot(args: {
 export async function sbIssueStock(args: {
   itemId: string; color: string; size: string; qty: number;
   reason: string; ref: string; occurredAt: string; by: string;
+  tourProfileId?: string; tourCode?: string;
 }, client: SupabaseClient = sb): Promise<void> {
   const { error } = await client.rpc('inventory_issue', {
     p_item_id: args.itemId, p_color: args.color, p_size: args.size, p_qty: args.qty,
     p_reason: args.reason, p_ref: args.ref, p_occurred_at: args.occurredAt, p_by: args.by,
+    p_tour_profile_id: args.tourProfileId ?? null, p_tour_code: args.tourCode ?? null,
   });
   if (error) throw new Error(error.message);
 }
@@ -5019,10 +5025,12 @@ export async function sbDeleteAsset(id: string, client: SupabaseClient = sb): Pr
 export async function sbAssetAction(args: {
   assetId: string; action: AssetAction; toStatus: AssetStatus; holder: string;
   reason: string; ref: string; occurredAt: string; by: string;
+  tourProfileId?: string; tourCode?: string;
 }, client: SupabaseClient = sb): Promise<void> {
   const { error } = await client.rpc('inventory_asset_action', {
     p_asset_id: args.assetId, p_action: args.action, p_to_status: args.toStatus, p_holder: args.holder,
     p_reason: args.reason, p_ref: args.ref, p_occurred_at: args.occurredAt, p_by: args.by,
+    p_tour_profile_id: args.tourProfileId ?? null, p_tour_code: args.tourCode ?? null,
   });
   if (error) throw new Error(error.message);
 }
