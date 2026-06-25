@@ -140,7 +140,7 @@ type QuoteState = {
   saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[], linkedForeign?: { id: string; name: string; template: Template } | null, overwrite?: { cloudId: string; id: number } | null) => Promise<CloudQuoteEntry>;
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
-  loadCloud: (cloudId: string, opts?: { dmc?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  loadCloud: (cloudId: string, opts?: { dmc?: boolean; keepView?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Khôi phục nội dung 1 phiên bản cũ vào draft, GIỮ nguyên báo giá (currentQuoteId)
    *  — lưu lại sẽ tạo thành phiên bản mới. Đánh dấu cloudDirty để người dùng biết. */
   restoreVersionState: (state: QuoteDraft) => void;
@@ -918,13 +918,14 @@ export const useQuoteStore = create<QuoteState>()(
           const status = idxEntry?.status ?? project.currentState.status ?? 'in_progress';
           // Hồ sơ tour lấy từ index entry (chuẩn — phủ cả báo giá cũ đã backfill mà
           // state lưu chưa có field). Lần lưu sau sẽ tái dùng đúng hồ sơ.
-          muted(() => set(() => ({
+          muted(() => set((s) => ({
             draft: {
               ...project.currentState, currentQuoteId: cloudId, rates, status,
               tourProfileId: idxEntry?.tourProfileId ?? project.currentState.tourProfileId,
               tourCode: idxEntry?.tourCode ?? project.currentState.tourCode,
             },
-            view: 'cost', cloudDirty: false,
+            // keepView: giữ nguyên view (vd ở Hồ sơ tour mở báo giá chính mà không rời tab).
+            view: opts?.keepView ? s.view : 'cost', cloudDirty: false,
             ...CLEAR_HIST,
           })));
           return { ok: true };
