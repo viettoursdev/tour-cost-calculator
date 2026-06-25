@@ -10,6 +10,7 @@ import { useNccStore } from '@/stores/nccStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
 import { useLinkNavStore, type LinkNavKind } from '@/stores/linkNavStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -39,11 +40,13 @@ const META: Record<Kind, { label: string; icon: string; color: string }> = {
   visaProc:    { label: 'Hồ sơ visa', icon: '🗂️', color: '#a855f7' },
   customer:    { label: 'Khách hàng', icon: '👥', color: '#16a34a' },
   ncc:         { label: 'Nhà cung cấp', icon: '🏢', color: '#475569' },
+  tourProfile: { label: 'Hồ sơ tour', icon: '🧭', color: '#0d7a6a' },
 };
 
-type ScopeKey = 'all' | 'quote' | 'itinerary' | 'menu' | 'contract' | 'visa' | 'customer' | 'ncc';
+type ScopeKey = 'all' | 'tourProfile' | 'quote' | 'itinerary' | 'menu' | 'contract' | 'visa' | 'customer' | 'ncc';
 const SCOPES: { key: ScopeKey; label: string; kinds: Kind[] }[] = [
   { key: 'all', label: 'Tất cả', kinds: [] },
+  { key: 'tourProfile', label: '🧭 Hồ sơ tour', kinds: ['tourProfile'] },
   { key: 'quote', label: '📋 Báo giá', kinds: ['quoteDom', 'quoteIntl', 'dmc'] },
   { key: 'itinerary', label: '🗺️ Chương trình', kinds: ['itinerary'] },
   { key: 'menu', label: '🍽️ Thực đơn', kinds: ['menu'] },
@@ -76,6 +79,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
   const menus = useMenuStore((s) => s.list);
   const visaProjects = useVisaProjectStore((s) => s.projects);
   const visaProcs = useVisaProcStore((s) => s.list);
+  const tourProfilesAll = useTourProfileStore((s) => s.profiles);
 
   const [q, setQ] = useState('');
   const [scope, setScope] = useState<ScopeKey>('all');
@@ -85,8 +89,9 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
   useEffect(() => { if (open) { setQ(''); setScope('all'); setActive(0); setTimeout(() => inputRef.current?.focus(), 60); } }, [open]);
 
   const index = useMemo<SItem[]>(
-    () => buildSearchIndex({ quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs }),
-    [quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs],
+    () => buildSearchIndex({ quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs, tourProfiles: useTourProfileStore.getState().visibleProfiles() }),
+    // tourProfilesAll giữ trong deps để re-index khi hồ sơ đổi (body gọi visibleProfiles() qua getState).
+    [quotes, dmcQuotes, contracts, customers, suppliers, itineraries, menus, visaProjects, visaProcs, tourProfilesAll], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const scopedIndex = useMemo<SItem[]>(() => {
@@ -153,6 +158,11 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
     } else if (it.kind === 'customer' || it.kind === 'ncc' || it.kind === 'contract') {
       if (needLeave('view')) { if (!confirmLeave()) return; useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } })); }
       st.setView(it.kind);
+    } else if (it.kind === 'tourProfile') {
+      // Mở tab "Hồ sơ tour" + focus đúng hồ sơ (TourProfilesView consume lúc mount).
+      if (needLeave('view')) { if (!confirmLeave()) return; useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } })); }
+      useTourProfileStore.getState().requestFocus(it.id);
+      st.setView('cockpit');
     } else {
       if (!confirmLeave()) return;
       const navKind = it.kind as LinkNavKind; // menu | itinerary | visaProject | visaProc

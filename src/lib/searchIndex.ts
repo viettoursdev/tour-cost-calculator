@@ -5,12 +5,12 @@
  */
 import type {
   Contract, Customer, ItineraryIndexEntry, MenuIndexEntry, Ncc, CloudQuoteEntry,
-  VisaProcIndexEntry, VisaProjectDoc,
+  VisaProcIndexEntry, VisaProjectDoc, TourProfile,
 } from '@/types';
 
 export type IndexKind =
   | 'quoteDom' | 'quoteIntl' | 'dmc' | 'itinerary' | 'menu'
-  | 'contract' | 'visaProject' | 'visaProc' | 'customer' | 'ncc';
+  | 'contract' | 'visaProject' | 'visaProc' | 'customer' | 'ncc' | 'tourProfile';
 
 export interface IndexItem {
   kind: IndexKind;
@@ -30,6 +30,7 @@ export interface SearchIndexInput {
   menus?: MenuIndexEntry[];
   visaProjects?: VisaProjectDoc[];
   visaProcs?: VisaProcIndexEntry[];
+  tourProfiles?: TourProfile[];
 }
 
 const txt = (parts: (string | undefined | null)[]): string => parts.filter(Boolean).join(' ');
@@ -77,6 +78,10 @@ export function buildSearchIndex(d: SearchIndexInput): IndexItem[] {
   (d.visaProcs ?? []).forEach((x) => out.push({
     kind: 'visaProc', id: x.id, title: x.title, subtitle: sub([x.code, x.country]),
     text: txt([x.title, x.code, x.country]),
+  }));
+  (d.tourProfiles ?? []).forEach((p) => out.push({
+    kind: 'tourProfile', id: p.id, title: p.name || p.code, subtitle: sub([p.code, p.customerName]),
+    text: txt([p.code, p.name, p.customerName, p.dest]),
   }));
 
   return out;

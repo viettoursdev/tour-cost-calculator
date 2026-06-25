@@ -11,6 +11,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { canViewAll, type SharedArea } from '@/auth/ROLES';
 import { visibleVisaProjects } from '@/components/visa/visaAccess';
 import { buildSearchIndex, type IndexItem, type SearchIndexInput } from '@/lib/searchIndex';
@@ -44,6 +45,7 @@ export function permittedData(): Required<SearchIndexInput> {
     visaProcs: useVisaProcStore.getState().list.filter(
       (p) => p.createdByUsername === u?.u || (p.collaborators ?? []).includes(u?.u ?? ''),
     ),
+    tourProfiles: useTourProfileStore.getState().visibleProfiles(),
   };
 }
 

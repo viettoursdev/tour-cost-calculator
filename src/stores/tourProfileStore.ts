@@ -32,6 +32,11 @@ type State = {
   profiles: TourProfile[];
   loading: boolean;
   error: string | null;
+  /** Deep-link: hồ sơ cần mở khi vào tab "Hồ sơ tour" (đặt từ Global Search/Trợ lý). */
+  focusId: string | null;
+  requestFocus: (id: string) => void;
+  /** Lấy & xoá focusId (TourProfilesView gọi lúc mount để mở đúng hồ sơ). */
+  consumeFocus: () => string | null;
   init: () => Unsubscribe;
   /** Hồ sơ user được phép xem (creator / collab / follower / TP-PP cùng phòng / BGĐ-CEO). */
   visibleProfiles: () => TourProfile[];
@@ -53,6 +58,13 @@ export const useTourProfileStore = create<State>()(
     profiles: [],
     loading: true,
     error: null,
+    focusId: null,
+    requestFocus: (id) => set({ focusId: id }),
+    consumeFocus: () => {
+      const id = get().focusId;
+      if (id) set({ focusId: null });
+      return id;
+    },
 
     init: () => sbSubscribeTourProfiles((profiles) => set({ profiles, loading: false })),
 

@@ -217,6 +217,18 @@ export function TourProfilesView() {
     if (await openQuote(pq.cloudId, true)) setDetailId(p.id);
   };
 
+  // Deep-link từ Global Search / Trợ lý: mở đúng hồ sơ khi vào tab.
+  const consumeFocus = useTourProfileStore((s) => s.consumeFocus);
+  useEffect(() => {
+    const fid = consumeFocus();
+    if (!fid) return;
+    const p = profiles.find((x) => x.id === fid);
+    if (!p) return;
+    if (primaryOf(p)) void openProfile(p);
+    else setExpanded((prev) => new Set(prev).add(fid)); // hồ sơ trống → mở rộng trong danh sách
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Detail: Bảng điều hành (DealCockpit) của báo giá chính, kèm thanh hồ sơ ──
   if (detailId) {
     const p = profiles.find((x) => x.id === detailId);

@@ -11,6 +11,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { useNccProductsStore } from '@/stores/nccProductsStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { permittedIndex, permittedData, visibleQuotesAll } from './data';
 import type { CloudQuoteEntry } from '@/types';
@@ -25,7 +26,7 @@ export interface ToolDef {
 
 const KIND_ENUM = [
   'quoteDom', 'quoteIntl', 'dmc', 'itinerary', 'menu',
-  'contract', 'visaProject', 'visaProc', 'customer', 'ncc',
+  'contract', 'visaProject', 'visaProc', 'customer', 'ncc', 'tourProfile',
 ];
 
 export const CATEGORY_ENUM = [
@@ -66,6 +67,15 @@ export const ASSISTANT_TOOLS: ToolDef[] = [
       type: 'object',
       properties: { name: { type: 'string', description: 'Tên khách hàng (một phần cũng được)' } },
       required: ['name'],
+    },
+  },
+  {
+    name: 'tour_profile',
+    description: 'Chi tiết một HỒ SƠ TOUR theo mã (NĐ/NN.DD.MM.YY.NN) hoặc tên/khách: khách hàng, ngày khởi hành, số khách, các phương án báo giá (mã/tên/trạng thái/tổng) + báo giá chính, cộng tác viên & người theo dõi, trạng thái (đang mở/lưu trữ). Dùng cho câu hỏi như "tình trạng hồ sơ NĐ.25.06.26.01", "tour của khách X gồm những phương án nào".',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Mã hồ sơ, tên tour hoặc tên khách (một phần cũng được)' } },
+      required: ['query'],
     },
   },
   {
@@ -303,6 +313,32 @@ async function toolGetQuote(input: Record<string, unknown>): Promise<unknown> {
   };
 }
 
+async function toolTourProfile(input: Record<string, unknown>): Promise<unknown> {
+  const raw = str(input, 'query');
+  if (!normalizeVN(raw)) return { error: 'Thiếu mã/tên hồ sơ.' };
+  const profiles = useTourProfileStore.getState().visibleProfiles();
+  const hit = filterRank(profiles, raw, (p) => [p.code, p.name, p.customerName, p.dest].filter(Boolean).join(' '))[0];
+  if (!hit) return { found: false };
+  const quotes = visibleQuotesAll().filter((e) => e.tourProfileId === hit.id);
+  return {
+    found: true,
+    code: hit.code,
+    name: hit.name,
+    kind: hit.kind === 'intl' ? 'Nước ngoài' : 'Nội địa',
+    customer: hit.customerName ?? null,
+    startDate: hit.startDate ?? null,
+    pax: hit.pax ?? null,
+    status: hit.status === 'archived' ? 'Lưu trữ' : 'Đang mở',
+    collaborators: (hit.collaborators ?? []).map((c) => c.name),
+    followers: (hit.followers ?? []).map((c) => c.name),
+    quoteCount: quotes.length,
+    quotes: quotes.map((e) => ({
+      cloudId: e.cloudId, quoteCode: e.quoteCode, name: e.name, status: e.status ?? null,
+      totalCostVND: e.totalCost, isPrimary: e.cloudId === hit.primaryQuoteId,
+    })),
+  };
+}
+
 async function toolCustomerTours(input: Record<string, unknown>): Promise<unknown> {
   const q = normalizeVN(str(input, 'name'));
   if (!q) return { error: 'Thiếu tên khách hàng.' };
@@ -535,6 +571,7 @@ export async function runAssistantTool(name: string, input: Record<string, unkno
       case 'search_records': result = await toolSearch(input); break;
       case 'get_quote': result = await toolGetQuote(input); break;
       case 'customer_tours': result = await toolCustomerTours(input); break;
+      case 'tour_profile': result = await toolTourProfile(input); break;
       case 'find_suppliers': result = await toolFindSuppliers(input); break;
       case 'supplier_usage': result = await toolSupplierUsage(input); break;
       case 'pricing_stats': result = await toolPricingStats(input); break;
