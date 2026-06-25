@@ -91,12 +91,12 @@ export async function exportInventoryExcel({
 
   // Lịch sử nhập/xuất.
   addSheet(wb, 'Lịch sử',
-    ['Thời gian', 'Loại', 'Mã SP', 'Sản phẩm', 'Màu', 'Size', 'Số lượng', 'Lý do', 'Tham chiếu', 'Người'],
+    ['Thời gian', 'Loại', 'Mã SP', 'Sản phẩm', 'Màu', 'Size', 'Số lượng', 'Tour', 'Lý do', 'Tham chiếu', 'Người'],
     movements.map((m) => {
       const it = itemById.get(m.itemId);
       return [
         fmtDate(m.occurredAt), TYPE_LABEL[m.type] ?? m.type, it?.code ?? '', it?.name ?? '',
-        m.color || '—', m.size || '—', (m.type === 'out' ? -m.qty : m.qty), m.reason, m.ref, m.createdBy,
+        m.color || '—', m.size || '—', (m.type === 'out' ? -m.qty : m.qty), m.tourCode ?? '', m.reason, m.ref, m.createdBy,
       ];
     }),
   );

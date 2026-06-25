@@ -1,6 +1,6 @@
 -- Quản lý kho (migrations 0049 + 0050): RPC sinh mã, nhập lô, xuất FIFO, tài sản.
 begin;
-select plan(15);
+select plan(16);
 
 select has_function('public', 'inventory_next_item_code', 'RPC sinh mã sản phẩm tồn tại');
 select has_function('public', 'inventory_receive_lot', 'RPC nhập lô tồn tại');
@@ -49,6 +49,12 @@ select throws_ok($$ select public.inventory_issue('itm_t', 'Đỏ', 'M', 99, 'x'
 select is(
   (select count(*)::int from public.inventory_movements where item_id = 'itm_t' and type = 'out'),
   2, 'FIFO ghi 2 movement xuất theo 2 lô');
+
+-- Đợt 4: xuất gắn tour → lưu tour_code (tour_profile_id NULL để né FK trong test).
+select public.inventory_issue('itm_t', 'Đỏ', 'M', 1, 'cấp tour', 'T2', now(), 'tester', NULL, 'NĐ.01.01.25.99');
+select is(
+  (select count(*)::int from public.inventory_movements where item_id = 'itm_t' and type = 'out' and tour_code = 'NĐ.01.01.25.99'),
+  1, 'xuất gắn tour lưu tour_code');
 
 -- Tài sản theo từng cái.
 insert into public.inventory_categories(id, code, name, kind) values ('cat_tb', 'TB', 'Thiết bị', 'asset');
