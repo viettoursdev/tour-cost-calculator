@@ -10,6 +10,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
+import DocumentScannerIcon from '@mui/icons-material/DocumentScanner';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
@@ -132,6 +133,29 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [reminderOpen, setReminderOpen] = useState(false);
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
+
+  // Quét hộ chiếu bằng AI: mỗi ảnh → 1 khách mới (tự điền tên/HC/ngày sinh…).
+  const onScanPassports = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setBusy(true);
+    let ok = 0;
+    const created: Passenger[] = [];
+    for (const f of files) {
+      try {
+        const { extractPassport } = await import('./passportOcr');
+        const patch = await extractPassport(f);
+        created.push({ ...applicantToPassenger(newVisaApplicant()), ...patch });
+        ok++;
+      } catch (err) {
+        toast(`Lỗi quét ${f.name}: ${(err as Error).message}`, 'warning');
+      }
+    }
+    if (created.length) setList((prev) => [...prev, ...created]);
+    setBusy(false);
+    if (ok) toast(`✅ Đã quét ${ok}/${files.length} hộ chiếu — kiểm tra lại trước khi lưu.`);
+  };
 
   const updDoc = (p: Passenger, patch: (docs: ApplicantDoc[]) => ApplicantDoc[], set: (x: Partial<Passenger>) => void) =>
     set({ docs: patch(p.docs ?? []) });
@@ -294,6 +318,10 @@ export function VisaApplicantManager({ project, onClose }: Props) {
           </Button>
           <Button color="inherit" variant="outlined" startIcon={<PlaylistRemoveIcon />} onClick={onDedupe}>
             Loại trùng
+          </Button>
+          <Button color="inherit" variant="outlined" startIcon={<DocumentScannerIcon />} component="label" disabled={busy}>
+            Quét hộ chiếu
+            <input type="file" hidden accept="image/*" multiple onChange={onScanPassports} />
           </Button>
           <Button color="inherit" variant="outlined" startIcon={<AddIcon />} onClick={add}>
             Thêm khách
