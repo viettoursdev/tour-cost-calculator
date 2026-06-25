@@ -14,6 +14,7 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import InputOutlinedIcon from '@mui/icons-material/InputOutlined';
 import OutputOutlinedIcon from '@mui/icons-material/OutputOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { useInventoryStore, computeStock, itemOnHand, colorToCode, ASSET_STATUS } from '@/stores/inventoryStore';
@@ -29,6 +30,7 @@ export function InventoryView() {
   const items = useInventoryStore((s) => s.items);
   const lots = useInventoryStore((s) => s.lots);
   const movements = useInventoryStore((s) => s.movements);
+  const assets = useInventoryStore((s) => s.assets);
   const loading = useInventoryStore((s) => s.loading);
 
   const [tab, setTab] = useState(0);
@@ -52,6 +54,11 @@ export function InventoryView() {
   const consumableCats = categories.filter((c) => c.kind === 'consumable');
   const assetCats = categories.filter((c) => c.kind === 'asset');
 
+  const doExport = async () => {
+    const { exportInventoryExcel } = await import('@/lib/exports/exportInventoryExcel');
+    await exportInventoryExcel({ categories, items, stock, assets, movements });
+  };
+
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1100, mx: 'auto' }}>
       <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
@@ -59,6 +66,7 @@ export function InventoryView() {
         <Typography fontWeight={900} fontSize={20}>Quản lý kho</Typography>
         <Box sx={{ flex: 1 }} />
         <Chip label={`Giá trị tồn: ${fmtVND(totalValue)}`} sx={{ fontWeight: 700, bgcolor: TEAL + '18', color: TEAL }} />
+        <Button size="small" variant="outlined" startIcon={<FileDownloadOutlinedIcon />} onClick={() => void doExport()}>Excel</Button>
         <Button size="small" variant="outlined" startIcon={<CategoryOutlinedIcon />} onClick={() => setCatOpen(true)}>Loại SP</Button>
         {tab === 0 && (
           <Button size="small" variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: TEAL }}
@@ -84,6 +92,7 @@ export function InventoryView() {
         <Tab label={`Tồn kho (${consumableItems.length})`} sx={{ minHeight: 38 }} />
         <Tab label={`Thiết bị / Tài sản (${assetItems.length})`} sx={{ minHeight: 38 }} />
         <Tab label="Lịch sử nhập/xuất" sx={{ minHeight: 38 }} />
+        <Tab label="📊 Tổng quan" sx={{ minHeight: 38 }} />
       </Tabs>
 
       {tab === 0 && (
@@ -108,6 +117,11 @@ export function InventoryView() {
       )}
 
       {tab === 2 && <MovementsTab />}
+
+      {tab === 3 && (
+        <InventoryDashboard categories={categories} items={items} stock={stock}
+          assets={assets} totalValue={totalValue} catById={catById} isAssetItem={isAssetItem} />
+      )}
 
       {catOpen && <CategoryManager onClose={() => setCatOpen(false)} />}
       {itemDlg && <ItemDialog item={itemDlg === 'new' ? null : itemDlg} categories={consumableCats} asset={false} onClose={() => setItemDlg(null)} />}
@@ -658,5 +672,96 @@ function AssetActionDialog({ asset, action, onClose }: { asset: InventoryAsset; 
         <Button variant="contained" sx={{ bgcolor: cfg.toStatus === 'retired' || cfg.toStatus === 'lost' ? '#dc3250' : TEAL }} onClick={() => void submit()}>{cfg.label}</Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+// ── Tổng quan kho ──────────────────────────────────────────────────────────────
+function InventoryDashboard({ categories, items, stock, assets, totalValue, catById, isAssetItem }: {
+  categories: InventoryCategory[];
+  items: InventoryItem[];
+  stock: StockRow[];
+  assets: InventoryAsset[];
+  totalValue: number;
+  catById: Map<string, InventoryCategory>;
+  isAssetItem: (it: InventoryItem) => boolean;
+}) {
+  const consumable = items.filter((it) => !isAssetItem(it));
+  const lowItems = consumable.filter((it) => it.minStock > 0 && itemOnHand(it.id, stock) < it.minStock);
+
+  // Giá trị tồn theo từng sản phẩm → top 5.
+  const valueByItem = new Map<string, number>();
+  for (const s of stock) valueByItem.set(s.itemId, (valueByItem.get(s.itemId) ?? 0) + s.value);
+  const topItems = consumable
+    .map((it) => ({ it, value: valueByItem.get(it.id) ?? 0, onHand: itemOnHand(it.id, stock) }))
+    .filter((x) => x.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
+  const assetByStatus = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const a of assets) c[a.status] = (c[a.status] ?? 0) + 1;
+    return c;
+  }, [assets]);
+  const assetValue = assets.reduce((a, x) => a + x.purchaseCost, 0);
+
+  const Kpi = ({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) => (
+    <Paper variant="outlined" sx={{ p: 1.5, flex: 1, minWidth: 150, borderTop: `3px solid ${color}` }}>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+      <Typography fontWeight={900} fontSize={20} sx={{ color }}>{value}</Typography>
+      {sub && <Typography variant="caption" color="text.disabled">{sub}</Typography>}
+    </Paper>
+  );
+
+  return (
+    <Stack spacing={2}>
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+        <Kpi label="Giá trị tồn (hàng tiêu hao)" value={fmtVND(totalValue)} color={TEAL} />
+        <Kpi label="Sản phẩm tiêu hao" value={String(consumable.length)} color="#2563eb" sub={`${categories.filter((c) => c.kind === 'consumable').length} loại`} />
+        <Kpi label="Sắp hết (dưới tối thiểu)" value={String(lowItems.length)} color={lowItems.length ? '#dc3250' : '#6b7280'} />
+        <Kpi label="Thiết bị / tài sản" value={String(assets.length)} color="#7c3aed" sub={`Nguyên giá ${fmtVND(assetValue)}`} />
+      </Stack>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+        <Paper variant="outlined" sx={{ p: 1.5 }}>
+          <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>🏆 Top sản phẩm theo giá trị tồn</Typography>
+          {topItems.length === 0 ? <Typography variant="caption" color="text.disabled">Chưa có tồn.</Typography> : (
+            <Stack spacing={0.75}>
+              {topItems.map(({ it, value, onHand }) => (
+                <Stack key={it.id} direction="row" alignItems="center" spacing={1}>
+                  <Typography fontSize={13} sx={{ flex: 1 }} noWrap>{it.name} <Typography component="span" variant="caption" color="text.secondary">{onHand} {it.unit}</Typography></Typography>
+                  <Typography fontSize={13} fontWeight={700} sx={{ color: TEAL }}>{fmtVND(value)}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 1.5 }}>
+          <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>🔧 Tài sản theo trạng thái</Typography>
+          {assets.length === 0 ? <Typography variant="caption" color="text.disabled">Chưa có thiết bị.</Typography> : (
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              {(Object.keys(ASSET_STATUS) as (keyof typeof ASSET_STATUS)[]).map((st) => (
+                <Chip key={st} label={`${ASSET_STATUS[st].label}: ${assetByStatus[st] ?? 0}`}
+                  sx={{ fontWeight: 700, bgcolor: ASSET_STATUS[st].color + '22', color: ASSET_STATUS[st].color }} />
+              ))}
+            </Stack>
+          )}
+        </Paper>
+      </Box>
+
+      {lowItems.length > 0 && (
+        <Paper variant="outlined" sx={{ p: 1.5, borderLeft: '4px solid #dc3250' }}>
+          <Typography fontWeight={800} fontSize={14} sx={{ mb: 1, color: '#dc3250' }}>⚠ Sản phẩm cần nhập thêm</Typography>
+          <Stack spacing={0.5}>
+            {lowItems.map((it) => (
+              <Typography key={it.id} fontSize={13}>
+                {it.name} ({it.code}) — còn <b>{itemOnHand(it.id, stock)}</b> {it.unit}, tối thiểu {it.minStock}
+                <Typography component="span" variant="caption" color="text.secondary"> · {catById.get(it.categoryId)?.name ?? ''}</Typography>
+              </Typography>
+            ))}
+          </Stack>
+        </Paper>
+      )}
+    </Stack>
   );
 }
