@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { APPLICANT_RESULT_META } from './constants';
 import { visibleVisaProjects } from './visaAccess';
+import { VisaAdvancedStats } from './VisaAdvancedStats';
 import { matchesGuestQuery } from './applicantMatch';
 import { normalizeVN } from '@/lib/search';
 import type { VisaApplicant, VisaProjectDoc } from '@/types';
@@ -199,6 +200,7 @@ export function VisaResultsDashboard({ onOpenProject }: Props) {
         </Paper>
       ) : (
         <Stack spacing={2}>
+          <VisaAdvancedStats />
           {/* Theo quốc gia */}
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography fontWeight={800} sx={{ mb: 1.5 }}>📊 Kết quả theo quốc gia</Typography>
