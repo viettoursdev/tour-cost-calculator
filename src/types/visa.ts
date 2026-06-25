@@ -176,6 +176,7 @@ export interface VisaProjectDoc {
   documentsSummary: string;           // hồ sơ bao gồm (mô tả ngắn)
   linkedQuoteId: string | null;       // link báo giá tour
   linkedQuoteName: string;
+  tourProfileId?: string | null;      // gắn TRỰC TIẾP vào hồ sơ tour (id)
   linkedProcIds: string[];            // hồ sơ VisaProc liên kết (Đợt 3)
   attachments: FileAttachment[];      // hồ sơ sao lưu (Đợt 3)
   // Số liệu khách

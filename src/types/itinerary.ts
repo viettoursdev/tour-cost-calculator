@@ -106,6 +106,7 @@ export interface Itinerary {
   excludes: string[];
   linkedQuoteId: string | null;
   linkedQuoteName: string;
+  tourProfileId?: string | null;
   /** Thông tin vận hành cho file Itinerary Execution (optional). */
   exec?: ExecData;
   createdAt?: string;
@@ -138,6 +139,7 @@ export interface ItineraryIndexEntry {
   country?: string;
   linkedQuoteId?: string | null;
   linkedQuoteName: string;
+  tourProfileId?: string | null;
   createdAt?: string;
   createdBy?: string;
   updatedAt: string;

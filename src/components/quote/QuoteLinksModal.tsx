@@ -24,6 +24,7 @@ type Props = { open: boolean; onClose: () => void };
 
 export function QuoteLinksModal({ open, onClose }: Props) {
   const qid = useQuoteStore((s) => s.draft.currentQuoteId);
+  const tpid = useQuoteStore((s) => s.draft.tourProfileId);
   const qname = useQuoteStore((s) => s.draft.info.name) || '(báo giá chưa đặt tên)';
   const template = useQuoteStore((s) => s.draft.template);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
@@ -65,19 +66,20 @@ export function QuoteLinksModal({ open, onClose }: Props) {
   // ── Link / unlink writers ──
   const linkMenu = (id: string, on: boolean) => run(async () => {
     const full = await useMenuStore.getState().load(id);
-    if (full) await useMenuStore.getState().save({ ...full, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '' }, savedBy);
+    // Link vào báo giá cũng gắn LUÔN vào hồ sơ tour của báo giá (đọc kép sau này).
+    if (full) await useMenuStore.getState().save({ ...full, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '', tourProfileId: on ? (tpid ?? null) : null }, savedBy);
   });
   const linkItin = (id: string, on: boolean) => run(async () => {
     const full = await useItineraryStore.getState().load(id);
-    if (full) await useItineraryStore.getState().save({ ...full, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '' }, savedBy);
+    if (full) await useItineraryStore.getState().save({ ...full, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '', tourProfileId: on ? (tpid ?? null) : null }, savedBy);
   });
   const linkVisa = (id: string, on: boolean) => run(async () => {
     const p = visaProjects.find((x) => x.id === id);
-    if (p) await useVisaProjectStore.getState().save({ ...p, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '' });
+    if (p) await useVisaProjectStore.getState().save({ ...p, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '', tourProfileId: on ? (tpid ?? null) : null });
   });
   const linkContract = (id: string, on: boolean) => run(async () => {
     const c = contracts.find((x) => x.id === id);
-    if (c) await useContractStore.getState().save({ ...c, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '' });
+    if (c) await useContractStore.getState().save({ ...c, linkedQuoteId: on ? qid : null, linkedQuoteName: on ? qname : '', tourProfileId: on ? (tpid ?? null) : null });
   });
   const linkDmc = (cloudId: string, on: boolean) => run(async () => {
     await sbSetDMCEntryLink(cloudId, {

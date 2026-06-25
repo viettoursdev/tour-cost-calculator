@@ -814,6 +814,7 @@ function rowToContract(
     _tourKey: (r.tour_key as string) ?? undefined,
     linkedQuoteId: (r.linked_quote_id as string) ?? undefined,
     linkedQuoteName: (r.linked_quote_name as string) ?? undefined,
+    tourProfileId: (r.tour_profile_id as string) ?? undefined,
   };
 }
 
@@ -906,6 +907,7 @@ export async function sbPushContracts(
           tour_key: contract._tourKey ?? null,
           linked_quote_id: contract.linkedQuoteId ?? null,
           linked_quote_name: contract.linkedQuoteName ?? null,
+          tour_profile_id: contract.tourProfileId ?? null,
           created_by_name: contract.createdBy,
           created_at: contract.createdAt,
           ...stamp,
@@ -1622,6 +1624,7 @@ async function assembleVisaProjects(client: SupabaseClient): Promise<VisaProject
       documentsSummary: (r.documents_summary as string) ?? '',
       linkedQuoteId: (r.linked_quote_id as string) ?? null,
       linkedQuoteName: (r.linked_quote_name as string) ?? '',
+      tourProfileId: (r.tour_profile_id as string) ?? null,
       linkedProcIds: (r.linked_proc_ids as string[]) ?? [],
       attachments: attMap.get(legacyId) ?? [],
       applyCount: (r.apply_count as number) ?? 0,
@@ -1676,6 +1679,7 @@ export async function sbPushVisaProjects(
       documents_summary: p.documentsSummary ?? '',
       linked_quote_id: p.linkedQuoteId ?? null,
       linked_quote_name: p.linkedQuoteName ?? '',
+      tour_profile_id: p.tourProfileId ?? null,
       linked_proc_ids: p.linkedProcIds ?? [],
       apply_count: p.applyCount ?? 0,
       passed_count: p.passedCount ?? 0,
@@ -1755,6 +1759,7 @@ const rowToItineraryIndex = (r: Record<string, unknown>): ItineraryIndexEntry =>
   nights: r.nights as number,
   linkedQuoteId: (r.linked_quote_id as string) ?? null,
   linkedQuoteName: (r.linked_quote_name as string) ?? '',
+  tourProfileId: (r.tour_profile_id as string) ?? null,
   createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
   createdBy: (r.created_by_name as string) ?? undefined,
   updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : '',
@@ -1774,7 +1779,7 @@ export function sbSubscribeItineraries(
     async (cl) => {
       const { data, error } = await cl
         .from('itineraries')
-        .select('id, legacy_id, code, title, destination, days, nights, linked_quote_id, linked_quote_name, created_at, created_by_name, updated_at, updated_by_name')
+        .select('id, legacy_id, code, title, destination, days, nights, linked_quote_id, linked_quote_name, tour_profile_id, created_at, created_by_name, updated_at, updated_by_name')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []).map(rowToItineraryIndex);
@@ -1830,6 +1835,7 @@ export async function sbGetItinerary(
     exec: (row.exec as Itinerary['exec']) ?? undefined,
     linkedQuoteId: (row.linked_quote_id as string) ?? null,
     linkedQuoteName: (row.linked_quote_name as string) ?? '',
+    tourProfileId: (row.tour_profile_id as string) ?? null,
     schedule: (days ?? []).map(rowToDay),
     flights: (flights ?? []).map(rowToFlight),
     createdAt: row.created_at ? new Date(row.created_at as string).toISOString() : undefined,
@@ -1869,6 +1875,7 @@ export async function sbSaveItinerary(
         start_date: itin.startDate ?? null,
         linked_quote_id: itin.linkedQuoteId ?? null,
         linked_quote_name: itin.linkedQuoteName ?? '',
+        tour_profile_id: itin.tourProfileId ?? null,
         created_by_name: itin.createdBy ?? savedBy,
         created_at: itin.createdAt,
         updated_at: now,
@@ -1960,6 +1967,7 @@ const rowToMenuIndex = (r: Record<string, unknown>): MenuIndexEntry => ({
   linkedItineraryName: (r.linked_itinerary_name as string) ?? '',
   linkedQuoteId: (r.linked_quote_id as string) ?? null,
   linkedQuoteName: (r.linked_quote_name as string) ?? '',
+  tourProfileId: (r.tour_profile_id as string) ?? null,
   createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : undefined,
   createdBy: (r.created_by_name as string) ?? undefined,
   updatedAt: r.updated_at ? new Date(r.updated_at as string).toISOString() : '',
@@ -2117,7 +2125,7 @@ export function sbSubscribeMenus(
       const { data, error } = await cl
         .from('menus')
         .select(
-          'id, legacy_id, code, title, destination, days, linked_itinerary_id, linked_itinerary_name, linked_quote_id, linked_quote_name, created_at, created_by_name, updated_at, updated_by_name',
+          'id, legacy_id, code, title, destination, days, linked_itinerary_id, linked_itinerary_name, linked_quote_id, linked_quote_name, tour_profile_id, created_at, created_by_name, updated_at, updated_by_name',
         )
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -2163,6 +2171,7 @@ export async function sbGetMenu(
     linkedItineraryName: (row.linked_itinerary_name as string) ?? '',
     linkedQuoteId: (row.linked_quote_id as string) ?? null,
     linkedQuoteName: (row.linked_quote_name as string) ?? '',
+    tourProfileId: (row.tour_profile_id as string) ?? null,
     schedule: (days ?? []).map(rowToMenuDay),
     createdAt: row.created_at ? new Date(row.created_at as string).toISOString() : undefined,
     createdBy: (row.created_by_name as string) ?? undefined,
@@ -2198,6 +2207,7 @@ export async function sbSaveMenu(
         linked_itinerary_name: m.linkedItineraryName ?? '',
         linked_quote_id: m.linkedQuoteId ?? null,
         linked_quote_name: m.linkedQuoteName ?? '',
+        tour_profile_id: m.tourProfileId ?? null,
         created_at: m.createdAt ?? now,
         created_by_name: m.createdBy ?? savedBy,
         updated_at: now,

@@ -57,4 +57,6 @@ export type Contract = {
   /** Liên kết tới báo giá tour (cloudId) — mở chéo 2 chiều. */
   linkedQuoteId?: string | null;
   linkedQuoteName?: string;
+  /** Gắn TRỰC TIẾP vào hồ sơ tour (id) — bền hơn link qua báo giá. */
+  tourProfileId?: string | null;
 };

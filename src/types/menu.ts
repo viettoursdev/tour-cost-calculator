@@ -67,6 +67,7 @@ export interface Menu {
   linkedItineraryName: string;
   linkedQuoteId: string | null;
   linkedQuoteName: string;
+  tourProfileId?: string | null;
   schedule: MenuDay[];
   createdAt?: string;
   createdBy?: string;
@@ -91,6 +92,7 @@ export interface MenuIndexEntry {
   linkedItineraryName: string;
   linkedQuoteId?: string | null;
   linkedQuoteName: string;
+  tourProfileId?: string | null;
   createdAt?: string;
   createdBy?: string;
   updatedAt: string;

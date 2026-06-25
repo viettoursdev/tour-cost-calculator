@@ -96,14 +96,17 @@ export function TourProfilesView() {
     return dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate });
   };
 
-  // Liên kết của hồ sơ = gom theo MỌI báo giá thuộc hồ sơ (đọc gián tiếp qua linkedQuoteId).
+  // Liên kết của hồ sơ — ĐỌC KÉP: ưu tiên tourProfileId trực tiếp, fallback suy qua
+  // báo giá thuộc hồ sơ (entity.linkedQuoteId ∈ cloudId các báo giá).
   const linksOf = (p: TourProfile): ProfileLinks => {
     const ids = new Set((quotesByProfile.get(p.id) ?? []).map((q) => q.cloudId));
+    const belongs = (e: { tourProfileId?: string | null; linkedQuoteId?: string | null }): boolean =>
+      e.tourProfileId === p.id || (!!e.linkedQuoteId && ids.has(e.linkedQuoteId));
     return {
-      contract: contracts.filter((c) => c.linkedQuoteId && ids.has(c.linkedQuoteId)).length,
-      visa: visaProjects.filter((v) => v.linkedQuoteId && ids.has(v.linkedQuoteId)).length,
-      menu: menus.filter((m) => m.linkedQuoteId && ids.has(m.linkedQuoteId)).length,
-      itinerary: itineraries.filter((i) => i.linkedQuoteId && ids.has(i.linkedQuoteId)).length,
+      contract: contracts.filter(belongs).length,
+      visa: visaProjects.filter(belongs).length,
+      menu: menus.filter(belongs).length,
+      itinerary: itineraries.filter(belongs).length,
     };
   };
 
@@ -153,6 +156,7 @@ export function TourProfilesView() {
           )}
         </Stack>
         <DealCockpit />
+        {p && <DirectLinkPanel profile={p} />}
       </Box>
     );
   }
@@ -298,6 +302,98 @@ function Meta({ label, value }: { label: string; value: string }) {
     <Box>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.1 }}>{label}</Typography>
       <Typography fontSize={13} fontWeight={700} noWrap>{value}</Typography>
+    </Box>
+  );
+}
+
+type LinkItem = { id: string; label: string; sub?: string; tourProfileId?: string | null };
+
+/** Gắn TRỰC TIẾP thực đơn/chương trình/visa/HĐ vào hồ sơ (set tourProfileId) —
+ *  dùng được kể cả khi tour CHƯA có báo giá nào. */
+function DirectLinkPanel({ profile }: { profile: TourProfile }) {
+  const user = useAuthStore((s) => s.currentUser);
+  const savedBy = user ? `${user.name} (${user.role})` : '';
+  const menus = useMenuStore((s) => s.list);
+  const itineraries = useItineraryStore((s) => s.list);
+  const visaProjects = useVisaProjectStore((s) => s.projects);
+  const contracts = useContractStore((s) => s.contracts);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try { await fn(); } catch (e) { window.alert('❌ ' + (e as Error).message); } finally { setBusy(false); }
+  };
+
+  const setMenu = (id: string, on: boolean) => run(async () => {
+    const full = await useMenuStore.getState().load(id);
+    if (full) await useMenuStore.getState().save({ ...full, tourProfileId: on ? profile.id : null }, savedBy);
+  });
+  const setItin = (id: string, on: boolean) => run(async () => {
+    const full = await useItineraryStore.getState().load(id);
+    if (full) await useItineraryStore.getState().save({ ...full, tourProfileId: on ? profile.id : null }, savedBy);
+  });
+  const setVisa = (id: string, on: boolean) => run(async () => {
+    const p = visaProjects.find((x) => x.id === id);
+    if (p) await useVisaProjectStore.getState().save({ ...p, tourProfileId: on ? profile.id : null });
+  });
+  const setContract = (id: string, on: boolean) => run(async () => {
+    const c = contracts.find((x) => x.id === id);
+    if (c) await useContractStore.getState().save({ ...c, tourProfileId: on ? profile.id : null });
+  });
+
+  const sections: { title: string; items: LinkItem[]; set: (id: string, on: boolean) => void }[] = [
+    { title: '🍽️ Thực đơn', set: setMenu, items: menus.map((m) => ({ id: m.id, label: m.title, sub: m.code, tourProfileId: m.tourProfileId })) },
+    { title: '🗺️ Chương trình tour', set: setItin, items: itineraries.map((i) => ({ id: i.id, label: i.title, sub: i.code, tourProfileId: i.tourProfileId })) },
+    { title: '🛂 Dự án visa', set: setVisa, items: visaProjects.map((v) => ({ id: v.id, label: v.name || v.code, sub: v.country, tourProfileId: v.tourProfileId })) },
+    { title: '📜 Hợp đồng', set: setContract, items: contracts.map((c) => ({ id: c.id, label: c.tourName || c.contractNo, sub: c.contractNo, tourProfileId: c.tourProfileId })) },
+  ];
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }}>
+      <Typography fontWeight={800} fontSize={13.5} sx={{ mb: 0.5 }}>🔗 Gắn liên kết trực tiếp vào hồ sơ</Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        Gắn thực đơn / chương trình / visa / hợp đồng thẳng vào hồ sơ tour — dùng được kể cả khi chưa có báo giá.
+      </Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+        {sections.map((s) => (
+          <DirectLinkSection key={s.title} title={s.title} profileId={profile.id} items={s.items} busy={busy} onSet={s.set} />
+        ))}
+      </Box>
+    </Paper>
+  );
+}
+
+function DirectLinkSection({ title, profileId, items, busy, onSet }: {
+  title: string; profileId: string; items: LinkItem[]; busy: boolean; onSet: (id: string, on: boolean) => void;
+}) {
+  const [pick, setPick] = useState<LinkItem | null>(null);
+  const linked = items.filter((i) => i.tourProfileId === profileId);
+  const options = items.filter((i) => i.tourProfileId !== profileId);
+  return (
+    <Box>
+      <Typography fontWeight={700} fontSize={12.5} sx={{ mb: 0.5 }}>{title}
+        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>({linked.length})</Typography>
+      </Typography>
+      <Stack spacing={0.5} sx={{ mb: 0.75 }}>
+        {linked.map((o) => (
+          <Stack key={o.id} direction="row" alignItems="center" spacing={1}
+            sx={{ border: '1px solid rgba(13,122,106,0.25)', borderRadius: 1.5, px: 1, py: 0.25, bgcolor: 'rgba(13,122,106,0.06)' }}>
+            <Typography fontSize={12.5} fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>{o.label}</Typography>
+            <Button size="small" color="error" disabled={busy} onClick={() => onSet(o.id, false)} sx={{ minWidth: 0 }}>Gỡ</Button>
+          </Stack>
+        ))}
+      </Stack>
+      <Stack direction="row" spacing={0.5}>
+        <Autocomplete
+          size="small" sx={{ flex: 1 }} options={options} value={pick}
+          onChange={(_, v) => setPick(v)}
+          getOptionLabel={(o) => o.label}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          renderOption={(props, o) => (<li {...props} key={o.id}><Box><Typography variant="body2">{o.label}</Typography>{o.sub && <Typography variant="caption" color="text.secondary">{o.sub}</Typography>}</Box></li>)}
+          renderInput={(pr) => <TextField {...pr} placeholder="Chọn để gắn…" />}
+        />
+        <Button size="small" variant="outlined" disabled={busy || !pick} onClick={() => { if (pick) { onSet(pick.id, true); setPick(null); } }}>+ Gắn</Button>
+      </Stack>
     </Box>
   );
 }
