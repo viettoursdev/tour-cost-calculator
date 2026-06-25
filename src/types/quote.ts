@@ -1,5 +1,6 @@
 import type { Department } from './user';
 import type { ApplicantDoc, PassportRecord } from './visa';
+import type { ContractCancel } from './contract';
 
 export type CategoryId =
   | 'flight' | 'hotel' | 'transport' | 'meal' | 'sight' | 'meeting'
@@ -272,6 +273,7 @@ export type QuoteDraft = {
   rateDate?: string;
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm
+  cancellation?: ContractCancel[]; // Chính sách huỷ tour (mốc thời gian → % phạt)
   payments?: QuotePayment[]; // Thông tin thanh toán theo đợt
   pricingOptions?: QuotePricingOptions; // Phụ thu / trẻ em / tips…
   // Multi group-size mode. When groups is present (length ≥ 1), the top-level

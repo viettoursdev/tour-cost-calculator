@@ -22,7 +22,7 @@ import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { useTourProfileStore } from './tourProfileStore';
 import { useTodoStore } from './todoStore';
 import type {
-  CategoryId, CloudQuoteEntry, Collaborator, DmcMargin, FileAttachment, Item, OutputCurrency,
+  CategoryId, CloudQuoteEntry, Collaborator, ContractCancel, DmcMargin, FileAttachment, Item, OutputCurrency,
   NewQuoteMeta, Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, TourAdvance, User, WorkflowStep,
 } from '@/types';
 
@@ -113,6 +113,7 @@ type QuoteState = {
   setPassengers: (v: Passenger[]) => void;
   setCatOrder: (ids: CategoryId[]) => void;
   setExclusions: (v: string[]) => void;
+  setCancellation: (v: ContractCancel[]) => void;
   setPayments: (v: QuotePayment[]) => void;
   setPricingOptions: (v: QuotePricingOptions) => void;
   addGroup: () => void;
@@ -480,6 +481,7 @@ export const useQuoteStore = create<QuoteState>()(
         setPassengers: (v) => set((s) => ({ draft: { ...s.draft, passengers: v } })),
         setCatOrder: (ids) => set((s) => ({ draft: { ...s.draft, catOrder: ids } })),
         setExclusions: (v) => set((s) => ({ draft: { ...s.draft, exclusions: v } })),
+        setCancellation: (v) => set((s) => ({ draft: { ...s.draft, cancellation: v } })),
         setPayments: (v) => set((s) => ({ draft: { ...s.draft, payments: v } })),
         setPricingOptions: (v) => set((s) => ({ draft: { ...s.draft, pricingOptions: v } })),
 
@@ -696,6 +698,7 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.rateDate ? { rateDate: data.rateDate } : {}),
               ...(data.inclusions ? { inclusions: data.inclusions } : {}),
               ...(data.exclusions ? { exclusions: data.exclusions } : {}),
+              ...(data.cancellation ? { cancellation: data.cancellation } : {}),
               ...(data.payments ? { payments: data.payments } : {}),
               ...(data.pricingOptions ? { pricingOptions: data.pricingOptions } : {}),
               ...(data.flights ? { flights: data.flights } : {}),

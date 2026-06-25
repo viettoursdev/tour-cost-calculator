@@ -65,6 +65,9 @@ export function buildPublicQuote(opts: {
     ...(rateNote ? { rateNote } : {}),
     inclusions: (draft.inclusions ?? []).filter(Boolean),
     exclusions: (draft.exclusions ?? []).filter(Boolean),
+    ...((draft.cancellation ?? []).some((c) => c.when.trim() || c.penalty)
+      ? { cancellation: (draft.cancellation ?? []).filter((c) => c.when.trim() || c.penalty).map((c) => ({ when: c.when, penalty: c.penalty })) }
+      : {}),
     payments: (draft.payments ?? []).map((p) => ({ label: p.label, amount: p.amount, note: p.note })),
     ...(opts.itinerary && opts.itinerary.length ? { itinerary: opts.itinerary } : {}),
     ...(opts.note ? { note: opts.note } : {}),

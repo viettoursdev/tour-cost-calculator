@@ -3,12 +3,12 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { DEFAULT_INCLUDES, DEFAULT_EXCLUDES, DEFAULT_PAYMENTS } from '@/components/contract/constants';
+import { DEFAULT_INCLUDES, DEFAULT_EXCLUDES, DEFAULT_PAYMENTS, DEFAULT_CANCELS } from '@/components/contract/constants';
 import {
   DEFAULT_VALID_DAYS, addDaysISO, effectiveValidUntil, fmtDateVN, isoDate, validityStatus,
 } from './quoteValidity';
 import { LEGACY } from '@/theme';
-import type { QuotePayment } from '@/types';
+import type { ContractCancel, QuotePayment } from '@/types';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -131,6 +131,56 @@ function PaymentEditor({
   );
 }
 
+/** Chính sách huỷ tour (mốc thời gian → % phạt). Tái dùng cấu trúc của hợp đồng. */
+function CancellationEditor({
+  cancels, onChange,
+}: {
+  cancels: ContractCancel[];
+  onChange: (next: ContractCancel[]) => void;
+}) {
+  const setAt = (i: number, patch: Partial<ContractCancel>) =>
+    onChange(cancels.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const removeAt = (i: number) => onChange(cancels.filter((_, j) => j !== i));
+  const add = () => onChange([...cancels, { when: '', penalty: 0 }]);
+  const seed = () => onChange(DEFAULT_CANCELS.map((c) => ({ ...c })));
+
+  return (
+    <Stack spacing={1.25}>
+      {cancels.length === 0 && (
+        <Typography fontSize={13} sx={{ color: 'rgba(15,58,74,0.4)', fontStyle: 'italic' }}>
+          Chưa có mốc huỷ nào.
+        </Typography>
+      )}
+      {cancels.map((c, i) => (
+        <Stack key={i} direction="row" spacing={1} alignItems="center">
+          <TextField
+            size="small" label="Mốc huỷ" value={c.when} sx={{ flex: 1 }}
+            placeholder="vd: Trong vòng 15 ngày trước khởi hành"
+            onChange={(e) => setAt(i, { when: e.target.value })}
+          />
+          <TextField
+            size="small" label="Phạt (%)" type="number" value={c.penalty || ''}
+            onChange={(e) => setAt(i, { penalty: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
+            sx={{ width: 110 }}
+            slotProps={{ htmlInput: { min: 0, max: 100, style: { textAlign: 'right' } } }}
+          />
+          <IconButton size="small" color="error" onClick={() => removeAt(i)}>
+            <DeleteOutlineIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      ))}
+      <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+        <Button size="small" startIcon={<AddIcon />} onClick={add} sx={{ color: '#dc3250' }}>
+          Thêm mốc huỷ
+        </Button>
+        <Button size="small" startIcon={<AutoFixHighIcon />} onClick={seed} sx={{ color: 'rgba(15,58,74,0.55)' }}>
+          Dùng mẫu mặc định
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
+
 /** Hiệu lực báo giá (ngày hết hạn hướng khách) + đóng dấu ngày tỷ giá. */
 function ValidityEditor() {
   const validUntil = useQuoteStore((s) => s.draft.validUntil);
@@ -192,9 +242,11 @@ export function QuoteTermsEditor() {
   const inclusions = useQuoteStore((s) => s.draft.inclusions);
   const exclusions = useQuoteStore((s) => s.draft.exclusions);
   const payments = useQuoteStore((s) => s.draft.payments);
+  const cancellation = useQuoteStore((s) => s.draft.cancellation);
   const setInclusions = useQuoteStore((s) => s.setInclusions);
   const setExclusions = useQuoteStore((s) => s.setExclusions);
   const setPayments = useQuoteStore((s) => s.setPayments);
+  const setCancellation = useQuoteStore((s) => s.setCancellation);
 
   return (
     <Box sx={{ mt: 3 }}>
@@ -232,6 +284,13 @@ export function QuoteTermsEditor() {
         <SectionLabel>🧾 Thông tin thanh toán</SectionLabel>
         <Paper variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
           <PaymentEditor payments={payments ?? []} onChange={setPayments} />
+        </Paper>
+      </Box>
+
+      <Box sx={{ mt: 3 }}>
+        <SectionLabel>🚷 Chính sách huỷ tour</SectionLabel>
+        <Paper variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+          <CancellationEditor cancels={cancellation ?? []} onChange={setCancellation} />
         </Paper>
       </Box>
     </Box>

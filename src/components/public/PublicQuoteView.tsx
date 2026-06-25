@@ -105,6 +105,22 @@ export function PublicQuoteView({ token }: { token: string }) {
             </Box>
           )}
 
+          {doc.cancellation && doc.cancellation.length > 0 && (
+            <Box sx={{ mt: 2.5 }}>
+              <Typography fontWeight={800} sx={{ mb: 1 }}>🚷 Chính sách huỷ tour</Typography>
+              <Stack spacing={0.75}>
+                {doc.cancellation.map((c, i) => (
+                  <Paper key={i} variant="outlined" sx={{ p: 1.25 }}>
+                    <Stack direction="row" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+                      <Typography fontSize={14}>{c.when}</Typography>
+                      <Typography fontWeight={700} fontSize={14} color="#dc3250">Phạt {c.penalty}%</Typography>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
           {doc.itinerary && doc.itinerary.length > 0 && (
             <Box sx={{ mt: 2.5 }}>
               <Typography fontWeight={800} sx={{ mb: 1 }}>🗺️ Lịch trình tóm tắt</Typography>

@@ -15,6 +15,11 @@ export interface PublicQuotePayment {
   note: string;
 }
 
+export interface PublicQuoteCancel {
+  when: string;
+  penalty: number;
+}
+
 export interface PublicQuoteAcceptance {
   name?: string;
   contact?: string;
@@ -43,6 +48,7 @@ export interface PublicQuoteDoc {
   rateNote?: string;
   inclusions: string[];
   exclusions: string[];
+  cancellation?: PublicQuoteCancel[];
   payments: PublicQuotePayment[];
   itinerary?: PublicQuoteItinDay[];
   note?: string;

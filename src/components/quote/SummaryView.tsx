@@ -183,6 +183,15 @@ export function SummaryView() {
                   {fmtVND(totalProfit)}
                 </Typography>
               </Stack>
+              {/* Markup (trên giá vốn) vs Biên lợi gộp (trên doanh thu chưa VAT) */}
+              <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
+                <Typography fontSize={11} sx={{ color: 'rgba(15,58,74,0.4)' }}>
+                  Markup {margin}% trên giá vốn
+                </Typography>
+                <Typography fontSize={11} sx={{ color: 'rgba(15,58,74,0.4)' }}>
+                  Biên lợi gộp {basis + totalProfit > 0 ? Math.round((totalProfit / (basis + totalProfit)) * 1000) / 10 : 0}% trên doanh thu
+                </Typography>
+              </Stack>
             </Box>
 
             {/* VAT */}

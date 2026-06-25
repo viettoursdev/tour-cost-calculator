@@ -34,6 +34,7 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
   const inclusions = (draft.inclusions ?? []).filter((s) => s.trim());
   const exclusions = (draft.exclusions ?? []).filter((s) => s.trim());
   const payments = (draft.payments ?? []).filter((p) => p.label.trim() || p.amount || p.note.trim());
+  const cancels = (draft.cancellation ?? []).filter((c) => c.when.trim() || c.penalty);
 
   // Hiệu lực báo giá (hạn đặt tay hoặc mặc định N ngày) + dấu tỷ giá áp dụng.
   const validUntil = effectiveValidUntil(draft.validUntil, isoDate(new Date()));
@@ -198,6 +199,21 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
                 {p.amount ? <span style={{ color: TEAL }}>{fmtVND(p.amount)}</span> : null}
               </div>
               {p.note.trim() && <div style={{ paddingLeft: 14, color: '#7a828a', fontSize: 12 }}>{p.note}</div>}
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Cancellation policy */}
+      {cancels.length > 0 && (
+        <>
+          <div style={{ color: '#dc3250', fontWeight: 800, fontSize: 14, borderBottom: '2px solid #dc3250', paddingBottom: 4, margin: '14px 0 8px' }}>
+            🚷 CHÍNH SÁCH HUỶ TOUR / CANCELLATION POLICY
+          </div>
+          {cancels.map((c, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: 14, color: '#3a4650' }}>
+              <span>• {c.when}</span>
+              <span style={{ color: '#dc3250', fontWeight: 700, whiteSpace: 'nowrap', paddingLeft: 10 }}>Phạt {c.penalty}%</span>
             </div>
           ))}
         </>
