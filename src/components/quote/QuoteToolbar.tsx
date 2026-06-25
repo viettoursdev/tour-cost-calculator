@@ -718,21 +718,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           ref={excelInput} type="file" accept=".xlsx"
           hidden onChange={handleImportExcel}
         />
-        {template && template !== 'dmc' && currentUser && (
-          <Box sx={{ position: 'fixed', left: -99999, top: 0, zIndex: -1, pointerEvents: 'none' }} aria-hidden>
-            <QuotePrintable
-              ref={printRef}
-              draft={draft}
-              savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
-            />
-            <QuotePrintable
-              ref={printRefPkg}
-              pkg
-              draft={draft}
-              savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
-            />
-          </Box>
-        )}
         <Tooltip title="Trạng thái báo giá">
           <Button
             size="small" variant="contained"
@@ -800,6 +785,27 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           </IconButton>
         </Tooltip>
       </Toolbar>
+
+      {/* Bản in ẩn (chụp ảnh để xuất PDF). Bọc trong khung 0×0 + overflow:hidden:
+          AppBar có `backdrop-filter` nên trở thành containing block của phần tử
+          `position: fixed` này → nếu để khung cao thật, bản in sẽ cộng vào chiều cao
+          cuộn của trang và sinh khoảng trắng cuộn thừa. Khung 0×0 cắt hết nội dung
+          khỏi luồng cuộn; html2canvas vẫn chụp đúng vì đọc thẳng node bản in bên trong. */}
+      {template && template !== 'dmc' && currentUser && (
+        <Box sx={{ position: 'fixed', left: -99999, top: 0, width: 0, height: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none' }} aria-hidden>
+          <QuotePrintable
+            ref={printRef}
+            draft={draft}
+            savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
+          />
+          <QuotePrintable
+            ref={printRefPkg}
+            pkg
+            draft={draft}
+            savedBy={{ name: currentUser.name, role: currentUser.role, email: currentUser.email, phone: currentUser.phone }}
+          />
+        </Box>
+      )}
 
       <QuoteLinksModal open={linksOpen} onClose={() => setLinksOpen(false)} />
       <VersionHistoryModal open={versionsOpen} onClose={() => setVersionsOpen(false)} />
