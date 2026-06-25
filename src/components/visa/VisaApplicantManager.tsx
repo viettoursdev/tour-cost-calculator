@@ -9,8 +9,10 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
+import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import HistoryIcon from '@mui/icons-material/History';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import SaveIcon from '@mui/icons-material/Save';
@@ -26,6 +28,7 @@ import {
 import { GuestDashboard, GuestListTable } from '../quote/GuestListTable';
 import { RoomingPanel } from '../quote/RoomingPanel';
 import { VisaApplicantTimeline } from './VisaApplicantTimeline';
+import { BulkStatusDialog, ReminderDialog } from './VisaApplicantActions';
 import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, passengersToApplicants } from './guestAdapters';
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
@@ -125,6 +128,8 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [guestSeed, setGuestSeed] = useState<GuestKey | null>(null);
   const [view, setView] = useState<'list' | 'timeline'>('list');
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -281,6 +286,12 @@ export function VisaApplicantManager({ project, onClose }: Props) {
             <MenuItem onClick={() => void exportTimeline('excel')}>📊 Excel tình trạng & timeline</MenuItem>
             <MenuItem onClick={() => void exportTimeline('pdf')}>📄 PDF tình trạng & timeline</MenuItem>
           </Menu>
+          <Button color="inherit" variant="outlined" startIcon={<PlaylistAddCheckIcon />} onClick={() => setBulkOpen(true)} disabled={list.length === 0}>
+            Đổi trạng thái loạt
+          </Button>
+          <Button color="inherit" variant="outlined" startIcon={<CampaignOutlinedIcon />} onClick={() => setReminderOpen(true)} disabled={list.length === 0}>
+            Nhắc khách
+          </Button>
           <Button color="inherit" variant="outlined" startIcon={<PlaylistRemoveIcon />} onClick={onDedupe}>
             Loại trùng
           </Button>
@@ -410,6 +421,9 @@ export function VisaApplicantManager({ project, onClose }: Props) {
           </>
         )}
       </Box>
+
+      {bulkOpen && <BulkStatusDialog applicants={list} onApply={setList} onClose={() => setBulkOpen(false)} />}
+      {reminderOpen && <ReminderDialog project={project} applicants={list} onClose={() => setReminderOpen(false)} />}
 
       <Dialog open={!!guestSeed} onClose={() => setGuestSeed(null)} fullWidth maxWidth="md">
         <DialogTitle sx={{ pr: 6 }}>
