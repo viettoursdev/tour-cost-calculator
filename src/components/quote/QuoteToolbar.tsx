@@ -71,7 +71,8 @@ import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
 import { RATE_CATEGORIES, isRateCategoryVisible } from '@/components/rates/constants';
-import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES, promptLossReason } from './constants';
+import { TEMPLATES, QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
+import { LossReasonDialog } from './LossReasonDialog';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
 import type { Contract, OutputCurrency, QuoteStatus, Todo } from '@/types';
@@ -202,6 +203,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const [linksOpen, setLinksOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [statusAnchor, setStatusAnchor] = useState<HTMLElement | null>(null);
+  const [lossPending, setLossPending] = useState<QuoteStatus | null>(null);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const undoDraft = useQuoteStore((s) => s.undoDraft);
   const redoDraft = useQuoteStore((s) => s.redoDraft);
@@ -749,9 +751,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
               key={st} selected={st === status}
               onClick={() => {
                 if (LOSS_STATUSES.includes(st)) {
-                  const reason = promptLossReason(draft.lossReason);
-                  if (reason === null) { setStatusAnchor(null); return; }
-                  setStatus(st, reason);
+                  setLossPending(st);
                 } else setStatus(st);
                 setStatusAnchor(null);
               }}
@@ -761,6 +761,12 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
             </MenuItem>
           ))}
         </Menu>
+        <LossReasonDialog
+          open={!!lossPending}
+          current={draft.lossReason}
+          onClose={() => setLossPending(null)}
+          onConfirm={(reason) => { if (lossPending) setStatus(lossPending, reason); setLossPending(null); }}
+        />
         <UndoRedoButtons undo={undoDraft} redo={redoDraft} canUndo={canUndo} canRedo={canRedo} />
         {/* Trạng thái đồng bộ cloud được gộp thẳng vào nút Lưu (chấm màu): cam = chưa
             lưu, xanh = đã đồng bộ — bỏ dòng chữ "Chưa lưu/Đã lưu" rời rạc cho gọn. */}

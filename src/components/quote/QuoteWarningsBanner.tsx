@@ -8,13 +8,16 @@ type Props = {
   cats: CatDef[];
   items: Partial<Record<CategoryId, Item[]>>;
   catEnabled: Partial<Record<CategoryId, boolean>>;
+  /** Tổng giá để cảnh báo định giá (chưa có lợi nhuận / bán dưới giá vốn). */
+  pricing?: { totalCost: number; totalProfit: number; grandTotal: number };
 };
 
 /**
- * Banner tổng kiểm tra đầu trang Chi phí: gộp cảnh báo toàn báo giá + hạng mục
- * "bật nhưng trống". Bấm chip → cuộn tới hạng mục tương ứng.
+ * Banner tổng kiểm tra đầu trang Chi phí: cảnh báo định giá (chưa có lợi nhuận /
+ * dưới giá vốn) + cảnh báo nhập liệu toàn báo giá + hạng mục "bật nhưng trống".
+ * Bấm chip → cuộn tới hạng mục tương ứng.
  */
-export function QuoteWarningsBanner({ cats, items, catEnabled }: Props) {
+export function QuoteWarningsBanner({ cats, items, catEnabled, pricing }: Props) {
   const rows = cats.map((cat) => {
     const arr = items[cat.id as CategoryId] ?? [];
     const dup = duplicateNames(arr);
@@ -26,10 +29,31 @@ export function QuoteWarningsBanner({ cats, items, catEnabled }: Props) {
     return { cat, count, emptyEnabled };
   }).filter((r) => r.count > 0 || r.emptyEnabled);
 
-  if (rows.length === 0) return null;
+  // Cảnh báo định giá (đỏ, nghiêm trọng): chỉ khi có chi phí thực.
+  const priceMsgs: string[] = [];
+  if (pricing && pricing.totalCost > 0) {
+    if (pricing.grandTotal < pricing.totalCost) priceMsgs.push('Giá bán đang THẤP HƠN giá vốn — kiểm tra lại margin/làm tròn.');
+    else if (pricing.totalProfit <= 0) priceMsgs.push('Báo giá chưa có lợi nhuận (margin 0%) — xác nhận lại trước khi gửi.');
+  }
+
+  if (rows.length === 0 && priceMsgs.length === 0) return null;
   const total = rows.reduce((s, r) => s + r.count, 0);
 
   return (
+    <>
+      {priceMsgs.length > 0 && (
+        <Paper
+          variant="outlined"
+          sx={{ mb: 1.5, p: 1.25, borderRadius: 2, borderColor: 'rgba(220,50,80,0.6)', background: 'rgba(220,50,80,0.08)' }}
+        >
+          {priceMsgs.map((m) => (
+            <Typography key={m} sx={{ fontWeight: 800, fontSize: 13.5, color: '#b01030' }}>
+              ⛔ {m}
+            </Typography>
+          ))}
+        </Paper>
+      )}
+      {rows.length > 0 && (
     <Paper
       variant="outlined"
       sx={{ mb: 1.5, p: 1.25, borderRadius: 2, borderColor: 'rgba(245,166,35,0.6)', background: 'rgba(245,166,35,0.08)' }}
@@ -58,5 +82,7 @@ export function QuoteWarningsBanner({ cats, items, catEnabled }: Props) {
         ))}
       </Stack>
     </Paper>
+      )}
+    </>
   );
 }

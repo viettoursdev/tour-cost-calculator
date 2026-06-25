@@ -8,7 +8,8 @@ import { sbSetQuoteStatus } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { filterRank } from '@/lib/search';
 import { fmtVND } from './calc';
-import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES, promptLossReason } from './constants';
+import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
+import { LossReasonDialog } from './LossReasonDialog';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 
@@ -30,6 +31,7 @@ export function SalesPipeline() {
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) as Mode) || 'status');
   const [search, setSearch] = useState('');
   const [owner, setOwner] = useState('');
+  const [lossPending, setLossPending] = useState<{ cloudId: string; status: QuoteStatus; current?: string } | null>(null);
   const refs = useRef<Partial<Record<QuoteStatus, HTMLDivElement | null>>>({});
 
   const owners = useMemo(() => [...new Set(visibleQuotes().map((q) => q.createdByName).filter(Boolean))].sort(), [quotes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -57,18 +59,24 @@ export function SalesPipeline() {
   const byStage = (st: DealStage) => rows.filter((q) => stageById.get(q.cloudId) === st);
   const sumOf = (items: CloudQuoteEntry[]) => items.reduce((s, q) => s + (q.totalCost ?? 0), 0);
 
-  const move = (cloudId: string, status: QuoteStatus) => {
+  // Ghi đổi trạng thái (cloud + audit + đồng bộ báo giá đang mở).
+  const applyMove = (cloudId: string, status: QuoteStatus, reason?: string) => {
     const q = useQuoteHistoryStore.getState().quotes.find((x) => x.cloudId === cloudId);
-    if (!q || (q.status ?? 'in_progress') === status) return;
-    let reason: string | undefined;
-    if (LOSS_STATUSES.includes(status)) {
-      const r = promptLossReason(q.lossReason);
-      if (r === null) return; // huỷ
-      reason = r;
-    }
+    if (!q) return;
     void sbSetQuoteStatus(cloudId, status, reason).catch((e) => window.alert('Đổi trạng thái lỗi: ' + (e as Error).message));
     logAudit('update', 'Báo giá', q.name, `Trạng thái → ${QUOTE_STATUS_META[status].label}${reason ? ` (${reason})` : ''}`);
     if (currentQuoteId === cloudId) setStatus(status, reason); // đồng bộ báo giá đang mở
+  };
+
+  const move = (cloudId: string, status: QuoteStatus) => {
+    const q = useQuoteHistoryStore.getState().quotes.find((x) => x.cloudId === cloudId);
+    if (!q || (q.status ?? 'in_progress') === status) return;
+    // Thua/Huỷ → hỏi lý do có cấu trúc qua dialog (không chặn luồng kéo-thả).
+    if (LOSS_STATUSES.includes(status)) {
+      setLossPending({ cloudId, status, current: q.lossReason });
+      return;
+    }
+    applyMove(cloudId, status);
   };
   const moveRef = useRef(move);
   moveRef.current = move;
@@ -165,6 +173,12 @@ export function SalesPipeline() {
           ? 'Giai đoạn hồ sơ suy ra từ trạng thái bán + hợp đồng liên kết + ngày khởi hành. Bấm thẻ để mở Hồ sơ tour. Chỉ gồm báo giá thường.'
           : 'Kéo-thả thẻ giữa các cột để đổi trạng thái deal. Chỉ gồm báo giá thường (không gồm breakdown DMC).'}
       </Typography>
+      <LossReasonDialog
+        open={!!lossPending}
+        current={lossPending?.current}
+        onClose={() => setLossPending(null)}
+        onConfirm={(reason) => { if (lossPending) applyMove(lossPending.cloudId, lossPending.status, reason); setLossPending(null); }}
+      />
     </Box>
   );
 }

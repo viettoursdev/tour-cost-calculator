@@ -80,9 +80,13 @@ export function SharePublicQuoteModal({ open, onClose }: Props) {
       });
       await sbPublishQuote(docData);
       await sbSetQuoteShare(currentQuoteId, { token, publishedAt: docData.publishedAt });
+      // Vừa chia sẻ link cho khách → tự nâng trạng thái lên "Đã gửi KH"
+      // (CHỈ tiến tới từ "Đang triển khai", không hạ cấp deal/won/thua).
+      const bumped = (draft.status ?? 'in_progress') === 'in_progress';
+      if (bumped) useQuoteStore.getState().setStatus('sent');
       setLink(shareUrl(token));
       setAccepted(null);
-      toast('🔗 Đã tạo link chia sẻ báo giá cho khách.');
+      toast(bumped ? '🔗 Đã tạo link chia sẻ & chuyển trạng thái → Đã gửi KH.' : '🔗 Đã tạo link chia sẻ báo giá cho khách.');
     } catch (e) {
       window.alert('❌ Lỗi chia sẻ: ' + (e as Error).message);
     } finally { setBusy(false); }

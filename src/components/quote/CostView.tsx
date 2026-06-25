@@ -181,7 +181,14 @@ export function CostView() {
           </Paper>
         )}
 
-        {!hidePrice && <QuoteWarningsBanner cats={cats} items={items} catEnabled={catEnabled} />}
+        {!hidePrice && (
+          <QuoteWarningsBanner
+            cats={cats}
+            items={items}
+            catEnabled={catEnabled}
+            pricing={isDMC ? undefined : { totalCost: totals.totalCost, totalProfit: totals.totalProfit, grandTotal: totals.grandTotal }}
+          />
+        )}
 
         <GroupSizeTabs />
 
