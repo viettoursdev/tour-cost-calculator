@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-  IconButton, Paper, Stack, TextField, Tooltip, Typography,
+  Alert, Autocomplete, Box, Button, Chip, Collapse, Dialog, DialogActions, DialogContent, DialogTitle,
+  Divider, IconButton, Paper, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LaunchIcon from '@mui/icons-material/Launch';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useAuthStore } from '@/stores/authStore';
@@ -19,10 +20,11 @@ import { fmtVND } from './calc';
 import { VisaProjectEditor } from '@/components/visa/VisaProjectEditor';
 import { VisaApplicantManager } from '@/components/visa/VisaApplicantManager';
 import {
-  VISA_COUNTRIES, VISA_PROC_PRESETS, VISA_STATUS_META, visaPresetKeyForCountry,
+  VISA_APPLICANT_STATUS_META, VISA_COUNTRIES, VISA_PROC_PRESETS, VISA_STATUS_META,
+  deriveVisaStatus, visaPresetKeyForCountry,
 } from '@/components/visa/constants';
 import { LEGACY } from '@/theme';
-import type { VisaProjectDoc } from '@/types';
+import type { VisaApplicant, VisaProjectDoc } from '@/types';
 
 function fmtDt(s?: string): string {
   if (!s) return '—';
@@ -53,6 +55,13 @@ export function TourVisaPanel() {
   const [delId, setDelId] = useState<string | null>(null);
   const [visaDlg, setVisaDlg] = useState(false);
   const [visaCountry, setVisaCountry] = useState('');
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+
+  const toggleOpen = (id: string) => setOpenIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // Bộ hồ sơ visa của tour này: ưu tiên theo báo giá, gộp thêm theo hồ sơ tour.
   const linked = useMemo(
@@ -191,7 +200,18 @@ export function TourVisaPanel() {
                   </Stack>
 
                   <Stack direction="row" spacing={0.5}>
-                    <Tooltip title="Danh sách khách">
+                    <Tooltip title={openIds.has(p.id) ? 'Thu gọn danh sách khách' : 'Xem nhanh danh sách khách'}>
+                      <IconButton
+                        size="small" sx={{ color: '#0d7a6a' }} onClick={() => toggleOpen(p.id)}
+                        aria-label="Mở/đóng danh sách khách"
+                      >
+                        <ExpandMoreIcon
+                          fontSize="small"
+                          sx={{ transition: 'transform .2s', transform: openIds.has(p.id) ? 'rotate(180deg)' : 'none' }}
+                        />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Quản lý danh sách khách">
                       <IconButton size="small" sx={{ color: '#0d7a6a' }} onClick={() => setManaging(p)}><PeopleAltIcon fontSize="small" /></IconButton>
                     </Tooltip>
                     <Tooltip title="Sửa">
@@ -210,6 +230,11 @@ export function TourVisaPanel() {
                     </Tooltip>
                   </Stack>
                 </Stack>
+
+                <Collapse in={openIds.has(p.id)} unmountOnExit>
+                  <Divider sx={{ my: 1.25 }} />
+                  <ApplicantList applicants={p.applicants} onManage={() => setManaging(p)} />
+                </Collapse>
               </Paper>
             );
           })}
@@ -244,6 +269,48 @@ export function TourVisaPanel() {
       {editing && <VisaProjectEditor initial={editing} onClose={() => setEditing(null)} />}
       {managing && <VisaApplicantManager project={managing} onClose={() => setManaging(null)} />}
     </Box>
+  );
+}
+
+/**
+ * Danh sách KHÁCH xin visa của một bộ hồ sơ — xem nhanh ngay trong báo giá
+ * (họ tên, giới tính/ngày sinh, số hộ chiếu, tình trạng visa hợp nhất 8 mốc).
+ * Chỉ đọc; bấm "Quản lý danh sách khách" để sửa/thêm trong trình quản lý đầy đủ.
+ */
+function ApplicantList({ applicants, onManage }: { applicants?: VisaApplicant[]; onManage: () => void }) {
+  const list = applicants ?? [];
+  if (list.length === 0) {
+    return (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', py: 0.5 }}>
+        Chưa nhập danh sách khách. <Box component="span" role="button" tabIndex={0} onClick={onManage}
+          sx={{ color: '#0d7a6a', fontWeight: 700, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>
+          Thêm khách →
+        </Box>
+      </Typography>
+    );
+  }
+  return (
+    <Stack spacing={0.5}>
+      {list.map((a, i) => {
+        const st = deriveVisaStatus(a);
+        const meta = VISA_APPLICANT_STATUS_META[st];
+        const sub = [a.gender, a.dob ? fmtDt(a.dob) : '', a.passport ? `HC ${a.passport}` : '']
+          .filter(Boolean).join(' · ');
+        return (
+          <Stack
+            key={a.id} direction="row" alignItems="center" spacing={1}
+            sx={{ px: 1, py: 0.5, borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
+          >
+            <Typography variant="caption" sx={{ color: 'text.disabled', minWidth: 18, textAlign: 'right' }}>{i + 1}.</Typography>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography fontSize={13} fontWeight={700} noWrap>{a.name || '(chưa đặt tên)'}</Typography>
+              {sub && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{sub}</Typography>}
+            </Box>
+            <Chip size="small" label={meta.label} sx={{ bgcolor: meta.color + '22', color: meta.color, fontWeight: 700 }} />
+          </Stack>
+        );
+      })}
+    </Stack>
   );
 }
 
