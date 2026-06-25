@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateTourCode, tourPrefix, tourDatePart, canViewTourProfile, visibleTourProfiles } from './tourProfile';
+import { generateTourCode, tourPrefix, tourDatePart, canViewTourProfile, visibleTourProfiles, nextPrimaryAfterDelete } from './tourProfile';
 import type { Department, Role, TourProfile, User } from '@/types';
 
 const user = (u: string, role: Role, department?: Department): User =>
@@ -43,6 +43,21 @@ describe('generateTourCode — mã NĐ/NN.DD.MM.YY.NN', () => {
     ];
     expect(generateTourCode('domestic', existing, NOW)).toBe('NĐ.25.06.26.03');
     expect(generateTourCode('intl', existing, NOW)).toBe('NN.25.06.26.02');
+  });
+});
+
+describe('nextPrimaryAfterDelete — chống mồ côi khi xoá báo giá', () => {
+  it('xoá báo giá KHÔNG phải chính → không đổi gì', () => {
+    expect(nextPrimaryAfterDelete('q1', 'q2', ['q1', 'q3'])).toBeNull();
+  });
+  it('xoá báo giá chính, còn báo giá khác → chuyển sang cái đầu còn lại', () => {
+    expect(nextPrimaryAfterDelete('q1', 'q1', ['q2', 'q3'])).toEqual({ primaryQuoteId: 'q2', archive: false });
+  });
+  it('xoá báo giá chính, hết báo giá → gỡ primary + lưu trữ', () => {
+    expect(nextPrimaryAfterDelete('q1', 'q1', [])).toEqual({ primaryQuoteId: undefined, archive: true });
+  });
+  it('hồ sơ chưa có primary, xoá báo giá bất kỳ → không đổi', () => {
+    expect(nextPrimaryAfterDelete(undefined, 'q1', ['q2'])).toBeNull();
   });
 });
 

@@ -8,7 +8,7 @@ import {
 } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
-import { generateTourCode, visibleTourProfiles } from '@/lib/tourProfile';
+import { generateTourCode, visibleTourProfiles, nextPrimaryAfterDelete } from '@/lib/tourProfile';
 import { logAudit } from '@/lib/audit';
 import type { Collaborator, TourKind, TourProfile } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -164,16 +164,17 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       // Báo giá còn lại của hồ sơ (loại trừ cái vừa xoá).
       const remaining = useQuoteHistoryStore.getState().quotes
-        .filter((q) => q.tourProfileId === profileId && q.cloudId !== deletedCloudId);
-      if (p.primaryQuoteId === deletedCloudId) {
-        if (remaining.length > 0) {
-          await get().save({ ...p, primaryQuoteId: remaining[0].cloudId });
-          logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Tự chuyển báo giá chính (báo giá cũ bị xoá)');
-        } else {
-          // Báo giá cuối cùng bị xoá → lưu trữ hồ sơ, gỡ con trỏ primary mồ côi.
-          await get().save({ ...p, primaryQuoteId: undefined, status: 'archived' });
-          logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Lưu trữ (đã xoá báo giá cuối cùng)');
-        }
+        .filter((q) => q.tourProfileId === profileId && q.cloudId !== deletedCloudId)
+        .map((q) => q.cloudId);
+      const decision = nextPrimaryAfterDelete(p.primaryQuoteId, deletedCloudId, remaining);
+      if (!decision) return; // xoá báo giá không phải chính → không đổi gì
+      if (decision.archive) {
+        // Báo giá cuối cùng bị xoá → lưu trữ hồ sơ, gỡ con trỏ primary mồ côi.
+        await get().save({ ...p, primaryQuoteId: undefined, status: 'archived' });
+        logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Lưu trữ (đã xoá báo giá cuối cùng)');
+      } else {
+        await get().save({ ...p, primaryQuoteId: decision.primaryQuoteId });
+        logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Tự chuyển báo giá chính (báo giá cũ bị xoá)');
       }
     },
   })),

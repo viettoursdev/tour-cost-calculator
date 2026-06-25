@@ -33,6 +33,22 @@ export function generateTourCode(kind: TourKind, existing: TourProfile[], now: D
   return `${prefix}.${date}.${seq}`;
 }
 
+/**
+ * Quyết định báo giá chính kế tiếp khi XOÁ một báo giá khỏi hồ sơ (hàm thuần).
+ *  - Xoá báo giá KHÔNG phải chính → không cần đổi gì (null).
+ *  - Xoá báo giá chính, còn báo giá khác → chuyển primary sang cái đầu tiên còn lại.
+ *  - Xoá báo giá chính, hết báo giá → gỡ primary + lưu trữ hồ sơ (chống mồ côi).
+ */
+export function nextPrimaryAfterDelete(
+  currentPrimaryId: string | undefined,
+  deletedCloudId: string,
+  remainingCloudIds: string[],
+): { primaryQuoteId: string | undefined; archive: boolean } | null {
+  if (currentPrimaryId !== deletedCloudId) return null;
+  if (remainingCloudIds.length > 0) return { primaryQuoteId: remainingCloudIds[0], archive: false };
+  return { primaryQuoteId: undefined, archive: true };
+}
+
 /** Quyền XEM một hồ sơ: theo recordAccess HOẶC là người theo dõi (follower). */
 export function canViewTourProfile(user: User | null | undefined, p: TourProfile, users: User[]): boolean {
   if (!user) return false;
