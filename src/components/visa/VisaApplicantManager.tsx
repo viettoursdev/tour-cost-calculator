@@ -215,6 +215,18 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     }
   };
 
+  // Xuất checklist hồ sơ visa theo từng khách (PDF).
+  const exportChecklist = async () => {
+    setExportAnchor(null);
+    if (list.length === 0) { toast('Chưa có khách để xuất.', 'warning'); return; }
+    try {
+      const m = await import('@/lib/exports/exportVisaDocsChecklist');
+      m.exportVisaDocsChecklistPDF(project, list);
+    } catch (e) {
+      window.alert('❌ Lỗi xuất file: ' + (e as Error).message);
+    }
+  };
+
   // Tính ngược timeline từ ngày khởi hành cho CẢ ĐOÀN (chỉ điền mốc còn trống).
   const bulkTimelineFromDeparture = () => {
     if (!project.departureDate) { toast('Dự án chưa có ngày khởi hành (sửa ở thẻ dự án).', 'warning'); return; }
@@ -312,6 +324,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
           <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)}>
             <MenuItem onClick={() => void exportTimeline('excel')}>📊 Excel tình trạng & timeline</MenuItem>
             <MenuItem onClick={() => void exportTimeline('pdf')}>📄 PDF tình trạng & timeline</MenuItem>
+            <MenuItem onClick={() => void exportChecklist()}>📋 PDF checklist hồ sơ từng khách</MenuItem>
           </Menu>
           <Button color="inherit" variant="outlined" startIcon={<PlaylistAddCheckIcon />} onClick={() => setBulkOpen(true)} disabled={list.length === 0}>
             Đổi trạng thái loạt
