@@ -14,6 +14,8 @@ import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 import AddIcon from '@mui/icons-material/Add';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import BarChartIcon from '@mui/icons-material/BarChart';
@@ -71,6 +73,7 @@ export function TourProfilesView() {
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setPrimaryQuote = useTourProfileStore((s) => s.setPrimaryQuote);
   const archive = useTourProfileStore((s) => s.archive);
+  const removeProfile = useTourProfileStore((s) => s.remove);
   const createProfile = useTourProfileStore((s) => s.create);
   const moveQuote = useTourProfileStore((s) => s.moveQuote);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
@@ -82,6 +85,7 @@ export function TourProfilesView() {
   const [exporting, setExporting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
+  const [deleteState, setDeleteState] = useState<TourProfile | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
 
@@ -329,6 +333,7 @@ export function TourProfilesView() {
                 onOpenQuote={(cid) => void openQuote(cid, false)}
                 onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
                 onArchive={(on) => void archive(p.id, on)}
+                onDelete={() => setDeleteState(p)}
                 onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
               />
             );
@@ -355,7 +360,57 @@ export function TourProfilesView() {
           setMoveState(null);
         }}
       />
+
+      <DeleteProfileDialog
+        profile={deleteState}
+        quoteCount={deleteState ? (quotesByProfile.get(deleteState.id) ?? []).length : 0}
+        linkCount={deleteState ? (() => { const l = metaOf(deleteState.id).links; return l.contract + l.visa + l.menu + l.itinerary; })() : 0}
+        onClose={() => setDeleteState(null)}
+        onDelete={async () => {
+          if (deleteState) await removeProfile(deleteState.id);
+          setDeleteState(null);
+        }}
+      />
     </Box>
+  );
+}
+
+/** Xoá hẳn hồ sơ tour. Báo giá / hợp đồng / visa liên kết KHÔNG bị xoá — chỉ gỡ
+ *  liên kết (FK ON DELETE SET NULL). Hành động không hoàn tác được. */
+function DeleteProfileDialog({ profile, quoteCount, linkCount, onClose, onDelete }: {
+  profile: TourProfile | null; quoteCount: number; linkCount: number;
+  onClose: () => void; onDelete: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (profile) setBusy(false); }, [profile]);
+  const submit = async () => { setBusy(true); try { await onDelete(); } finally { setBusy(false); } };
+  const detached = quoteCount + linkCount;
+  return (
+    <Dialog open={!!profile} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Xoá hồ sơ tour?</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          Xoá hẳn hồ sơ <strong>{profile?.code}</strong>
+          {profile?.name ? <> — {profile.name}</> : null}. Hành động này <strong>không hoàn tác</strong> được.
+        </Typography>
+        {detached > 0 ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {quoteCount > 0 && <>{quoteCount} báo giá </>}
+            {quoteCount > 0 && linkCount > 0 && '· '}
+            {linkCount > 0 && <>{linkCount} hợp đồng / visa / thực đơn / chương trình </>}
+            đang gắn vào hồ sơ sẽ được <strong>gỡ liên kết</strong> (không bị xoá) và vẫn truy cập được riêng lẻ.
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="text.secondary">Hồ sơ trống — không có dữ liệu liên kết.</Typography>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Huỷ</Button>
+        <Button variant="contained" color="error" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Đang xoá…' : 'Xoá hồ sơ'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -471,13 +526,13 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 
 function ProfileRow({
   profile, stage, primary, guideCount, quotes, links, expanded, showPrice,
-  currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onMoveQuote,
+  currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
   links: ProfileLinks; expanded: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
-  onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void;
+  onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void; onDelete: () => void;
   onMoveQuote: (cloudId: string, quoteName: string) => void;
 }) {
   const sm = STAGE_META(stage);
@@ -513,6 +568,24 @@ function ProfileRow({
             {guideCount > 0 && <Meta label="Lịch HDV" value={String(guideCount)} />}
             {showPrice && primary && <Meta label="Giá trị" value={fmtVND(primary.totalCost ?? 0)} />}
           </Stack>
+          <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
+              <PersonOutlineIcon sx={{ fontSize: 14 }} />
+              <Typography variant="caption">
+                Tạo bởi <strong>{profile.createdBy || '—'}</strong>
+                {profile.createdAt ? ` · ${new Date(profile.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+              </Typography>
+            </Stack>
+            {(profile.collaborators?.length ?? 0) > 0 && (
+              <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Typography variant="caption" color="text.secondary">Cộng tác:</Typography>
+                {(profile.collaborators ?? []).map((c) => (
+                  <Chip key={c.u} size="small" icon={<GroupAddIcon sx={{ fontSize: 13 }} />} label={c.name}
+                    sx={{ height: 20, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
+                ))}
+              </Stack>
+            )}
+          </Stack>
         </Box>
         <Stack direction="row" spacing={0.5} alignItems="center">
           {(profile.collaborators?.length || profile.followers?.length) ? (
@@ -526,6 +599,13 @@ function ProfileRow({
             <Tooltip title={archived ? 'Mở lại hồ sơ' : 'Lưu trữ hồ sơ'}>
               <IconButton size="small" onClick={() => onArchive(!archived)}>
                 {archived ? <UnarchiveOutlinedIcon fontSize="small" /> : <ArchiveOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
+          {canShare && (
+            <Tooltip title="Xoá hồ sơ">
+              <IconButton size="small" color="error" onClick={onDelete}>
+                <DeleteOutlineIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
