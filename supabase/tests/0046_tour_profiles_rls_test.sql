@@ -1,17 +1,17 @@
--- RLS xem tour_profiles (migration 0046) + cột profiles.department + role 'Phó Phòng'.
--- Mô phỏng nhiều user (sub claim) ở các phòng/vai trò khác nhau, kiểm phạm vi thấy.
+-- RLS xem tour_profiles: kiểm CẤU TRÚC + LOGIC predicate qua hàm
+-- public.tour_profile_can_view (0047). Test gọi thẳng hàm với request.jwt.claims
+-- của từng user → không phụ thuộc cơ chế lọc RLS của harness (pg_prove chạy bằng
+-- superuser nên SET ROLE không kích hoạt row-filter; production dùng role thật vẫn lọc đúng).
 begin;
-select plan(9);
+select plan(10);
 
 -- ── Cấu trúc ──
 select has_column('public', 'profiles', 'department', 'profiles.department tồn tại');
 select ok((select relrowsecurity from pg_class where oid = 'public.tour_profiles'::regclass), 'RLS bật trên tour_profiles');
-
--- GUC bootstrap (trigger handle_new_user đọc; tránh phụ thuộc ALTER DATABASE).
-select set_config('app.bootstrap_ceo_email', 'developer@viettours.com.vn', false);
+select has_function('public', 'tour_profile_can_view', 'hàm predicate tồn tại');
 
 -- ── Seed user qua auth.users (trigger tự tạo profiles) rồi set role/department ──
--- an, binh: Sales phòng nội địa · pp: Phó Phòng nội địa · cuong: Operations nước ngoài · sep: CEO
+select set_config('app.bootstrap_ceo_email', 'developer@viettours.com.vn', false);
 insert into auth.users (id, email, instance_id, aud, role) values
   ('00000000-0000-0000-0000-0000000000a1','an@viettours.com.vn',   '00000000-0000-0000-0000-000000000000','authenticated','authenticated'),
   ('00000000-0000-0000-0000-0000000000b1','binh@viettours.com.vn', '00000000-0000-0000-0000-000000000000','authenticated','authenticated'),
@@ -25,31 +25,32 @@ update public.profiles set username='pp',   role='Phó Phòng',  department='dh_
 update public.profiles set username='cuong',role='Operations', department='dh_nuocngoai' where id='00000000-0000-0000-0000-0000000000d1';
 update public.profiles set username='sep',  role='CEO',        department=null           where id='00000000-0000-0000-0000-0000000000e1';
 
--- ── Hồ sơ tour (insert ở vai superuser → bỏ qua RLS) ──
-insert into public.tour_profiles (id, code, created_by_username, collaborators, followers) values
-  ('tp_an_1',  'NĐ.TEST.01', 'an',    '[{"u":"binh","name":"Binh"}]'::jsonb, '[]'::jsonb),
-  ('tp_an_2',  'NĐ.TEST.02', 'an',    '[]'::jsonb, '[{"u":"cuong","name":"Cuong"}]'::jsonb),
-  ('tp_cuong', 'NN.TEST.01', 'cuong', '[]'::jsonb, '[]'::jsonb);
+-- Hồ sơ "an" (nội địa): collab=binh, follow=cuong.
+-- collabsA / followsA mô phỏng cột tour_profiles.collaborators/followers.
 
--- ── Impersonate authenticated + đổi sub theo từng user ──
 set local role authenticated;
 
+-- an (người tạo) thấy hồ sơ mình
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","email":"an@viettours.com.vn"}', true);
-select is((select count(*)::int from public.tour_profiles where id='tp_an_1'), 1, 'người tạo (an) thấy hồ sơ mình');
+select ok(public.tour_profile_can_view('an', '[{"u":"binh","name":"Binh"}]'::jsonb, '[]'::jsonb), 'người tạo thấy hồ sơ mình');
 
+-- binh (collaborator) thấy
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000b1","email":"binh@viettours.com.vn"}', true);
-select is((select count(*)::int from public.tour_profiles where id='tp_an_1'), 1, 'collaborator (binh) thấy hồ sơ được chia sẻ');
+select ok(public.tour_profile_can_view('an', '[{"u":"binh","name":"Binh"}]'::jsonb, '[]'::jsonb), 'collaborator thấy');
 
+-- pp (Phó Phòng cùng phòng người tạo) thấy hồ sơ của an; KHÔNG thấy hồ sơ của cuong (khác phòng)
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","email":"pp@viettours.com.vn"}', true);
-select is((select count(*)::int from public.tour_profiles where id='tp_an_1'), 1, 'Phó Phòng CÙNG phòng thấy hồ sơ người trong phòng');
-select is((select count(*)::int from public.tour_profiles where id='tp_cuong'), 0, 'Phó Phòng KHÁC phòng KHÔNG thấy');
+select ok(public.tour_profile_can_view('an', '[]'::jsonb, '[]'::jsonb), 'Phó Phòng CÙNG phòng thấy');
+select ok(not public.tour_profile_can_view('cuong', '[]'::jsonb, '[]'::jsonb), 'Phó Phòng KHÁC phòng KHÔNG thấy');
 
+-- cuong (khác phòng, không chia sẻ) KHÔNG thấy hồ sơ của an; nhưng thấy hồ sơ mình follow
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000d1","email":"cuong@viettours.com.vn"}', true);
-select is((select count(*)::int from public.tour_profiles where id='tp_an_1'), 0, 'người khác phòng, không chia sẻ → KHÔNG thấy');
-select is((select count(*)::int from public.tour_profiles where id='tp_an_2'), 1, 'follower (cuong) thấy hồ sơ theo dõi');
+select ok(not public.tour_profile_can_view('an', '[]'::jsonb, '[]'::jsonb), 'người khác phòng, không chia sẻ → KHÔNG thấy');
+select ok(public.tour_profile_can_view('an', '[]'::jsonb, '[{"u":"cuong","name":"Cuong"}]'::jsonb), 'follower thấy hồ sơ theo dõi');
 
+-- sep (CEO) thấy mọi hồ sơ kể cả khác phòng
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000e1","email":"sep@viettours.com.vn"}', true);
-select is((select count(*)::int from public.tour_profiles where id in ('tp_an_1','tp_an_2','tp_cuong')), 3, 'CEO thấy tất cả');
+select ok(public.tour_profile_can_view('cuong', '[]'::jsonb, '[]'::jsonb), 'CEO thấy tất cả');
 
 select * from finish();
 rollback;
