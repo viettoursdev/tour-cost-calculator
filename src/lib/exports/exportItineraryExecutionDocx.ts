@@ -93,7 +93,10 @@ export async function exportItineraryExecutionDocx(
     kids.push(line([tr('Ăn: ', { bold: true }), tr(mealsLabel(d.meals) + (d.mealNote ? ` (${d.mealNote})` : ''))]));
     d.segments.forEach((s) => {
       if (s.groupLabel || s.transport) kids.push(line([tr([s.groupLabel, s.transport && `🚌 ${s.transport}`].filter(Boolean).join('  ·  '), { bold: true, color: TEAL })]));
-      s.activities.forEach((a) => { if (a.time || a.text) kids.push(line([tr('• ', { color: TEAL }), ...(a.time ? [tr(a.time + '  ', { bold: true })] : []), tr(a.text)], 120)); });
+      s.activities.forEach((a) => {
+        if (a.time || a.text) kids.push(line([tr('• ', { color: TEAL }), ...(a.time ? [tr(a.time + '  ', { bold: true })] : []), tr(a.text)], 120));
+        if (a.ops) kids.push(line([tr('🧭 Vận hành: ', { bold: true, color: TEAL }), tr(a.ops)], 260));
+      });
     });
     if (d.menuMeals.length) {
       kids.push(line([tr('🍽️ Thực đơn', { bold: true, color: NAVY })]));

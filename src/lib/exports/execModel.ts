@@ -20,7 +20,7 @@ export interface ExecDayVM {
   title: string;
   meals: { B: boolean; L: boolean; D: boolean };
   mealNote: string;
-  segments: { groupLabel: string; transport: string; activities: { time: string; text: string }[] }[];
+  segments: { groupLabel: string; transport: string; activities: { time: string; text: string; ops?: string }[] }[];
   menuMeals: ExecMealVM[];
   hotelName?: string;
   hotelContact?: string;
@@ -80,7 +80,7 @@ export function buildExecModel(
       segments: (d.segments ?? []).map((s) => ({
         groupLabel: s.groupLabel,
         transport: s.transport,
-        activities: (s.activities ?? []).map((a) => ({ time: a.time, text: a.text })),
+        activities: (s.activities ?? []).map((a) => ({ time: a.time, text: a.text, ops: a.ops })),
       })),
       menuMeals,
       hotelName: ops?.hotelName,

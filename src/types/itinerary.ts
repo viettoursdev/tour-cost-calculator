@@ -2,6 +2,8 @@ export interface Activity {
   id: string;
   time: string;
   text: string;
+  /** Ghi chú vận hành cho mốc giờ này (cho HDV): NCC, contact, xác nhận, đón/trả… */
+  ops?: string;
 }
 
 export interface Segment {

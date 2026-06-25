@@ -45,6 +45,7 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ImageIcon from '@mui/icons-material/Image';
+import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
 
 type Props = {
   initial: Itinerary | null;
@@ -94,6 +95,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [aiSchedOpen, setAiSchedOpen] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  // Mốc giờ đang mở ô nhập vận hành (theo activity.id).
+  const [opsOpenIds, setOpsOpenIds] = useState<Set<string>>(new Set());
+  const toggleOps = (id: string) => setOpsOpenIds((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const applyAISchedule = (days: Day[], mode: 'replace' | 'append') => setIt((p) => {
     const merged = mode === 'append' ? [...p.schedule, ...days] : days;
     return { ...p, schedule: merged.map((d, i) => ({ ...d, dayNum: i + 1 })) };
@@ -832,8 +840,11 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                       deps={[seg.activities.length, d.id, seg.id]}
                       sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, minHeight: 8 }}
                     >
-                      {seg.activities.map((a) => (
-                        <Stack key={a.id} data-sid={a.id} direction="row" spacing={0.75} alignItems="center">
+                      {seg.activities.map((a) => {
+                        const opsOn = opsOpenIds.has(a.id) || !!a.ops;
+                        return (
+                        <Box key={a.id} data-sid={a.id}>
+                        <Stack direction="row" spacing={0.75} alignItems="center">
                           <Box component="span" className="act-handle" sx={{ cursor: 'grab', color: 'rgba(15,58,74,0.3)', fontSize: 13, flexShrink: 0 }}>⋮⋮</Box>
                           <TextField size="small" sx={{ width: 80, flexShrink: 0 }}
                             value={a.time}
@@ -869,6 +880,17 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                                 placeholder="Nội dung… (Enter xuống dòng · **đậm** · *nghiêng* · gõ tên điểm để gợi ý)" />
                             )}
                           />
+                          <Tooltip title={a.ops ? 'Sửa vận hành mốc giờ này' : 'Thêm vận hành cho mốc giờ này (cho HDV)'}>
+                            <IconButton size="small" onClick={() => toggleOps(a.id)}
+                              sx={{ flexShrink: 0,
+                                color: a.ops ? '#fff' : '#0f3a4a',
+                                bgcolor: a.ops ? '#0f3a4a' : 'transparent',
+                                border: '1px solid', borderColor: a.ops ? '#0f3a4a' : 'rgba(15,58,74,0.3)',
+                                borderRadius: 1,
+                                '&:hover': { bgcolor: a.ops ? '#14566b' : 'rgba(15,58,74,0.08)' } }}>
+                              <EngineeringOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Button size="small" variant="outlined"
                             disabled={aiBusy === a.id}
                             onClick={() => void genActivity(d.id, seg.id, a.id, a.text)}
@@ -881,7 +903,20 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                             <DeleteOutlineIcon fontSize="small" />
                           </IconButton>
                         </Stack>
-                      ))}
+                        {opsOn && (
+                          <Box sx={{ pl: '106px', pr: '76px', mt: 0.5, mb: 0.25 }}>
+                            <TextField size="small" fullWidth multiline minRows={1}
+                              value={a.ops ?? ''}
+                              autoFocus={opsOpenIds.has(a.id) && !a.ops}
+                              onChange={(e) => updAct(d.id, seg.id, a.id, { ops: e.target.value })}
+                              placeholder="🧭 Vận hành (giờ này): NCC · contact · số xác nhận · điểm đón-trả…"
+                              sx={{ bgcolor: 'rgba(15,58,74,0.04)', borderRadius: 1,
+                                '& .MuiInputBase-input': { fontSize: 12, color: '#0f3a4a' } }} />
+                          </Box>
+                        )}
+                        </Box>
+                        );
+                      })}
                     </SortableList>
                     <Button size="small" onClick={() => addAct(d.id, seg.id)}
                       sx={{ mt: 0.75, color: '#0d7a6a', fontSize: 12 }}>

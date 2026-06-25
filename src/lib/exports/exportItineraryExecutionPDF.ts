@@ -144,10 +144,15 @@ export function exportItineraryExecutionPDF(
         pdf.text([s.groupLabel, s.transport && `Xe: ${s.transport}`].filter(Boolean).join('  ·  '), M, y + 3.5); y += 5;
       }
       s.activities.forEach((a) => {
-        if (!a.time && !a.text) return;
+        if (!a.time && !a.text && !a.ops) return;
         ensure(4.5); setF('normal'); pdf.setFontSize(8.5); pdf.setTextColor(...INK);
         const head = a.time ? `${a.time}  ` : '';
         wrap(head + a.text, CW - 6).forEach((l, i) => { ensure(4.3); pdf.text((i ? '   ' : '• ') + l, M + 2, y + 3.3); y += 4.3; });
+        if (a.ops) {
+          setF('bold'); pdf.setFontSize(8); pdf.setTextColor(...TEAL);
+          wrap('Vận hành: ' + a.ops, CW - 12).forEach((l) => { ensure(4); pdf.text(l, M + 6, y + 3); y += 4; });
+          setF('normal');
+        }
       });
     });
     // meals from menu
