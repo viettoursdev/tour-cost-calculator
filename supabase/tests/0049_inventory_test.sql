@@ -45,9 +45,10 @@ select is(
 select throws_ok($$ select public.inventory_issue('itm_t', 'Đỏ', 'M', 99, 'x', '', now(), 't') $$,
   NULL, 'xuất vượt tồn bị chặn');
 
+-- Xuất 12 trải 2 lô (10 lô cũ + 2 lô mới) → FIFO ghi 2 dòng movement xuất.
 select is(
   (select count(*)::int from public.inventory_movements where item_id = 'itm_t' and type = 'out'),
-  1, 'có đúng 1 movement xuất');
+  2, 'FIFO ghi 2 movement xuất theo 2 lô');
 
 -- Tài sản theo từng cái.
 insert into public.inventory_categories(id, code, name, kind) values ('cat_tb', 'TB', 'Thiết bị', 'asset');
