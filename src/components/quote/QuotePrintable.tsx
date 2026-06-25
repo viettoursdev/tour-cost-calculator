@@ -3,7 +3,8 @@
  * the image-based PDF export (exportPDFImage). Rendered off-screen.
  */
 import { forwardRef } from 'react';
-import { calcVND, computeTotals, fmtVND } from './calc';
+import { calcVND, computeTotals, fmtVND, usedForeignCurrencies } from './calc';
+import { effectiveValidUntil, fmtDateVN, isoDate } from './quoteValidity';
 import { getCATS } from './constants';
 import { pricingLines } from './pricing';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
@@ -33,6 +34,10 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
   const inclusions = (draft.inclusions ?? []).filter((s) => s.trim());
   const exclusions = (draft.exclusions ?? []).filter((s) => s.trim());
   const payments = (draft.payments ?? []).filter((p) => p.label.trim() || p.amount || p.note.trim());
+
+  // Hiệu lực báo giá (hạn đặt tay hoặc mặc định N ngày) + dấu tỷ giá áp dụng.
+  const validUntil = effectiveValidUntil(draft.validUntil, isoDate(new Date()));
+  const fxUsed = usedForeignCurrencies(items);
 
   const groupVariants = (draft.groups && draft.groups.length)
     ? draft.groups.map((g) => (g.id === draft.activeGroupId
@@ -198,8 +203,21 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
         </>
       )}
 
+      {/* FX rate stamp + variation clause (chỉ khi có hạng mục ngoại tệ) */}
+      {fxUsed.length > 0 && (
+        <div style={{ marginTop: 14, padding: '10px 12px', background: '#f4faf8', border: '1px solid #d7e8e4', borderRadius: 6, fontSize: 11.5, color: '#3a4650' }}>
+          <div style={{ fontWeight: 700, color: DARK, marginBottom: 2 }}>
+            💱 Tỷ giá áp dụng{draft.rateDate ? ` (ngày ${fmtDateVN(draft.rateDate)})` : ''}:{' '}
+            {fxUsed.map((c) => `1 ${c} = ${fmtVND(rates[c] ?? 0)}`).join(' · ')}
+          </div>
+          <div style={{ color: '#7a828a' }}>
+            Giá được tính theo tỷ giá tại thời điểm báo giá; có thể điều chỉnh nếu tỷ giá biến động đáng kể tại thời điểm Quý khách xác nhận.
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: 18, paddingTop: 8, borderTop: '1px dashed #cfd6da', fontSize: 11, color: '#9aa2aa', textAlign: 'center' }}>
-        Báo giá có hiệu lực 07 ngày · Phụ trách: {savedBy.name} ({savedBy.role})
+        Báo giá có hiệu lực đến hết ngày {fmtDateVN(validUntil)} · Phụ trách: {savedBy.name} ({savedBy.role})
         {savedBy.phone ? ` · ${savedBy.phone}` : ''}{savedBy.email ? ` · ${savedBy.email}` : ''}
         {' · '}{new Date().toLocaleDateString('vi-VN')}
       </div>

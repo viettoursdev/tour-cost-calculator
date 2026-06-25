@@ -14,6 +14,7 @@ import {
 } from '@/lib/supabase';
 import { TEMPLATES, RATES_INIT, CATS, mkItem, DMC_CAT_IDS } from '@/components/quote/constants';
 import { computeTotals } from '@/components/quote/calc';
+import { isoDate } from '@/components/quote/quoteValidity';
 import { workflowDueSummary, workflowBoardSummary } from '@/components/quote/workflowConstants';
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
@@ -102,6 +103,8 @@ type QuoteState = {
   setSvcBasis: (n: number) => void;
   setRounding: (n: number) => void;
   setInclusions: (v: string[]) => void;
+  /** Đặt/xoá hạn hiệu lực báo giá (ISO 'YYYY-MM-DD'; rỗng = về mặc định N ngày). */
+  setValidUntil: (v?: string) => void;
   /** Thêm 1 file Excel báo giá vào lịch sử (báo giá khoá — upload thêm). */
   addExcelFile: (f: FileAttachment) => void;
   setFlights: (v: QuoteFlight[]) => void;
@@ -328,7 +331,7 @@ export const useQuoteStore = create<QuoteState>()(
           // Alt templates (e.g. itinerary) skip the cost-view scaffolding entirely.
           if (tpl.kind === 'alt' || !tpl.init) {
             muted(() => set((s) => ({
-              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: seedNewRates(s.syncedRates) },
+              draft: { ...EMPTY_DRAFT, template, currentQuoteId: null, rates: seedNewRates(s.syncedRates), rateDate: isoDate(new Date()) },
               view: 'cost', cloudDirty: false,
               ...CLEAR_HIST,
             })));
@@ -364,6 +367,7 @@ export const useQuoteStore = create<QuoteState>()(
               catEnabled,
               currentQuoteId: null,
               rates: seedNewRates(s.syncedRates),
+              rateDate: isoDate(new Date()),
               ...metaFields,
               ...(template === 'dmc' ? dmcDefaults() : {}),
             },
@@ -418,7 +422,7 @@ export const useQuoteStore = create<QuoteState>()(
 
         // Sửa tỷ giá của BÁO GIÁ đang mở (per-quote, lưu hành nội bộ trong báo giá đó).
         setRate: (cur, rate) =>
-          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate } } })),
+          set((s) => ({ draft: { ...s.draft, rates: { ...s.draft.rates, [cur]: rate }, rateDate: isoDate(new Date()) } })),
 
         // Sửa 1 dòng bảng tỷ giá ĐỒNG BỘ (global). Chưa ghi cloud cho tới khi
         // "Đồng bộ tỷ giá" (pushGlobalRates) được bấm.
@@ -465,6 +469,7 @@ export const useQuoteStore = create<QuoteState>()(
         setRounding: (n) => set((s) => ({ draft: { ...s.draft, rounding: Math.max(1, n) } })),
         setRateBase: (cur) => set((s) => ({ draft: { ...s.draft, rateBase: cur } })),
         setInclusions: (v) => set((s) => ({ draft: { ...s.draft, inclusions: v } })),
+        setValidUntil: (v) => set((s) => ({ draft: { ...s.draft, validUntil: v || undefined } })),
         addExcelFile: (f) => set((s) => {
           const prev = s.draft.excelFiles ?? (s.draft.excelFile ? [s.draft.excelFile] : []);
           return { draft: { ...s.draft, excelFiles: [...prev, f] } };
@@ -687,6 +692,8 @@ export const useQuoteStore = create<QuoteState>()(
               ...(data.rounding != null ? { rounding: Math.max(1, Number(data.rounding) || 1) } : {}),
               ...(data.items ? { items: data.items } : {}),
               ...(data.catEnabled ? { catEnabled: data.catEnabled } : {}),
+              ...(data.validUntil ? { validUntil: data.validUntil } : {}),
+              ...(data.rateDate ? { rateDate: data.rateDate } : {}),
               ...(data.inclusions ? { inclusions: data.inclusions } : {}),
               ...(data.exclusions ? { exclusions: data.exclusions } : {}),
               ...(data.payments ? { payments: data.payments } : {}),

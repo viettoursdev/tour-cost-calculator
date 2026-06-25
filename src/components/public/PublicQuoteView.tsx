@@ -5,6 +5,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { sbGetPublicQuote, sbAcceptPublicQuote } from '@/lib/supabase';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
+import { fmtDateVN, validityStatus } from '@/components/quote/quoteValidity';
 import type { PublicQuoteAcceptance, PublicQuoteDoc } from '@/types';
 
 const fmt = (n: number) => (n || 0).toLocaleString('vi-VN') + ' đ';
@@ -36,6 +37,9 @@ export function PublicQuoteView({ token }: { token: string }) {
     );
   }
 
+  const validity = doc.validUntil ? validityStatus(doc.validUntil) : null;
+  const expired = validity?.expired ?? false;
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#eef3f8', py: { xs: 0, sm: 4 } }}>
       <Box sx={{ maxWidth: 720, mx: 'auto', bgcolor: '#fff', boxShadow: { sm: '0 12px 40px rgba(15,58,74,0.12)' }, borderRadius: { sm: 3 }, overflow: 'hidden' }}>
@@ -47,18 +51,38 @@ export function PublicQuoteView({ token }: { token: string }) {
             {doc.dest ? `${doc.dest} · ` : ''}{doc.days}N{doc.nights}Đ · {doc.pax} khách
             {doc.startDate ? ` · Khởi hành ${fmtDate(doc.startDate)}` : ''}
           </Typography>
-          {doc.quoteCode && <Chip size="small" label={doc.quoteCode} sx={{ mt: 1, bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700 }} />}
+          <Stack direction="row" spacing={1} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+            {doc.quoteCode && <Chip size="small" label={doc.quoteCode} sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700 }} />}
+            {validity && (
+              <Chip
+                size="small"
+                label={expired ? `Hết hiệu lực ${fmtDateVN(doc.validUntil)}` : `Hiệu lực đến hết ${fmtDateVN(doc.validUntil)}`}
+                sx={{ bgcolor: expired ? 'rgba(220,50,80,0.9)' : 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 700 }}
+              />
+            )}
+          </Stack>
         </Box>
 
         <Box sx={{ px: { xs: 2.5, sm: 4 }, py: 3 }}>
           {doc.customerName && <Typography sx={{ mb: 1 }}>Kính gửi: <strong>{doc.customerName}</strong></Typography>}
           {doc.note && <Typography sx={{ mb: 2, whiteSpace: 'pre-wrap', color: 'text.secondary' }}>{doc.note}</Typography>}
 
+          {expired && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Báo giá này đã hết hiệu lực (đến hết {fmtDateVN(doc.validUntil)}). Vui lòng liên hệ nhân viên phụ trách để nhận báo giá cập nhật.
+            </Alert>
+          )}
+
           {/* Price */}
           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, textAlign: 'center', borderColor: 'rgba(3,105,161,0.3)', bgcolor: 'rgba(3,105,161,0.04)' }}>
             <Typography variant="caption" color="text.secondary" fontWeight={700}>GIÁ TRỌN GÓI</Typography>
             <Typography sx={{ fontSize: 30, fontWeight: 900, color: '#0369a1', lineHeight: 1.1 }}>{fmt(doc.pricePerPax)}</Typography>
             <Typography variant="caption" color="text.secondary">/ khách · Tổng {fmt(doc.totalPrice)} cho {doc.pax} khách</Typography>
+            {doc.rateNote && (
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary', fontStyle: 'italic' }}>
+                💱 {doc.rateNote}
+              </Typography>
+            )}
           </Paper>
 
           {doc.inclusions.length > 0 && <Section title="✅ Giá bao gồm" items={doc.inclusions} />}
@@ -100,7 +124,7 @@ export function PublicQuoteView({ token }: { token: string }) {
           )}
 
           <Divider sx={{ my: 3 }} />
-          <AcceptBlock token={token} doc={doc} onAccepted={(a) => setDoc({ ...doc, acceptance: a })} />
+          <AcceptBlock token={token} doc={doc} expired={expired} onAccepted={(a) => setDoc({ ...doc, acceptance: a })} />
 
           <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 3, textAlign: 'center' }}>
             Báo giá lập bởi {doc.publishedBy} · Viettours · {fmtDate(doc.publishedAt)}
@@ -122,7 +146,7 @@ function Section({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function AcceptBlock({ token, doc, onAccepted }: { token: string; doc: PublicQuoteDoc; onAccepted: (a: PublicQuoteAcceptance) => void }) {
+function AcceptBlock({ token, doc, expired, onAccepted }: { token: string; doc: PublicQuoteDoc; expired: boolean; onAccepted: (a: PublicQuoteAcceptance) => void }) {
   const [name, setName] = useState(doc.customerName ?? '');
   const [contact, setContact] = useState('');
   const [note, setNote] = useState('');
@@ -133,6 +157,14 @@ function AcceptBlock({ token, doc, onAccepted }: { token: string; doc: PublicQuo
     return (
       <Alert icon={<CheckCircleIcon fontSize="inherit" />} severity="success">
         Cảm ơn Quý khách! Báo giá đã được xác nhận{doc.acceptance.name ? ` bởi ${doc.acceptance.name}` : ''} lúc {new Date(doc.acceptance.at).toLocaleString('vi-VN')}. Viettours sẽ liên hệ ngay.
+      </Alert>
+    );
+  }
+
+  if (expired) {
+    return (
+      <Alert severity="info">
+        Báo giá đã hết hiệu lực nên tạm thời không thể xác nhận trực tuyến. Quý khách vui lòng liên hệ nhân viên phụ trách để được cập nhật giá mới nhất.
       </Alert>
     );
   }

@@ -264,6 +264,12 @@ export type QuoteDraft = {
   catOrder?: CategoryId[];  // Thứ tự hiển thị hạng mục (kéo-thả); thiếu = thứ tự mặc định
 
   // Customer-facing terms (optional — absent until edited).
+  /** Hiệu lực báo giá đến HẾT ngày này (ISO 'YYYY-MM-DD'). Trống = mặc định
+   *  N ngày kể từ ngày báo giá (xem `quoteValidity.DEFAULT_VALID_DAYS`). */
+  validUntil?: string;
+  /** Ngày áp tỷ giá (ISO 'YYYY-MM-DD') — đóng dấu lên bản in & điều khoản biến
+   *  động tỷ giá. Tự đóng dấu khi tạo báo giá mới / sửa 1 dòng tỷ giá. */
+  rateDate?: string;
   inclusions?: string[];   // Giá bao gồm
   exclusions?: string[];   // Giá không bao gồm
   payments?: QuotePayment[]; // Thông tin thanh toán theo đợt

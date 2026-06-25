@@ -1,4 +1,5 @@
-import { computeTotals } from '@/components/quote/calc';
+import { computeTotals, fmtVND, usedForeignCurrencies } from '@/components/quote/calc';
+import { effectiveValidUntil, fmtDateVN, isoDate } from '@/components/quote/quoteValidity';
 import type { Itinerary, PublicQuoteDoc, PublicQuoteItinDay, QuoteDraft } from '@/types';
 
 /** Token ngẫu nhiên cho link chia sẻ (khó đoán). */
@@ -41,6 +42,12 @@ export function buildPublicQuote(opts: {
 }): PublicQuoteDoc {
   const { draft } = opts;
   const totals = computeTotals(draft);
+  const publishedAt = new Date().toISOString();
+  const validUntil = effectiveValidUntil(draft.validUntil, isoDate(new Date(publishedAt)));
+  const fx = usedForeignCurrencies(draft.items);
+  const rateNote = fx.length
+    ? `Tỷ giá áp dụng${draft.rateDate ? ` ngày ${fmtDateVN(draft.rateDate)}` : ''}: ${fx.map((c) => `1 ${c} = ${fmtVND(draft.rates[c] ?? 0)}`).join(' · ')}. Giá có thể điều chỉnh nếu tỷ giá biến động đáng kể tại thời điểm xác nhận.`
+    : undefined;
   return {
     token: opts.token,
     quoteCloudId: opts.cloudId,
@@ -54,12 +61,14 @@ export function buildPublicQuote(opts: {
     startDate: draft.info.startDate ?? null,
     pricePerPax: Math.round(totals.roundedPPax),
     totalPrice: Math.round(totals.grandTotal),
+    validUntil,
+    ...(rateNote ? { rateNote } : {}),
     inclusions: (draft.inclusions ?? []).filter(Boolean),
     exclusions: (draft.exclusions ?? []).filter(Boolean),
     payments: (draft.payments ?? []).map((p) => ({ label: p.label, amount: p.amount, note: p.note })),
     ...(opts.itinerary && opts.itinerary.length ? { itinerary: opts.itinerary } : {}),
     ...(opts.note ? { note: opts.note } : {}),
-    publishedAt: new Date().toISOString(),
+    publishedAt,
     publishedBy: opts.publishedBy,
   };
 }

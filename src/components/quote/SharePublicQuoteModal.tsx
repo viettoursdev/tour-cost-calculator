@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { sbPublishQuote, sbUnpublishQuote, sbSetQuoteShare, sbGetPublicQuote } from '@/lib/supabase';
 import { buildPublicQuote, genShareToken, shareUrl, itineraryToSummary } from '@/lib/publicQuote';
 import { computeTotals, fmtVND } from './calc';
+import { effectiveValidUntil, fmtDateVN, isoDate, validityStatus } from './quoteValidity';
 import { toast } from '@/stores/toastStore';
 import { normalizeVN } from '@/lib/search';
 import type { PublicQuoteAcceptance } from '@/types';
@@ -28,6 +29,8 @@ export function SharePublicQuoteModal({ open, onClose }: Props) {
 
   const entry = useMemo(() => quotes.find((q) => q.cloudId === currentQuoteId), [quotes, currentQuoteId]);
   const totals = computeTotals(draft);
+  const effValidUntil = effectiveValidUntil(draft.validUntil, isoDate(new Date()));
+  const validity = validityStatus(effValidUntil);
 
   // Lịch trình gợi ý: khớp theo khách hàng hoặc tên tour.
   const itinMatches = useMemo(() => {
@@ -120,6 +123,11 @@ export function SharePublicQuoteModal({ open, onClose }: Props) {
             </Typography>
             <Typography sx={{ mt: 0.5, fontWeight: 800, color: '#0369a1' }}>
               {fmtVND(totals.roundedPPax)}/khách · Tổng {fmtVND(totals.grandTotal)}
+            </Typography>
+            <Typography variant="caption" sx={{ color: validity.expired ? '#dc3250' : 'text.secondary' }}>
+              Hiệu lực đến hết {fmtDateVN(effValidUntil)}
+              {draft.validUntil ? '' : ' (mặc định)'}
+              {validity.expired ? ' — đã hết hạn, khách sẽ không chốt được' : ''}
             </Typography>
           </Box>
 

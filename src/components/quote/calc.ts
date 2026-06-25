@@ -83,6 +83,27 @@ export function computeTotals(draft: QuoteDraft): Totals {
 }
 
 /**
+ * Các ngoại tệ (≠ VND) thực sự được dùng ở các dòng đang BẬT & có cộng tổng.
+ * Dùng để đóng dấu tỷ giá áp dụng + điều khoản biến động tỷ giá trên báo giá.
+ * Thứ tự ưu tiên USD, EUR trước; còn lại theo thứ tự bảng chữ cái.
+ */
+export function usedForeignCurrencies(items: Partial<Record<CategoryId, Item[]>>): string[] {
+  const seen = new Set<string>();
+  for (const arr of Object.values(items)) {
+    for (const it of arr ?? []) {
+      if (it.enabled === false || it.foc === true || it.included === true) continue;
+      if (it.cur && it.cur !== 'VND') seen.add(it.cur);
+    }
+  }
+  const PRIORITY = ['USD', 'EUR'];
+  return [...seen].sort((a, b) => {
+    const ia = PRIORITY.indexOf(a), ib = PRIORITY.indexOf(b);
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    return a.localeCompare(b);
+  });
+}
+
+/**
  * VND formatter. Source: public/legacy.html:1693.
  */
 export const fmtVND = (n: number): string =>

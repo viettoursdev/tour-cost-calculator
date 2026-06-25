@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcVND, catTotal, subtotal, computeTotals } from './calc';
+import { calcVND, catTotal, subtotal, computeTotals, usedForeignCurrencies } from './calc';
 import type { Item, QuoteDraft, CategoryId } from '@/types';
 import { CATS } from './constants';
 
@@ -39,6 +39,24 @@ function emptyDraft(over: Partial<QuoteDraft> = {}): QuoteDraft {
     ...over,
   };
 }
+
+describe('usedForeignCurrencies', () => {
+  it('lists distinct non-VND currencies from enabled counting lines, USD/EUR first', () => {
+    const items = {
+      hotel: [item({ cur: 'EUR' }), item({ cur: 'VND' })],
+      flight: [item({ cur: 'JPY' }), item({ cur: 'USD' })],
+    } as Partial<Record<CategoryId, Item[]>>;
+    expect(usedForeignCurrencies(items)).toEqual(['USD', 'EUR', 'JPY']);
+  });
+
+  it('ignores disabled / FOC / included lines and VND-only quotes', () => {
+    const items = {
+      hotel: [item({ cur: 'USD', enabled: false }), item({ cur: 'EUR', foc: true })],
+      meal: [item({ cur: 'VND' })],
+    } as Partial<Record<CategoryId, Item[]>>;
+    expect(usedForeignCurrencies(items)).toEqual([]);
+  });
+});
 
 describe('calcVND', () => {
   it('returns 0 when item is disabled (enabled === false)', () => {

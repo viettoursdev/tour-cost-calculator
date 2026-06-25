@@ -4,6 +4,9 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { DEFAULT_INCLUDES, DEFAULT_EXCLUDES, DEFAULT_PAYMENTS } from '@/components/contract/constants';
+import {
+  DEFAULT_VALID_DAYS, addDaysISO, effectiveValidUntil, fmtDateVN, isoDate, validityStatus,
+} from './quoteValidity';
 import { LEGACY } from '@/theme';
 import type { QuotePayment } from '@/types';
 
@@ -128,6 +131,63 @@ function PaymentEditor({
   );
 }
 
+/** Hiệu lực báo giá (ngày hết hạn hướng khách) + đóng dấu ngày tỷ giá. */
+function ValidityEditor() {
+  const validUntil = useQuoteStore((s) => s.draft.validUntil);
+  const rateDate = useQuoteStore((s) => s.draft.rateDate);
+  const setValidUntil = useQuoteStore((s) => s.setValidUntil);
+  const today = isoDate(new Date());
+  const effective = effectiveValidUntil(validUntil, today);
+  const st = validityStatus(effective);
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      <SectionLabel>📅 Hiệu lực báo giá &amp; tỷ giá</SectionLabel>
+      <Paper variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+        <Stack spacing={1.5}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+            <TextField
+              size="small" type="date" label="Hiệu lực đến hết ngày"
+              value={validUntil ?? ''} onChange={(e) => setValidUntil(e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ width: 200 }}
+            />
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              {[7, 14, 30].map((d) => (
+                <Button
+                  key={d} size="small" variant="outlined"
+                  onClick={() => setValidUntil(addDaysISO(today, d))}
+                  sx={{ minWidth: 0, px: 1.25, color: LEGACY.teal }}
+                >
+                  +{d} ngày
+                </Button>
+              ))}
+              {validUntil && (
+                <Button
+                  size="small" onClick={() => setValidUntil(undefined)}
+                  sx={{ minWidth: 0, px: 1.25, color: 'rgba(15,58,74,0.55)' }}
+                >
+                  Xoá hạn
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+          <Typography fontSize={12.5} sx={{ color: st.expired ? '#dc3250' : 'rgba(15,58,74,0.6)' }}>
+            {validUntil ? (
+              <>Có hiệu lực đến hết <strong>{fmtDateVN(effective)}</strong>{st.expired ? ' — ĐÃ HẾT HẠN' : st.daysLeft === 0 ? ' — hết hạn hôm nay' : ` — còn ${st.daysLeft} ngày`}.</>
+            ) : (
+              <>Chưa đặt hạn → mặc định <strong>{DEFAULT_VALID_DAYS} ngày</strong> kể từ ngày báo giá (đến hết {fmtDateVN(effective)}).</>
+            )}
+          </Typography>
+          <Typography fontSize={12} sx={{ color: 'rgba(15,58,74,0.5)' }}>
+            💱 Tỷ giá áp dụng: <strong>{rateDate ? fmtDateVN(rateDate) : '— (tự cập nhật khi sửa bảng tỷ giá)'}</strong>. Bản in &amp; link khách sẽ ghi rõ tỷ giá + điều khoản biến động khi báo giá có hạng mục ngoại tệ.
+          </Typography>
+        </Stack>
+      </Paper>
+    </Box>
+  );
+}
+
 export function QuoteTermsEditor() {
   const inclusions = useQuoteStore((s) => s.draft.inclusions);
   const exclusions = useQuoteStore((s) => s.draft.exclusions);
@@ -138,6 +198,7 @@ export function QuoteTermsEditor() {
 
   return (
     <Box sx={{ mt: 3 }}>
+      <ValidityEditor />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
         <Box>
           <SectionLabel>✅ Giá bao gồm</SectionLabel>

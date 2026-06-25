@@ -37,6 +37,10 @@ export interface PublicQuoteDoc {
   pricePerPax: number;
   /** Tổng giá (VND). */
   totalPrice: number;
+  /** Hiệu lực báo giá đến HẾT ngày này (ISO 'YYYY-MM-DD'). */
+  validUntil?: string;
+  /** Dòng đóng dấu tỷ giá áp dụng (dựng sẵn cho khách); trống nếu báo giá toàn VND. */
+  rateNote?: string;
   inclusions: string[];
   exclusions: string[];
   payments: PublicQuotePayment[];
