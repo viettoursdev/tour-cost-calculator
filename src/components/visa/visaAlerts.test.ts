@@ -49,6 +49,25 @@ describe('projectAlerts — mốc trễ hạn', () => {
   });
 });
 
+describe('projectAlerts — timeline từng khách trễ hạn', () => {
+  const ams = (label: string, date: string | null) => ({ id: Math.random().toString(36).slice(2), label, date });
+  it('khách chưa chốt có mốc timeline đã qua → cảnh báo applicant_timeline', () => {
+    const p = proj({ applicants: [appl({ visaStatus: 'collecting', timeline: [ams('Deadline nhận hồ sơ', '2026-06-01')] })] });
+    const a = projectAlerts(p, TODAY).find((x) => x.kind === 'applicant_timeline');
+    expect(a?.message).toMatch(/1 khách có mốc hồ sơ trễ hạn/);
+  });
+  it('khách đã đậu/đã có visa/huỷ → bỏ qua dù mốc đã qua', () => {
+    for (const s of ['passed', 'have_visa', 'cancelled'] as const) {
+      const p = proj({ applicants: [appl({ visaStatus: s, timeline: [ams('Deadline', '2026-06-01')] })] });
+      expect(projectAlerts(p, TODAY).some((x) => x.kind === 'applicant_timeline')).toBe(false);
+    }
+  });
+  it('mốc còn trong tương lai → không cảnh báo', () => {
+    const p = proj({ applicants: [appl({ visaStatus: 'collecting', timeline: [ams('Deadline', '2026-12-01')] })] });
+    expect(projectAlerts(p, TODAY).some((x) => x.kind === 'applicant_timeline')).toBe(false);
+  });
+});
+
 describe('projectAlerts — hồ sơ thiếu & dự án kẹt', () => {
   it('thiếu hồ sơ + khởi hành trong 30 ngày → cao', () => {
     const p = proj({ departureDate: '2026-07-10', applicants: [appl({ docStatus: 'missing' })] });

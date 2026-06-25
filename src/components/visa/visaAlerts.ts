@@ -6,8 +6,9 @@
 //  sát ngày khởi hành. Không IO → dễ test, tái dùng cho panel & badge.
 // ════════════════════════════════════════════════════════════════════════
 import type { VisaProjectDoc } from '@/types';
+import { deriveVisaStatus } from './constants';
 
-export type VisaAlertKind = 'passport' | 'milestone' | 'docs' | 'stuck';
+export type VisaAlertKind = 'passport' | 'milestone' | 'docs' | 'stuck' | 'applicant_timeline';
 export type VisaAlertSeverity = 'high' | 'medium';
 
 export interface VisaAlert {
@@ -70,6 +71,24 @@ export function projectAlerts(p: VisaProjectDoc, todayISO: string): VisaAlert[] 
     const earliest = overdue.slice().sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))[0];
     const sev: VisaAlertSeverity = depDays != null && depDays <= 14 ? 'high' : 'medium';
     out.push(mk('milestone', sev, `${overdue.length} mốc trễ hạn (gần nhất: ${earliest.label} · ${earliest.date})`));
+  }
+
+  // ── Mốc TIMELINE của TỪNG khách trễ hạn (hồ sơ khách chưa chốt) ──
+  let lateApplicants = 0;
+  let earliestLabel = '';
+  let earliestDate = '';
+  for (const a of applicants) {
+    const st = deriveVisaStatus(a);
+    if (st === 'passed' || st === 'have_visa' || st === 'cancelled') continue;
+    const lateMs = (a.timeline ?? []).filter((m) => m.date && (dayDiff(todayISO, m.date) ?? 1) < 0);
+    if (lateMs.length === 0) continue;
+    lateApplicants++;
+    const e = lateMs.slice().sort((x, y) => (x.date ?? '').localeCompare(y.date ?? ''))[0];
+    if (!earliestDate || (e.date ?? '') < earliestDate) { earliestDate = e.date ?? ''; earliestLabel = e.label; }
+  }
+  if (lateApplicants > 0) {
+    const sev: VisaAlertSeverity = depDays != null && depDays <= 14 ? 'high' : 'medium';
+    out.push(mk('applicant_timeline', sev, `${lateApplicants} khách có mốc hồ sơ trễ hạn (gần nhất: ${earliestLabel} · ${earliestDate})`));
   }
 
   // ── Hồ sơ thiếu sát ngày khởi hành ──

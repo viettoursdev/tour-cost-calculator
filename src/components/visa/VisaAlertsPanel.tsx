@@ -10,6 +10,7 @@ const KIND_META: Record<VisaAlertKind, { icon: string; label: string }> = {
   milestone: { icon: '⏰', label: 'Mốc trễ' },
   docs: { icon: '📄', label: 'Hồ sơ' },
   stuck: { icon: '🐢', label: 'Tiến độ' },
+  applicant_timeline: { icon: '🗓️', label: 'Timeline khách' },
 };
 const SEV_COLOR = { high: '#dc3250', medium: '#f5a623' } as const;
 

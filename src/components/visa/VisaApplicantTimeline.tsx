@@ -1,10 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Box, Chip, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, MenuItem, Paper, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import {
   APPLICANT_MILESTONE_COLOR, APPLICANT_MILESTONE_CUSTOM_COLOR, DEFAULT_APPLICANT_TIMELINE,
-  VISA_APPLICANT_STATUS_META, defaultApplicantTimeline, deriveVisaStatus,
+  VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, defaultApplicantTimeline,
+  deriveVisaStatus, isApplicantOverdue,
 } from './constants';
-import type { Passenger, VisaApplicantMilestone } from '@/types';
+import type { Passenger, VisaApplicantMilestone, VisaApplicantStatus } from '@/types';
+
+type SortKey = 'name' | 'earliest' | 'departure';
 
 const DAY = 86400000;
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -33,6 +36,9 @@ export function VisaApplicantTimeline({ rows, departureDate, onChange }: {
   onChange?: (rows: Passenger[]) => void;
 }) {
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [statusFilter, setStatusFilter] = useState<Set<VisaApplicantStatus>>(() => new Set());
+  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('earliest');
   const editable = !!onChange;
 
   // Mỗi khách → bộ mốc hiệu lực (dùng timeline đã lưu, hoặc mốc mặc định). Memo hoá
@@ -44,6 +50,36 @@ export function VisaApplicantTimeline({ rows, departureDate, onChange }: {
     })).map((r) => ({ ...r, ms: r.tl.map((m) => ({ ...m, t: parseDate(m.date) })) })),
     [rows, departureDate],
   );
+
+  // Các trạng thái có mặt trong đoàn (để dựng bộ lọc gọn — chỉ hiện cái đang dùng).
+  const presentStatuses = useMemo(
+    () => VISA_APPLICANT_STATUS_ORDER.filter((s) => rows.some((p) => deriveVisaStatus(p) === s)),
+    [rows],
+  );
+  const toggleStatus = (s: VisaApplicantStatus) =>
+    setStatusFilter((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+
+  // Lọc + sắp xếp danh sách HIỂN THỊ (giữ perRow đầy đủ cho kéo-thả theo id).
+  const shown = useMemo(() => {
+    const earliestT = (ms: { t: number | null }[]) => {
+      const ts = ms.map((m) => m.t).filter((x): x is number => x != null);
+      return ts.length ? Math.min(...ts) : Infinity;
+    };
+    let r = perRow;
+    if (statusFilter.size) r = r.filter((x) => statusFilter.has(deriveVisaStatus(x.p)));
+    if (onlyOverdue) r = r.filter((x) => isApplicantOverdue(x.p));
+    const arr = [...r];
+    arr.sort((a, b) => {
+      if (sortKey === 'name') return (a.p.name || '').localeCompare(b.p.name || '');
+      if (sortKey === 'departure') {
+        const da = a.tl.find((m) => m.key === 'departure')?.date ?? '';
+        const db = b.tl.find((m) => m.key === 'departure')?.date ?? '';
+        return (da || '9999').localeCompare(db || '9999');
+      }
+      return earliestT(a.ms) - earliestT(b.ms);
+    });
+    return arr;
+  }, [perRow, statusFilter, onlyOverdue, sortKey]);
 
   // Dời 1 mốc của 1 khách đi `deltaDays`. Ghi NGUYÊN bộ mốc hiển thị (cùng id) để
   // không lệch khi khách đang dùng mốc mặc định chưa lưu.
@@ -59,23 +95,60 @@ export function VisaApplicantTimeline({ rows, departureDate, onChange }: {
   };
 
   const range = useMemo(() => {
-    const times = perRow.flatMap((r) => r.ms.map((m) => m.t).filter((x): x is number => x != null));
+    const times = shown.flatMap((r) => r.ms.map((m) => m.t).filter((x): x is number => x != null));
     if (times.length === 0) return null;
     let min = Math.min(...times);
     let max = Math.max(...times);
     if (min === max) { min -= 15 * DAY; max += 15 * DAY; }
     else { const pad = Math.max(2 * DAY, (max - min) * 0.06); min -= pad; max += pad; }
     return { min: startOfDay(min), max: startOfDay(max) };
-  }, [perRow]);
+  }, [shown]);
+
+  // Thanh lọc/sắp xếp — tách riêng để hiện cả khi không có mốc ngày nào.
+  const controls = (
+    <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 1 }}>
+      {presentStatuses.map((s) => {
+        const meta = VISA_APPLICANT_STATUS_META[s];
+        const on = statusFilter.has(s);
+        return (
+          <Chip key={s} size="small" label={meta.label} onClick={() => toggleStatus(s)}
+            variant={on ? 'filled' : 'outlined'}
+            sx={{ fontWeight: 700, cursor: 'pointer', color: on ? '#fff' : meta.color, bgcolor: on ? meta.color : 'transparent', borderColor: meta.color, '&:hover': { bgcolor: on ? meta.color : `${meta.color}1a` } }} />
+        );
+      })}
+      <Chip size="small" label="⚠ Chỉ quá hạn" onClick={() => setOnlyOverdue((v) => !v)}
+        variant={onlyOverdue ? 'filled' : 'outlined'} color="error"
+        sx={{ fontWeight: 700, cursor: 'pointer' }} />
+      <Box sx={{ flex: 1 }} />
+      <TextField select size="small" label="Sắp xếp" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} sx={{ width: 160 }}>
+        <MenuItem value="earliest">Mốc sớm nhất</MenuItem>
+        <MenuItem value="departure">Ngày khởi hành</MenuItem>
+        <MenuItem value="name">Tên khách</MenuItem>
+      </TextField>
+    </Stack>
+  );
 
   if (rows.length === 0) {
     return <Typography color="text.disabled" sx={{ py: 4, textAlign: 'center' }}>Chưa có khách nào.</Typography>;
   }
+  if (shown.length === 0) {
+    return (
+      <Stack spacing={1.5}>
+        {controls}
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>
+          Không có khách khớp bộ lọc.
+        </Paper>
+      </Stack>
+    );
+  }
   if (!range) {
     return (
-      <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>
-        Chưa có mốc ngày nào. Mở tab “📋 Danh sách”, bung từng khách và nhập các mốc timeline.
-      </Paper>
+      <Stack spacing={1.5}>
+        {controls}
+        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>
+          Chưa có mốc ngày nào. Mở tab “📋 Danh sách”, bung từng khách và nhập các mốc timeline.
+        </Paper>
+      </Stack>
     );
   }
 
@@ -94,6 +167,7 @@ export function VisaApplicantTimeline({ rows, departureDate, onChange }: {
 
   return (
     <Stack spacing={1.5}>
+      {controls}
       {/* Chú giải */}
       <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap alignItems="center">
         <Typography variant="caption" fontWeight={700} color="text.secondary">Mốc:</Typography>
@@ -117,7 +191,9 @@ export function VisaApplicantTimeline({ rows, departureDate, onChange }: {
       <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
         {/* Trục ngày */}
         <Box sx={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.1)', bgcolor: '#fafafa', position: 'sticky', top: 0, zIndex: 2 }}>
-          <Box sx={{ width: LABEL_W, flexShrink: 0, px: 1, py: 0.5, fontWeight: 800, fontSize: 12 }}>{rows.length} khách</Box>
+          <Box sx={{ width: LABEL_W, flexShrink: 0, px: 1, py: 0.5, fontWeight: 800, fontSize: 12 }}>
+            {shown.length}{shown.length !== rows.length ? `/${rows.length}` : ''} khách
+          </Box>
           <Box sx={{ flex: 1, position: 'relative', height: 24 }}>
             {ticks.map((t) => (
               <Box key={t} sx={{ position: 'absolute', left: `${pct(t)}%`, top: 0, transform: 'translateX(-50%)', fontSize: 10, color: 'text.secondary', whiteSpace: 'nowrap', pt: 0.5 }}>
@@ -128,7 +204,7 @@ export function VisaApplicantTimeline({ rows, departureDate, onChange }: {
         </Box>
 
         {/* Dòng từng khách */}
-        {perRow.map(({ p, ms }, ri) => {
+        {shown.map(({ p, ms }, ri) => {
           const st = deriveVisaStatus(p);
           const meta = VISA_APPLICANT_STATUS_META[st];
           const resolved = st === 'passed' || st === 'have_visa' || st === 'cancelled';
