@@ -38,4 +38,7 @@ jobs:
       - name: Push migrations to production
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        # --include-all applies migrations even when an earlier-numbered file
+        # (e.g. 0041) was committed after a higher one (0042) was already on
+        # remote; plain `db push` refuses such out-of-order migrations.
+        run: supabase db push --include-all --db-url "$SUPABASE_DB_URL"
