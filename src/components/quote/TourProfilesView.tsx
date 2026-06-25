@@ -15,6 +15,8 @@ import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useMenuStore } from '@/stores/menuStore';
+import { useItineraryStore } from '@/stores/itineraryStore';
 import { canShareRecord } from '@/auth/recordAccess';
 import { userLabel } from '@/auth/ROLES';
 import { sbSendNotification } from '@/lib/supabase';
@@ -27,6 +29,9 @@ import type { CloudQuoteEntry, Collaborator, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
   st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
+
+/** Số lượng thực thể liên kết gom theo hồ sơ (qua các báo giá thuộc hồ sơ). */
+type ProfileLinks = { contract: number; visa: number; menu: number; itinerary: number };
 
 const prefsKey = (u: string) => `vte_tourprofile_prefs_${u}`;
 const loadExpanded = (u?: string): Set<string> => {
@@ -48,6 +53,8 @@ export function TourProfilesView() {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const contracts = useContractStore((s) => s.contracts);
   const visaProjects = useVisaProjectStore((s) => s.projects);
+  const menus = useMenuStore((s) => s.list);
+  const itineraries = useItineraryStore((s) => s.list);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const showPrice = canSeePrices(currentUser);
@@ -87,6 +94,17 @@ export function TourProfilesView() {
     if (!pq) return 'request';
     const c = contracts.find((x) => x.linkedQuoteId === pq.cloudId);
     return dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate });
+  };
+
+  // Liên kết của hồ sơ = gom theo MỌI báo giá thuộc hồ sơ (đọc gián tiếp qua linkedQuoteId).
+  const linksOf = (p: TourProfile): ProfileLinks => {
+    const ids = new Set((quotesByProfile.get(p.id) ?? []).map((q) => q.cloudId));
+    return {
+      contract: contracts.filter((c) => c.linkedQuoteId && ids.has(c.linkedQuoteId)).length,
+      visa: visaProjects.filter((v) => v.linkedQuoteId && ids.has(v.linkedQuoteId)).length,
+      menu: menus.filter((m) => m.linkedQuoteId && ids.has(m.linkedQuoteId)).length,
+      itinerary: itineraries.filter((i) => i.linkedQuoteId && ids.has(i.linkedQuoteId)).length,
+    };
   };
 
   const toggle = (id: string) => {
@@ -167,8 +185,7 @@ export function TourProfilesView() {
               stage={stageOf(p)}
               primary={primaryOf(p)}
               quotes={quotesByProfile.get(p.id) ?? []}
-              visaCount={visaProjects.filter((v) => (quotesByProfile.get(p.id) ?? []).some((q) => q.cloudId === v.linkedQuoteId)).length}
-              contractCount={contracts.filter((c) => (quotesByProfile.get(p.id) ?? []).some((q) => q.cloudId === c.linkedQuoteId)).length}
+              links={linksOf(p)}
               expanded={expanded.has(p.id)}
               showPrice={showPrice}
               currentUser={currentUser}
@@ -185,11 +202,11 @@ export function TourProfilesView() {
 }
 
 function ProfileRow({
-  profile, stage, primary, quotes, visaCount, contractCount, expanded, showPrice,
+  profile, stage, primary, quotes, links, expanded, showPrice,
   currentUser, users, onToggle, onOpenProfile, onOpenQuote,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; quotes: CloudQuoteEntry[];
-  visaCount: number; contractCount: number; expanded: boolean; showPrice: boolean;
+  links: ProfileLinks; expanded: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
 }) {
@@ -213,8 +230,10 @@ function ProfileRow({
             <Meta label="Khách" value={profile.customerName || '—'} />
             <Meta label="Khởi hành" value={profile.startDate ? new Date(profile.startDate).toLocaleDateString('vi-VN') : '—'} />
             <Meta label="Báo giá" value={String(quotes.length)} />
-            {contractCount > 0 && <Meta label="Hợp đồng" value={String(contractCount)} />}
-            {visaCount > 0 && <Meta label="Visa" value={String(visaCount)} />}
+            {links.contract > 0 && <Meta label="Hợp đồng" value={String(links.contract)} />}
+            {links.visa > 0 && <Meta label="Visa" value={String(links.visa)} />}
+            {links.menu > 0 && <Meta label="Thực đơn" value={String(links.menu)} />}
+            {links.itinerary > 0 && <Meta label="Chương trình" value={String(links.itinerary)} />}
             {showPrice && primary && <Meta label="Giá trị" value={fmtVND(primary.totalCost ?? 0)} />}
           </Stack>
         </Box>

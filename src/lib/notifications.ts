@@ -39,8 +39,11 @@ import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useTodoStore } from '@/stores/todoStore';
 import { useProcessStore } from '@/stores/processStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
+import { useContractStore } from '@/stores/contractStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK, canReceivePush } from '@/auth/ROLES';
+import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from '@/components/quote/dealStage';
 import { daysUntil } from '@/lib/dateUtils';
 import type { User } from '@/types';
 
@@ -574,5 +577,87 @@ export async function checkDormantCustomers(user: User): Promise<void> {
     try { localStorage.setItem(DORMANT_KEY, JSON.stringify(seen.slice(-100))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkDormantCustomers failed:', (e as Error).message);
+  }
+}
+
+// ── Hồ sơ tour: nhắc người THEO DÕI / CỘNG TÁC khi đổi giai đoạn hoặc sắp khởi hành ──
+const TPF_DEP_KEY = 'vte_tour_profile_dep_notified';     // dedup mốc khởi hành (1 lần/mốc)
+const TPF_STAGE_KEY = 'vte_tour_profile_stage_seen';     // baseline giai đoạn đã thấy {pid:u -> stage}
+
+const STAGE_LABEL = (st: DealStage): string =>
+  (st === 'lost' ? DEAL_STAGE_LOST : DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]).short;
+
+/**
+ * Nhắc người theo dõi (follower) & cộng tác (collaborator) một hồ sơ tour khi:
+ *  (1) giai đoạn (suy từ báo giá chính) THAY ĐỔI so với lần thấy trước, và
+ *  (2) tour sắp khởi hành (mốc 7/3/1 ngày).
+ * Chạy per-user trong vòng nhắc của MainApp; dedup qua localStorage như các check khác.
+ */
+export async function checkTourProfileFollowers(user: User): Promise<void> {
+  try {
+    const profiles = useTourProfileStore.getState().profiles;
+    const quotes = useQuoteHistoryStore.getState().quotes;
+    const contracts = useContractStore.getState().contracts;
+
+    let depSeen: string[] = [];
+    try { depSeen = JSON.parse(localStorage.getItem(TPF_DEP_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const depSet = new Set(depSeen);
+    let stageSeen: Record<string, string> = {};
+    try { stageSeen = JSON.parse(localStorage.getItem(TPF_STAGE_KEY) ?? '{}') as Record<string, string>; } catch { /* ignore */ }
+
+    for (const p of profiles) {
+      if (p.status === 'archived') continue;
+      const involved =
+        (p.followers ?? []).some((f) => f.u === user.u) ||
+        (p.collaborators ?? []).some((c) => c.u === user.u);
+      if (!involved) continue;
+
+      const pqs = quotes.filter((q) => q.tourProfileId === p.id);
+      const pq = pqs.find((q) => q.cloudId === p.primaryQuoteId) ?? pqs[0];
+      if (!pq) continue;
+      const c = contracts.find((x) => x.linkedQuoteId === pq.cloudId);
+      const stage = dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate });
+      const link = p.primaryQuoteId
+        ? { kind: 'quote' as const, id: p.primaryQuoteId, label: p.code }
+        : undefined;
+
+      // (1) đổi giai đoạn — chỉ nhắc khi đã có baseline & khác baseline (lần đầu chỉ ghi nhận).
+      const sKey = `${p.id}:${user.u}`;
+      const last = stageSeen[sKey];
+      if (last && last !== stage) {
+        await sbSendNotification(user.u, {
+          type: 'announcement',
+          title: `🔔 Hồ sơ ${p.code} chuyển giai đoạn`,
+          message: `Tour "${p.name || p.code}" bạn đang theo dõi đã chuyển sang giai đoạn “${STAGE_LABEL(stage)}”.`,
+          createdBy: 'Hệ thống',
+          ...(link ? { link } : {}),
+        });
+      }
+      stageSeen[sKey] = stage;
+
+      // (2) sắp khởi hành — mốc 7/3/1 ngày, mỗi mốc 1 lần.
+      const d = daysUntil(pq.departDate);
+      if (d !== null && d >= 0) {
+        const ms = d <= 1 ? '1d' : d <= 3 ? '3d' : d <= 7 ? '7d' : null;
+        if (ms) {
+          const key = `${p.id}:${user.u}:${ms}:${pq.departDate}`;
+          if (!depSet.has(key)) {
+            depSet.add(key);
+            await sbSendNotification(user.u, {
+              type: 'announcement',
+              title: '🧭 Tour theo dõi sắp khởi hành',
+              message: `Tour "${p.name || p.code}" khởi hành ${new Date(pq.departDate!).toLocaleDateString('vi-VN')} — còn ~${d} ngày.`,
+              createdBy: 'Hệ thống',
+              ...(link ? { link } : {}),
+            });
+          }
+        }
+      }
+    }
+
+    try { localStorage.setItem(TPF_DEP_KEY, JSON.stringify([...depSet].slice(-500))); } catch { /* ignore */ }
+    try { localStorage.setItem(TPF_STAGE_KEY, JSON.stringify(stageSeen)); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkTourProfileFollowers failed:', (e as Error).message);
   }
 }
