@@ -3,15 +3,16 @@ import {
   Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Stack,
   TextField, Typography,
 } from '@mui/material';
+import { toast } from '@/stores/toastStore';
 import { useVisaProductsStore } from '@/stores/visaProductsStore';
+import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { normalizeVN } from '@/lib/search';
 import { actualMargin, estimateVisaCost } from './visaCost';
 import type { VisaProjectDoc } from '@/types';
 
 const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN') + ' đ';
-const lsKey = (id: string) => `vte_visa_cost_${id}`;
 
-/** Dự toán chi phí visa của đoàn theo bảng giá + đối chiếu thực chi (lưu localStorage). */
+/** Dự toán chi phí visa của đoàn theo bảng giá + đối chiếu thực chi (lưu cloud trên dự án). */
 export function VisaCostDialog({ project, count, onClose }: {
   project: VisaProjectDoc; count: number; onClose: () => void;
 }) {
@@ -27,14 +28,14 @@ export function VisaCostDialog({ project, count, onClose }: {
   const [productId, setProductId] = useState('');
   const [pax, setPax] = useState(count || 0);
   const [actual, setActual] = useState(0);
+  const [busy, setBusy] = useState(false);
 
-  // Nạp lựa chọn đã lưu (localStorage theo dự án).
+  // Nạp chi phí đã lưu trên dự án (cloud).
   useEffect(() => {
-    let saved: { productId?: string; count?: number; actualSpend?: number } = {};
-    try { saved = JSON.parse(localStorage.getItem(lsKey(project.id)) || '{}'); } catch { /* ignore */ }
-    setProductId(saved.productId && products.some((p) => p.id === saved.productId) ? saved.productId : (matches[0]?.id ?? ''));
-    if (saved.count) setPax(saved.count);
-    if (saved.actualSpend) setActual(saved.actualSpend);
+    const c = project.costing;
+    setProductId(c?.productId && products.some((p) => p.id === c.productId) ? c.productId : (matches[0]?.id ?? ''));
+    if (c?.count) setPax(c.count);
+    if (c?.actualSpend) setActual(c.actualSpend);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, products.length]);
 
@@ -42,9 +43,24 @@ export function VisaCostDialog({ project, count, onClose }: {
   const est = product ? estimateVisaCost(product, pax, rates) : null;
   const margin = est ? actualMargin(est.totalSell, actual) : 0;
 
-  const save = () => {
-    try { localStorage.setItem(lsKey(project.id), JSON.stringify({ productId, count: pax, actualSpend: actual })); } catch { /* ignore */ }
-    onClose();
+  // Lưu vào dự án (merge vào bản MỚI NHẤT trong store để không đè applicants chưa lưu).
+  const save = async () => {
+    setBusy(true);
+    try {
+      const cur = useVisaProjectStore.getState().projects.find((p) => p.id === project.id) ?? project;
+      await useVisaProjectStore.getState().save({
+        ...cur,
+        costing: {
+          productId, count: pax, actualSpend: actual,
+          estTotalCost: est?.totalCost, estTotalSell: est?.totalSell,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      toast('✅ Đã lưu chi phí visa lên dự án.');
+      onClose();
+    } catch (e) {
+      toast('Lỗi lưu chi phí: ' + (e as Error).message, 'warning');
+    } finally { setBusy(false); }
   };
 
   return (
@@ -89,9 +105,10 @@ export function VisaCostDialog({ project, count, onClose }: {
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Đóng</Button>
-        <Button variant="contained" onClick={save} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
-          Lưu (máy này)
+        <Button onClick={onClose} disabled={busy}>Đóng</Button>
+        <Button variant="contained" onClick={() => void save()} disabled={busy || products.length === 0}
+          sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+          {busy ? 'Đang lưu…' : 'Lưu lên dự án'}
         </Button>
       </DialogActions>
     </Dialog>

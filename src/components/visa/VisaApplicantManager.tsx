@@ -260,8 +260,10 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     setBusy(true);
     try {
       const applicants = passengersToApplicants(list);
+      // Merge từ bản MỚI NHẤT trong store để không đè chi phí visa (costing) vừa lưu nơi khác.
+      const cur = useVisaProjectStore.getState().projects.find((p) => p.id === project.id) ?? project;
       await save({
-        ...project,
+        ...cur,
         applicants,
         ...countsFromApplicants(applicants),
         updatedAt: new Date().toISOString(),

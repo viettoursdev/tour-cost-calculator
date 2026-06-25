@@ -189,6 +189,16 @@ export interface VisaApplicant {
   roomNo?: string;              // Nhãn/số phòng để ghép khách ở chung
 }
 
+/** Chi phí visa của một dự án: dự toán (theo bảng giá) + thực chi → biên lợi. */
+export interface VisaCosting {
+  productId?: string;       // sản phẩm bảng giá đã chọn
+  count?: number;           // số khách dùng để dự toán
+  actualSpend?: number;     // thực chi (VND)
+  estTotalCost?: number;    // dự toán giá vốn đoàn (VND) — chốt tại lúc lưu
+  estTotalSell?: number;    // dự toán giá bán đoàn (VND)
+  updatedAt?: string;
+}
+
 export interface VisaProjectDoc {
   id: string;
   code: string;
@@ -216,6 +226,8 @@ export interface VisaProjectDoc {
   milestones: VisaMilestone[];
   // Checklist (Đợt 4)
   applicants?: VisaApplicant[];
+  // Chi phí visa (dự toán + thực chi)
+  costing?: VisaCosting;
   // Quyền xem / meta
   collaborators: string[];
   createdByUsername: string;
