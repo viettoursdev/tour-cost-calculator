@@ -11,7 +11,11 @@ import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
+import { useVisaProductsStore } from '@/stores/visaProductsStore';
 import { useLinkNavStore } from '@/stores/linkNavStore';
+import { estimateVisaCost } from '@/components/visa/visaCost';
+import { normalizeVN } from '@/lib/search';
+import { fmtVND } from './calc';
 import { VisaProjectEditor } from '@/components/visa/VisaProjectEditor';
 import { VisaApplicantManager } from '@/components/visa/VisaApplicantManager';
 import {
@@ -39,6 +43,8 @@ export function TourVisaPanel() {
   const tourProfileId = useQuoteStore((s) => s.draft.tourProfileId);
   const projects = useVisaProjectStore((s) => s.projects);
   const remove = useVisaProjectStore((s) => s.remove);
+  const visaProducts = useVisaProductsStore((s) => s.products);
+  const visaRates = useVisaProductsStore((s) => s.rates);
   const users = useAuthStore((s) => s.users);
   const user = useAuthStore((s) => s.currentUser);
 
@@ -58,6 +64,20 @@ export function TourVisaPanel() {
 
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
   const presetLabel = VISA_PROC_PRESETS.find((p) => p.key === visaPresetKeyForCountry(visaCountry))?.label;
+
+  // Dự toán chi phí visa của 1 bộ hồ sơ theo bảng giá (khớp nước) × số khách.
+  const costOf = (p: VisaProjectDoc) => {
+    const c = normalizeVN(p.country);
+    const prod = visaProducts.find((x) => x.active !== false && c && normalizeVN(x.country).includes(c));
+    if (!prod) return null;
+    const n = p.applyCount || (p.applicants?.length ?? 0);
+    return estimateVisaCost(prod, n, visaRates);
+  };
+  const totalVisaSell = useMemo(
+    () => linked.reduce((s, p) => s + (costOf(p)?.totalSell ?? 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [linked, visaProducts, visaRates],
+  );
 
   const openInVisaApp = (id: string) => {
     if (!window.confirm('Mở dự án này trong phần Quản lý Visa? Thay đổi chưa lưu của báo giá có thể mất.')) return;
@@ -98,6 +118,12 @@ export function TourVisaPanel() {
           </Typography>
         </Box>
         <Box sx={{ flex: 1 }} />
+        {totalVisaSell > 0 && (
+          <Tooltip title="Tổng dự toán chi phí visa của tour (theo bảng giá × số khách)">
+            <Chip color="success" variant="outlined" sx={{ fontWeight: 800 }}
+              label={`💰 Dự toán visa: ${fmtVND(totalVisaSell)}`} />
+          </Tooltip>
+        )}
         <Button
           variant="contained" startIcon={<AddIcon />} disabled={!cid}
           onClick={openAddVisa}
@@ -144,6 +170,11 @@ export function TourVisaPanel() {
                         {(p.supportStaff?.length ?? 0) > 0 ? ` · Hỗ trợ: ${p.supportStaff.map(nameOf).join(', ')}` : ''}
                       </Typography>
                     )}
+                    {(() => { const e = costOf(p); return e ? (
+                      <Typography variant="caption" sx={{ display: 'block', mt: 0.25, color: '#0d7a6a', fontWeight: 700 }}>
+                        💰 Dự toán visa: {fmtVND(e.totalSell)} <span style={{ color: '#94a3b8', fontWeight: 400 }}>(vốn {fmtVND(e.totalCost)})</span>
+                      </Typography>
+                    ) : null; })()}
                   </Box>
 
                   <Stack direction="row" spacing={1.5} alignItems="center">
