@@ -329,6 +329,33 @@ const TOUR_WINDOW_DAYS = 7;
 const ictDate = (offsetDays = 0) =>
   new Date(Date.now() + 7 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10);
 
+// ── Tình trạng visa của khách (mirror src/components/visa/constants.ts) ──
+const VISA_RESOLVED = new Set(['passed', 'have_visa', 'cancelled']);
+function deriveVisaStatus(a) {
+  if (a.visaStatus) return a.visaStatus;
+  if (a.result === 'passed') return 'passed';
+  if (a.result === 'failed') return 'failed';
+  if (a.result === 'have_visa') return 'have_visa';
+  if (a.docStatus === 'complete') return 'collected';
+  if (a.docStatus === 'submitted') return 'collecting';
+  return 'deployed';
+}
+// Đếm khách CHƯA chốt có mốc timeline đã quá hạn (so với hôm nay ICT, yyyy-mm-dd).
+function projectVisaOverdue(p, today) {
+  if (p.status === 'completed' || p.status === 'cancelled') return null;
+  let count = 0; let earliestDate = ''; let earliestLabel = '';
+  for (const a of p.applicants || []) {
+    if (VISA_RESOLVED.has(deriveVisaStatus(a))) continue;
+    const late = (a.timeline || []).filter((m) => m.date && String(m.date).slice(0, 10) < today);
+    if (!late.length) continue;
+    count++;
+    const e = late.slice().sort((x, y) => String(x.date).localeCompare(String(y.date)))[0];
+    const ed = String(e.date).slice(0, 10);
+    if (!earliestDate || ed < earliestDate) { earliestDate = ed; earliestLabel = e.label || 'Mốc'; }
+  }
+  return count ? { project: p.name || '(dự án visa)', country: p.country || '', overdueGuests: count, earliest: `${earliestLabel} · ${earliestDate}` } : null;
+}
+
 async function sbRest(env, path) {
   const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
     headers: {
@@ -361,7 +388,8 @@ const DIGEST_PROMPT = (name, data) =>
   `CHỈ trả về nội dung tin nhắn (không tiêu đề "Bản tin sáng", không markdown heading, không lời chào dài dòng).\n\n` +
   `Dữ liệu hôm nay (${ictDate()}):\n` +
   `- Báo giá cần follow-up (đã gửi/đang deal nhưng lâu chưa cập nhật):\n${JSON.stringify(data.followups, null, 0)}\n` +
-  `- Tour khởi hành trong 7 ngày tới:\n${JSON.stringify(data.tours, null, 0)}\n\n` +
+  `- Tour khởi hành trong 7 ngày tới:\n${JSON.stringify(data.tours, null, 0)}\n` +
+  `- Hồ sơ visa có khách trễ mốc timeline:\n${JSON.stringify(data.visaAlerts, null, 0)}\n\n` +
   `Hãy tóm tắt thành 1–2 đoạn ngắn + gạch đầu dòng những việc cần ưu tiên hôm nay. ` +
   `Nếu một mục trống thì bỏ qua, đừng bịa.`;
 
@@ -395,6 +423,20 @@ async function runMorningDigest(env) {
     collabByQuote.get(c.quote_id).push(c.username);
   }
 
+  // 3b) Dự án visa có khách trễ mốc timeline (gửi cho người phụ trách/collab).
+  const visaProjects = await sbRest(
+    env,
+    'visa_projects?select=name,country,status,applicants,created_by_username,main_staff_usernames,support_staff_usernames,collaborator_usernames',
+  );
+  const visaOverdue = visaProjects
+    .map((p) => ({ p, info: projectVisaOverdue(p, today) }))
+    .filter((x) => x.info);
+  const involvedInVisa = (p, username) =>
+    p.created_by_username === username
+    || (p.main_staff_usernames || []).includes(username)
+    || (p.support_staff_usernames || []).includes(username)
+    || (p.collaborator_usernames || []).includes(username);
+
   // 4) Chống chạy trùng: bỏ user đã có "Bản tin sáng" trong 12h gần nhất.
   const since = new Date(Date.now() - 12 * 3600000).toISOString();
   const recentDigests = await sbRest(
@@ -419,11 +461,14 @@ async function runMorningDigest(env) {
         && q.status !== 'cancelled' && q.status !== 'not_selected'
         && (q.created_by_username === u.username || (collabByQuote.get(q.id) ?? []).includes(u.username)))
       .map(fmtQuote);
-    if (!followups.length && !tours.length) continue; // không có gì để báo
+    const visaAlerts = visaOverdue
+      .filter(({ p }) => involvedInVisa(p, u.username))
+      .map(({ info }) => info);
+    if (!followups.length && !tours.length && !visaAlerts.length) continue; // không có gì để báo
 
     let message;
     try {
-      message = await callClaude(env, [{ type: 'text', text: DIGEST_PROMPT(u.name || u.username, { followups, tours }) }], 1200, MODEL_ASSISTANT);
+      message = await callClaude(env, [{ type: 'text', text: DIGEST_PROMPT(u.name || u.username, { followups, tours, visaAlerts }) }], 1200, MODEL_ASSISTANT);
     } catch (e) {
       console.warn(`Bản tin sáng: Claude lỗi cho ${u.username}:`, e.message || e);
       continue;
