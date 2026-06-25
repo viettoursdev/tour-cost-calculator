@@ -5,6 +5,7 @@ import {
   sbUpsertTourProfile,
   sbDeleteTourProfile,
   sbNextTourCode,
+  sbSetQuoteTourProfile,
 } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
@@ -45,12 +46,17 @@ type State = {
   save: (p: TourProfile) => Promise<void>;
   remove: (id: string) => Promise<void>;
   setPrimaryQuote: (id: string, quoteId: string) => Promise<void>;
+  /** Đồng bộ NGƯỢC thông tin hiển thị (tên/khách/ngày/pax) từ báo giá chính vào hồ sơ
+   *  để báo cáo trực tiếp trên DB cũng đúng. Bỏ qua nếu không có gì đổi. */
+  syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
   addCollaborator: (id: string, c: Collaborator) => Promise<void>;
   addFollower: (id: string, c: Collaborator) => Promise<void>;
   archive: (id: string, on: boolean) => Promise<void>;
   /** Khi xoá một báo giá: nếu là báo giá CHÍNH thì chuyển primary sang báo giá khác
    *  còn lại của hồ sơ; nếu là báo giá cuối cùng thì lưu trữ (archive) hồ sơ. */
   onQuoteDeleted: (profileId: string, deletedCloudId: string) => Promise<void>;
+  /** Chuyển một báo giá từ hồ sơ này sang hồ sơ khác (sửa khi gắn nhầm). */
+  moveQuote: (cloudId: string, fromProfileId: string, toProfileId: string) => Promise<void>;
 };
 
 export const useTourProfileStore = create<State>()(
@@ -148,6 +154,24 @@ export const useTourProfileStore = create<State>()(
       logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Đổi báo giá chính');
     },
 
+    syncFromPrimary: async (id, info) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      const next: TourProfile = {
+        ...p,
+        name: info.name?.trim() || p.name,
+        customerId: info.customerId ?? p.customerId,
+        customerName: info.customerName ?? p.customerName,
+        dest: info.dest ?? p.dest,
+        startDate: info.startDate !== undefined ? info.startDate : p.startDate,
+        pax: info.pax ?? p.pax,
+      };
+      // Chỉ ghi khi thực sự có thay đổi (tránh ghi thừa mỗi lần lưu báo giá).
+      if (next.name === p.name && next.customerId === p.customerId && next.customerName === p.customerName &&
+          next.dest === p.dest && next.startDate === p.startDate && next.pax === p.pax) return;
+      await get().save(next);
+    },
+
     addCollaborator: async (id, c) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
@@ -188,6 +212,19 @@ export const useTourProfileStore = create<State>()(
         await get().save({ ...p, primaryQuoteId: decision.primaryQuoteId });
         logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Tự chuyển báo giá chính (báo giá cũ bị xoá)');
       }
+    },
+
+    moveQuote: async (cloudId, fromProfileId, toProfileId) => {
+      if (fromProfileId === toProfileId) return;
+      const target = get().profiles.find((x) => x.id === toProfileId);
+      if (!target) return;
+      // 1) Đổi tour_profile_id của báo giá sang hồ sơ đích.
+      await sbSetQuoteTourProfile(cloudId, target.id, target.code);
+      // 2) Hồ sơ nguồn: nếu báo giá vừa chuyển là báo giá chính → tự dọn (như khi xoá).
+      await get().onQuoteDeleted(fromProfileId, cloudId);
+      // 3) Hồ sơ đích: nếu chưa có báo giá chính → đặt báo giá này làm chính.
+      if (!target.primaryQuoteId) await get().setPrimaryQuote(target.id, cloudId);
+      logAudit('update', 'Hồ sơ tour', target.name || target.code, 'Nhận báo giá chuyển từ hồ sơ khác');
     },
   })),
 );

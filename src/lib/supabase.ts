@@ -4086,6 +4086,21 @@ export async function sbSetRegularEntryLink(
   if (error) throw new Error('sbSetRegularEntryLink: ' + error.message);
 }
 
+/** Đổi hồ sơ tour của một báo giá (chuyển báo giá sang hồ sơ khác). */
+export async function sbSetQuoteTourProfile(
+  cloudId: string,
+  tourProfileId: string | null,
+  tourCode: string | null,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('quotes').update({
+    tour_profile_id: tourProfileId,
+    tour_code: tourCode,
+    updated_at: new Date().toISOString(),
+  }).eq('cloud_id', cloudId);
+  if (error) throw new Error('sbSetQuoteTourProfile: ' + error.message);
+}
+
 /**
  * Same as sbSetRegularEntryLink for DMC quotes.
 

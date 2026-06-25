@@ -15,6 +15,7 @@ import StarBorderIcon from '@mui/icons-material/StarBorder';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import AddIcon from '@mui/icons-material/Add';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import { useAuthStore } from '@/stores/authStore';
@@ -71,6 +72,7 @@ export function TourProfilesView() {
   const setPrimaryQuote = useTourProfileStore((s) => s.setPrimaryQuote);
   const archive = useTourProfileStore((s) => s.archive);
   const createProfile = useTourProfileStore((s) => s.create);
+  const moveQuote = useTourProfileStore((s) => s.moveQuote);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const showPrice = canSeePrices(currentUser);
 
@@ -79,6 +81,7 @@ export function TourProfilesView() {
   const [showDash, setShowDash] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
 
@@ -326,6 +329,7 @@ export function TourProfilesView() {
                 onOpenQuote={(cid) => void openQuote(cid, false)}
                 onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
                 onArchive={(on) => void archive(p.id, on)}
+                onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
               />
             );
           })}
@@ -341,7 +345,53 @@ export function TourProfilesView() {
           if (created) setExpanded((prev) => new Set(prev).add(created.id));
         }}
       />
+
+      <MoveQuoteDialog
+        state={moveState}
+        options={rows.filter((p) => p.id !== moveState?.fromProfileId && p.status !== 'archived')}
+        onClose={() => setMoveState(null)}
+        onMove={async (toId) => {
+          if (moveState) await moveQuote(moveState.cloudId, moveState.fromProfileId, toId);
+          setMoveState(null);
+        }}
+      />
     </Box>
+  );
+}
+
+/** Chuyển một báo giá sang hồ sơ tour khác (sửa khi gắn nhầm). */
+function MoveQuoteDialog({ state, options, onClose, onMove }: {
+  state: { cloudId: string; fromProfileId: string; quoteName: string } | null;
+  options: TourProfile[];
+  onClose: () => void;
+  onMove: (toProfileId: string) => Promise<void>;
+}) {
+  const [pick, setPick] = useState<TourProfile | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (state) { setPick(null); setBusy(false); } }, [state]);
+  const submit = async () => { if (!pick) return; setBusy(true); try { await onMove(pick.id); } finally { setBusy(false); } };
+  return (
+    <Dialog open={!!state} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Chuyển báo giá sang hồ sơ khác</DialogTitle>
+      <DialogContent>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          Chuyển <strong>{state?.quoteName}</strong> sang một hồ sơ tour khác. Hồ sơ nguồn sẽ tự
+          chuyển báo giá chính (hoặc lưu trữ nếu hết báo giá).
+        </Typography>
+        <Autocomplete
+          options={options} value={pick} onChange={(_, v) => setPick(v)}
+          getOptionLabel={(p) => `${p.code} — ${p.name || '(chưa đặt tên)'}`}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          renderOption={(props, p) => (<li {...props} key={p.id}><Box><Typography variant="body2" fontWeight={700}>{p.code}</Typography><Typography variant="caption" color="text.secondary">{p.name || '(chưa đặt tên)'}</Typography></Box></li>)}
+          renderInput={(pr) => <TextField {...pr} autoFocus label="Hồ sơ đích" placeholder="Chọn hồ sơ…" />}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Huỷ</Button>
+        <Button variant="contained" disabled={busy || !pick} onClick={() => void submit()}
+          sx={{ background: LEGACY.headerGradient }}>{busy ? 'Đang chuyển…' : 'Chuyển'}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -421,13 +471,14 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 
 function ProfileRow({
   profile, stage, primary, guideCount, quotes, links, expanded, showPrice,
-  currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive,
+  currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onMoveQuote,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
   links: ProfileLinks; expanded: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
   onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void;
+  onMoveQuote: (cloudId: string, quoteName: string) => void;
 }) {
   const sm = STAGE_META(stage);
   const canShare = canShareRecord(currentUser, profile, users);
@@ -506,6 +557,11 @@ function ProfileRow({
                     {canShare && !isPrimary && (
                       <Tooltip title="Đặt làm báo giá chính">
                         <IconButton size="small" onClick={() => onSetPrimary(q.cloudId)}><StarBorderIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
+                    {canShare && (
+                      <Tooltip title="Chuyển sang hồ sơ khác">
+                        <IconButton size="small" onClick={() => onMoveQuote(q.cloudId, q.name)}><SwapHorizIcon fontSize="small" /></IconButton>
                       </Tooltip>
                     )}
                     <Button size="small" onClick={() => onOpenQuote(q.cloudId)}>Mở</Button>
@@ -657,19 +713,17 @@ function ShareControl({ profile, users, currentUser, canShare }: {
     const c: Collaborator = { u: pick.u, name: pick.name };
     try {
       if (role === 'collab') await addCollaborator(profile.id, c);
-      else {
-        await addFollower(profile.id, c);
-        // Follow → báo cho người được thêm (tái dùng notificationStore gateway).
-        try {
-          await sbSendNotification(pick.u, {
-            type: 'collab_invite',
-            title: `Bạn đang theo dõi hồ sơ tour ${profile.code}`,
-            message: `${currentUser?.name ?? 'Ai đó'} đã thêm bạn theo dõi hồ sơ "${profile.name || profile.code}".`,
-            createdBy: currentUser?.name ?? '',
-            ...(profile.primaryQuoteId ? { link: { kind: 'quote' as const, id: profile.primaryQuoteId, label: profile.code } } : {}),
-          });
-        } catch { /* thông báo không chặn */ }
-      }
+      else await addFollower(profile.id, c);
+      // Báo cho người được thêm (cả Collab lẫn Follow) — tái dùng notificationStore.
+      try {
+        await sbSendNotification(pick.u, {
+          type: 'collab_invite',
+          title: role === 'collab' ? `Bạn được thêm cộng tác hồ sơ tour ${profile.code}` : `Bạn đang theo dõi hồ sơ tour ${profile.code}`,
+          message: `${currentUser?.name ?? 'Ai đó'} đã thêm bạn ${role === 'collab' ? 'cộng tác (sửa được)' : 'theo dõi'} hồ sơ "${profile.name || profile.code}".`,
+          createdBy: currentUser?.name ?? '',
+          ...(profile.primaryQuoteId ? { link: { kind: 'quote' as const, id: profile.primaryQuoteId, label: profile.code } } : {}),
+        });
+      } catch { /* thông báo không chặn */ }
       setPick(null);
     } finally { setBusy(false); }
   };

@@ -816,6 +816,22 @@ export const useQuoteStore = create<QuoteState>()(
                 console.warn('saveCloud: tạo hồ sơ tour lỗi:', (e as Error).message);
               }
             }
+            // Đồng bộ NGƯỢC tên/khách/ngày/pax vào hồ sơ khi báo giá này là báo giá
+            // chính (để báo cáo trực tiếp trên DB cũng đúng, không chỉ suy lúc render).
+            if (tourProfileId) {
+              const prof = useTourProfileStore.getState().profiles.find((p) => p.id === tourProfileId);
+              if (prof && (prof.primaryQuoteId === cloudId || !prof.primaryQuoteId)) {
+                try {
+                  await useTourProfileStore.getState().syncFromPrimary(tourProfileId, {
+                    name: name.trim() || draft.info.name,
+                    customerId: customer?.id, customerName: customer?.name,
+                    dest: draft.info.dest || undefined,
+                    startDate: draft.info.startDate ?? null,
+                    pax: draft.pax,
+                  });
+                } catch { /* non-blocking */ }
+              }
+            }
           }
 
           const entry = await _save(
