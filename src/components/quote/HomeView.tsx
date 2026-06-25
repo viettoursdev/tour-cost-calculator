@@ -12,6 +12,8 @@ import { DEPARTMENTS } from '@/auth/departments';
 import { PROCESS_SEED, DEPT_COLOR, DEPT_ICON } from '@/components/process/processSeed';
 import { runProgress, currentStep } from '@/components/process/processRun';
 import { useProcessStore } from '@/stores/processStore';
+import { useInventoryStore, computeStock, itemOnHand } from '@/stores/inventoryStore';
+import { hasPerm } from '@/auth/PERMISSIONS';
 import type { CloudQuoteEntry, Department, Todo } from '@/types';
 
 const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa', 'ketoan'];
@@ -68,6 +70,14 @@ export function HomeView() {
   const setOpenRun = useProcessStore((s) => s.setOpenRun);
   const [todoOpen, setTodoOpen] = useState(false);
   const [editTodo, setEditTodo] = useState<Todo | null>(null);
+  const canInventory = hasPerm(me, 'manageInventory');
+  const invItems = useInventoryStore((s) => s.items);
+  const invLots = useInventoryStore((s) => s.lots);
+  const invStat = useMemo(() => {
+    const stock = computeStock(invLots);
+    const lowCount = invItems.filter((it) => it.minStock > 0 && itemOnHand(it.id, stock) < it.minStock).length;
+    return { products: invItems.length, lowCount };
+  }, [invItems, invLots]);
 
   // Phiên chạy quy trình đang hoạt động của tôi (phụ trách hoặc tự tạo).
   const myRuns = processRuns
@@ -136,6 +146,33 @@ export function HomeView() {
       <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
         {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} · việc cần để ý hôm nay
       </Typography>
+
+      {canInventory && (
+        <Paper
+          onClick={() => go('inventory')}
+          sx={{
+            mb: 1.5, p: 1.75, cursor: 'pointer', borderRadius: 2,
+            background: 'linear-gradient(135deg,#0d7a6a,#14a08c)', color: '#fff',
+            display: 'flex', alignItems: 'center', gap: 1.5,
+            '&:hover': { boxShadow: 4, filter: 'brightness(1.05)' },
+          }}
+        >
+          <Box sx={{ fontSize: 30, lineHeight: 1 }}>📦</Box>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography fontWeight={800} fontSize={15}>Quản lý kho</Typography>
+            <Typography variant="caption" sx={{ opacity: 0.9 }}>
+              Áo đồng phục · Travel kit · thiết bị — nhập/xuất theo lô, tồn theo size & màu
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Chip size="small" label={`${invStat.products} SP`} sx={{ bgcolor: 'rgba(255,255,255,0.22)', color: '#fff', fontWeight: 700 }} />
+            {invStat.lowCount > 0 && (
+              <Chip size="small" label={`⚠ ${invStat.lowCount} sắp hết`} sx={{ bgcolor: '#dc3250', color: '#fff', fontWeight: 700 }} />
+            )}
+            <Typography fontSize={20}>→</Typography>
+          </Stack>
+        </Paper>
+      )}
 
       <Box sx={{ mb: 1.5 }}>
         <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />
