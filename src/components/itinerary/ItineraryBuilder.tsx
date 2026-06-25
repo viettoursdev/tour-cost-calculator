@@ -882,12 +882,18 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                           />
                           <Tooltip title={a.ops ? 'Sửa vận hành mốc giờ này' : 'Thêm vận hành cho mốc giờ này (cho HDV)'}>
                             <IconButton size="small" onClick={() => toggleOps(a.id)}
-                              sx={{ flexShrink: 0,
-                                color: a.ops ? '#fff' : '#0f3a4a',
-                                bgcolor: a.ops ? '#0f3a4a' : 'transparent',
-                                border: '1px solid', borderColor: a.ops ? '#0f3a4a' : 'rgba(15,58,74,0.3)',
-                                borderRadius: 1,
-                                '&:hover': { bgcolor: a.ops ? '#14566b' : 'rgba(15,58,74,0.08)' } }}>
+                              sx={{ flexShrink: 0, borderRadius: 1.5, border: '1px solid',
+                                transition: 'all .18s ease',
+                                color: a.ops ? '#fff' : '#0d7a6a',
+                                borderColor: a.ops ? 'transparent' : 'rgba(13,122,106,0.35)',
+                                background: a.ops ? 'linear-gradient(135deg,#0d7a6a,#14a08c)' : 'rgba(13,122,106,0.06)',
+                                boxShadow: a.ops ? '0 2px 6px rgba(13,122,106,0.35)' : 'none',
+                                '&:hover': {
+                                  borderColor: a.ops ? 'transparent' : '#0d7a6a',
+                                  background: a.ops ? 'linear-gradient(135deg,#0a5c50,#0d7a6a)' : 'rgba(13,122,106,0.14)',
+                                  boxShadow: a.ops ? '0 3px 9px rgba(13,122,106,0.45)' : '0 1px 4px rgba(13,122,106,0.2)',
+                                  transform: 'translateY(-1px)',
+                                } }}>
                               <NoteAltOutlinedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
@@ -909,9 +915,12 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                               value={a.ops ?? ''}
                               autoFocus={opsOpenIds.has(a.id) && !a.ops}
                               onChange={(e) => updAct(d.id, seg.id, a.id, { ops: e.target.value })}
-                              placeholder="🧭 Vận hành (giờ này): NCC · contact · số xác nhận · điểm đón-trả…"
-                              sx={{ bgcolor: 'rgba(15,58,74,0.04)', borderRadius: 1,
-                                '& .MuiInputBase-input': { fontSize: 12, color: '#0f3a4a' } }} />
+                              placeholder="📝 Vận hành (giờ này): NCC · contact · số xác nhận · điểm đón-trả…"
+                              sx={{ bgcolor: 'rgba(13,122,106,0.05)', borderRadius: 1,
+                                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(13,122,106,0.3)' },
+                                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#0d7a6a' },
+                                '& .Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#0d7a6a' },
+                                '& .MuiInputBase-input': { fontSize: 12, color: '#0d5c50' } }} />
                           </Box>
                         )}
                         </Box>
