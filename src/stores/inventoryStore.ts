@@ -3,12 +3,15 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import {
   sbSubscribeInventory, sbUpsertInventoryCategory, sbDeleteInventoryCategory,
   sbNextItemCode, sbUpsertInventoryItem, sbDeleteInventoryItem,
-  sbReceiveLot, sbIssueStock, sbAdjustStock, type InventorySnapshot,
+  sbReceiveLot, sbIssueStock, sbAdjustStock,
+  sbNextAssetCode, sbUpsertAsset, sbDeleteAsset, sbAssetAction,
+  type InventorySnapshot,
 } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 import type {
   InventoryCategory, InventoryItem, InventoryLot, StockRow, ReceiveLine,
+  InventoryAsset, InventoryAssetLog, AssetStatus, AssetAction,
 } from '@/types/inventory';
 
 export const newInvId = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -47,6 +50,8 @@ type State = {
   items: InventoryItem[];
   lots: InventoryLot[];
   movements: InventorySnapshot['movements'];
+  assets: InventoryAsset[];
+  assetLogs: InventoryAssetLog[];
   loading: boolean;
   syncing: boolean;
   init: () => Unsubscribe;
@@ -60,6 +65,9 @@ type State = {
   }) => Promise<void>;
   issue: (args: { itemId: string; color: string; size: string; qty: number; reason: string; ref: string; occurredAt: string }) => Promise<void>;
   adjust: (lotLineId: string, newQty: number, reason: string) => Promise<void>;
+  saveAsset: (a: Partial<InventoryAsset> & { itemId: string }) => Promise<void>;
+  deleteAsset: (id: string) => Promise<void>;
+  assetAction: (args: { assetId: string; action: AssetAction; toStatus: AssetStatus; holder: string; reason: string; ref: string; occurredAt: string }) => Promise<void>;
 };
 
 export const useInventoryStore = create<State>()(
@@ -68,6 +76,8 @@ export const useInventoryStore = create<State>()(
     items: [],
     lots: [],
     movements: [],
+    assets: [],
+    assetLogs: [],
     loading: true,
     syncing: false,
 
@@ -75,7 +85,7 @@ export const useInventoryStore = create<State>()(
       set({ loading: true });
       return sbSubscribeInventory((snap) => set({
         categories: snap.categories, items: snap.items, lots: snap.lots,
-        movements: snap.movements, loading: false,
+        movements: snap.movements, assets: snap.assets, assetLogs: snap.assetLogs, loading: false,
       }));
     },
 
@@ -171,5 +181,58 @@ export const useInventoryStore = create<State>()(
       catch (e) { window.alert('❌ Lỗi điều chỉnh tồn: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
+
+    saveAsset: async (a) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return;
+      const existing = a.id ? get().assets.find((x) => x.id === a.id) : undefined;
+      set({ syncing: true });
+      try {
+        const code = existing?.code ?? (a.code || await sbNextAssetCode(a.itemId));
+        const asset: InventoryAsset = {
+          id: a.id || newInvId('ast_'),
+          code,
+          itemId: a.itemId,
+          name: (a.name ?? existing?.name ?? '').trim(),
+          serial: a.serial ?? existing?.serial ?? '',
+          purchaseCost: a.purchaseCost ?? existing?.purchaseCost ?? 0,
+          purchasedAt: a.purchasedAt ?? existing?.purchasedAt,
+          status: a.status ?? existing?.status ?? 'available',
+          holder: a.holder ?? existing?.holder ?? '',
+          location: a.location ?? existing?.location ?? '',
+          condition: a.condition ?? existing?.condition ?? '',
+          note: a.note ?? existing?.note ?? '',
+          createdBy: existing?.createdBy ?? u.name,
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
+        };
+        await sbUpsertAsset(asset, { name: u.name, role: u.role });
+      } catch (e) { window.alert('❌ Lỗi lưu tài sản: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
+    },
+
+    deleteAsset: async (id) => {
+      set({ syncing: true });
+      try { await sbDeleteAsset(id); }
+      catch (e) { window.alert('❌ Lỗi xoá tài sản: ' + (e as Error).message); }
+      finally { set({ syncing: false }); }
+    },
+
+    assetAction: async (args) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return;
+      set({ syncing: true });
+      try { await sbAssetAction({ ...args, by: u.name }); }
+      catch (e) { window.alert('❌ ' + (e as Error).message); throw e; }
+      finally { set({ syncing: false }); }
+    },
   })),
 );
+
+/** Nhãn + màu trạng thái tài sản (dùng chung UI). */
+export const ASSET_STATUS: Record<AssetStatus, { label: string; color: string }> = {
+  available:   { label: 'Sẵn sàng', color: '#0d7a6a' },
+  in_use:      { label: 'Đang dùng', color: '#2563eb' },
+  maintenance: { label: 'Bảo trì', color: '#f5a623' },
+  retired:     { label: 'Thanh lý', color: '#6b7280' },
+  lost:        { label: 'Mất/Hỏng', color: '#dc3250' },
+};

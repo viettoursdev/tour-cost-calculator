@@ -4771,6 +4771,7 @@ export function sbDeleteNcc(id: string, client: SupabaseClient = sb): Promise<vo
 import type {
   InventoryCategory, InventoryItem, InventoryLot, InventoryLotLine,
   InventoryMovement, InventoryKind, MovementType, ReceiveLine,
+  InventoryAsset, InventoryAssetLog, AssetStatus, AssetAction,
 } from '@/types/inventory';
 
 export interface InventorySnapshot {
@@ -4778,6 +4779,8 @@ export interface InventorySnapshot {
   items: InventoryItem[];
   lots: InventoryLot[];        // mỗi lô đã gắn sẵn `lines`
   movements: InventoryMovement[];
+  assets: InventoryAsset[];
+  assetLogs: InventoryAssetLog[];
 }
 
 const rowToInvCategory = (r: Record<string, unknown>): InventoryCategory => ({
@@ -4833,15 +4836,50 @@ const rowToInvMovement = (r: Record<string, unknown>): InventoryMovement => ({
   createdAt: r.created_at as string,
 });
 
+const rowToAsset = (r: Record<string, unknown>): InventoryAsset => ({
+  id: r.id as string,
+  code: (r.code as string) ?? '',
+  itemId: (r.item_id as string) ?? '',
+  name: (r.name as string) ?? '',
+  serial: (r.serial as string) ?? '',
+  purchaseCost: (r.purchase_cost as number) ?? 0,
+  purchasedAt: (r.purchased_at as string) ?? undefined,
+  status: ((r.status as string) ?? 'available') as AssetStatus,
+  holder: (r.holder as string) ?? '',
+  location: (r.location as string) ?? '',
+  condition: (r.condition as string) ?? '',
+  note: (r.note as string) ?? '',
+  createdBy: (r.created_by_name as string) ?? '',
+  createdAt: r.created_at as string,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+  updatedAt: (r.updated_at as string) ?? undefined,
+});
+
+const rowToAssetLog = (r: Record<string, unknown>): InventoryAssetLog => ({
+  id: r.id as string,
+  assetId: (r.asset_id as string) ?? '',
+  action: ((r.action as string) ?? 'status') as AssetAction,
+  fromStatus: (r.from_status as string) ?? '',
+  toStatus: (r.to_status as string) ?? '',
+  holder: (r.holder as string) ?? '',
+  reason: (r.reason as string) ?? '',
+  ref: (r.ref as string) ?? '',
+  occurredAt: r.occurred_at as string,
+  createdBy: (r.created_by_name as string) ?? '',
+  createdAt: r.created_at as string,
+});
+
 async function loadInventory(cl: SupabaseClient): Promise<InventorySnapshot> {
-  const [cats, items, lots, lines, moves] = await Promise.all([
+  const [cats, items, lots, lines, moves, assets, alogs] = await Promise.all([
     cl.from('inventory_categories').select('*').order('created_at', { ascending: true }),
     cl.from('inventory_items').select('*').order('code', { ascending: true }),
     cl.from('inventory_lots').select('*').order('received_at', { ascending: true }),
     cl.from('inventory_lot_lines').select('*'),
     cl.from('inventory_movements').select('*').order('occurred_at', { ascending: false }).limit(1000),
+    cl.from('inventory_assets').select('*').order('code', { ascending: true }),
+    cl.from('inventory_asset_logs').select('*').order('occurred_at', { ascending: false }).limit(1000),
   ]);
-  for (const res of [cats, items, lots, lines, moves]) if (res.error) throw res.error;
+  for (const res of [cats, items, lots, lines, moves, assets, alogs]) if (res.error) throw res.error;
   const linesByLot = new Map<string, InventoryLotLine[]>();
   for (const row of lines.data ?? []) {
     const ll = rowToInvLotLine(row);
@@ -4866,6 +4904,8 @@ async function loadInventory(cl: SupabaseClient): Promise<InventorySnapshot> {
     items: (items.data ?? []).map(rowToInvItem),
     lots: lotList,
     movements: (moves.data ?? []).map(rowToInvMovement),
+    assets: (assets.data ?? []).map(rowToAsset),
+    assetLogs: (alogs.data ?? []).map(rowToAssetLog),
   };
 }
 
@@ -4875,7 +4915,7 @@ export function sbSubscribeInventory(cb: (snap: InventorySnapshot) => void, clie
   const load = () => loadInventory(client).then((v) => { if (active) cb(v); })
     .catch((e) => console.warn('Supabase inventory load error:', (e as Error).message));
   load();
-  const tables = ['inventory_categories', 'inventory_items', 'inventory_lots', 'inventory_lot_lines', 'inventory_movements'];
+  const tables = ['inventory_categories', 'inventory_items', 'inventory_lots', 'inventory_lot_lines', 'inventory_movements', 'inventory_assets', 'inventory_asset_logs'];
   const ch = client.channel('inv:' + Math.random().toString(36).slice(2));
   for (const t of tables) ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, () => { load(); });
   ch.subscribe();
@@ -4948,6 +4988,41 @@ export async function sbIssueStock(args: {
 export async function sbAdjustStock(lotLineId: string, newQty: number, reason: string, by: string, client: SupabaseClient = sb): Promise<void> {
   const { error } = await client.rpc('inventory_adjust', {
     p_lot_line_id: lotLineId, p_new_qty: newQty, p_reason: reason, p_by: by,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// ── Tài sản (Đợt 2) ────────────────────────────────────────────────────────────
+export async function sbNextAssetCode(itemId: string, client: SupabaseClient = sb): Promise<string> {
+  const { data, error } = await client.rpc('inventory_next_asset_code', { p_item_id: itemId });
+  if (error) throw new Error('sbNextAssetCode: ' + error.message);
+  return data as string;
+}
+
+export async function sbUpsertAsset(a: InventoryAsset, by: { name: string; role: string }, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('inventory_assets').upsert({
+    id: a.id, code: a.code, item_id: a.itemId, name: a.name ?? '', serial: a.serial ?? '',
+    purchase_cost: a.purchaseCost ?? 0, purchased_at: a.purchasedAt || null, status: a.status ?? 'available',
+    holder: a.holder ?? '', location: a.location ?? '', condition: a.condition ?? '', note: a.note ?? '',
+    created_by_name: a.createdBy ?? '', created_at: a.createdAt,
+    updated_at: new Date().toISOString(), updated_by_name: `${by.name} (${by.role})`,
+  }, { onConflict: 'id' });
+  if (error) throw new Error('sbUpsertAsset: ' + error.message);
+}
+
+export async function sbDeleteAsset(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('inventory_assets').delete().eq('id', id);
+  if (error) throw new Error('sbDeleteAsset: ' + error.message);
+}
+
+/** Cấp phát / thu hồi / bảo trì / thanh lý — đổi trạng thái + ghi log atomic. */
+export async function sbAssetAction(args: {
+  assetId: string; action: AssetAction; toStatus: AssetStatus; holder: string;
+  reason: string; ref: string; occurredAt: string; by: string;
+}, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('inventory_asset_action', {
+    p_asset_id: args.assetId, p_action: args.action, p_to_status: args.toStatus, p_holder: args.holder,
+    p_reason: args.reason, p_ref: args.ref, p_occurred_at: args.occurredAt, p_by: args.by,
   });
   if (error) throw new Error(error.message);
 }

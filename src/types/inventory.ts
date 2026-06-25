@@ -93,3 +93,42 @@ export interface ReceiveLine {
   size: string;
   qty: number;
 }
+
+// ── Phân hệ B: tài sản theo từng cái ───────────────────────────────────────────
+export type AssetStatus = 'available' | 'in_use' | 'maintenance' | 'retired' | 'lost';
+export type AssetAction = 'checkout' | 'checkin' | 'maintenance' | 'retire' | 'status';
+
+/** Một CÁI thiết bị/tài sản vật lý (đơn vị riêng của một model = inventory_item kind='asset'). */
+export interface InventoryAsset {
+  id: string;
+  code: string;
+  itemId: string;
+  name: string;
+  serial: string;
+  purchaseCost: number;
+  purchasedAt?: string;
+  status: AssetStatus;
+  holder: string;
+  location: string;
+  condition: string;
+  note: string;
+  createdBy: string;
+  createdAt: string;
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
+/** Nhật ký một thao tác trên tài sản. */
+export interface InventoryAssetLog {
+  id: string;
+  assetId: string;
+  action: AssetAction;
+  fromStatus: string;
+  toStatus: string;
+  holder: string;
+  reason: string;
+  ref: string;
+  occurredAt: string;
+  createdBy: string;
+  createdAt: string;
+}

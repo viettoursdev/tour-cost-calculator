@@ -16,9 +16,9 @@ import OutputOutlinedIcon from '@mui/icons-material/OutputOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
-import { useInventoryStore, computeStock, itemOnHand, colorToCode } from '@/stores/inventoryStore';
+import { useInventoryStore, computeStock, itemOnHand, colorToCode, ASSET_STATUS } from '@/stores/inventoryStore';
 import { fmtVND } from '@/components/quote/calc';
-import type { InventoryItem, InventoryCategory, StockRow, ReceiveLine } from '@/types/inventory';
+import type { InventoryItem, InventoryCategory, StockRow, ReceiveLine, InventoryAsset, AssetStatus, AssetAction } from '@/types/inventory';
 
 const TEAL = '#0d7a6a';
 
@@ -34,18 +34,23 @@ export function InventoryView() {
   const [tab, setTab] = useState(0);
   const [catOpen, setCatOpen] = useState(false);
   const [itemDlg, setItemDlg] = useState<InventoryItem | 'new' | null>(null);
+  const [modelDlg, setModelDlg] = useState<InventoryItem | 'new' | null>(null);
   const [receiveFor, setReceiveFor] = useState<InventoryItem | null>(null);
   const [issueFor, setIssueFor] = useState<InventoryItem | null>(null);
 
   const stock = useMemo(() => computeStock(lots), [lots]);
   const totalValue = useMemo(() => stock.reduce((a, s) => a + s.value, 0), [stock]);
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const isAssetItem = (it: InventoryItem) => catById.get(it.categoryId)?.kind === 'asset';
+  const consumableItems = useMemo(() => items.filter((it) => !isAssetItem(it)), [items, catById]); // eslint-disable-line react-hooks/exhaustive-deps
+  const assetItems = useMemo(() => items.filter((it) => isAssetItem(it)), [items, catById]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!canManage) {
     return <Box sx={{ p: 4 }}><Typography>Bạn không có quyền truy cập Quản lý kho.</Typography></Box>;
   }
 
   const consumableCats = categories.filter((c) => c.kind === 'consumable');
+  const assetCats = categories.filter((c) => c.kind === 'asset');
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1100, mx: 'auto' }}>
@@ -53,45 +58,67 @@ export function InventoryView() {
         <Inventory2OutlinedIcon sx={{ color: TEAL }} />
         <Typography fontWeight={900} fontSize={20}>Quản lý kho</Typography>
         <Box sx={{ flex: 1 }} />
-        <Chip label={`${items.length} sản phẩm`} sx={{ fontWeight: 700 }} />
         <Chip label={`Giá trị tồn: ${fmtVND(totalValue)}`} sx={{ fontWeight: 700, bgcolor: TEAL + '18', color: TEAL }} />
         <Button size="small" variant="outlined" startIcon={<CategoryOutlinedIcon />} onClick={() => setCatOpen(true)}>Loại SP</Button>
-        <Button size="small" variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: TEAL }}
-          disabled={consumableCats.length === 0} onClick={() => setItemDlg('new')}>Sản phẩm</Button>
+        {tab === 0 && (
+          <Button size="small" variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: TEAL }}
+            disabled={consumableCats.length === 0} onClick={() => setItemDlg('new')}>Sản phẩm</Button>
+        )}
+        {tab === 1 && (
+          <Button size="small" variant="contained" startIcon={<AddIcon />} sx={{ bgcolor: TEAL }}
+            disabled={assetCats.length === 0} onClick={() => setModelDlg('new')}>Loại thiết bị</Button>
+        )}
       </Stack>
-      {consumableCats.length === 0 && (
+      {tab === 0 && consumableCats.length === 0 && (
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-          Hãy tạo một <b>Loại sản phẩm</b> trước (vd Áo đồng phục — mã AO) rồi mới thêm sản phẩm.
+          Hãy tạo một <b>Loại sản phẩm</b> (kiểu Hàng tiêu hao, vd Áo đồng phục — mã AO) rồi mới thêm sản phẩm.
+        </Typography>
+      )}
+      {tab === 1 && assetCats.length === 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+          Hãy tạo một <b>Loại sản phẩm</b> kiểu <b>Tài sản</b> (vd Thiết bị — mã TB) rồi thêm model thiết bị.
         </Typography>
       )}
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1.5, minHeight: 38 }}>
-        <Tab label="Tồn kho" sx={{ minHeight: 38 }} />
+        <Tab label={`Tồn kho (${consumableItems.length})`} sx={{ minHeight: 38 }} />
+        <Tab label={`Thiết bị / Tài sản (${assetItems.length})`} sx={{ minHeight: 38 }} />
         <Tab label="Lịch sử nhập/xuất" sx={{ minHeight: 38 }} />
       </Tabs>
 
       {tab === 0 && (
         loading ? <Typography color="text.secondary">Đang tải…</Typography> :
-        items.length === 0 ? <Typography color="text.secondary">Chưa có sản phẩm nào.</Typography> :
+        consumableItems.length === 0 ? <Typography color="text.secondary">Chưa có sản phẩm nào.</Typography> :
         <Stack spacing={1}>
-          {items.map((it) => (
+          {consumableItems.map((it) => (
             <ItemCard key={it.id} item={it} category={catById.get(it.categoryId)} stock={stock}
               onReceive={() => setReceiveFor(it)} onIssue={() => setIssueFor(it)} onEdit={() => setItemDlg(it)} />
           ))}
         </Stack>
       )}
 
-      {tab === 1 && <MovementsTab />}
+      {tab === 1 && (
+        loading ? <Typography color="text.secondary">Đang tải…</Typography> :
+        assetItems.length === 0 ? <Typography color="text.secondary">Chưa có model thiết bị nào.</Typography> :
+        <Stack spacing={1}>
+          {assetItems.map((it) => (
+            <AssetModelCard key={it.id} model={it} category={catById.get(it.categoryId)} onEditModel={() => setModelDlg(it)} />
+          ))}
+        </Stack>
+      )}
+
+      {tab === 2 && <MovementsTab />}
 
       {catOpen && <CategoryManager onClose={() => setCatOpen(false)} />}
-      {itemDlg && <ItemDialog item={itemDlg === 'new' ? null : itemDlg} categories={consumableCats} onClose={() => setItemDlg(null)} />}
+      {itemDlg && <ItemDialog item={itemDlg === 'new' ? null : itemDlg} categories={consumableCats} asset={false} onClose={() => setItemDlg(null)} />}
+      {modelDlg && <ItemDialog item={modelDlg === 'new' ? null : modelDlg} categories={assetCats} asset onClose={() => setModelDlg(null)} />}
       {receiveFor && <ReceiveLotDialog item={receiveFor} onClose={() => setReceiveFor(null)} />}
       {issueFor && <IssueDialog item={issueFor} stock={stock} onClose={() => setIssueFor(null)} />}
 
       <Typography variant="caption" color="text.disabled" sx={{ mt: 2, display: 'block' }}>
-        Tồn tính theo lô (FIFO) — xuất trừ lô nhập trước. Mã sản phẩm sinh tự động theo loại.
+        Hàng tiêu hao tính tồn theo lô (FIFO). Thiết bị quản lý theo từng cái có mã riêng. Mã sinh tự động theo loại.
       </Typography>
-      {movements.length >= 1000 && tab === 1 && (
+      {movements.length >= 1000 && tab === 2 && (
         <Typography variant="caption" color="text.disabled">Chỉ hiển thị 1000 dòng gần nhất.</Typography>
       )}
     </Box>
@@ -169,11 +196,12 @@ function CategoryManager({ onClose }: { onClose: () => void }) {
   const remove = useInventoryStore((s) => s.deleteCategory);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [kind, setKind] = useState<'consumable' | 'asset'>('consumable');
 
   const add = () => {
     if (!name.trim() || !code.trim()) { window.alert('Nhập tên loại và tiền tố mã.'); return; }
     if (categories.some((c) => c.code.toUpperCase() === code.trim().toUpperCase())) { window.alert('Tiền tố mã đã tồn tại.'); return; }
-    void save({ name, code, kind: 'consumable' });
+    void save({ name, code, kind });
     setName(''); setCode('');
   };
 
@@ -182,9 +210,13 @@ function CategoryManager({ onClose }: { onClose: () => void }) {
       <DialogTitle>Loại sản phẩm</DialogTitle>
       <DialogContent>
         <Typography variant="caption" color="text.secondary">Tiền tố mã (vd AO, TK, TB) dùng để sinh mã sản phẩm tự động: AO-001, AO-002…</Typography>
-        <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 2 }}>
-          <TextField size="small" label="Tên loại" value={name} onChange={(e) => setName(e.target.value)} sx={{ flex: 1 }} />
-          <TextField size="small" label="Tiền tố mã" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} sx={{ width: 120 }} inputProps={{ maxLength: 4 }} />
+        <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 2 }} flexWrap="wrap" useFlexGap>
+          <TextField size="small" label="Tên loại" value={name} onChange={(e) => setName(e.target.value)} sx={{ flex: 1, minWidth: 160 }} />
+          <TextField size="small" label="Tiền tố mã" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} sx={{ width: 110 }} inputProps={{ maxLength: 4 }} />
+          <TextField select size="small" label="Kiểu" value={kind} onChange={(e) => setKind(e.target.value as 'consumable' | 'asset')} sx={{ width: 160 }}>
+            <MenuItem value="consumable">Hàng tiêu hao</MenuItem>
+            <MenuItem value="asset">Tài sản (từng cái)</MenuItem>
+          </TextField>
           <Button variant="contained" sx={{ bgcolor: TEAL }} onClick={add}>Thêm</Button>
         </Stack>
         <Stack spacing={0.75}>
@@ -195,7 +227,8 @@ function CategoryManager({ onClose }: { onClose: () => void }) {
               <Paper key={c.id} variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Chip size="small" label={c.code} sx={{ fontWeight: 800, bgcolor: TEAL + '18', color: TEAL }} />
                 <Typography fontSize={14} sx={{ flex: 1 }}>{c.name}</Typography>
-                <Typography variant="caption" color="text.secondary">{used} SP · STT mã: {c.seq}</Typography>
+                <Chip size="small" variant="outlined" label={c.kind === 'asset' ? 'Tài sản' : 'Tiêu hao'} />
+                <Typography variant="caption" color="text.secondary">{used} SP</Typography>
                 <IconButton size="small" disabled={used > 0}
                   onClick={() => { if (window.confirm(`Xoá loại "${c.name}"?`)) void remove(c.id); }}>
                   <DeleteOutlineIcon fontSize="small" />
@@ -210,39 +243,52 @@ function CategoryManager({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Thêm / sửa sản phẩm ────────────────────────────────────────────────────────
-function ItemDialog({ item, categories, onClose }: { item: InventoryItem | null; categories: InventoryCategory[]; onClose: () => void }) {
+// ── Thêm / sửa sản phẩm (hàng tiêu hao) hoặc model thiết bị (asset) ─────────────
+function ItemDialog({ item, categories, asset, onClose }: { item: InventoryItem | null; categories: InventoryCategory[]; asset: boolean; onClose: () => void }) {
   const save = useInventoryStore((s) => s.saveItem);
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? categories[0]?.id ?? '');
   const [name, setName] = useState(item?.name ?? '');
-  const [unit, setUnit] = useState(item?.unit ?? 'cái');
+  const [unit, setUnit] = useState(item?.unit ?? (asset ? 'cái' : 'cái'));
   const [sizesText, setSizesText] = useState((item?.sizes ?? []).join(', '));
   const [minStock, setMinStock] = useState(String(item?.minStock ?? 0));
   const [note, setNote] = useState(item?.note ?? '');
 
   const submit = () => {
-    if (!name.trim()) { window.alert('Nhập tên sản phẩm.'); return; }
-    if (!categoryId) { window.alert('Chọn loại sản phẩm.'); return; }
-    const sizes = sizesText.split(',').map((s) => s.trim()).filter(Boolean);
-    void save({ id: item?.id, categoryId, name, unit, sizes, minStock: Number(minStock) || 0, note });
+    if (!name.trim()) { window.alert('Nhập tên.'); return; }
+    if (!categoryId) { window.alert('Chọn loại.'); return; }
+    const sizes = asset ? [] : sizesText.split(',').map((s) => s.trim()).filter(Boolean);
+    void save({ id: item?.id, categoryId, name, unit, sizes, minStock: asset ? 0 : Number(minStock) || 0, note });
     onClose();
   };
 
+  const title = asset
+    ? (item ? `Sửa model · ${item.code}` : 'Thêm model thiết bị')
+    : (item ? `Sửa sản phẩm · ${item.code}` : 'Thêm sản phẩm');
+
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{item ? `Sửa sản phẩm · ${item.code}` : 'Thêm sản phẩm'}</DialogTitle>
+      <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
-          <TextField select size="small" label="Loại sản phẩm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={!!item}>
+          <TextField select size="small" label={asset ? 'Loại thiết bị' : 'Loại sản phẩm'} value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={!!item}>
             {categories.map((c) => <MenuItem key={c.id} value={c.id}>{c.code} · {c.name}</MenuItem>)}
           </TextField>
-          <TextField size="small" label="Tên sản phẩm" value={name} onChange={(e) => setName(e.target.value)} />
-          <Stack direction="row" spacing={1}>
-            <TextField size="small" label="Đơn vị tính" value={unit} onChange={(e) => setUnit(e.target.value)} sx={{ flex: 1 }} />
-            <TextField size="small" label="Tồn tối thiểu" type="number" value={minStock} onChange={(e) => setMinStock(e.target.value)} sx={{ width: 140 }} />
-          </Stack>
-          <TextField size="small" label="Danh sách size (cách nhau dấu phẩy)" placeholder="S, M, L, XL" value={sizesText}
-            onChange={(e) => setSizesText(e.target.value)} helperText="Để trống nếu sản phẩm không phân size (vd thiết bị, kit trọn gói)." />
+          <TextField size="small" label={asset ? 'Tên model (vd Máy chiếu Epson EB-2042)' : 'Tên sản phẩm'} value={name} onChange={(e) => setName(e.target.value)} />
+          {!asset && (
+            <>
+              <Stack direction="row" spacing={1}>
+                <TextField size="small" label="Đơn vị tính" value={unit} onChange={(e) => setUnit(e.target.value)} sx={{ flex: 1 }} />
+                <TextField size="small" label="Tồn tối thiểu" type="number" value={minStock} onChange={(e) => setMinStock(e.target.value)} sx={{ width: 140 }} />
+              </Stack>
+              <TextField size="small" label="Danh sách size (cách nhau dấu phẩy)" placeholder="S, M, L, XL" value={sizesText}
+                onChange={(e) => setSizesText(e.target.value)} helperText="Để trống nếu sản phẩm không phân size (vd kit trọn gói)." />
+            </>
+          )}
+          {asset && (
+            <Typography variant="caption" color="text.secondary">
+              Mỗi cái thiết bị sẽ có mã riêng (vd {(categories.find((c) => c.id === categoryId)?.code) ?? 'TB'}-001-001), thêm trong danh sách bên dưới sau khi lưu model.
+            </Typography>
+          )}
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} />
         </Stack>
       </DialogContent>
@@ -421,5 +467,196 @@ function MovementsTab() {
         </TableBody>
       </Table>
     </Box>
+  );
+}
+
+// ── Thẻ một model thiết bị + danh sách từng cái ────────────────────────────────
+const ACTIONS: Record<AssetAction, { label: string; toStatus: AssetStatus; needHolder: boolean }> = {
+  checkout:    { label: 'Cấp phát', toStatus: 'in_use', needHolder: true },
+  checkin:     { label: 'Thu hồi', toStatus: 'available', needHolder: false },
+  maintenance: { label: 'Đưa bảo trì', toStatus: 'maintenance', needHolder: false },
+  retire:      { label: 'Thanh lý', toStatus: 'retired', needHolder: false },
+  status:      { label: 'Báo mất/hỏng', toStatus: 'lost', needHolder: false },
+};
+
+function AssetModelCard({ model, category, onEditModel }: { model: InventoryItem; category?: InventoryCategory; onEditModel: () => void }) {
+  const [open, setOpen] = useState(false);
+  const assets = useInventoryStore((s) => s.assets);
+  const removeModel = useInventoryStore((s) => s.deleteItem);
+  const units = useMemo(() => assets.filter((a) => a.itemId === model.id).sort((a, b) => a.code.localeCompare(b.code)), [assets, model.id]);
+  const [unitDlg, setUnitDlg] = useState<InventoryAsset | 'new' | null>(null);
+  const [actFor, setActFor] = useState<{ asset: InventoryAsset; action: AssetAction } | null>(null);
+  const [logsFor, setLogsFor] = useState<string | null>(null);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const u of units) c[u.status] = (c[u.status] ?? 0) + 1;
+    return c;
+  }, [units]);
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.25, borderLeft: `4px solid #2563eb` }}>
+      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+        <IconButton size="small" onClick={() => setOpen((v) => !v)}>{open ? <ExpandMoreIcon /> : <ChevronRightIcon />}</IconButton>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography fontWeight={800} fontSize={14} noWrap>
+            {model.name} <Typography component="span" variant="caption" color="text.secondary">· {model.code}</Typography>
+          </Typography>
+          <Typography variant="caption" color="text.secondary">{category?.name ?? '—'}</Typography>
+        </Box>
+        <Box sx={{ flex: 1 }} />
+        <Chip size="small" label={`${units.length} cái`} sx={{ fontWeight: 800 }} />
+        {(['available', 'in_use', 'maintenance'] as AssetStatus[]).map((st) => counts[st] ? (
+          <Chip key={st} size="small" label={`${ASSET_STATUS[st].label}: ${counts[st]}`} sx={{ fontWeight: 700, bgcolor: ASSET_STATUS[st].color + '22', color: ASSET_STATUS[st].color }} />
+        ) : null)}
+        <Button size="small" startIcon={<AddIcon />} sx={{ color: '#2563eb' }} onClick={() => setUnitDlg('new')}>Thêm cái</Button>
+        <Tooltip title="Sửa model"><IconButton size="small" onClick={onEditModel}><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+        <Tooltip title="Xoá model">
+          <IconButton size="small" disabled={units.length > 0}
+            onClick={() => { if (window.confirm(`Xoá model "${model.name}"?`)) void removeModel(model.id); }}>
+            <DeleteOutlineIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+      <Collapse in={open}>
+        <Divider sx={{ my: 1 }} />
+        {units.length === 0 ? <Typography variant="caption" color="text.disabled">Chưa có cái nào — bấm "Thêm cái".</Typography> : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Mã</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Serial</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Trạng thái</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Người giữ / Vị trí</TableCell>
+                <TableCell sx={{ fontWeight: 700 }} align="right">Thao tác</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {units.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell sx={{ fontWeight: 700 }}>{a.code}</TableCell>
+                  <TableCell><Typography variant="caption">{a.serial || '—'}</Typography></TableCell>
+                  <TableCell><Chip size="small" label={ASSET_STATUS[a.status].label} sx={{ fontWeight: 700, bgcolor: ASSET_STATUS[a.status].color + '22', color: ASSET_STATUS[a.status].color }} /></TableCell>
+                  <TableCell><Typography variant="caption">{a.status === 'in_use' && a.holder ? `👤 ${a.holder}` : (a.location || '—')}</Typography></TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
+                      {a.status === 'available' && <Button size="small" sx={{ minWidth: 0 }} onClick={() => setActFor({ asset: a, action: 'checkout' })}>Cấp phát</Button>}
+                      {a.status === 'in_use' && <Button size="small" sx={{ minWidth: 0 }} onClick={() => setActFor({ asset: a, action: 'checkin' })}>Thu hồi</Button>}
+                      {(a.status === 'available' || a.status === 'in_use') && <Button size="small" color="warning" sx={{ minWidth: 0 }} onClick={() => setActFor({ asset: a, action: 'maintenance' })}>Bảo trì</Button>}
+                      {a.status === 'maintenance' && <Button size="small" sx={{ minWidth: 0 }} onClick={() => setActFor({ asset: a, action: 'checkin' })}>Xong</Button>}
+                      <Tooltip title="Lịch sử"><IconButton size="small" onClick={() => setLogsFor(logsFor === a.id ? null : a.id)}><Inventory2OutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Sửa"><IconButton size="small" onClick={() => setUnitDlg(a)}><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                    </Stack>
+                    <Collapse in={logsFor === a.id}><AssetLogList assetId={a.id} /></Collapse>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Collapse>
+      {unitDlg && <AssetUnitDialog model={model} asset={unitDlg === 'new' ? null : unitDlg} onClose={() => setUnitDlg(null)} />}
+      {actFor && <AssetActionDialog asset={actFor.asset} action={actFor.action} onClose={() => setActFor(null)} />}
+    </Paper>
+  );
+}
+
+function AssetLogList({ assetId }: { assetId: string }) {
+  const logs = useInventoryStore((s) => s.assetLogs).filter((l) => l.assetId === assetId);
+  if (logs.length === 0) return <Typography variant="caption" color="text.disabled" sx={{ display: 'block', py: 0.5 }}>Chưa có lịch sử.</Typography>;
+  return (
+    <Box sx={{ py: 0.5 }}>
+      {logs.map((l) => (
+        <Typography key={l.id} variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+          {new Date(l.occurredAt).toLocaleDateString('vi-VN')} · {ACTIONS[l.action]?.label ?? l.action}
+          {l.holder ? ` → ${l.holder}` : ''}{l.reason ? ` · ${l.reason}` : ''}{l.ref ? ` (${l.ref})` : ''} · {l.createdBy}
+        </Typography>
+      ))}
+    </Box>
+  );
+}
+
+// ── Thêm / sửa một cái thiết bị ────────────────────────────────────────────────
+function AssetUnitDialog({ model, asset, onClose }: { model: InventoryItem; asset: InventoryAsset | null; onClose: () => void }) {
+  const save = useInventoryStore((s) => s.saveAsset);
+  const remove = useInventoryStore((s) => s.deleteAsset);
+  const [serial, setSerial] = useState(asset?.serial ?? '');
+  const [purchaseCost, setPurchaseCost] = useState(String(asset?.purchaseCost ?? ''));
+  const [purchasedAt, setPurchasedAt] = useState(asset?.purchasedAt ?? '');
+  const [location, setLocation] = useState(asset?.location ?? '');
+  const [condition, setCondition] = useState(asset?.condition ?? 'Tốt');
+  const [note, setNote] = useState(asset?.note ?? '');
+
+  const submit = () => {
+    void save({ id: asset?.id, itemId: model.id, serial, purchaseCost: Number(purchaseCost) || 0,
+      purchasedAt: purchasedAt || undefined, location, condition, note });
+    onClose();
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{asset ? `Sửa thiết bị · ${asset.code}` : `Thêm cái · ${model.name}`}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 0.5 }}>
+          {asset && <Chip label={`Trạng thái: ${ASSET_STATUS[asset.status].label}`} sx={{ alignSelf: 'flex-start', bgcolor: ASSET_STATUS[asset.status].color + '22', color: ASSET_STATUS[asset.status].color, fontWeight: 700 }} />}
+          <TextField size="small" label="Số serial" value={serial} onChange={(e) => setSerial(e.target.value)} />
+          <Stack direction="row" spacing={1}>
+            <TextField size="small" label="Nguyên giá" type="number" value={purchaseCost} onChange={(e) => setPurchaseCost(e.target.value)}
+              sx={{ flex: 1 }} InputProps={{ endAdornment: <InputAdornment position="end">đ</InputAdornment> }} />
+            <TextField size="small" label="Ngày mua" type="date" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} sx={{ width: 170 }} InputLabelProps={{ shrink: true }} />
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <TextField size="small" label="Vị trí" value={location} onChange={(e) => setLocation(e.target.value)} sx={{ flex: 1 }} />
+            <TextField select size="small" label="Tình trạng" value={condition} onChange={(e) => setCondition(e.target.value)} sx={{ width: 150 }}>
+              {['Tốt', 'Khá', 'Trung bình', 'Hỏng'].map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </TextField>
+          </Stack>
+          <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        {asset && <Button color="error" onClick={() => { if (window.confirm(`Xoá thiết bị ${asset.code}?`)) { void remove(asset.id); onClose(); } }}>Xoá</Button>}
+        <Box sx={{ flex: 1 }} />
+        <Button onClick={onClose}>Huỷ</Button>
+        <Button variant="contained" sx={{ bgcolor: TEAL }} onClick={submit}>Lưu</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ── Thao tác tài sản (cấp phát/thu hồi/bảo trì/thanh lý) ────────────────────────
+function AssetActionDialog({ asset, action, onClose }: { asset: InventoryAsset; action: AssetAction; onClose: () => void }) {
+  const doAction = useInventoryStore((s) => s.assetAction);
+  const cfg = ACTIONS[action];
+  const [holder, setHolder] = useState('');
+  const [reason, setReason] = useState('');
+  const [ref, setRef] = useState('');
+  const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
+
+  const submit = async () => {
+    if (cfg.needHolder && !holder.trim()) { window.alert('Nhập người nhận.'); return; }
+    try {
+      await doAction({ assetId: asset.id, action, toStatus: cfg.toStatus, holder, reason, ref, occurredAt });
+      onClose();
+    } catch { /* lỗi đã báo */ }
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>{cfg.label} · {asset.code}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 0.5 }}>
+          {cfg.needHolder && <TextField size="small" label="Người nhận" value={holder} onChange={(e) => setHolder(e.target.value)} autoFocus />}
+          <TextField size="small" label="Lý do / Ghi chú" value={reason} onChange={(e) => setReason(e.target.value)} multiline minRows={2} />
+          <TextField size="small" label="Tham chiếu (tour / dự án)" value={ref} onChange={(e) => setRef(e.target.value)} />
+          <TextField size="small" label="Thời gian" type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} InputLabelProps={{ shrink: true }} />
+          {action === 'retire' && <Typography variant="caption" color="error">Thiết bị sẽ chuyển sang trạng thái Thanh lý.</Typography>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Huỷ</Button>
+        <Button variant="contained" sx={{ bgcolor: cfg.toStatus === 'retired' || cfg.toStatus === 'lost' ? '#dc3250' : TEAL }} onClick={() => void submit()}>{cfg.label}</Button>
+      </DialogActions>
+    </Dialog>
   );
 }
