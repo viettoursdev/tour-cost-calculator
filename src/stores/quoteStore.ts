@@ -875,6 +875,12 @@ export const useQuoteStore = create<QuoteState>()(
           const ent = (isDmc ? hist.dmcQuotes : hist.quotes).find((q) => q.cloudId === cloudId);
           await _del(id, cloudId);
           logAudit('delete', isDmc ? 'Breakdown DMC' : 'Báo giá', ent?.name ?? cloudId, ent?.quoteCode);
+          // Xử lý hồ sơ tour mồ côi: nếu báo giá vừa xoá là báo giá CHÍNH thì
+          // chuyển primary sang báo giá khác (hoặc lưu trữ hồ sơ nếu hết báo giá).
+          if (ent?.tourProfileId) {
+            try { await useTourProfileStore.getState().onQuoteDeleted(ent.tourProfileId, cloudId); }
+            catch (e) { console.warn('deleteCloud: dọn hồ sơ tour lỗi:', (e as Error).message); }
+          }
           const { draft } = get();
           if (draft.currentQuoteId === cloudId) {
             set({ draft: { ...draft, currentQuoteId: null } });

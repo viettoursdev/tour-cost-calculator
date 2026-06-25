@@ -7,7 +7,9 @@ import {
   sbNextTourCode,
 } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
+import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { generateTourCode, visibleTourProfiles } from '@/lib/tourProfile';
+import { logAudit } from '@/lib/audit';
 import type { Collaborator, TourKind, TourProfile } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
@@ -41,6 +43,9 @@ type State = {
   addCollaborator: (id: string, c: Collaborator) => Promise<void>;
   addFollower: (id: string, c: Collaborator) => Promise<void>;
   archive: (id: string, on: boolean) => Promise<void>;
+  /** Khi xoá một báo giá: nếu là báo giá CHÍNH thì chuyển primary sang báo giá khác
+   *  còn lại của hồ sơ; nếu là báo giá cuối cùng thì lưu trữ (archive) hồ sơ. */
+  onQuoteDeleted: (profileId: string, deletedCloudId: string) => Promise<void>;
 };
 
 export const useTourProfileStore = create<State>()(
@@ -90,6 +95,7 @@ export const useTourProfileStore = create<State>()(
       set({ profiles: [profile, ...prev] });
       try {
         await sbUpsertTourProfile(profile);
+        logAudit('create', 'Hồ sơ tour', profile.name || profile.code, profile.code);
       } catch (e) {
         set({ profiles: prev, error: (e as Error).message });
         return null;
@@ -125,7 +131,9 @@ export const useTourProfileStore = create<State>()(
 
     setPrimaryQuote: async (id, quoteId) => {
       const p = get().profiles.find((x) => x.id === id);
-      if (p) await get().save({ ...p, primaryQuoteId: quoteId });
+      if (!p || p.primaryQuoteId === quoteId) return;
+      await get().save({ ...p, primaryQuoteId: quoteId });
+      logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Đổi báo giá chính');
     },
 
     addCollaborator: async (id, c) => {
@@ -133,6 +141,7 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       if ((p.collaborators ?? []).some((x) => x.u === c.u)) return;
       await get().save({ ...p, collaborators: [...(p.collaborators ?? []), c] });
+      logAudit('update', 'Hồ sơ tour', p.name || p.code, `Thêm cộng tác: ${c.name}`);
     },
 
     addFollower: async (id, c) => {
@@ -140,11 +149,32 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       if ((p.followers ?? []).some((x) => x.u === c.u)) return;
       await get().save({ ...p, followers: [...(p.followers ?? []), c] });
+      logAudit('update', 'Hồ sơ tour', p.name || p.code, `Thêm theo dõi: ${c.name}`);
     },
 
     archive: async (id, on) => {
       const p = get().profiles.find((x) => x.id === id);
-      if (p) await get().save({ ...p, status: on ? 'archived' : 'open' });
+      if (!p) return;
+      await get().save({ ...p, status: on ? 'archived' : 'open' });
+      logAudit('update', 'Hồ sơ tour', p.name || p.code, on ? 'Lưu trữ hồ sơ' : 'Mở lại hồ sơ');
+    },
+
+    onQuoteDeleted: async (profileId, deletedCloudId) => {
+      const p = get().profiles.find((x) => x.id === profileId);
+      if (!p) return;
+      // Báo giá còn lại của hồ sơ (loại trừ cái vừa xoá).
+      const remaining = useQuoteHistoryStore.getState().quotes
+        .filter((q) => q.tourProfileId === profileId && q.cloudId !== deletedCloudId);
+      if (p.primaryQuoteId === deletedCloudId) {
+        if (remaining.length > 0) {
+          await get().save({ ...p, primaryQuoteId: remaining[0].cloudId });
+          logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Tự chuyển báo giá chính (báo giá cũ bị xoá)');
+        } else {
+          // Báo giá cuối cùng bị xoá → lưu trữ hồ sơ, gỡ con trỏ primary mồ côi.
+          await get().save({ ...p, primaryQuoteId: undefined, status: 'archived' });
+          logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Lưu trữ (đã xoá báo giá cuối cùng)');
+        }
+      }
     },
   })),
 );

@@ -144,7 +144,12 @@ export function DealCockpit() {
     <Box sx={{ p: 2, maxWidth: 1100, mx: 'auto' }}>
       {/* Header */}
       <Box sx={{ background: LEGACY.headerGradient, color: '#fff', borderRadius: 2, p: 2, mb: 2 }}>
-        <Typography variant="caption" sx={{ opacity: 0.85 }}>Hồ sơ tour</Typography>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Typography variant="caption" sx={{ opacity: 0.85 }}>Hồ sơ tour</Typography>
+          {draft.tourCode && (
+            <Chip size="small" label={draft.tourCode} sx={{ height: 18, bgcolor: 'rgba(255,255,255,0.25)', color: '#fff', fontWeight: 800, fontSize: 11 }} />
+          )}
+        </Stack>
         <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2 }}>
           {draft.info.name || '(báo giá chưa đặt tên)'}
         </Typography>

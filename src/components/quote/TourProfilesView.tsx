@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, Divider, IconButton,
-  Paper, Stack, TextField, Tooltip, Typography,
+  Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, Dialog, DialogActions,
+  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
+  TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -9,6 +10,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
+import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
+import AddIcon from '@mui/icons-material/Add';
 import { useAuthStore } from '@/stores/authStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -17,6 +23,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
+import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { canShareRecord } from '@/auth/recordAccess';
 import { userLabel } from '@/auth/ROLES';
 import { sbSendNotification } from '@/lib/supabase';
@@ -25,7 +32,8 @@ import { canSeePrices } from '@/auth/quotePerms';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
 import { DealCockpit } from './DealCockpit';
-import type { CloudQuoteEntry, Collaborator, TourProfile, User } from '@/types';
+import { LEGACY } from '@/theme';
+import type { CloudQuoteEntry, Collaborator, TourKind, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
   st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
@@ -55,11 +63,17 @@ export function TourProfilesView() {
   const visaProjects = useVisaProjectStore((s) => s.projects);
   const menus = useMenuStore((s) => s.list);
   const itineraries = useItineraryStore((s) => s.list);
+  const guideAssignments = useGuideScheduleStore((s) => s.assignments);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
+  const setPrimaryQuote = useTourProfileStore((s) => s.setPrimaryQuote);
+  const archive = useTourProfileStore((s) => s.archive);
+  const createProfile = useTourProfileStore((s) => s.create);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const showPrice = canSeePrices(currentUser);
 
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
 
@@ -76,39 +90,56 @@ export function TourProfilesView() {
     return m;
   }, [quotes]);
 
+  // ── Precompute meta MỘT LẦN cho mọi hồ sơ (O(n) thay vì O(rows×entities)). ──
+  const meta = useMemo(() => {
+    const quoteToProfile = new Map<string, string>();    // cloudId → profileId
+    for (const q of quotes) if (q.tourProfileId) quoteToProfile.set(q.cloudId, q.tourProfileId);
+    const contractByQuote = new Map<string, typeof contracts[number]>();
+    for (const c of contracts) if (c.linkedQuoteId) contractByQuote.set(c.linkedQuoteId, c);
+
+    const m = new Map<string, { primary?: CloudQuoteEntry; stage: DealStage; links: ProfileLinks; guide: number }>();
+    // Đọc kép: thực thể thuộc hồ sơ nào (ưu tiên tourProfileId, fallback qua báo giá).
+    const profOf = (e: { tourProfileId?: string | null; linkedQuoteId?: string | null }): string | undefined =>
+      e.tourProfileId ?? (e.linkedQuoteId ? quoteToProfile.get(e.linkedQuoteId) : undefined);
+    const ensure = (pid: string) => {
+      let v = m.get(pid);
+      if (!v) { v = { stage: 'request', links: { contract: 0, visa: 0, menu: 0, itinerary: 0 }, guide: 0 }; m.set(pid, v); }
+      return v;
+    };
+    for (const c of contracts) { const pid = profOf(c); if (pid) ensure(pid).links.contract++; }
+    for (const v of visaProjects) { const pid = profOf(v); if (pid) ensure(pid).links.visa++; }
+    for (const mn of menus) { const pid = profOf(mn); if (pid) ensure(pid).links.menu++; }
+    for (const it of itineraries) { const pid = profOf(it); if (pid) ensure(pid).links.itinerary++; }
+    // Lịch HDV keyed theo tourCloudId → quy về hồ sơ.
+    for (const key of Object.keys(guideAssignments)) {
+      const pid = quoteToProfile.get(key);
+      if (pid) ensure(pid).guide++;
+    }
+    // Báo giá chính + giai đoạn (suy từ báo giá chính).
+    for (const p of profiles) {
+      const list = quotesByProfile.get(p.id) ?? [];
+      const primary = list.find((q) => q.cloudId === p.primaryQuoteId) ?? list[0];
+      const v = ensure(p.id);
+      v.primary = primary;
+      v.stage = primary
+        ? dealStage({ status: primary.status, contract: contractFlags(contractByQuote.get(primary.cloudId)), departureISO: primary.departDate })
+        : 'request';
+    }
+    return m;
+  }, [quotes, contracts, visaProjects, menus, itineraries, guideAssignments, profiles, quotesByProfile]);
+
+  const metaOf = (id: string) => meta.get(id) ?? { primary: undefined, stage: 'request' as DealStage, links: { contract: 0, visa: 0, menu: 0, itinerary: 0 }, guide: 0 };
+  const primaryOf = (p: TourProfile): CloudQuoteEntry | undefined => metaOf(p.id).primary;
+
   const rows = useMemo(() => {
-    const list = visible().slice().sort((a, b) => {
+    let list = visible().slice();
+    if (!showArchived) list = list.filter((p) => p.status !== 'archived');
+    list.sort((a, b) => {
       if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
     return filterRank(list, search, (p) => [p.code, p.name, p.customerName].filter(Boolean).join(' '));
-  }, [visible, profiles, search]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Giai đoạn hồ sơ = suy từ BÁO GIÁ CHÍNH (status + hợp đồng liên kết + ngày KH).
-  const primaryOf = (p: TourProfile): CloudQuoteEntry | undefined => {
-    const list = quotesByProfile.get(p.id) ?? [];
-    return list.find((q) => q.cloudId === p.primaryQuoteId) ?? list[0];
-  };
-  const stageOf = (p: TourProfile): DealStage => {
-    const pq = primaryOf(p);
-    if (!pq) return 'request';
-    const c = contracts.find((x) => x.linkedQuoteId === pq.cloudId);
-    return dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate });
-  };
-
-  // Liên kết của hồ sơ — ĐỌC KÉP: ưu tiên tourProfileId trực tiếp, fallback suy qua
-  // báo giá thuộc hồ sơ (entity.linkedQuoteId ∈ cloudId các báo giá).
-  const linksOf = (p: TourProfile): ProfileLinks => {
-    const ids = new Set((quotesByProfile.get(p.id) ?? []).map((q) => q.cloudId));
-    const belongs = (e: { tourProfileId?: string | null; linkedQuoteId?: string | null }): boolean =>
-      e.tourProfileId === p.id || (!!e.linkedQuoteId && ids.has(e.linkedQuoteId));
-    return {
-      contract: contracts.filter(belongs).length,
-      visa: visaProjects.filter(belongs).length,
-      menu: menus.filter(belongs).length,
-      itinerary: itineraries.filter(belongs).length,
-    };
-  };
+  }, [visible, profiles, search, showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -137,6 +168,7 @@ export function TourProfilesView() {
   if (detailId) {
     const p = profiles.find((x) => x.id === detailId);
     const opts = p ? (quotesByProfile.get(p.id) ?? []) : [];
+    const canEdit = p ? canShareRecord(currentUser, p, users) : false;
     return (
       <Box sx={{ p: { xs: 1, sm: 2 }, maxWidth: 1100, mx: 'auto' }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
@@ -145,13 +177,21 @@ export function TourProfilesView() {
           {opts.length > 1 && (
             <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
               <Typography variant="caption" color="text.secondary">Phương án:</Typography>
-              {opts.map((q) => (
-                <Chip key={q.cloudId} size="small" clickable
-                  variant={currentQuoteId === q.cloudId ? 'filled' : 'outlined'}
-                  color={currentQuoteId === q.cloudId ? 'primary' : 'default'}
-                  label={q.cloudId === p?.primaryQuoteId ? `★ ${q.name}` : q.name}
-                  onClick={() => void openQuote(q.cloudId, true)} />
-              ))}
+              {opts.map((q) => {
+                const isPrimary = q.cloudId === p?.primaryQuoteId;
+                return (
+                  <Chip key={q.cloudId} size="small" clickable
+                    variant={currentQuoteId === q.cloudId ? 'filled' : 'outlined'}
+                    color={currentQuoteId === q.cloudId ? 'primary' : 'default'}
+                    icon={isPrimary ? <StarIcon sx={{ fontSize: 15 }} /> : undefined}
+                    label={q.name}
+                    onClick={() => void openQuote(q.cloudId, true)}
+                    // Icon sao bên phải (onDelete) = đặt làm báo giá chính.
+                    onDelete={canEdit && !isPrimary && p ? () => void setPrimaryQuote(p.id, q.cloudId) : undefined}
+                    deleteIcon={<Tooltip title="Đặt làm báo giá chính"><StarBorderIcon sx={{ fontSize: 16 }} /></Tooltip>}
+                  />
+                );
+              })}
             </Stack>
           )}
         </Stack>
@@ -170,56 +210,121 @@ export function TourProfilesView() {
             {rows.length} hồ sơ · trung tâm liên kết báo giá / khách / hợp đồng / vận hành / visa…
           </Typography>
         </Box>
-        <TextField size="small" value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 Tìm mã, tên tour, khách…" sx={{ minWidth: 240 }} />
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <FormControlLabel
+            control={<Switch size="small" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />}
+            label={<Typography variant="caption">Hiện lưu trữ</Typography>}
+            sx={{ mr: 0 }}
+          />
+          <TextField size="small" value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍 Tìm mã, tên tour, khách…" sx={{ minWidth: 220 }} />
+          <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+            Hồ sơ trống
+          </Button>
+        </Stack>
       </Stack>
 
       {rows.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="text.secondary">
-            Chưa có hồ sơ tour nào. Bấm <strong>＋ Tạo báo giá và tour mới</strong> để mở hồ sơ đầu tiên.
+            Chưa có hồ sơ tour nào. Bấm <strong>＋ Tạo báo giá và tour mới</strong> để mở hồ sơ đầu tiên,
+            hoặc <strong>Hồ sơ trống</strong> để mở một tour chưa có báo giá.
           </Typography>
         </Paper>
       ) : (
         <Stack spacing={1.25}>
-          {rows.map((p) => (
-            <ProfileRow
-              key={p.id}
-              profile={p}
-              stage={stageOf(p)}
-              primary={primaryOf(p)}
-              quotes={quotesByProfile.get(p.id) ?? []}
-              links={linksOf(p)}
-              expanded={expanded.has(p.id)}
-              showPrice={showPrice}
-              currentUser={currentUser}
-              users={users}
-              onToggle={() => toggle(p.id)}
-              onOpenProfile={() => void openProfile(p)}
-              onOpenQuote={(cid) => void openQuote(cid, false)}
-            />
-          ))}
+          {rows.map((p) => {
+            const mt = metaOf(p.id);
+            return (
+              <ProfileRow
+                key={p.id}
+                profile={p}
+                stage={mt.stage}
+                primary={mt.primary}
+                guideCount={mt.guide}
+                quotes={quotesByProfile.get(p.id) ?? []}
+                links={mt.links}
+                expanded={expanded.has(p.id)}
+                showPrice={showPrice}
+                currentUser={currentUser}
+                users={users}
+                onToggle={() => toggle(p.id)}
+                onOpenProfile={() => void openProfile(p)}
+                onOpenQuote={(cid) => void openQuote(cid, false)}
+                onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
+                onArchive={(on) => void archive(p.id, on)}
+              />
+            );
+          })}
         </Stack>
       )}
+
+      <CreateEmptyDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreate={async (kind, name) => {
+          const created = await createProfile({ kind, name });
+          setCreateOpen(false);
+          if (created) setExpanded((prev) => new Set(prev).add(created.id));
+        }}
+      />
     </Box>
   );
 }
 
+function CreateEmptyDialog({ open, onClose, onCreate }: {
+  open: boolean; onClose: () => void; onCreate: (kind: TourKind, name: string) => Promise<void>;
+}) {
+  const [kind, setKind] = useState<TourKind>('domestic');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (open) { setKind('domestic'); setName(''); setBusy(false); } }, [open]);
+  const submit = async () => { setBusy(true); try { await onCreate(kind, name.trim()); } finally { setBusy(false); } };
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Tạo hồ sơ tour trống</DialogTitle>
+      <DialogContent>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          Mở một hồ sơ tour chưa có báo giá — gắn thực đơn / chương trình / visa / hợp đồng vào sau (DirectLinkPanel).
+        </Typography>
+        <ToggleButtonGroup exclusive size="small" value={kind} sx={{ mb: 2 }}
+          onChange={(_, v: TourKind | null) => { if (v) setKind(v); }}>
+          <ToggleButton value="domestic">Nội địa (NĐ)</ToggleButton>
+          <ToggleButton value="intl">Nước ngoài (NN)</ToggleButton>
+        </ToggleButtonGroup>
+        <TextField fullWidth autoFocus label="Tên tour" value={name}
+          onChange={(e) => setName(e.target.value)} placeholder="VD: Đà Lạt – Đoàn ABC" />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Huỷ</Button>
+        <Button variant="contained" disabled={busy || !name.trim()} onClick={() => void submit()}
+          sx={{ background: LEGACY.headerGradient }}>{busy ? 'Đang tạo…' : 'Tạo hồ sơ'}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function ProfileRow({
-  profile, stage, primary, quotes, links, expanded, showPrice,
-  currentUser, users, onToggle, onOpenProfile, onOpenQuote,
+  profile, stage, primary, guideCount, quotes, links, expanded, showPrice,
+  currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive,
 }: {
-  profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; quotes: CloudQuoteEntry[];
+  profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
   links: ProfileLinks; expanded: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
+  onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void;
 }) {
   const sm = STAGE_META(stage);
   const canShare = canShareRecord(currentUser, profile, users);
   const pay = primary?.paymentSummary;
+  // A2 — KHÁCH/NGÀY/PAX suy từ BÁO GIÁ CHÍNH (không tin bản sao cứng trong hồ sơ → tránh lệch).
+  const custName = primary?.customerName ?? profile.customerName;
+  const departDate = primary?.departDate ?? profile.startDate;
+  const pax = primary?.pax ?? profile.pax;
+  const archived = profile.status === 'archived';
 
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, borderLeft: `4px solid ${sm.color}`, opacity: profile.status === 'archived' ? 0.6 : 1 }}>
+    <Paper variant="outlined" sx={{ p: 1.5, borderLeft: `4px solid ${sm.color}`, opacity: archived ? 0.6 : 1 }}>
       <Stack direction="row" alignItems="flex-start" spacing={1.25}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
@@ -228,16 +333,18 @@ function ProfileRow({
               {profile.name || '(chưa đặt tên)'}
             </Typography>
             <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
-            {profile.status === 'archived' && <Chip size="small" label="Lưu trữ" variant="outlined" sx={{ height: 20 }} />}
+            {archived && <Chip size="small" label="Lưu trữ" variant="outlined" sx={{ height: 20 }} />}
           </Stack>
           <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-            <Meta label="Khách" value={profile.customerName || '—'} />
-            <Meta label="Khởi hành" value={profile.startDate ? new Date(profile.startDate).toLocaleDateString('vi-VN') : '—'} />
+            <Meta label="Khách" value={custName || '—'} />
+            <Meta label="Khởi hành" value={departDate ? new Date(departDate).toLocaleDateString('vi-VN') : '—'} />
+            {pax ? <Meta label="Số khách" value={String(pax)} /> : null}
             <Meta label="Báo giá" value={String(quotes.length)} />
             {links.contract > 0 && <Meta label="Hợp đồng" value={String(links.contract)} />}
             {links.visa > 0 && <Meta label="Visa" value={String(links.visa)} />}
             {links.menu > 0 && <Meta label="Thực đơn" value={String(links.menu)} />}
             {links.itinerary > 0 && <Meta label="Chương trình" value={String(links.itinerary)} />}
+            {guideCount > 0 && <Meta label="Lịch HDV" value={String(guideCount)} />}
             {showPrice && primary && <Meta label="Giá trị" value={fmtVND(primary.totalCost ?? 0)} />}
           </Stack>
         </Box>
@@ -249,6 +356,13 @@ function ProfileRow({
               ))}
             </AvatarGroup>
           ) : null}
+          {canShare && (
+            <Tooltip title={archived ? 'Mở lại hồ sơ' : 'Lưu trữ hồ sơ'}>
+              <IconButton size="small" onClick={() => onArchive(!archived)}>
+                {archived ? <UnarchiveOutlinedIcon fontSize="small" /> : <ArchiveOutlinedIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
           <Button size="small" variant="outlined" startIcon={<OpenInNewIcon sx={{ fontSize: 16 }} />}
             onClick={onOpenProfile} sx={{ whiteSpace: 'nowrap' }}>Mở hồ sơ</Button>
           <IconButton size="small" onClick={onToggle}>{expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</IconButton>
@@ -263,18 +377,26 @@ function ProfileRow({
             <Typography variant="caption" fontWeight={800} color="text.secondary">Phương án báo giá ({quotes.length})</Typography>
             <Stack spacing={0.5} sx={{ mt: 0.5 }}>
               {quotes.length === 0 && <Typography variant="body2" color="text.secondary">Chưa có báo giá.</Typography>}
-              {quotes.map((q) => (
-                <Stack key={q.cloudId} direction="row" alignItems="center" spacing={1}
-                  sx={{ border: '1px solid rgba(15,58,74,0.12)', borderRadius: 1.5, px: 1, py: 0.5 }}>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography fontSize={13} fontWeight={600} noWrap>
-                      {q.cloudId === profile.primaryQuoteId ? '★ ' : ''}{q.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">{q.quoteCode}{showPrice ? ` · ${fmtVND(q.totalCost ?? 0)}` : ''}</Typography>
-                  </Box>
-                  <Button size="small" onClick={() => onOpenQuote(q.cloudId)}>Mở</Button>
-                </Stack>
-              ))}
+              {quotes.map((q) => {
+                const isPrimary = q.cloudId === profile.primaryQuoteId;
+                return (
+                  <Stack key={q.cloudId} direction="row" alignItems="center" spacing={0.5}
+                    sx={{ border: '1px solid rgba(15,58,74,0.12)', borderRadius: 1.5, px: 1, py: 0.5 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography fontSize={13} fontWeight={600} noWrap>
+                        {isPrimary ? '★ ' : ''}{q.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">{q.quoteCode}{showPrice ? ` · ${fmtVND(q.totalCost ?? 0)}` : ''}</Typography>
+                    </Box>
+                    {canShare && !isPrimary && (
+                      <Tooltip title="Đặt làm báo giá chính">
+                        <IconButton size="small" onClick={() => onSetPrimary(q.cloudId)}><StarBorderIcon fontSize="small" /></IconButton>
+                      </Tooltip>
+                    )}
+                    <Button size="small" onClick={() => onOpenQuote(q.cloudId)}>Mở</Button>
+                  </Stack>
+                );
+              })}
             </Stack>
           </Box>
           {/* Công nợ + chia sẻ */}
