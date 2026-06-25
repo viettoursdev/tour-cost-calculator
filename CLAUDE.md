@@ -121,8 +121,9 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 | `ncc_products` | Catalog sản phẩm NCC: mỗi sản phẩm tham chiếu supplier + bảng nhiều dòng giá + file R2. Tab "📦 Sản phẩm NCC" (view `nccProducts`, gate `manageNCC`). |
 | `customers` | Customer list |
 | `contracts` | All contracts |
-| `quotes` | Quote metadata index (regular + DMC) |
+| `quotes` | Quote metadata index (regular + DMC). `tour_profile_id`/`tour_code` link mỗi báo giá vào một hồ sơ tour. |
 | `quote_versions` | Full state per quote version (max 20); shredded children in `quote_items`, `quote_groups`, `quote_collab_payments`, `quote_flights`, `quote_workflow_steps`, `quote_passengers`. DMC quotes share this table, distinguished by `template = 'dmc'`. |
+| `tour_profiles` | **Hồ sơ tour** — aggregate root MỎNG làm trung tâm liên kết (1 hồ sơ : N báo giá). Mã `code` `NĐ/NN.DD.MM.YY.NN` sinh atomic qua RPC `next_tour_code` (advisory lock theo ngày). Sở hữu `created_by_username` + `collaborators`/`followers` (jsonb) + `primary_quote_id` (báo giá chính → suy giai đoạn/tổng qua `dealStage`). KHÔNG lưu giai đoạn/tổng. Các thực thể (`contracts`/`visa_projects`/`itineraries`/`menus`/`quotes`) có cột `tour_profile_id` (FK ON DELETE SET NULL, migration 0045) — ĐỌC KÉP: ưu tiên `tour_profile_id`, fallback suy qua `linked_quote_id`→báo giá→hồ sơ. **RLS đọc** scoped qua hàm `tour_profile_can_view` (0047): creator/collab/follower/BGĐ-CEO/Trưởng-Phó Phòng cùng phòng, kiểu KHÔNG-khoá-cứng. Gateway `sb*TourProfile`, store `tourProfileStore`, view `cockpit` = `TourProfilesView`. |
 | `itineraries` | Itinerary records |
 | `menus` / `restaurants` | Menu and restaurant records |
 | `visa_projects` | Visa application projects |
@@ -140,7 +141,7 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 | `hr_job_postings` / `hr_candidates` | ATS tuyển dụng: tin tuyển dụng + ứng viên (Kanban `stage`, `interview_notes` jsonb). "Nhận việc" tạo `hr_employees` + ghi `converted_employee_id`. View `recruit` ("Tuyển dụng", gate `viewHR`/`manageHR`). |
 | `hr_leaves` | Nghỉ phép: đơn theo nhân viên (`type`, khoảng ngày, `days`, `status` pending/approved/rejected/cancelled, người duyệt). Tab "Nghỉ phép" trong HRView; duyệt bởi `isApprover` (CEO/BGĐ/Trưởng Phòng). KHÔNG chấm công giờ. |
 
-**Per-quote draft fields (no new table).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
+**Per-quote draft fields (no new table).** Một số tính năng lưu thẳng trong `quoteStore.draft` nên tự lưu/khôi phục theo báo giá & từng bản lịch sử (round-trip qua `applyImport`/`importJSON`): `status` (QuoteStatus), `flights` (QuoteFlight[] — tab ✈️ Chuyến bay, AI parse text/ảnh qua `/chat`), `workflow` (WorkflowStep[] — tab 🗂️ Quy trình vận hành: Kanban/List/Checklist/Gantt, 13 bước mặc định chỉnh được), `tourProfileId`/`tourCode` (hồ sơ tour của báo giá — auto-tạo/gắn ở `saveCloud`, nạp lại từ index entry ở `loadCloud`). Thêm field optional + setter mẫu `setInclusions`; KHÔNG đụng dữ liệu cũ.
 
 ## localStorage Keys
 
@@ -173,6 +174,8 @@ Defined in `src/auth/ROLES.ts` and `src/auth/PERMISSIONS.ts`.
 - `Accountant`: view history only, no exports or rate card edits
 
 Check with `hasPerm(user, 'permName')`. Payment-approver roles: `APPROVER_ROLES` / `isApprover()` in `src/auth/ROLES.ts` (CEO, Ban Giám Đốc, Trưởng Phòng).
+
+**`department` + RLS (migration 0046/0047).** `profiles.department` được đồng bộ từ app qua `sbPushUsers`/`sbPullUsers`/`profileToUser` (TRƯỚC 0046 department KHÔNG được lưu xuống DB → quy tắc "thấy theo phòng" trong `recordAccess` không chạy thật). Role enum DB gồm cả `'Phó Phòng'`. RLS đọc `tour_profiles` siết server-side qua hàm `public.tour_profile_can_view(created_by, collaborators, followers)` (single source of truth cho cả policy lẫn pgTAP). **Lưu ý vận hành:** sau khi áp 0046, admin phải vào Quản lý người dùng → Lưu để populate `department`/`role` xuống `profiles`. **pgTAP RLS:** KHÔNG test row-filtering qua `SET ROLE authenticated` (pg_prove chạy superuser → không kích hoạt lọc RLS); test GỌI THẲNG hàm predicate với `set_config('request.jwt.claims', …)`.
 
 ### Shared-data sync + view scope
 
