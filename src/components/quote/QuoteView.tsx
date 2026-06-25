@@ -40,6 +40,7 @@ const NccProductView = lazy(() => import('@/components/ncc/NccProductView').then
 const HRView = lazy(() => import('@/components/hr/HRView').then((m) => ({ default: m.HRView })));
 const AdvanceSettlementView = lazy(() => import('./AdvanceSettlementView').then((m) => ({ default: m.AdvanceSettlementView })));
 const TodoView = lazy(() => import('@/components/todo/TodoView').then((m) => ({ default: m.TodoView })));
+const TourVisaPanel = lazy(() => import('./TourVisaPanel').then((m) => ({ default: m.TourVisaPanel })));
 const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').then((m) => ({ default: m.ItineraryApp })));
 const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
 const VisaApp = lazy(() => import('@/components/visa/VisaApp').then((m) => ({ default: m.VisaApp })));
@@ -58,7 +59,9 @@ export function QuoteView() {
   const currentUser = useAuthStore((s) => s.currentUser);
   // Phòng HDV bị ẩn giá: nếu draft còn lưu view thuần về giá thì ép về "Báo giá".
   const hidePrice = !canSeePrices(currentUser);
-  const view = hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard' || rawView === 'settlement')
+  const view = (hidePrice && (rawView === 'summary' || rawView === 'dashboard' || rawView === 'payment' || rawView === 'payboard' || rawView === 'settlement'))
+    // "Visa của tour" chỉ dành cho báo giá nước ngoài — đổi báo giá khác thì về "Báo giá".
+    || (rawView === 'tourvisa' && template !== 'intl')
     ? 'cost'
     : rawView;
   // `currentUsername` is null until `quoteStore.init(user)` has run from
@@ -139,6 +142,7 @@ export function QuoteView() {
             {view === 'nccProducts' && <NccProductView />}
             {view === 'hr' && <HRView />}
             {view === 'todo' && <TodoView />}
+            {view === 'tourvisa' && <TourVisaPanel />}
            </Suspense>
           </Box>
 

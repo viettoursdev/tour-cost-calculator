@@ -47,6 +47,7 @@ import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import ConnectingAirportsOutlinedIcon from '@mui/icons-material/ConnectingAirportsOutlined';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import { TPL_ACCENT } from './templateStyle';
 import { NavCustomizeModal } from './NavCustomizeModal';
 import { useNavPrefStore } from '@/stores/navPrefStore';
@@ -384,6 +385,8 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       cat('opsboard', 'grp:ops', 'Điều phối', { v: 'opsboard' }),
       cat('departures', 'grp:ops', 'Lịch khởi hành', { v: 'departures' }),
       cat('flights', 'grp:ops', 'Chuyến bay', { v: 'flights' }),
+      // Visa của tour: chỉ báo giá nước ngoài.
+      ...(template === 'intl' ? [cat('tourvisa', 'grp:ops', 'Visa của tour', { v: 'tourvisa', icon: <BadgeOutlinedIcon /> })] : []),
       ...(isMgr ? [cat('audit', 'grp:ops', 'Nhật ký', { v: 'audit' })] : []),
       cat('app:itinerary', 'grp:ops', 'Chương trình tour', { icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') }),
       cat('app:menu', 'grp:ops', 'Thực đơn', { icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') }),
