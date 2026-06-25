@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent } from 'react';
 import {
-  AppBar, Box, Button, Checkbox, Chip, Dialog, DialogTitle, FormControlLabel, IconButton, Stack,
-  TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography,
+  AppBar, Box, Button, Checkbox, Chip, Dialog, DialogTitle, FormControlLabel, IconButton, Menu,
+  MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import { toast } from '@/stores/toastStore';
 import AddIcon from '@mui/icons-material/Add';
@@ -113,6 +113,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [guestSeed, setGuestSeed] = useState<GuestKey | null>(null);
   const [view, setView] = useState<'list' | 'timeline'>('list');
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -156,6 +157,19 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     if (!window.confirm(`Phát hiện ${r.removed} bản trùng. Gộp thông tin & loại bỏ bản thừa?`)) return;
     setList(applicantsToPassengers(r.list));
     toast(`✅ Đã gộp & loại ${r.removed} bản trùng.`);
+  };
+
+  // Xuất tình trạng + timeline visa của đoàn (Excel / PDF) — nạp động thư viện nặng.
+  const exportTimeline = async (fmt: 'excel' | 'pdf') => {
+    setExportAnchor(null);
+    if (list.length === 0) { toast('Chưa có khách để xuất.', 'warning'); return; }
+    try {
+      const m = await import('@/lib/exports/exportVisaTimeline');
+      if (fmt === 'excel') await m.exportVisaTimelineExcel(project, list);
+      else m.exportVisaTimelinePDF(project, list);
+    } catch (e) {
+      window.alert('❌ Lỗi xuất file: ' + (e as Error).message);
+    }
   };
 
   // Báo giá liên kết chỉ thao tác được khi nó đang là draft đang mở.
@@ -235,6 +249,13 @@ export function VisaApplicantManager({ project, onClose }: Props) {
             onClick={() => void import('@/lib/exports/importVisaApplicants').then((m) => m.downloadVisaApplicantsTemplate())}>
             Tải mẫu
           </Button>
+          <Button color="inherit" variant="outlined" startIcon={<FileDownloadIcon />} onClick={(e) => setExportAnchor(e.currentTarget)}>
+            Xuất timeline
+          </Button>
+          <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)}>
+            <MenuItem onClick={() => void exportTimeline('excel')}>📊 Excel tình trạng & timeline</MenuItem>
+            <MenuItem onClick={() => void exportTimeline('pdf')}>📄 PDF tình trạng & timeline</MenuItem>
+          </Menu>
           <Button color="inherit" variant="outlined" startIcon={<PlaylistRemoveIcon />} onClick={onDedupe}>
             Loại trùng
           </Button>
