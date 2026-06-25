@@ -45,7 +45,7 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ImageIcon from '@mui/icons-material/Image';
-import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
+import NoteAltOutlinedIcon from '@mui/icons-material/NoteAltOutlined';
 
 type Props = {
   initial: Itinerary | null;
@@ -888,7 +888,7 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                                 border: '1px solid', borderColor: a.ops ? '#0f3a4a' : 'rgba(15,58,74,0.3)',
                                 borderRadius: 1,
                                 '&:hover': { bgcolor: a.ops ? '#14566b' : 'rgba(15,58,74,0.08)' } }}>
-                              <EngineeringOutlinedIcon fontSize="small" />
+                              <NoteAltOutlinedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Button size="small" variant="outlined"
