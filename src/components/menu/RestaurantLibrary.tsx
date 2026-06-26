@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Autocomplete, Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
+  Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import RestaurantMenuOutlinedIcon from '@mui/icons-material/RestaurantMenuOutlined';
 import { NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from '@/components/ncc/constants';
@@ -19,6 +19,7 @@ import { AIRestaurantImportDialog } from './AIRestaurantImportDialog';
 import type { ParsedRestaurant } from '@/lib/restaurantFileParse';
 import { AiButton } from '@/components/common/AiButton';
 import { DebouncedTextField } from '@/components/common/DebouncedTextField';
+import { DebouncedAutocomplete } from '@/components/common/DebouncedAutocomplete';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import type { ChangeEvent } from 'react';
 import type { Restaurant, RestaurantTourLink } from '@/types';
@@ -221,19 +222,16 @@ export function RestaurantLibrary({ onBack }: Props) {
                 '& .MuiInputBase-inputMultiline': { py: 0 },
                 '& .MuiAutocomplete-input': { py: '2.5px !important' } }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 36px', gap: 1, mb: 1, alignItems: 'center' }}>
-                <DebouncedTextField size="small" value={r.name}
+                <DebouncedTextField size="small" value={r.name ?? ''}
                   onCommit={(v) => updR(r.id, { name: v })}
                   placeholder="Tên nhà hàng"
                   InputProps={{ sx: { fontWeight: 700 } }} />
-                <Autocomplete freeSolo size="small" options={contOpts} value={r.continent || ''}
-                  onInputChange={(_, v) => { if (v !== (r.continent || '')) updR(r.id, { continent: v }); }}
-                  renderInput={(params) => <TextField {...params} placeholder="Châu lục ▾" />} />
-                <Autocomplete freeSolo size="small" options={countryOpts(r.continent)} value={r.country || ''}
-                  onInputChange={(_, v) => { if (v !== (r.country || '')) updR(r.id, { country: v }); }}
-                  renderInput={(params) => <TextField {...params} placeholder="Quốc gia ▾" />} />
-                <Autocomplete freeSolo size="small" options={cityOpts(r.country)} value={r.city || ''}
-                  onInputChange={(_, v) => { if (v !== (r.city || '')) updR(r.id, { city: v }); }}
-                  renderInput={(params) => <TextField {...params} placeholder="Thành phố ▾" />} />
+                <DebouncedAutocomplete options={contOpts} value={r.continent ?? ''}
+                  onCommit={(v) => updR(r.id, { continent: v })} placeholder="Châu lục ▾" />
+                <DebouncedAutocomplete options={countryOpts(r.continent)} value={r.country ?? ''}
+                  onCommit={(v) => updR(r.id, { country: v })} placeholder="Quốc gia ▾" />
+                <DebouncedAutocomplete options={cityOpts(r.country)} value={r.city ?? ''}
+                  onCommit={(v) => updR(r.id, { city: v })} placeholder="Thành phố ▾" />
                 <IconButton size="small" color="error" onClick={() => delR(r.id)}>
                   <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
@@ -265,7 +263,7 @@ export function RestaurantLibrary({ onBack }: Props) {
                 </Typography>
                 <StarRating value={r.rating} onChange={(v) => updR(r.id, { rating: v })} size={17} />
                 <DebouncedTextField
-                  size="small" fullWidth value={r.review}
+                  size="small" fullWidth value={r.review ?? ''}
                   onCommit={(v) => updR(r.id, { review: v })}
                   placeholder="Lưu ý cho tour sau (phục vụ, vị trí, chất lượng...)"
                   sx={{ flex: 1, minWidth: 200, '& .MuiInputBase-input': { fontSize: 12 } }}
@@ -328,19 +326,19 @@ export function RestaurantLibrary({ onBack }: Props) {
                     bgcolor: 'rgba(168,230,221,0.12)', borderRadius: 1.5, p: 1.25,
                   }}>
                     <Stack spacing={0.75}>
-                      <DebouncedTextField size="small" value={m.name}
+                      <DebouncedTextField size="small" value={m.name ?? ''}
                         onCommit={(v) => updMenu(r.id, m.id, { name: v })}
                         placeholder="Tên set"
                         InputProps={{ sx: { fontSize: 12, fontWeight: 600 } }} />
                       <StarRating value={m.rating} onChange={(v) => updMenu(r.id, m.id, { rating: v })} size={14} />
                     </Stack>
-                    <DebouncedTextField size="small" multiline minRows={3} value={m.dishes}
+                    <DebouncedTextField size="small" multiline minRows={3} value={m.dishes ?? ''}
                       onCommit={(v) => updMenu(r.id, m.id, { dishes: v })}
                       placeholder={'Gỏi cuốn\nCá kho tộ\nCanh chua...'}
                       InputProps={{ sx: { fontSize: 12 } }} />
                     <Stack spacing={0.75}>
                       <Stack direction="row" spacing={0.5}>
-                        <DebouncedTextField size="small" type="number" value={String(m.price ?? 0)}
+                        <DebouncedTextField size="small" type="number" value={m.price ? String(m.price) : ''}
                           onCommit={(v) => updMenu(r.id, m.id, { price: +v || 0 })}
                           placeholder="Giá"
                           InputProps={{ sx: { fontSize: 12, textAlign: 'right' } }} />
@@ -352,7 +350,7 @@ export function RestaurantLibrary({ onBack }: Props) {
                           ))}
                         </Select>
                       </Stack>
-                      <DebouncedTextField size="small" value={m.review}
+                      <DebouncedTextField size="small" value={m.review ?? ''}
                         onCommit={(v) => updMenu(r.id, m.id, { review: v })}
                         placeholder="Nhận xét set"
                         InputProps={{ sx: { fontSize: 11, fontStyle: m.review ? 'normal' : 'italic' } }} />
