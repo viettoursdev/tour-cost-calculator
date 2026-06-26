@@ -70,3 +70,13 @@ export const VISA_EXPORT_COLUMNS: VisaExportColumn[] = [
 export const DEFAULT_VISA_EXPORT_COLS: string[] = [
   'stt', 'name', 'gender', 'dob', 'nationality', 'idNo', 'passportIssue', 'passportExpiry', 'visaStatus',
 ];
+
+/** Preset chọn nhanh bộ cột (1 chạm) — chọn xong vẫn tinh chỉnh tiếp được. */
+export const VISA_EXPORT_PRESETS: { id: string; label: string; keys: string[] }[] = [
+  { id: 'default', label: 'Mặc định', keys: DEFAULT_VISA_EXPORT_COLS },
+  {
+    id: 'timeline', label: 'Tình trạng & timeline',
+    keys: ['stt', 'name', 'visaStatus', ...DEFAULT_APPLICANT_TIMELINE.map((m) => `ms_${m.key}`), 'overdue'],
+  },
+  { id: 'full', label: 'Đầy đủ', keys: VISA_EXPORT_COLUMNS.map((c) => c.key) },
+];

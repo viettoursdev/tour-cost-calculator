@@ -427,26 +427,21 @@ export function VisaApplicantManager({ project, onClose }: Props) {
 
           {/* Menu: xuất */}
           <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)} slotProps={{ paper: { sx: menuPaperSx } }}>
-            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Danh sách khách</ListSubheader>
+            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Excel</ListSubheader>
             <MenuItem disabled={list.length === 0}
               onClick={() => { setExportAnchor(null); setExportListOpen(true); }}>
               <ListItemIcon><TableViewIcon fontSize="small" sx={{ color: '#0d7a6a' }} /></ListItemIcon>
-              <ListItemText primary="Tải danh sách khách (Excel)" secondary="Chọn cột & thứ tự · cần mật khẩu" />
+              <ListItemText primary="Tải danh sách khách" secondary="Chọn cột & thứ tự (có preset Tình trạng & timeline) · cần mật khẩu" />
             </MenuItem>
             <Divider />
-            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Tình trạng & timeline</ListSubheader>
-            <MenuItem onClick={() => void exportTimeline('excel')}>
-              <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
-              <ListItemText primary="Excel" />
-            </MenuItem>
+            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>PDF</ListSubheader>
             <MenuItem onClick={() => void exportTimeline('pdf')}>
               <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
-              <ListItemText primary="PDF" />
+              <ListItemText primary="Tình trạng & timeline" />
             </MenuItem>
-            <Divider />
             <MenuItem onClick={() => void exportChecklist()}>
               <ListItemIcon><PlaylistAddCheckIcon fontSize="small" /></ListItemIcon>
-              <ListItemText primary="PDF checklist hồ sơ từng khách" />
+              <ListItemText primary="Checklist hồ sơ từng khách" />
             </MenuItem>
           </Menu>
 

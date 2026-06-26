@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Checkbox, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent,
   DialogTitle, Divider, IconButton, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -13,7 +13,7 @@ import { toast } from '@/stores/toastStore';
 import { useAuthStore } from '@/stores/authStore';
 import { isApprover } from '@/auth/ROLES';
 import { sbSetVisaExportPassword, sbVerifyVisaExportPassword, sbVisaExportPasswordIsSet } from '@/lib/supabase';
-import { DEFAULT_VISA_EXPORT_COLS, VISA_EXPORT_COLUMNS } from '@/lib/exports/visaExportColumns';
+import { DEFAULT_VISA_EXPORT_COLS, VISA_EXPORT_COLUMNS, VISA_EXPORT_PRESETS } from '@/lib/exports/visaExportColumns';
 import type { Passenger, VisaProjectDoc } from '@/types';
 
 const PREF_KEY = 'vte_visa_export_cols_v1';
@@ -84,9 +84,12 @@ export function VisaExportDialog({ project, applicants, onClose }: Props) {
       return next;
     });
 
-  const resetDefault = () => {
-    setOrder([...ALL_KEYS]);
-    setEnabled(new Set(DEFAULT_VISA_EXPORT_COLS));
+  // Chọn nhanh một preset: đưa các cột của preset lên đầu (đúng thứ tự đó),
+  // phần còn lại xếp sau & bỏ tích.
+  const applyPreset = (keys: string[]) => {
+    const valid = keys.filter((k) => ALL_KEYS.includes(k));
+    setOrder([...valid, ...ALL_KEYS.filter((k) => !valid.includes(k))]);
+    setEnabled(new Set(valid));
   };
 
   const persistPref = () => {
@@ -143,13 +146,17 @@ export function VisaExportDialog({ project, applicants, onClose }: Props) {
       </DialogTitle>
 
       <DialogContent dividers>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-          <Typography variant="subtitle2" fontWeight={700}>
-            Chọn cột & thứ tự ({selectedCount} cột)
-          </Typography>
-          <Button size="small" startIcon={<RestartAltIcon />} onClick={resetDefault} sx={{ color: '#0d7a6a' }}>
-            Mặc định
-          </Button>
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.75 }}>
+          Chọn cột & thứ tự ({selectedCount} cột)
+        </Typography>
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mr: 0.25 }}>Chọn nhanh:</Typography>
+          {VISA_EXPORT_PRESETS.map((p) => (
+            <Chip key={p.id} label={p.label} size="small" variant="outlined" clickable
+              icon={<RestartAltIcon style={{ fontSize: 15 }} />}
+              onClick={() => applyPreset(p.keys)}
+              sx={{ borderColor: '#0d7a6a', color: '#0d7a6a', '& .MuiChip-icon': { color: '#0d7a6a' } }} />
+          ))}
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
           Tích chọn cột cần xuất; dùng mũi tên để đổi thứ tự cột trong file Excel.
