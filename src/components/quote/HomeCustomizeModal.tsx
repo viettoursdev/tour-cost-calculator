@@ -6,8 +6,14 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import AddIcon from '@mui/icons-material/Add';
 import { SortableList } from '@/components/itinerary/SortableList';
 import { isHidden, reorderSection, setRowsPer, toggleHidden, ROWS_OPTIONS, type HomeLayout } from './homeLayout';
+import {
+  addPreset, renamePreset, deletePreset, switchPreset, MAX_PRESETS, type PresetState,
+} from './homePresets';
 
 const ROWS_LABEL = (n: number) => (n >= 9999 ? 'Tất cả' : `${n} dòng`);
 
@@ -19,9 +25,23 @@ type Props = {
   layout: HomeLayout;
   onChange: (layout: HomeLayout) => void;
   onReset: () => void;
+  presetState: PresetState;
+  onPresetChange: (state: PresetState) => void;
 };
 
-export function HomeCustomizeModal({ open, onClose, labels, layout, onChange, onReset }: Props) {
+export function HomeCustomizeModal({ open, onClose, labels, layout, onChange, onReset, presetState, onPresetChange }: Props) {
+  const { presets, activeId } = presetState;
+  const addNew = () => {
+    const name = window.prompt('Tên bố cục mới:', `Bố cục ${presets.length + 1}`);
+    if (name != null) onPresetChange(addPreset(presetState, name));
+  };
+  const rename = (id: string, cur: string) => {
+    const name = window.prompt('Đổi tên bố cục:', cur);
+    if (name != null) onPresetChange(renamePreset(presetState, id, name));
+  };
+  const remove = (id: string, name: string) => {
+    if (window.confirm(`Xoá bố cục "${name}"?`)) onPresetChange(deletePreset(presetState, id));
+  };
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pb: 0.5 }}>
@@ -31,6 +51,31 @@ export function HomeCustomizeModal({ open, onClose, labels, layout, onChange, on
         </Typography>
       </DialogTitle>
       <DialogContent>
+        <Box sx={{ mt: 1, mb: 1.5, p: 1, border: '1px solid rgba(13,122,106,0.25)', borderRadius: 2, bgcolor: 'rgba(13,122,106,0.03)' }}>
+          <Stack direction="row" alignItems="center" sx={{ mb: 0.5 }}>
+            <Typography fontWeight={800} fontSize={13} sx={{ flex: 1, color: '#0d7a6a' }}>Bố cục đặt tên</Typography>
+            <Button size="small" startIcon={<AddIcon />} onClick={addNew} disabled={presets.length >= MAX_PRESETS}>Thêm</Button>
+          </Stack>
+          <Stack spacing={0.5}>
+            {presets.map((p) => {
+              const active = p.id === activeId;
+              return (
+                <Stack key={p.id} direction="row" alignItems="center" spacing={0.5}
+                  sx={{ px: 1, py: 0.5, borderRadius: 1.5, cursor: active ? 'default' : 'pointer',
+                    bgcolor: active ? 'rgba(13,122,106,0.12)' : '#fff', border: '1px solid', borderColor: active ? 'rgba(13,122,106,0.4)' : 'rgba(0,0,0,0.08)' }}
+                  onClick={() => { if (!active) onPresetChange(switchPreset(presetState, p.id)); }}>
+                  <Typography fontSize={13} fontWeight={active ? 800 : 600} sx={{ flex: 1, minWidth: 0 }} noWrap>
+                    {active ? '● ' : ''}{p.name}
+                  </Typography>
+                  <Tooltip title="Đổi tên"><IconButton size="small" onClick={(e) => { e.stopPropagation(); rename(p.id, p.name); }}><EditOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+                  <Tooltip title={presets.length <= 1 ? 'Cần giữ ít nhất 1 bố cục' : 'Xoá'}>
+                    <span><IconButton size="small" disabled={presets.length <= 1} onClick={(e) => { e.stopPropagation(); remove(p.id, p.name); }}><DeleteOutlineIcon fontSize="small" /></IconButton></span>
+                  </Tooltip>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Box>
         <TextField
           select size="small" label="Số dòng mỗi thẻ" value={layout.rowsPer}
           onChange={(e) => onChange(setRowsPer(layout, Number(e.target.value)))}

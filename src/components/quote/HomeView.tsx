@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Chip, IconButton, Paper, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
+import {
+  Box, Button, Chip, IconButton, MenuItem, Paper, Stack, TextField,
+  ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+} from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import SnoozeIcon from '@mui/icons-material/Snooze';
+import DoneIcon from '@mui/icons-material/Done';
+import CloseIcon from '@mui/icons-material/Close';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -21,15 +28,20 @@ import { runProgress, currentStep } from '@/components/process/processRun';
 import { useProcessStore } from '@/stores/processStore';
 import { useHomePrefStore } from '@/stores/homePrefStore';
 import { HomeCustomizeModal } from './HomeCustomizeModal';
+import { HOME_SECTION_IDS, isCollapsed, toggleCollapsed, type HomeLayout } from './homeLayout';
+import { computeHomeStats } from './homeStats';
+import { rankPriority, severityOf, type PriKind, type PriSeverity } from './homePriority';
 import {
-  HOME_SECTION_IDS, reconcileHomeLayout, isCollapsed, toggleCollapsed, type HomeLayout,
-} from './homeLayout';
+  normalizePresets, activeLayout, setActiveLayout, switchPreset, addPreset, type PresetState,
+} from './homePresets';
 import type { CloudQuoteEntry, Department, LeaveType, Todo } from '@/types';
 
 const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa', 'ketoan'];
 
 /** Nhãn từng thẻ trang chủ (hiển thị trong hộp thoại tùy chỉnh). */
 const SECTION_LABELS: Record<string, string> = {
+  kpi: '📊 Chỉ số nhanh',
+  priority: '🔥 Ưu tiên hôm nay',
   todo: '📋 Việc cần làm',
   process: '🗂️ Quy trình phòng ban',
   myRuns: '▶️ Quy trình đang chạy của tôi',
@@ -43,11 +55,14 @@ const SECTION_LABELS: Record<string, string> = {
   followups: '📅 Hẹn liên hệ khách hôm nay',
 };
 /** Thẻ chiếm trọn chiều ngang (phần còn lại xếp lưới 2 cột). */
-const FULL_SPAN = new Set(['todo', 'process', 'myRuns', 'deadlines']);
+const FULL_SPAN = new Set(['kpi', 'priority', 'todo', 'process', 'myRuns', 'deadlines']);
 
 const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
   annual: 'Nghỉ phép năm', unpaid: 'Nghỉ không lương', sick: 'Nghỉ ốm', other: 'Nghỉ khác',
 };
+
+const PRI_ICON: Record<PriKind, string> = { overdue: '⏱', deadline: '⏳', ncc: '🏦', doc: '🛂', owing: '💰' };
+const PRI_COLOR: Record<PriSeverity, string> = { overdue: '#dc3250', urgent: '#f5a623', soon: '#2563eb' };
 
 type Scope = 'me' | 'dept' | 'all';
 
@@ -77,6 +92,16 @@ function Section({ icon, title, count, color, onAll, collapsed, onToggleCollapse
   );
 }
 
+/** Ô chỉ số nhanh trong dải KPI. */
+const Kpi = ({ label, value, sub, color, onClick }: { label: string; value: string; sub?: string; color: string; onClick: () => void }) => (
+  <Paper variant="outlined" onClick={onClick}
+    sx={{ p: 1.25, cursor: 'pointer', borderTop: `3px solid ${color}`, '&:hover': { boxShadow: 1 } }}>
+    <Typography fontWeight={900} fontSize={20} sx={{ color, lineHeight: 1.1 }} noWrap>{value}</Typography>
+    <Typography fontSize={11.5} fontWeight={700} noWrap>{label}</Typography>
+    {sub && <Typography variant="caption" color="text.secondary" noWrap>{sub}</Typography>}
+  </Paper>
+);
+
 /** Đếm ngược tới mốc `target` (ms). Trả về nhãn "còn 2 ngày 5 giờ" / "QUÁ HẠN …". */
 function countdown(target: number, now: number): { text: string; overdue: boolean; urgent: boolean } {
   const diff = target - now;
@@ -99,6 +124,13 @@ const Row = ({ onClick, primary, secondary, right }: { onClick: () => void; prim
       {right}
     </Stack>
   </Paper>
+);
+
+/** Nút hành động nhanh trên 1 dòng (chặn nổi bọt để không kích hoạt mở view). */
+const QuickBtn = ({ title, icon, color, onClick }: { title: string; icon: React.ReactNode; color?: string; onClick: () => void }) => (
+  <Tooltip title={title}>
+    <IconButton size="small" sx={{ color }} onClick={(e) => { e.stopPropagation(); onClick(); }}>{icon}</IconButton>
+  </Tooltip>
 );
 
 export function HomeView() {
@@ -140,13 +172,23 @@ export function HomeView() {
     () => HOME_SECTION_IDS.filter((id) => (id === 'leaves' ? amApprover : true)),
     [amApprover],
   );
-  const layout = useMemo(() => reconcileHomeLayout(applicableIds, homeRaw), [applicableIds, homeRaw]);
+  // Bố cục đặt tên (preset). `presetState` chuẩn hoá từ blob; `layout` = preset đang chọn.
+  const presetState: PresetState = useMemo(() => normalizePresets(applicableIds, homeRaw), [applicableIds, homeRaw]);
+  const layout = activeLayout(presetState);
   const rows = layout.rowsPer;
-  const saveLayout = (l: HomeLayout) => useHomePrefStore.getState().save(me?.u, l);
+  const savePresets = (st: PresetState) => useHomePrefStore.getState().save(me?.u, st);
+  const saveLayout = (l: HomeLayout) => savePresets(setActiveLayout(presetState, l));
   const collapseProps = (id: string) => ({
     collapsed: isCollapsed(layout, id),
     onToggleCollapse: () => saveLayout(toggleCollapsed(layout, id)),
   });
+  const onPickPreset = (id: string) => {
+    if (id === '__new__') {
+      const name = window.prompt('Tên bố cục mới:', `Bố cục ${presetState.presets.length + 1}`);
+      if (name == null) return;
+      savePresets(addPreset(presetState, name));
+    } else savePresets(switchPreset(presetState, id));
+  };
 
   // Tập username trong phòng của tôi (cho phạm vi "Cả phòng").
   const deptUsers = useMemo(() => {
@@ -171,8 +213,7 @@ export function HomeView() {
     setView(v);
   };
 
-  // Phạm vi áp cho các thẻ CÁ NHÂN (việc/deadline/khách của tôi). Thẻ vận hành
-  // (tour khởi hành, công nợ/đến hạn NCC) luôn hiện toàn bộ dữ liệu được phép xem.
+  // Phạm vi áp cho các thẻ CÁ NHÂN. Thẻ vận hành (tour/công nợ/đến hạn NCC) luôn full.
   const inScope = (owner?: string | null) => {
     if (scope === 'all') return true;
     if (!owner) return false;
@@ -181,6 +222,7 @@ export function HomeView() {
 
   const data = useMemo(() => {
     const list = visibleQuotes();
+    const stats = computeHomeStats(list);
     const soon = list.filter((q) => { const d = q.departDate ? daysUntil(q.departDate) : null; return d != null && d >= 0 && d <= 7; })
       .sort((a, b) => (a.departDate ?? '').localeCompare(b.departDate ?? ''));
     const myOverdue = list.flatMap((q) => (q.workflowDue ?? [])
@@ -196,10 +238,7 @@ export function HomeView() {
     const horizon = now + 14 * 86400000;
     const stepTarget = (d: string) => new Date(d.includes('T') ? d : d + 'T23:59:59').getTime();
 
-    // Deadline công việc trong 2 tuần tới (đếm ngược ngày/giờ). Gồm deadline báo giá
-    // (datetime, người tạo/collab trong phạm vi) và bước quy trình SẮP tới.
     const deadlines: { key: string; q: CloudQuoteEntry; label: string; target: number; view: QuoteViewKey }[] = [];
-    // Đến hạn trả NCC (gồm cả quá hạn) — thẻ vận hành, không lọc theo phạm vi cá nhân.
     const nccDue: { key: string; q: CloudQuoteEntry; n: NonNullable<CloudQuoteEntry['nccDue']>[number]; target: number }[] = [];
     for (const q of list) {
       const mine = inScope(q.createdByUsername) || (q.collaborators ?? []).some((c) => c.u === me?.u);
@@ -211,20 +250,19 @@ export function HomeView() {
       for (const w of q.workflowDue ?? []) {
         if (!inScope(w.assignee ?? q.createdByUsername)) continue;
         const t = stepTarget(w.dueDate);
-        if (isNaN(t) || t < now || t > horizon) continue; // chỉ bước sắp tới (chưa quá hạn)
+        if (isNaN(t) || t < now || t > horizon) continue;
         deadlines.push({ key: `${q.cloudId}:${w.label}:${w.dueDate}`, q, label: w.label, target: t, view: 'workflow' });
       }
       for (const n of q.nccDue ?? []) {
         const t = stepTarget(n.dueDate);
-        if (isNaN(t) || t > horizon) continue; // gồm quá hạn + tới hạn trong 2 tuần
+        if (isNaN(t) || t > horizon) continue;
         nccDue.push({ key: `${q.cloudId}:${n.label}:${n.dueDate}`, q, n, target: t });
       }
     }
     deadlines.sort((a, b) => a.target - b.target);
     nccDue.sort((a, b) => a.target - b.target);
 
-    // Giấy tờ khách (hộ chiếu/visa) sắp hết hạn ≤ 90 ngày — siết quyền xem PII.
-    const docs: { key: string; traveler: string; kind: string; customerName: string; days: number }[] = [];
+    const docs: { key: string; traveler: string; kind: string; customerName: string; days: number; ts: number }[] = [];
     for (const c of customers) {
       if (!canViewTravelerDocs(me, c)) continue;
       if (!inScope(c.ownerU ?? c.createdByU)) continue;
@@ -234,13 +272,14 @@ export function HomeView() {
           if (!exp) continue;
           const d = daysUntil(exp);
           if (d == null || d > 90) continue;
-          docs.push({ key: `${c.id}:${t.id}:${field}`, traveler: t.fullName, kind, customerName: c.name, days: d });
+          docs.push({ key: `${c.id}:${t.id}:${field}`, traveler: t.fullName, kind, customerName: c.name, days: d, ts: new Date(exp).getTime() });
         }
       }
     }
     docs.sort((a, b) => a.days - b.days);
 
-    return { soon, myOverdue, owing, followups, deadlines, nccDue, docs };
+    const owingTotal = owing.reduce((s, q) => s + (q.paymentSummary?.remaining ?? 0), 0);
+    return { stats, soon, myOverdue, owing, owingTotal, followups, deadlines, nccDue, docs };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes, customers, me, scope, deptUsers]);
 
@@ -252,15 +291,69 @@ export function HomeView() {
       .sort((a, b) => (a.startDate ?? '9999').localeCompare(b.startDate ?? '9999'));
   }, [leaves, employees]);
 
+  // Hàng đợi ưu tiên: gộp mọi cảnh báo + xếp hạng (xây ở render để gắn hành động mở hiện hành).
+  const stepTs = (d: string) => new Date(d.includes('T') ? d : d + 'T23:59:59').getTime();
+  type PItem = { id: string; kind: PriKind; primary: string; secondary?: string; dueTs: number | null; severity: PriSeverity; open: () => void };
+  const priorityRaw: PItem[] = [];
+  for (const { q, w } of data.myOverdue)
+    priorityRaw.push({ id: `ov:${q.cloudId}:${w.label}:${w.dueDate}`, kind: 'overdue', primary: w.label, secondary: q.name, dueTs: stepTs(w.dueDate), severity: 'overdue', open: () => void openQuote(q, 'workflow') });
+  for (const d of data.deadlines)
+    priorityRaw.push({ id: d.key, kind: 'deadline', primary: d.label, secondary: `${d.q.name}${d.q.customerName ? ` · ${d.q.customerName}` : ''}`, dueTs: d.target, severity: severityOf(d.target, nowMs), open: () => void openQuote(d.q, d.view) });
+  for (const d of data.nccDue)
+    priorityRaw.push({ id: d.key, kind: 'ncc', primary: `${d.n.supplier ? d.n.supplier + ' · ' : ''}${d.n.label} — ${fmtVND(d.n.amount)}`, secondary: d.q.name, dueTs: d.target, severity: severityOf(d.target, nowMs), open: () => void openQuote(d.q, 'payment') });
+  for (const d of data.docs)
+    priorityRaw.push({ id: d.key, kind: 'doc', primary: `${d.traveler} · ${d.kind}`, secondary: d.customerName, dueTs: d.ts, severity: severityOf(d.ts, nowMs), open: () => go('customer') });
+  for (const q of data.owing)
+    priorityRaw.push({ id: `ow:${q.cloudId}`, kind: 'owing', primary: `${q.name} — nợ NCC ${fmtVND(q.paymentSummary!.remaining)}`, secondary: q.customerName || q.createdByName, dueTs: q.departDate ? new Date(q.departDate).getTime() : null, severity: 'overdue', open: () => void openQuote(q, 'payment') });
+  const priority = rankPriority(priorityRaw);
+
   // Phiên chạy quy trình đang hoạt động (theo phạm vi).
   const myRuns = processRuns
     .filter((r) => r.status === 'active' && (inScope(r.assignee) || inScope(r.createdByUsername)))
     .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
   const openRun = (id: string) => { setOpenRun(id); setView('process'); };
 
+  // Hành động nhanh inline.
+  const cust = () => useCustomerStore.getState();
+  const doneFollowUp = (id: string) => void cust().clearFollowUp(id).catch(() => {});
+  const snoozeFollowUp = (id: string, note: string) => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    void cust().setFollowUp(id, d.toISOString().slice(0, 10), note).catch(() => {});
+  };
+  const decideLeave = (id: string, status: 'approved' | 'rejected', name: string) => {
+    if (status === 'rejected' && !window.confirm(`Từ chối đơn nghỉ phép của ${name}?`)) return;
+    void useHrLeaveStore.getState().decide(id, status).catch(() => {});
+  };
+
+  const wonLost = data.stats.won + data.stats.lost;
+
   // Mỗi thẻ là 1 node theo id ổn định; render theo `layout` (thứ tự + ẩn/hiện + thu gọn).
-  // `myRuns` chỉ render khi có phiên đang chạy (= null thì bỏ qua dù đang hiện).
   const nodes: Record<string, React.ReactNode | null> = {
+    kpi: (
+      <Section icon="📊" title="Chỉ số nhanh" count={1} color="#0d7a6a" {...collapseProps('kpi')}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
+          <Kpi label="Báo giá đang mở" value={String(data.stats.open)} color="#0d7a6a" onClick={() => go('cost')} />
+          <Kpi label="Tỷ lệ thắng" value={`${data.stats.winRatePct}%`} sub={wonLost ? `${data.stats.won}/${wonLost} chốt` : 'chưa có'} color="#14a08c" onClick={() => go('history')} />
+          <Kpi label="Tour 7 ngày" value={String(data.soon.length)} color="#2563eb" onClick={() => go('departures')} />
+          <Kpi label="Còn nợ NCC" value={fmtVND(data.owingTotal)} color="#f5a623" onClick={() => go('payboard')} />
+          <Kpi label="Biên lợi thực" value={fmtVND(data.stats.settledProfit)} color="#7c3aed" onClick={() => go('history')} />
+        </Box>
+      </Section>
+    ),
+    priority: (
+      <Section icon="🔥" title="Ưu tiên hôm nay" count={priority.length} color="#dc3250" {...collapseProps('priority')}>
+        <Stack spacing={0.75}>
+          {priority.slice(0, rows).map((p) => (
+            <Row key={p.id} onClick={p.open}
+              primary={`${PRI_ICON[p.kind]} ${p.primary}`}
+              secondary={p.secondary}
+              right={<Chip size="small" variant={p.severity === 'overdue' ? 'filled' : 'outlined'}
+                label={p.dueTs == null ? '—' : countdown(p.dueTs, nowMs).text}
+                sx={{ height: 20, fontWeight: 700, ...(p.severity === 'overdue' ? { bgcolor: PRI_COLOR.overdue, color: '#fff' } : { borderColor: PRI_COLOR[p.severity], color: PRI_COLOR[p.severity] }) }} />} />
+          ))}
+        </Stack>
+      </Section>
+    ),
     todo: <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />,
     process: (
       <Section icon="🗂️" title="Quy trình phòng ban" count={PROCESS_SEED.length} color="#0d7a6a" onAll={() => go('process')} {...collapseProps('process')}>
@@ -406,9 +499,13 @@ export function HomeView() {
           {leavesPending.slice(0, rows).map((l) => (
             <Row key={l.id} onClick={() => go('hr')}
               primary={l.employeeName}
-              secondary={`${LEAVE_TYPE_LABEL[l.type] ?? 'Nghỉ phép'} · ${l.days} ngày`}
-              right={<Typography variant="caption" sx={{ color: '#2563eb', fontWeight: 700 }}>
-                {l.startDate ? new Date(l.startDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }) : ''}</Typography>} />
+              secondary={`${LEAVE_TYPE_LABEL[l.type] ?? 'Nghỉ phép'} · ${l.days} ngày${l.startDate ? ` · ${new Date(l.startDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}` : ''}`}
+              right={
+                <Stack direction="row" spacing={0.25}>
+                  <QuickBtn title="Duyệt" color="#1a9e63" icon={<DoneIcon fontSize="small" />} onClick={() => decideLeave(l.id, 'approved', l.employeeName)} />
+                  <QuickBtn title="Từ chối" color="#dc3250" icon={<CloseIcon fontSize="small" />} onClick={() => decideLeave(l.id, 'rejected', l.employeeName)} />
+                </Stack>
+              } />
           ))}
         </Stack>
       </Section>
@@ -420,8 +517,14 @@ export function HomeView() {
             <Row key={c.id} onClick={() => go('customer')}
               primary={c.name}
               secondary={c.nextFollowUp!.note || 'Liên hệ lại'}
-              right={<Typography variant="caption" sx={{ color: c.nextFollowUp!.date < today ? '#dc3250' : '#2563eb', fontWeight: 700 }}>
-                {new Date(c.nextFollowUp!.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>} />
+              right={
+                <Stack direction="row" alignItems="center" spacing={0.25}>
+                  <Typography variant="caption" sx={{ color: c.nextFollowUp!.date < today ? '#dc3250' : '#2563eb', fontWeight: 700 }}>
+                    {new Date(c.nextFollowUp!.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>
+                  <QuickBtn title="Đã liên hệ" color="#1a9e63" icon={<CheckCircleOutlineIcon fontSize="small" />} onClick={() => doneFollowUp(c.id)} />
+                  <QuickBtn title="Dời +1 ngày" icon={<SnoozeIcon fontSize="small" />} onClick={() => snoozeFollowUp(c.id, c.nextFollowUp!.note)} />
+                </Stack>
+              } />
           ))}
         </Stack>
       </Section>
@@ -432,13 +535,21 @@ export function HomeView() {
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1000, mx: 'auto' }}>
-      <Stack direction="row" alignItems="flex-start" spacing={1}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 180 }}>
           <Typography fontWeight={900} fontSize={18}>👋 Chào {me?.name ?? ''}</Typography>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
             {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} · việc cần để ý hôm nay
           </Typography>
         </Box>
+        <TextField
+          select size="small" value={presetState.activeId}
+          onChange={(e) => onPickPreset(e.target.value)}
+          sx={{ minWidth: 140, '& .MuiSelect-select': { py: 0.5, fontSize: 13, fontWeight: 700 } }}
+        >
+          {presetState.presets.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
+          <MenuItem value="__new__" sx={{ fontStyle: 'italic', color: '#0d7a6a' }}>＋ Bố cục mới…</MenuItem>
+        </TextField>
         {canDept && (
           <ToggleButtonGroup
             size="small" exclusive value={scope}
@@ -465,6 +576,8 @@ export function HomeView() {
         layout={layout}
         onChange={saveLayout}
         onReset={() => useHomePrefStore.getState().reset(me?.u)}
+        presetState={presetState}
+        onPresetChange={savePresets}
       />
 
       {visibleIds.length === 0 ? (

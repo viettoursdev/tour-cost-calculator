@@ -12,6 +12,8 @@
 
 /** Id thẻ trang chủ — phải trùng với khóa render trong HomeView. */
 export const HOME_SECTION_IDS = [
+  'kpi',
+  'priority',
   'todo',
   'process',
   'myRuns',
