@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Button, Chip, IconButton, Link, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
@@ -22,11 +22,34 @@ import { DebouncedTextField } from '@/components/common/DebouncedTextField';
 import { DebouncedAutocomplete } from '@/components/common/DebouncedAutocomplete';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import type { ChangeEvent } from 'react';
-import type { Restaurant, RestaurantTourLink } from '@/types';
+import type { Restaurant, RestaurantMenu, RestaurantTourLink } from '@/types';
 
 type Props = { onBack: () => void };
 
 const CONT_SEED = ['Châu Á', 'Châu Âu', 'Châu Úc', 'Châu Mỹ', 'Châu Phi', 'Việt Nam'];
+
+// sx ổn định (hoist khỏi render): tránh emotion serialize lại mỗi lần vẽ thẻ.
+const PAPER_SX = {
+  p: 1.75,
+  '& .MuiOutlinedInput-input': { py: 0.6, fontSize: 13.5 },
+  '& .MuiInputBase-inputMultiline': { py: 0 },
+  '& .MuiAutocomplete-input': { py: '2.5px !important' },
+} as const;
+const HEADER_GRID_SX = { display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 36px', gap: 1, mb: 1, alignItems: 'center' } as const;
+const NAME_INPUT_SX = { sx: { fontWeight: 700 } } as const;
+const ADDRESS_SX = { mb: 1, '& .MuiInputBase-input': { fontSize: 12 } } as const;
+const FONT12_SX = { '& .MuiInputBase-input': { fontSize: 12 } } as const;
+const REVIEW_SX = { flex: 1, minWidth: 200, '& .MuiInputBase-input': { fontSize: 12 } } as const;
+const NOTE_SX = { mb: 1, '& .MuiInputBase-input': { fontSize: 12 } } as const;
+const LINKS_GRID_SX = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.25, mb: 1 } as const;
+const MENU_BOX_SX = {
+  display: 'grid', gridTemplateColumns: '1.2fr 2.5fr 1.3fr 30px',
+  gap: 1.25, alignItems: 'start',
+  bgcolor: 'rgba(168,230,221,0.12)', borderRadius: 1.5, p: 1.25,
+} as const;
+const SET_NAME_INPUT_SX = { sx: { fontSize: 12, fontWeight: 600 } } as const;
+const DISHES_INPUT_SX = { sx: { fontSize: 12 } } as const;
+const PRICE_INPUT_SX = { sx: { fontSize: 12, textAlign: 'right' as const } } as const;
 
 function uniq(a: string[]): string[] {
   return [...new Set(a.filter(Boolean).map((s) => s.trim()))].sort((x, y) => x.localeCompare(y, 'vi'));
@@ -37,9 +60,181 @@ function normalizeUrl(u: string | undefined): string {
   return /^https?:\/\//.test(u) ? u : 'https://' + u;
 }
 
+type CardProps = {
+  r: Restaurant;
+  tourLinks: RestaurantTourLink[] | undefined;
+  contOpts: string[];
+  countryOptsFor: (cont: string) => string[];
+  cityOptsFor: (country: string) => string[];
+  uploading: boolean;
+  onUpdR: (id: string, patch: Partial<Restaurant>) => void;
+  onDelR: (id: string) => void;
+  onAddMenu: (rid: string) => void;
+  onUpdMenu: (rid: string, mid: string, patch: Partial<RestaurantMenu>) => void;
+  onDelMenu: (rid: string, mid: string) => void;
+  onPickFile: (rid: string, e: ChangeEvent<HTMLInputElement>) => void;
+  onDelFile: (rid: string, key: string) => void;
+};
+
+/**
+ * Một thẻ nhà hàng — memo hoá để khi sửa MỘT nhà hàng không kéo theo vẽ lại CẢ
+ * danh sách. Nhờ `restaurantStore` giữ nguyên tham chiếu cho các nhà hàng KHÔNG
+ * đổi (updR dùng map có điều kiện), props `r` của thẻ không liên quan giữ
+ * nguyên → React.memo bỏ qua. Callback + options đều ổn định (xem cha).
+ */
+const RestaurantCard = memo(function RestaurantCard({
+  r, tourLinks, contOpts, countryOptsFor, cityOptsFor, uploading,
+  onUpdR, onDelR, onAddMenu, onUpdMenu, onDelMenu, onPickFile, onDelFile,
+}: CardProps) {
+  return (
+    <Paper variant="outlined" sx={PAPER_SX}>
+      <Box sx={HEADER_GRID_SX}>
+        <DebouncedTextField size="small" value={r.name ?? ''}
+          onCommit={(v) => onUpdR(r.id, { name: v })}
+          placeholder="Tên nhà hàng"
+          InputProps={NAME_INPUT_SX} />
+        <DebouncedAutocomplete options={contOpts} value={r.continent ?? ''}
+          onCommit={(v) => onUpdR(r.id, { continent: v })} placeholder="Châu lục ▾" />
+        <DebouncedAutocomplete options={countryOptsFor(r.continent)} value={r.country ?? ''}
+          onCommit={(v) => onUpdR(r.id, { country: v })} placeholder="Quốc gia ▾" />
+        <DebouncedAutocomplete options={cityOptsFor(r.country)} value={r.city ?? ''}
+          onCommit={(v) => onUpdR(r.id, { city: v })} placeholder="Thành phố ▾" />
+        <IconButton size="small" color="error" onClick={() => onDelR(r.id)}>
+          <DeleteOutlineIcon fontSize="small" />
+        </IconButton>
+      </Box>
+
+      <DebouncedTextField fullWidth size="small" value={r.address ?? ''}
+        onCommit={(v) => onUpdR(r.id, { address: v })}
+        placeholder="📍 Địa chỉ"
+        sx={ADDRESS_SX} />
+
+      {/* Tour (menu) đang dùng nhà hàng này */}
+      {(tourLinks?.length ?? 0) > 0 && (
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+          <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
+            <RestaurantMenuOutlinedIcon sx={{ fontSize: 15 }} /> Đang dùng trong {tourLinks!.length} tour:
+          </Typography>
+          {tourLinks!.map((t) => (
+            <Tooltip key={t.menuId} title={t.destination ? `Điểm đến: ${t.destination}` : ''} disableHoverListener={!t.destination}>
+              <Chip size="small" label={t.title}
+                sx={{ height: 20, fontSize: 11, fontWeight: 600, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a', maxWidth: 240 }} />
+            </Tooltip>
+          ))}
+        </Stack>
+      )}
+
+      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
+        <Typography variant="caption" fontWeight={700} color="text.secondary">
+          Đánh giá chất lượng:
+        </Typography>
+        <StarRating value={r.rating} onChange={(v) => onUpdR(r.id, { rating: v })} size={17} />
+        <DebouncedTextField
+          size="small" fullWidth value={r.review ?? ''}
+          onCommit={(v) => onUpdR(r.id, { review: v })}
+          placeholder="Lưu ý cho tour sau (phục vụ, vị trí, chất lượng...)"
+          sx={REVIEW_SX}
+        />
+      </Stack>
+
+      <Box sx={LINKS_GRID_SX}>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <DebouncedTextField fullWidth size="small" value={r.website ?? ''}
+            onCommit={(v) => onUpdR(r.id, { website: v })}
+            placeholder="Website"
+            sx={FONT12_SX} />
+          {r.website && (
+            <Link href={normalizeUrl(r.website)} target="_blank" rel="noopener" title="Mở website">🌐</Link>
+          )}
+        </Stack>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <DebouncedTextField fullWidth size="small" value={r.menuLink ?? ''}
+            onCommit={(v) => onUpdR(r.id, { menuLink: v })}
+            placeholder="Link menu"
+            sx={FONT12_SX} />
+          {r.menuLink && (
+            <Link href={normalizeUrl(r.menuLink)} target="_blank" rel="noopener" title="Mở link menu">📋</Link>
+          )}
+        </Stack>
+        <DebouncedTextField fullWidth size="small" value={r.contact ?? ''}
+          onCommit={(v) => onUpdR(r.id, { contact: v })}
+          placeholder="Contact (SĐT / email / người LH)"
+          sx={FONT12_SX} />
+      </Box>
+
+      <DebouncedTextField fullWidth size="small" multiline minRows={2} value={r.note ?? ''}
+        onCommit={(v) => onUpdR(r.id, { note: v })}
+        placeholder="📝 Thông tin / ghi chú (đặc sản, lưu ý đặt bàn, sức chứa…)"
+        sx={NOTE_SX} />
+
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+        <Button component="label" size="small" variant="outlined" startIcon={<AttachFileIcon fontSize="small" />} disabled={uploading}
+          sx={{ fontSize: 12 }}>
+          {uploading ? 'Đang tải…' : 'Thêm file'}
+          <input type="file" hidden onChange={(e) => void onPickFile(r.id, e)} />
+        </Button>
+        {(r.files ?? []).map((f) => (
+          <Chip key={f.key} size="small" icon={<AttachFileIcon />} label={f.name}
+            onClick={() => openFilePreview({ key: f.key, name: f.name })}
+            onDelete={() => onDelFile(r.id, f.key)} sx={{ maxWidth: 240 }} />
+        ))}
+      </Stack>
+
+      <Typography variant="caption" fontWeight={700} color="text.secondary"
+        sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        Thực đơn mẫu (mỗi món 1 dòng)
+      </Typography>
+
+      <Stack spacing={1.25}>
+        {(r.menus ?? []).map((m) => (
+          <Box key={m.id} sx={MENU_BOX_SX}>
+            <Stack spacing={0.75}>
+              <DebouncedTextField size="small" value={m.name ?? ''}
+                onCommit={(v) => onUpdMenu(r.id, m.id, { name: v })}
+                placeholder="Tên set"
+                InputProps={SET_NAME_INPUT_SX} />
+              <StarRating value={m.rating} onChange={(v) => onUpdMenu(r.id, m.id, { rating: v })} size={14} />
+            </Stack>
+            <DebouncedTextField size="small" multiline minRows={3} value={m.dishes ?? ''}
+              onCommit={(v) => onUpdMenu(r.id, m.id, { dishes: v })}
+              placeholder={'Gỏi cuốn\nCá kho tộ\nCanh chua...'}
+              InputProps={DISHES_INPUT_SX} />
+            <Stack spacing={0.75}>
+              <Stack direction="row" spacing={0.5}>
+                <DebouncedTextField size="small" type="number" value={m.price ? String(m.price) : ''}
+                  onCommit={(v) => onUpdMenu(r.id, m.id, { price: +v || 0 })}
+                  placeholder="Giá"
+                  InputProps={PRICE_INPUT_SX} />
+                <Select size="small" value={m.cur}
+                  onChange={(e) => onUpdMenu(r.id, m.id, { cur: e.target.value })}
+                  sx={{ width: 70, fontSize: 11 }}>
+                  {MENU_CUR.map((c) => (
+                    <MenuItem key={c} value={c}>{c}</MenuItem>
+                  ))}
+                </Select>
+              </Stack>
+              <DebouncedTextField size="small" value={m.review ?? ''}
+                onCommit={(v) => onUpdMenu(r.id, m.id, { review: v })}
+                placeholder="Nhận xét set"
+                InputProps={{ sx: { fontSize: 11, fontStyle: m.review ? 'normal' : 'italic' } }} />
+            </Stack>
+            <IconButton size="small" color="error" onClick={() => onDelMenu(r.id, m.id)}>
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        ))}
+      </Stack>
+
+      <Button size="small" startIcon={<AddIcon />} onClick={() => onAddMenu(r.id)}
+        sx={{ mt: 1, color: '#0d7a6a' }}>
+        Thêm set thực đơn
+      </Button>
+    </Paper>
+  );
+});
+
 export function RestaurantLibrary({ onBack }: Props) {
   const list = useRestaurantStore((s) => s.list);
-  const user = useAuthStore((s) => s.currentUser);
   // Bản đồ nhà hàng → các tour (menu) đang dùng. Nạp 1 lần khi mở thư viện.
   const [tourLinks, setTourLinks] = useState<Record<string, RestaurantTourLink[]>>({});
   useEffect(() => {
@@ -58,62 +253,69 @@ export function RestaurantLibrary({ onBack }: Props) {
   const [filterCountry, setFilterCountry] = useState('');
   const [filterCity, setFilterCity] = useState('');
   const [filterRating, setFilterRating] = useState(0);
-
-  const persist = (next: Restaurant[]) => {
-    const savedBy = user ? `${user.name} (${user.role})` : 'unknown';
-    void useRestaurantStore.getState().save(next, savedBy);
-  };
-
-  const topRef = useRef<HTMLDivElement>(null);
-  // Thêm nhà hàng mới → đưa lên ĐẦU danh sách + xoá lọc (để thẻ trống không bị
-  // ẩn) + cuộn lên đầu cho thấy ngay.
-  const addR = () => {
-    persist([newRestaurant(), ...list]);
-    setSearch(''); setFilterCont(''); setFilterCountry(''); setFilterCity(''); setFilterRating(0);
-    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-  };
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
-  const addRestaurant = (r: Restaurant) => persist([...useRestaurantStore.getState().list, r]);
-  const updR = (id: string, patch: Partial<Restaurant>) =>
-    persist(list.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  const delR = (id: string) => {
-    if (!window.confirm('Xoá nhà hàng này khỏi thư viện?')) return;
-    persist(list.filter((r) => r.id !== id));
-  };
 
-  const addMenu = (rid: string) => {
-    const r = list.find((x) => x.id === rid);
+  // Tất cả mutator dùng `getState()` để lấy danh sách MỚI NHẤT (không phụ thuộc
+  // `list` của closure) → tham chiếu callback ỔN ĐỊNH qua các lần render, nhờ đó
+  // React.memo trên từng thẻ phát huy tác dụng.
+  const persist = useCallback((next: Restaurant[]) => {
+    const u = useAuthStore.getState().currentUser;
+    const savedBy = u ? `${u.name} (${u.role})` : 'unknown';
+    useRestaurantStore.getState().save(next, savedBy);
+  }, []);
+  const updR = useCallback((id: string, patch: Partial<Restaurant>) => {
+    persist(useRestaurantStore.getState().list.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }, [persist]);
+  const patchFresh = useCallback((rid: string, fn: (r: Restaurant) => Restaurant) =>
+    persist(useRestaurantStore.getState().list.map((r) => (r.id === rid ? fn(r) : r))), [persist]);
+  const delR = useCallback((id: string) => {
+    if (!window.confirm('Xoá nhà hàng này khỏi thư viện?')) return;
+    persist(useRestaurantStore.getState().list.filter((r) => r.id !== id));
+  }, [persist]);
+
+  const addMenu = useCallback((rid: string) => {
+    const r = useRestaurantStore.getState().list.find((x) => x.id === rid);
     if (!r) return;
     updR(rid, { menus: [...(r.menus ?? []), newRestMenu()] });
-  };
-  const updMenu = (rid: string, mid: string, patch: Partial<Restaurant['menus'][number]>) => {
-    const r = list.find((x) => x.id === rid);
+  }, [updR]);
+  const updMenu = useCallback((rid: string, mid: string, patch: Partial<RestaurantMenu>) => {
+    const r = useRestaurantStore.getState().list.find((x) => x.id === rid);
     if (!r) return;
     updR(rid, { menus: r.menus.map((m) => (m.id === mid ? { ...m, ...patch } : m)) });
-  };
-  const delMenu = (rid: string, mid: string) => {
-    const r = list.find((x) => x.id === rid);
+  }, [updR]);
+  const delMenu = useCallback((rid: string, mid: string) => {
+    const r = useRestaurantStore.getState().list.find((x) => x.id === rid);
     if (!r) return;
     updR(rid, { menus: r.menus.filter((m) => m.id !== mid) });
-  };
+  }, [updR]);
 
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
-  const patchFresh = (rid: string, fn: (r: Restaurant) => Restaurant) =>
-    persist(useRestaurantStore.getState().list.map((r) => (r.id === rid ? fn(r) : r)));
-  const onPickFile = async (rid: string, e: ChangeEvent<HTMLInputElement>) => {
+  const onPickFile = useCallback(async (rid: string, e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; e.target.value = '';
     if (!f) return;
     if (f.size > 20 * 1024 * 1024) { window.alert('File vượt quá 20MB.'); return; }
     setUploadingId(rid);
     try {
       const up = await uploadFileToWorker(f);
-      patchFresh(rid, (r) => ({ ...r, files: [...(r.files ?? []), { key: up.key, name: up.name, uploadedBy: user?.name, uploadedAt: new Date().toISOString() }] }));
+      const uname = useAuthStore.getState().currentUser?.name;
+      patchFresh(rid, (r) => ({ ...r, files: [...(r.files ?? []), { key: up.key, name: up.name, uploadedBy: uname, uploadedAt: new Date().toISOString() }] }));
     } catch (e2) { window.alert('Tải file lỗi: ' + (e2 as Error).message); }
     finally { setUploadingId(null); }
-  };
-  const delFile = (rid: string, key: string) => patchFresh(rid, (r) => ({ ...r, files: (r.files ?? []).filter((f) => f.key !== key) }));
+  }, [patchFresh]);
+  const delFile = useCallback((rid: string, key: string) =>
+    patchFresh(rid, (r) => ({ ...r, files: (r.files ?? []).filter((f) => f.key !== key) })), [patchFresh]);
 
-  const mergeIntoR = (rid: string, p: ParsedRestaurant) => patchFresh(rid, (r) => ({
+  const topRef = useRef<HTMLDivElement>(null);
+  // Thêm nhà hàng mới → đưa lên ĐẦU danh sách + xoá lọc (để thẻ trống không bị
+  // ẩn) + cuộn lên đầu cho thấy ngay.
+  const addR = useCallback(() => {
+    persist([newRestaurant(), ...useRestaurantStore.getState().list]);
+    setSearch(''); setFilterCont(''); setFilterCountry(''); setFilterCity(''); setFilterRating(0);
+    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }, [persist]);
+  const addRestaurant = useCallback((r: Restaurant) =>
+    persist([...useRestaurantStore.getState().list, r]), [persist]);
+  const mergeIntoR = useCallback((rid: string, p: ParsedRestaurant) => patchFresh(rid, (r) => ({
     ...r,
     name: r.name || p.name,
     address: r.address || p.address,
@@ -124,7 +326,7 @@ export function RestaurantLibrary({ onBack }: Props) {
     note: r.note ? (p.note ? `${r.note}\n${p.note}` : r.note) : p.note,
     rating: r.rating || p.rating,
     menus: [...(r.menus ?? []), ...p.menus.map((m) => ({ ...newRestMenu(m.name), name: m.name, dishes: m.dishes, price: m.price, cur: m.cur, review: m.review }))],
-  }));
+  })), [patchFresh]);
 
   const filtered = list.filter((r) => {
     if (filterCont && r.continent !== filterCont) return false;
@@ -141,11 +343,41 @@ export function RestaurantLibrary({ onBack }: Props) {
     );
   });
 
-  // Danh mục chuẩn (như NCC) + giá trị đang có trong dữ liệu.
-  const contOpts = useMemo(() => uniq([...NCC_CONTINENTS, ...CONT_SEED, ...list.map((r) => r.continent)]), [list]);
-  const countryOpts = (cont: string) =>
-    uniq([...(cont ? (NCC_COUNTRIES[cont] ?? []) : NCC_ALL_COUNTRIES), ...list.filter((r) => !cont || r.continent === cont).map((r) => r.country)]);
-  const cityOpts = (country: string) => uniq(list.filter((r) => !country || r.country === country).map((r) => r.city));
+  // Danh mục gợi ý (như NCC) + giá trị đang có. CHỈ tính lại khi tập địa lý
+  // (châu lục/quốc gia/thành phố trong dữ liệu) đổi — KHÔNG phải mỗi phím gõ —
+  // nên `contOpts`/`countryOptsFor`/`cityOptsFor` giữ tham chiếu ổn định, không
+  // làm hỏng memo của thẻ khi sửa các trường khác.
+  const geoSig = useMemo(
+    () => list.map((r) => `${r.continent}${r.country}${r.city}`).join(''),
+    [list],
+  );
+  const { contOpts, countryOptsFor, cityOptsFor } = useMemo(() => {
+    const cur = useRestaurantStore.getState().list;
+    const conts = uniq([...NCC_CONTINENTS, ...CONT_SEED, ...cur.map((r) => r.continent)]);
+    const countryCache = new Map<string, string[]>();
+    const countryOptsFor = (cont: string) => {
+      let v = countryCache.get(cont);
+      if (!v) {
+        v = uniq([
+          ...(cont ? (NCC_COUNTRIES[cont] ?? []) : NCC_ALL_COUNTRIES),
+          ...cur.filter((r) => !cont || r.continent === cont).map((r) => r.country),
+        ]);
+        countryCache.set(cont, v);
+      }
+      return v;
+    };
+    const cityCache = new Map<string, string[]>();
+    const cityOptsFor = (country: string) => {
+      let v = cityCache.get(country);
+      if (!v) {
+        v = uniq(cur.filter((r) => !country || r.country === country).map((r) => r.city));
+        cityCache.set(country, v);
+      }
+      return v;
+    };
+    return { contOpts: conts, countryOptsFor, cityOptsFor };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoSig]);
 
   return (
     <Box ref={topRef} sx={{ minHeight: '100%' }}>
@@ -192,12 +424,12 @@ export function RestaurantLibrary({ onBack }: Props) {
             onChange={(e) => { setFilterCountry(e.target.value); setFilterCity(''); }}
             sx={{ minWidth: 140, ...filterSelectSx }}>
             <MenuItem value="">Tất cả quốc gia</MenuItem>
-            {countryOpts(filterCont).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+            {countryOptsFor(filterCont).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </Select>
           <Select size="small" displayEmpty value={filterCity}
             onChange={(e) => setFilterCity(e.target.value)} sx={{ minWidth: 140, ...filterSelectSx }}>
             <MenuItem value="">Tất cả thành phố</MenuItem>
-            {cityOpts(filterCountry).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
+            {cityOptsFor(filterCountry).map((o) => <MenuItem key={o} value={o}>{o}</MenuItem>)}
           </Select>
           <Select size="small" value={filterRating}
             onChange={(e) => setFilterRating(Number(e.target.value))} sx={{ minWidth: 130, ...filterSelectSx }}>
@@ -216,157 +448,22 @@ export function RestaurantLibrary({ onBack }: Props) {
 
         <Stack spacing={1.5}>
           {filtered.map((r) => (
-            <Paper key={r.id} variant="outlined"
-              sx={{ p: 1.75,
-                '& .MuiOutlinedInput-input': { py: 0.6, fontSize: 13.5 },
-                '& .MuiInputBase-inputMultiline': { py: 0 },
-                '& .MuiAutocomplete-input': { py: '2.5px !important' } }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 36px', gap: 1, mb: 1, alignItems: 'center' }}>
-                <DebouncedTextField size="small" value={r.name ?? ''}
-                  onCommit={(v) => updR(r.id, { name: v })}
-                  placeholder="Tên nhà hàng"
-                  InputProps={{ sx: { fontWeight: 700 } }} />
-                <DebouncedAutocomplete options={contOpts} value={r.continent ?? ''}
-                  onCommit={(v) => updR(r.id, { continent: v })} placeholder="Châu lục ▾" />
-                <DebouncedAutocomplete options={countryOpts(r.continent)} value={r.country ?? ''}
-                  onCommit={(v) => updR(r.id, { country: v })} placeholder="Quốc gia ▾" />
-                <DebouncedAutocomplete options={cityOpts(r.country)} value={r.city ?? ''}
-                  onCommit={(v) => updR(r.id, { city: v })} placeholder="Thành phố ▾" />
-                <IconButton size="small" color="error" onClick={() => delR(r.id)}>
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Box>
-
-              <DebouncedTextField fullWidth size="small" value={r.address ?? ''}
-                onCommit={(v) => updR(r.id, { address: v })}
-                placeholder="📍 Địa chỉ"
-                sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
-
-              {/* Tour (menu) đang dùng nhà hàng này */}
-              {(tourLinks[r.id]?.length ?? 0) > 0 && (
-                <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-                  <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}>
-                    <RestaurantMenuOutlinedIcon sx={{ fontSize: 15 }} /> Đang dùng trong {tourLinks[r.id].length} tour:
-                  </Typography>
-                  {tourLinks[r.id].map((t) => (
-                    <Tooltip key={t.menuId} title={t.destination ? `Điểm đến: ${t.destination}` : ''} disableHoverListener={!t.destination}>
-                      <Chip size="small" label={t.title}
-                        sx={{ height: 20, fontSize: 11, fontWeight: 600, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a', maxWidth: 240 }} />
-                    </Tooltip>
-                  ))}
-                </Stack>
-              )}
-
-              <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1, flexWrap: 'wrap' }}>
-                <Typography variant="caption" fontWeight={700} color="text.secondary">
-                  Đánh giá chất lượng:
-                </Typography>
-                <StarRating value={r.rating} onChange={(v) => updR(r.id, { rating: v })} size={17} />
-                <DebouncedTextField
-                  size="small" fullWidth value={r.review ?? ''}
-                  onCommit={(v) => updR(r.id, { review: v })}
-                  placeholder="Lưu ý cho tour sau (phục vụ, vị trí, chất lượng...)"
-                  sx={{ flex: 1, minWidth: 200, '& .MuiInputBase-input': { fontSize: 12 } }}
-                />
-              </Stack>
-
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.25, mb: 1 }}>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <DebouncedTextField fullWidth size="small" value={r.website ?? ''}
-                    onCommit={(v) => updR(r.id, { website: v })}
-                    placeholder="Website"
-                    sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
-                  {r.website && (
-                    <Link href={normalizeUrl(r.website)} target="_blank" rel="noopener" title="Mở website">🌐</Link>
-                  )}
-                </Stack>
-                <Stack direction="row" spacing={0.5} alignItems="center">
-                  <DebouncedTextField fullWidth size="small" value={r.menuLink ?? ''}
-                    onCommit={(v) => updR(r.id, { menuLink: v })}
-                    placeholder="Link menu"
-                    sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
-                  {r.menuLink && (
-                    <Link href={normalizeUrl(r.menuLink)} target="_blank" rel="noopener" title="Mở link menu">📋</Link>
-                  )}
-                </Stack>
-                <DebouncedTextField fullWidth size="small" value={r.contact ?? ''}
-                  onCommit={(v) => updR(r.id, { contact: v })}
-                  placeholder="Contact (SĐT / email / người LH)"
-                  sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
-              </Box>
-
-              <DebouncedTextField fullWidth size="small" multiline minRows={2} value={r.note ?? ''}
-                onCommit={(v) => updR(r.id, { note: v })}
-                placeholder="📝 Thông tin / ghi chú (đặc sản, lưu ý đặt bàn, sức chứa…)"
-                sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
-
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-                <Button component="label" size="small" variant="outlined" startIcon={<AttachFileIcon fontSize="small" />} disabled={uploadingId === r.id}
-                  sx={{ fontSize: 12 }}>
-                  {uploadingId === r.id ? 'Đang tải…' : 'Thêm file'}
-                  <input type="file" hidden onChange={(e) => void onPickFile(r.id, e)} />
-                </Button>
-                {(r.files ?? []).map((f) => (
-                  <Chip key={f.key} size="small" icon={<AttachFileIcon />} label={f.name}
-                    onClick={() => openFilePreview({ key: f.key, name: f.name })}
-                    onDelete={() => delFile(r.id, f.key)} sx={{ maxWidth: 240 }} />
-                ))}
-              </Stack>
-
-              <Typography variant="caption" fontWeight={700} color="text.secondary"
-                sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Thực đơn mẫu (mỗi món 1 dòng)
-              </Typography>
-
-              <Stack spacing={1.25}>
-                {(r.menus ?? []).map((m) => (
-                  <Box key={m.id} sx={{
-                    display: 'grid', gridTemplateColumns: '1.2fr 2.5fr 1.3fr 30px',
-                    gap: 1.25, alignItems: 'start',
-                    bgcolor: 'rgba(168,230,221,0.12)', borderRadius: 1.5, p: 1.25,
-                  }}>
-                    <Stack spacing={0.75}>
-                      <DebouncedTextField size="small" value={m.name ?? ''}
-                        onCommit={(v) => updMenu(r.id, m.id, { name: v })}
-                        placeholder="Tên set"
-                        InputProps={{ sx: { fontSize: 12, fontWeight: 600 } }} />
-                      <StarRating value={m.rating} onChange={(v) => updMenu(r.id, m.id, { rating: v })} size={14} />
-                    </Stack>
-                    <DebouncedTextField size="small" multiline minRows={3} value={m.dishes ?? ''}
-                      onCommit={(v) => updMenu(r.id, m.id, { dishes: v })}
-                      placeholder={'Gỏi cuốn\nCá kho tộ\nCanh chua...'}
-                      InputProps={{ sx: { fontSize: 12 } }} />
-                    <Stack spacing={0.75}>
-                      <Stack direction="row" spacing={0.5}>
-                        <DebouncedTextField size="small" type="number" value={m.price ? String(m.price) : ''}
-                          onCommit={(v) => updMenu(r.id, m.id, { price: +v || 0 })}
-                          placeholder="Giá"
-                          InputProps={{ sx: { fontSize: 12, textAlign: 'right' } }} />
-                        <Select size="small" value={m.cur}
-                          onChange={(e) => updMenu(r.id, m.id, { cur: e.target.value })}
-                          sx={{ width: 70, fontSize: 11 }}>
-                          {MENU_CUR.map((c) => (
-                            <MenuItem key={c} value={c}>{c}</MenuItem>
-                          ))}
-                        </Select>
-                      </Stack>
-                      <DebouncedTextField size="small" value={m.review ?? ''}
-                        onCommit={(v) => updMenu(r.id, m.id, { review: v })}
-                        placeholder="Nhận xét set"
-                        InputProps={{ sx: { fontSize: 11, fontStyle: m.review ? 'normal' : 'italic' } }} />
-                    </Stack>
-                    <IconButton size="small" color="error" onClick={() => delMenu(r.id, m.id)}>
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                ))}
-              </Stack>
-
-              <Button size="small" startIcon={<AddIcon />} onClick={() => addMenu(r.id)}
-                sx={{ mt: 1, color: '#0d7a6a' }}>
-                Thêm set thực đơn
-              </Button>
-            </Paper>
+            <RestaurantCard
+              key={r.id}
+              r={r}
+              tourLinks={tourLinks[r.id]}
+              contOpts={contOpts}
+              countryOptsFor={countryOptsFor}
+              cityOptsFor={cityOptsFor}
+              uploading={uploadingId === r.id}
+              onUpdR={updR}
+              onDelR={delR}
+              onAddMenu={addMenu}
+              onUpdMenu={updMenu}
+              onDelMenu={delMenu}
+              onPickFile={onPickFile}
+              onDelFile={delFile}
+            />
           ))}
         </Stack>
       </Box>
