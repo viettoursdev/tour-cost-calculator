@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, Dialog, DialogActions,
   DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
-  TextField, Tooltip, Typography,
+  Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -165,7 +165,9 @@ export function TourProfilesView() {
   const [requestDeleteState, setRequestDeleteState] = useState<TourProfile | null>(null);
   const [closeState, setCloseState] = useState<{ profile: TourProfile; items: ClosingItem[] } | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailTab, setDetailTab] = useState(0);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
+  useEffect(() => { setDetailTab(0); }, [detailId]); // mở hồ sơ mới → về tab Tổng quan
 
   const visible = useTourProfileStore((s) => s.visibleProfiles);
   // Báo giá gom theo hồ sơ (1 hồ sơ : N báo giá).
@@ -456,48 +458,66 @@ export function TourProfilesView() {
             </Stack>
           )}
         </Stack>
-        {p && (() => {
-          const mt = metaOf(p.id);
-          const risks = tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract });
-          const milestones = tourProfileMilestones({ primary: mt.primary, stage: mt.stage });
-          return (
-            <>
-              {risks.length > 0 && <RiskPanel risks={risks} />}
-              <MilestonePanel milestones={milestones} />
-            </>
-          );
-        })()}
-        <DealCockpit />
-        {p && <DirectLinkPanel profile={p} />}
-        {p && <TagEditor profile={p} canEdit={canEdit} />}
-        {p && <DocumentHub profile={p} canEdit={canEdit} />}
-        {p && opts.length > 1 && (
-          <CompareOptionsPanel
-            options={opts}
-            primaryId={p.primaryQuoteId}
-            currentId={currentQuoteId ?? undefined}
-            showPrice={showPrice}
-            onOpen={(cid) => void openQuote(cid, true)}
-          />
-        )}
-        {p && (() => {
-          const custName = metaOf(p.id).primary?.customerName ?? p.customerName ?? '';
-          if (!custName) return null;
-          const portRows: ProfilePortfolioRow[] = visible().map((x) => {
-            const m = metaOf(x.id);
-            return { id: x.id, code: x.code, name: x.name, customerName: m.primary?.customerName ?? x.customerName, stage: m.stage, value: m.values.current, profit: m.primary?.settlementSummary?.actualProfit };
-          });
-          return (
-            <CustomerPortfolioPanel
-              portfolio={customerPortfolio(portRows, custName)}
-              currentId={p.id}
+        <Tabs value={detailTab} onChange={(_, v: number) => setDetailTab(v)} variant="scrollable" scrollButtons="auto"
+          sx={{ minHeight: 36, mb: 1.5, '& .MuiTab-root': { minHeight: 36, py: 0.5, textTransform: 'none', fontWeight: 700 } }}>
+          <Tab label="Tổng quan" />
+          <Tab label="Hồ sơ & liên kết" />
+          <Tab label="Trao đổi & lịch sử" />
+        </Tabs>
+
+        {/* Tab 0 — Tổng quan: cảnh báo + mốc + bảng điều hành + so sánh phương án */}
+        <Box hidden={detailTab !== 0}>
+          {p && (() => {
+            const mt = metaOf(p.id);
+            const risks = tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract });
+            const milestones = tourProfileMilestones({ primary: mt.primary, stage: mt.stage });
+            return (
+              <>
+                {risks.length > 0 && <RiskPanel risks={risks} />}
+                <MilestonePanel milestones={milestones} />
+              </>
+            );
+          })()}
+          <DealCockpit />
+          {p && opts.length > 1 && (
+            <CompareOptionsPanel
+              options={opts}
+              primaryId={p.primaryQuoteId}
+              currentId={currentQuoteId ?? undefined}
               showPrice={showPrice}
-              onOpen={(id) => { const tp = profiles.find((x) => x.id === id); if (tp) void openProfile(tp); }}
+              onOpen={(cid) => void openQuote(cid, true)}
             />
-          );
-        })()}
-        {p && (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2 }}>
+          )}
+        </Box>
+
+        {/* Tab 1 — Hồ sơ & liên kết: nhãn + liên kết + tài liệu + khách hàng 360 */}
+        {p && detailTab === 1 && (
+          <>
+            <TagEditor profile={p} canEdit={canEdit} />
+            <DirectLinkPanel profile={p} />
+            <DocumentHub profile={p} canEdit={canEdit} />
+            {(() => {
+              const custName = metaOf(p.id).primary?.customerName ?? p.customerName ?? '';
+              if (!custName) return null;
+              const portRows: ProfilePortfolioRow[] = visible().map((x) => {
+                const m = metaOf(x.id);
+                return { id: x.id, code: x.code, name: x.name, customerName: m.primary?.customerName ?? x.customerName, stage: m.stage, value: m.values.current, profit: m.primary?.settlementSummary?.actualProfit };
+              });
+              return (
+                <CustomerPortfolioPanel
+                  portfolio={customerPortfolio(portRows, custName)}
+                  currentId={p.id}
+                  showPrice={showPrice}
+                  onOpen={(id) => { const tp = profiles.find((x) => x.id === id); if (tp) void openProfile(tp); }}
+                />
+              );
+            })()}
+          </>
+        )}
+
+        {/* Tab 2 — Trao đổi & lịch sử */}
+        {p && detailTab === 2 && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
             <ProfileDiscussion profile={p} users={users} currentUser={currentUser} />
             <ProfileTimeline profile={p} />
           </Box>
