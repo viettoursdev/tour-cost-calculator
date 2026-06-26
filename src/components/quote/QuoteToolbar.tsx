@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
-  AppBar, Box, Button, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem,
+  AppBar, Badge, Box, Button, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem,
   Stack, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import { toast } from '@/stores/toastStore';
+import { useHomeBadgeStore } from '@/stores/homeBadgeStore';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -40,7 +41,6 @@ import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
-import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
@@ -101,10 +101,13 @@ const navBtnSx = (active: boolean) => ({
   '& .MuiButton-endIcon': { ml: 0.2 },
 });
 
-/** Nút điều hướng phẳng (tab đơn). */
-function NavTab({ label, icon, active, onClick }: { label: string; icon?: ReactNode; active: boolean; onClick: () => void }) {
+/** Nút điều hướng phẳng (tab đơn). `badge` > 0 hiện số nhắc việc (vd tab Hôm nay). */
+function NavTab({ label, icon, active, onClick, badge }: { label: string; icon?: ReactNode; active: boolean; onClick: () => void; badge?: number }) {
+  const start = badge && badge > 0
+    ? <Badge badgeContent={badge} color="error" max={99} sx={{ '& .MuiBadge-badge': { fontSize: 9, height: 15, minWidth: 15 } }}>{icon}</Badge>
+    : icon;
   return (
-    <Button onClick={onClick} disableRipple startIcon={icon} sx={navBtnSx(active)}>
+    <Button onClick={onClick} disableRipple startIcon={start} sx={navBtnSx(active)}>
       {label}
     </Button>
   );
@@ -165,6 +168,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const pax = useQuoteStore((s) => s.draft.pax);
   const rates = useQuoteStore((s) => s.draft.rates);
   const view = useQuoteStore((s) => s.view);
+  const homeBadge = useHomeBadgeStore((s) => s.count);
   const patchInfo = useQuoteStore((s) => s.patchInfo);
   const setPax = useQuoteStore((s) => s.setPax);
   const setView = useQuoteStore((s) => s.setView);
@@ -379,8 +383,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         cat('salesanalytics', 'grp:sales', 'Phân tích bán hàng', { v: 'salesanalytics' }),
       ] : []),
       cat('todo', 'grp:ops', 'Việc cần làm', { v: 'todo' }),
-      ...(hasPerm(currentUser, 'viewTraining') ? [cat('training', 'grp:ops', 'Đào tạo', { v: 'training', icon: <SchoolOutlinedIcon /> })] : []),
-      cat('process', 'grp:ops', 'Quy trình phòng ban', { v: 'process' }),
       cat('workflow', 'grp:ops', 'Quy trình điều hành', { v: 'workflow' }),
       cat('passengers', 'grp:ops', 'Khách đoàn', { v: 'passengers' }),
       cat('opsboard', 'grp:ops', 'Điều phối', { v: 'opsboard' }),
@@ -561,6 +563,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           {NAV.map((n, i) => ('group' in n
             ? <NavGroup key={`g${i}`} label={n.group} icon={n.icon} items={n.items} view={view} onSelect={(v) => setView(v)} />
             : <NavTab key={n.v ?? n.label} label={n.label} icon={n.icon} active={view === n.v}
+                badge={n.v === 'home' ? homeBadge : undefined}
                 onClick={() => { if (n.action) n.action(); else if (n.v) setView(n.v); }} />
           ))}
         </Box>

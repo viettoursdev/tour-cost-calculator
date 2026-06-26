@@ -1,16 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
   defaultHomeLayout, reconcileHomeLayout, toggleHidden, toggleCollapsed, setRowsPer,
-  reorderSection, isHidden, isCollapsed, DEFAULT_ROWS,
+  setDocsDays, setTourDays, reorderSection, isHidden, isCollapsed,
+  DEFAULT_ROWS, DEFAULT_DOCS_DAYS, DEFAULT_TOUR_DAYS,
   type HomeLayout,
 } from './homeLayout';
 
 const catalog = ['todo', 'process', 'soon', 'owing'];
 
 describe('homeLayout', () => {
-  it('defaultHomeLayout = thứ tự catalog, không ẩn/thu gọn, rowsPer mặc định', () => {
+  it('defaultHomeLayout = thứ tự catalog, không ẩn/thu gọn, mặc định rows/ngưỡng', () => {
     expect(defaultHomeLayout(catalog)).toEqual({
-      order: ['todo', 'process', 'soon', 'owing'], hidden: [], collapsed: [], rowsPer: DEFAULT_ROWS,
+      order: ['todo', 'process', 'soon', 'owing'], hidden: [], collapsed: [],
+      rowsPer: DEFAULT_ROWS, docsDays: DEFAULT_DOCS_DAYS, tourDays: DEFAULT_TOUR_DAYS,
     });
   });
 
@@ -18,25 +20,39 @@ describe('homeLayout', () => {
     expect(reconcileHomeLayout(catalog, null)).toEqual(defaultHomeLayout(catalog));
   });
 
-  it('reconcile: giữ thứ tự + ẩn + thu gọn + rowsPer đã lưu', () => {
-    const saved: HomeLayout = { order: ['owing', 'soon', 'process', 'todo'], hidden: ['soon'], collapsed: ['owing'], rowsPer: 10 };
+  it('reconcile: giữ thứ tự + ẩn + thu gọn + rowsPer + ngưỡng đã lưu', () => {
+    const saved: HomeLayout = { order: ['owing', 'soon', 'process', 'todo'], hidden: ['soon'], collapsed: ['owing'], rowsPer: 10, docsDays: 30, tourDays: 14 };
     expect(reconcileHomeLayout(catalog, saved)).toEqual(saved);
   });
 
   it('reconcile: bỏ id không còn khả dụng, thêm id mới vào cuối (hiện)', () => {
-    const saved: HomeLayout = { order: ['gone', 'owing', 'todo'], hidden: ['gone', 'owing'], collapsed: ['gone'], rowsPer: 3 };
+    const saved: HomeLayout = { order: ['gone', 'owing', 'todo'], hidden: ['gone', 'owing'], collapsed: ['gone'], rowsPer: 3, docsDays: 60, tourDays: 7 };
     const r = reconcileHomeLayout(catalog, saved);
     expect(r.order).toEqual(['owing', 'todo', 'process', 'soon']);
     expect(r.hidden).toEqual(['owing']);   // 'gone' bị lọc
     expect(r.collapsed).toEqual([]);       // 'gone' bị lọc
     expect(r.rowsPer).toBe(3);
+    expect(r.docsDays).toBe(60);
   });
 
-  it('reconcile: rowsPer sai/thiếu → về mặc định; back-compat layout cũ thiếu field', () => {
-    expect(reconcileHomeLayout(catalog, { order: ['todo'], hidden: [], rowsPer: 7 } as never).rowsPer).toBe(DEFAULT_ROWS);
+  it('reconcile: rows/ngưỡng sai/thiếu → về mặc định; back-compat layout cũ thiếu field', () => {
+    const bad = reconcileHomeLayout(catalog, { order: ['todo'], hidden: [], rowsPer: 7, docsDays: 45, tourDays: 99 } as never);
+    expect(bad.rowsPer).toBe(DEFAULT_ROWS);
+    expect(bad.docsDays).toBe(DEFAULT_DOCS_DAYS); // 45 không thuộc options
+    expect(bad.tourDays).toBe(DEFAULT_TOUR_DAYS); // 99 không thuộc options
     const old = reconcileHomeLayout(catalog, { order: ['todo', 'process'], hidden: ['process'] } as never);
     expect(old.collapsed).toEqual([]);
     expect(old.rowsPer).toBe(DEFAULT_ROWS);
+    expect(old.docsDays).toBe(DEFAULT_DOCS_DAYS);
+    expect(old.tourDays).toBe(DEFAULT_TOUR_DAYS);
+  });
+
+  it('setDocsDays / setTourDays chỉ nhận giá trị hợp lệ', () => {
+    const l = defaultHomeLayout(catalog);
+    expect(setDocsDays(l, 30).docsDays).toBe(30);
+    expect(setDocsDays(l, 45).docsDays).toBe(DEFAULT_DOCS_DAYS);
+    expect(setTourDays(l, 14).tourDays).toBe(14);
+    expect(setTourDays(l, 5).tourDays).toBe(DEFAULT_TOUR_DAYS);
   });
 
   it('reconcile: khử trùng lặp trong order', () => {

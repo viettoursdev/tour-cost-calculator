@@ -17,7 +17,7 @@ describe('normalizePresets', () => {
   });
 
   it('blob cũ là HomeLayout (có order) → gói thành 1 preset', () => {
-    const legacy: HomeLayout = { order: ['soon', 'todo', 'process'], hidden: ['todo'], collapsed: [], rowsPer: 10 };
+    const legacy: HomeLayout = { order: ['soon', 'todo', 'process'], hidden: ['todo'], collapsed: [], rowsPer: 10, docsDays: 90, tourDays: 7 };
     const s = normalizePresets(catalog, legacy);
     expect(s.presets).toHaveLength(1);
     expect(activeLayout(s).order).toEqual(['soon', 'todo', 'process']);
@@ -45,14 +45,14 @@ describe('thao tác preset', () => {
     let s = normalizePresets(catalog, null);
     s = addPreset(s, 'Sales');                 // active = Sales
     const firstId = s.presets[0].id;
-    s = setActiveLayout(s, { order: ['todo'], hidden: ['todo'], collapsed: [], rowsPer: 3 });
+    s = setActiveLayout(s, { order: ['todo'], hidden: ['todo'], collapsed: [], rowsPer: 3, docsDays: 90, tourDays: 7 });
     expect(activeLayout(s).hidden).toEqual(['todo']);
     expect(s.presets.find((p) => p.id === firstId)!.layout.hidden).toEqual([]); // không đụng cái kia
   });
 
   it('add clone layout hiện tại + thành active; switch đổi active', () => {
     let s = normalizePresets(catalog, null);
-    s = setActiveLayout(s, { order: ['soon'], hidden: [], collapsed: [], rowsPer: 5 });
+    s = setActiveLayout(s, { order: ['soon'], hidden: [], collapsed: [], rowsPer: 5, docsDays: 90, tourDays: 7 });
     const firstId = s.activeId;
     s = addPreset(s, 'Vận hành');
     expect(s.presets).toHaveLength(2);

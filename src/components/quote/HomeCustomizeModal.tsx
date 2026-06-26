@@ -10,7 +10,10 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import { SortableList } from '@/components/itinerary/SortableList';
-import { isHidden, reorderSection, setRowsPer, toggleHidden, ROWS_OPTIONS, type HomeLayout } from './homeLayout';
+import {
+  isHidden, reorderSection, setRowsPer, setDocsDays, setTourDays, toggleHidden,
+  ROWS_OPTIONS, DOCS_DAYS_OPTIONS, TOUR_DAYS_OPTIONS, type HomeLayout,
+} from './homeLayout';
 import {
   addPreset, renamePreset, deletePreset, switchPreset, MAX_PRESETS, type PresetState,
 } from './homePresets';
@@ -76,13 +79,20 @@ export function HomeCustomizeModal({ open, onClose, labels, layout, onChange, on
             })}
           </Stack>
         </Box>
-        <TextField
-          select size="small" label="Số dòng mỗi thẻ" value={layout.rowsPer}
-          onChange={(e) => onChange(setRowsPer(layout, Number(e.target.value)))}
-          sx={{ mt: 1, mb: 0.5, minWidth: 160 }}
-        >
-          {ROWS_OPTIONS.map((n) => <MenuItem key={n} value={n}>{ROWS_LABEL(n)}</MenuItem>)}
-        </TextField>
+        <Stack direction="row" spacing={1} sx={{ mt: 1, mb: 0.5, flexWrap: 'wrap', gap: 1 }}>
+          <TextField select size="small" label="Số dòng mỗi thẻ" value={layout.rowsPer}
+            onChange={(e) => onChange(setRowsPer(layout, Number(e.target.value)))} sx={{ minWidth: 150 }}>
+            {ROWS_OPTIONS.map((n) => <MenuItem key={n} value={n}>{ROWS_LABEL(n)}</MenuItem>)}
+          </TextField>
+          <TextField select size="small" label="Giấy tờ hết hạn ≤" value={layout.docsDays}
+            onChange={(e) => onChange(setDocsDays(layout, Number(e.target.value)))} sx={{ minWidth: 140 }}>
+            {DOCS_DAYS_OPTIONS.map((n) => <MenuItem key={n} value={n}>{n} ngày</MenuItem>)}
+          </TextField>
+          <TextField select size="small" label="Tour khởi hành ≤" value={layout.tourDays}
+            onChange={(e) => onChange(setTourDays(layout, Number(e.target.value)))} sx={{ minWidth: 140 }}>
+            {TOUR_DAYS_OPTIONS.map((n) => <MenuItem key={n} value={n}>{n} ngày</MenuItem>)}
+          </TextField>
+        </Stack>
         <SortableList
           handle=".home-drag-handle"
           deps={[layout.order.join(',')]}

@@ -27,10 +27,13 @@ import { PROCESS_SEED, DEPT_COLOR, DEPT_ICON } from '@/components/process/proces
 import { runProgress, currentStep } from '@/components/process/processRun';
 import { useProcessStore } from '@/stores/processStore';
 import { useHomePrefStore } from '@/stores/homePrefStore';
+import { useHomeBadgeStore } from '@/stores/homeBadgeStore';
 import { HomeCustomizeModal } from './HomeCustomizeModal';
 import { HOME_SECTION_IDS, isCollapsed, toggleCollapsed, type HomeLayout } from './homeLayout';
 import { computeHomeStats } from './homeStats';
 import { rankPriority, severityOf, type PriKind, type PriSeverity } from './homePriority';
+import { buildDigest } from './homeDigest';
+import { weekAgenda, weeklyQuoteCounts } from './homeAgenda';
 import {
   normalizePresets, activeLayout, setActiveLayout, switchPreset, addPreset, type PresetState,
 } from './homePresets';
@@ -40,8 +43,10 @@ const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa',
 
 /** Nhãn từng thẻ trang chủ (hiển thị trong hộp thoại tùy chỉnh). */
 const SECTION_LABELS: Record<string, string> = {
+  digest: '🌅 Bản tin sáng',
   kpi: '📊 Chỉ số nhanh',
   priority: '🔥 Ưu tiên hôm nay',
+  week: '🗓️ Lịch tuần',
   todo: '📋 Việc cần làm',
   process: '🗂️ Quy trình phòng ban',
   myRuns: '▶️ Quy trình đang chạy của tôi',
@@ -55,7 +60,7 @@ const SECTION_LABELS: Record<string, string> = {
   followups: '📅 Hẹn liên hệ khách hôm nay',
 };
 /** Thẻ chiếm trọn chiều ngang (phần còn lại xếp lưới 2 cột). */
-const FULL_SPAN = new Set(['kpi', 'priority', 'todo', 'process', 'myRuns', 'deadlines']);
+const FULL_SPAN = new Set(['digest', 'kpi', 'priority', 'week', 'todo', 'process', 'myRuns', 'deadlines']);
 
 const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
   annual: 'Nghỉ phép năm', unpaid: 'Nghỉ không lương', sick: 'Nghỉ ốm', other: 'Nghỉ khác',
@@ -101,6 +106,23 @@ const Kpi = ({ label, value, sub, color, onClick }: { label: string; value: stri
     {sub && <Typography variant="caption" color="text.secondary" noWrap>{sub}</Typography>}
   </Paper>
 );
+
+/** Sparkline nhỏ (SVG) cho dãy số — báo giá theo tuần. */
+function Sparkline({ values, w = 150, h = 28 }: { values: number[]; w?: number; h?: number }) {
+  if (values.length < 2) return <Box sx={{ flex: 1 }} />;
+  const max = Math.max(1, ...values);
+  const stepX = w / (values.length - 1);
+  const pts = values.map((v, i) => `${(i * stepX).toFixed(1)},${(h - (v / max) * (h - 4) - 2).toFixed(1)}`).join(' ');
+  const lastY = h - (values[values.length - 1] / max) * (h - 4) - 2;
+  return (
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+        <polyline points={pts} fill="none" stroke="#0d7a6a" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={w} cy={lastY} r={2.5} fill="#0d7a6a" />
+      </svg>
+    </Box>
+  );
+}
 
 /** Đếm ngược tới mốc `target` (ms). Trả về nhãn "còn 2 ngày 5 giờ" / "QUÁ HẠN …". */
 function countdown(target: number, now: number): { text: string; overdue: boolean; urgent: boolean } {
@@ -220,10 +242,11 @@ export function HomeView() {
     return scope === 'dept' ? deptUsers.has(owner) : owner === me?.u;
   };
 
+  const { docsDays, tourDays } = layout;
   const data = useMemo(() => {
     const list = visibleQuotes();
     const stats = computeHomeStats(list);
-    const soon = list.filter((q) => { const d = q.departDate ? daysUntil(q.departDate) : null; return d != null && d >= 0 && d <= 7; })
+    const soon = list.filter((q) => { const d = q.departDate ? daysUntil(q.departDate) : null; return d != null && d >= 0 && d <= tourDays; })
       .sort((a, b) => (a.departDate ?? '').localeCompare(b.departDate ?? ''));
     const myOverdue = list.flatMap((q) => (q.workflowDue ?? [])
       .filter((w) => inScope(w.assignee ?? q.createdByUsername) && w.dueDate < today)
@@ -271,7 +294,7 @@ export function HomeView() {
           const exp = t[field];
           if (!exp) continue;
           const d = daysUntil(exp);
-          if (d == null || d > 90) continue;
+          if (d == null || d > docsDays) continue;
           docs.push({ key: `${c.id}:${t.id}:${field}`, traveler: t.fullName, kind, customerName: c.name, days: d, ts: new Date(exp).getTime() });
         }
       }
@@ -279,9 +302,10 @@ export function HomeView() {
     docs.sort((a, b) => a.days - b.days);
 
     const owingTotal = owing.reduce((s, q) => s + (q.paymentSummary?.remaining ?? 0), 0);
-    return { stats, soon, myOverdue, owing, owingTotal, followups, deadlines, nccDue, docs };
+    const weeklyQuotes = weeklyQuoteCounts(list.map((q) => q.createdAt).filter(Boolean) as string[], 8, now);
+    return { stats, soon, myOverdue, owing, owingTotal, followups, deadlines, nccDue, docs, weeklyQuotes };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quotes, customers, me, scope, deptUsers]);
+  }, [quotes, customers, me, scope, deptUsers, docsDays, tourDays]);
 
   const leavesPending = useMemo(() => {
     const nameOf = (id: string) => employees.find((e) => e.id === id)?.fullName ?? id;
@@ -307,6 +331,22 @@ export function HomeView() {
     priorityRaw.push({ id: `ow:${q.cloudId}`, kind: 'owing', primary: `${q.name} — nợ NCC ${fmtVND(q.paymentSummary!.remaining)}`, secondary: q.customerName || q.createdByName, dueTs: q.departDate ? new Date(q.departDate).getTime() : null, severity: 'overdue', open: () => void openQuote(q, 'payment') });
   const priority = rankPriority(priorityRaw);
 
+  // Badge trên tab "Hôm nay" = số việc ưu tiên KHẨN (quá hạn + ≤24h).
+  const badgeCount = priority.reduce((s, p) => s + (p.severity === 'soon' ? 0 : 1), 0);
+  useEffect(() => { useHomeBadgeStore.getState().setCount(badgeCount); }, [badgeCount]);
+
+  // Bản tin sáng + lịch tuần.
+  const digest = buildDigest({
+    overdue: data.myOverdue.length, deadlines: data.deadlines.length, departing: data.soon.length,
+    nccDue: data.nccDue.length, docs: data.docs.length, leaves: leavesPending.length, followups: data.followups.length,
+  });
+  const agenda = weekAgenda({
+    departing: data.soon.map((q) => q.departDate!).filter(Boolean),
+    deadlines: data.deadlines.map((d) => new Date(d.target).toISOString().slice(0, 10)),
+    followups: data.followups.map((c) => c.nextFollowUp!.date),
+  }, today, 7);
+  const agendaTotal = agenda.reduce((s, d) => s + d.total, 0);
+
   // Phiên chạy quy trình đang hoạt động (theo phạm vi).
   const myRuns = processRuns
     .filter((r) => r.status === 'active' && (inScope(r.assignee) || inScope(r.createdByUsername)))
@@ -329,6 +369,36 @@ export function HomeView() {
 
   // Mỗi thẻ là 1 node theo id ổn định; render theo `layout` (thứ tự + ẩn/hiện + thu gọn).
   const nodes: Record<string, React.ReactNode | null> = {
+    digest: (
+      <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(13,122,106,0.06)', borderColor: 'rgba(13,122,106,0.25)' }}>
+        <Typography fontSize={14} fontWeight={700} sx={{ color: '#0d7a6a' }}>🌅 {digest}</Typography>
+      </Paper>
+    ),
+    week: (
+      <Section icon="🗓️" title="Lịch tuần" count={agendaTotal} color="#2563eb" onAll={() => go('departures')} {...collapseProps('week')}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
+          {agenda.map((d) => (
+            <Box key={d.date}
+              sx={{ p: 0.75, textAlign: 'center', borderRadius: 1.5, minHeight: 64,
+                border: '1px solid', borderColor: d.isToday ? '#2563eb' : 'rgba(0,0,0,0.08)',
+                bgcolor: d.isToday ? 'rgba(37,99,235,0.08)' : '#fff' }}>
+              <Typography fontSize={10.5} color="text.secondary" noWrap>{d.weekday}</Typography>
+              <Typography fontSize={15} fontWeight={d.isToday ? 900 : 700} sx={{ color: d.isToday ? '#2563eb' : 'text.primary' }}>{d.day}</Typography>
+              <Stack direction="row" justifyContent="center" spacing={0.25} sx={{ mt: 0.25, flexWrap: 'wrap' }}>
+                {d.departing > 0 && <Tooltip title={`${d.departing} tour khởi hành`}><Box sx={{ fontSize: 10, fontWeight: 700, color: '#14a08c' }}>🛫{d.departing}</Box></Tooltip>}
+                {d.deadlines > 0 && <Tooltip title={`${d.deadlines} deadline`}><Box sx={{ fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>⏳{d.deadlines}</Box></Tooltip>}
+                {d.followups > 0 && <Tooltip title={`${d.followups} hẹn khách`}><Box sx={{ fontSize: 10, fontWeight: 700, color: '#f5a623' }}>📅{d.followups}</Box></Tooltip>}
+              </Stack>
+            </Box>
+          ))}
+        </Box>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1.25 }}>
+          <Typography fontSize={11.5} color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>Báo giá 8 tuần</Typography>
+          <Sparkline values={data.weeklyQuotes} />
+          <Typography fontSize={12} fontWeight={700} sx={{ color: '#0d7a6a' }}>{data.weeklyQuotes.reduce((s, n) => s + n, 0)}</Typography>
+        </Stack>
+      </Section>
+    ),
     kpi: (
       <Section icon="📊" title="Chỉ số nhanh" count={1} color="#0d7a6a" {...collapseProps('kpi')}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
@@ -423,7 +493,7 @@ export function HomeView() {
       </Section>
     ),
     soon: (
-      <Section icon="🛫" title="Tour sắp khởi hành (7 ngày)" count={data.soon.length} color="#14a08c" onAll={() => go('departures')} {...collapseProps('soon')}>
+      <Section icon="🛫" title={`Tour sắp khởi hành (${tourDays} ngày)`} count={data.soon.length} color="#14a08c" onAll={() => go('departures')} {...collapseProps('soon')}>
         <Stack spacing={0.75}>
           {data.soon.slice(0, rows).map((q) => (
             <Row key={q.cloudId} onClick={() => void openQuote(q, 'workflow')}

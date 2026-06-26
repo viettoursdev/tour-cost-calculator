@@ -12,8 +12,10 @@
 
 /** Id thẻ trang chủ — phải trùng với khóa render trong HomeView. */
 export const HOME_SECTION_IDS = [
+  'digest',
   'kpi',
   'priority',
+  'week',
   'todo',
   'process',
   'myRuns',
@@ -33,21 +35,34 @@ export type HomeSectionId = (typeof HOME_SECTION_IDS)[number];
 export const ROWS_OPTIONS = [3, 5, 10, 9999] as const;
 export const DEFAULT_ROWS = 5;
 
+/** Ngưỡng cảnh báo tùy chỉnh. */
+export const DOCS_DAYS_OPTIONS = [30, 60, 90, 180] as const;
+export const TOUR_DAYS_OPTIONS = [7, 14, 30] as const;
+export const DEFAULT_DOCS_DAYS = 90;
+export const DEFAULT_TOUR_DAYS = 7;
+
 export interface HomeLayout {
   order: string[];
   hidden: string[];
   collapsed: string[];
   rowsPer: number;
+  /** Cảnh báo giấy tờ khách sắp hết hạn trong ≤ N ngày. */
+  docsDays: number;
+  /** Cửa sổ "tour sắp khởi hành" = ≤ N ngày. */
+  tourDays: number;
 }
 
 /** Layout mặc định = thứ tự catalog, không ẩn/thu gọn gì. */
 export function defaultHomeLayout(catalog: string[]): HomeLayout {
-  return { order: [...catalog], hidden: [], collapsed: [], rowsPer: DEFAULT_ROWS };
+  return {
+    order: [...catalog], hidden: [], collapsed: [], rowsPer: DEFAULT_ROWS,
+    docsDays: DEFAULT_DOCS_DAYS, tourDays: DEFAULT_TOUR_DAYS,
+  };
 }
 
-function sanitizeRows(n: unknown): number {
-  return typeof n === 'number' && (ROWS_OPTIONS as readonly number[]).includes(n) ? n : DEFAULT_ROWS;
-}
+const oneOf = (n: unknown, opts: readonly number[], fallback: number): number =>
+  typeof n === 'number' && opts.includes(n) ? n : fallback;
+const sanitizeRows = (n: unknown) => oneOf(n, ROWS_OPTIONS, DEFAULT_ROWS);
 
 /**
  * Hợp nhất layout đã lưu với catalog hiện tại (robust):
@@ -69,7 +84,12 @@ export function reconcileHomeLayout(catalog: string[], saved: Partial<HomeLayout
     if (!seen.has(id)) { order.push(id); seen.add(id); }
   }
   const keep = (arr: unknown) => [...new Set((Array.isArray(arr) ? arr : []).filter((id) => avail.has(id)))];
-  return { order, hidden: keep(saved?.hidden), collapsed: keep(saved?.collapsed), rowsPer: sanitizeRows(saved?.rowsPer) };
+  return {
+    order, hidden: keep(saved?.hidden), collapsed: keep(saved?.collapsed),
+    rowsPer: sanitizeRows(saved?.rowsPer),
+    docsDays: oneOf(saved?.docsDays, DOCS_DAYS_OPTIONS, DEFAULT_DOCS_DAYS),
+    tourDays: oneOf(saved?.tourDays, TOUR_DAYS_OPTIONS, DEFAULT_TOUR_DAYS),
+  };
 }
 
 export function isHidden(layout: HomeLayout, id: string): boolean {
@@ -97,6 +117,16 @@ export function toggleCollapsed(layout: HomeLayout, id: string): HomeLayout {
 /** Đổi số dòng tối đa mỗi thẻ. */
 export function setRowsPer(layout: HomeLayout, rowsPer: number): HomeLayout {
   return { ...layout, rowsPer: sanitizeRows(rowsPer) };
+}
+
+/** Đổi ngưỡng cảnh báo giấy tờ (ngày). */
+export function setDocsDays(layout: HomeLayout, days: number): HomeLayout {
+  return { ...layout, docsDays: oneOf(days, DOCS_DAYS_OPTIONS, DEFAULT_DOCS_DAYS) };
+}
+
+/** Đổi cửa sổ tour sắp khởi hành (ngày). */
+export function setTourDays(layout: HomeLayout, days: number): HomeLayout {
+  return { ...layout, tourDays: oneOf(days, TOUR_DAYS_OPTIONS, DEFAULT_TOUR_DAYS) };
 }
 
 /** Sắp xếp lại: đưa id ở vị trí `from` tới vị trí `to` trong `order`. */
