@@ -15,6 +15,7 @@ export * from './chat';
 export * from './guide';
 export * from './email';
 export * from './publicQuote';
+export * from './publicVisaList';
 export * from './todo';
 export * from './process';
 export * from './hr';

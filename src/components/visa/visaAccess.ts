@@ -34,3 +34,14 @@ export function visibleVisaProjects<T extends ProjAccess>(user: User | null, pro
 export function canViewVisaReports(user: User | null): boolean {
   return !!user && (ROLE_RANK[user.role] ?? 0) >= RANK_VIEW_ALL;
 }
+
+/**
+ * Ai được DUYỆT link công khai cho khách xem danh sách visa: Trưởng phòng của
+ * phòng Visa, cộng CEO & Ban Giám Đốc (cấp trên). KHÔNG mở cho Trưởng Phòng phòng
+ * khác. (Đối chiếu server-side: hàm SQL `can_approve_visa_share`.)
+ */
+export function canApproveVisaShareLink(user: User | null): boolean {
+  if (!user) return false;
+  if (user.role === 'CEO' || user.role === 'Ban Giám Đốc') return true;
+  return user.role === 'Trưởng Phòng' && user.department === 'visa';
+}

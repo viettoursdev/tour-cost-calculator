@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus, TrainingProgram, TrainingEnrollment, TrainingModule, ModuleProgress, GateState, TrainingPhase, EnrollmentStatus } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, PublicVisaListDoc, PublicVisaListRecord, PublicVisaListStatus, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus, TrainingProgram, TrainingEnrollment, TrainingModule, ModuleProgress, GateState, TrainingPhase, EnrollmentStatus } from '@/types';
 import type { WorkflowStep } from '@/types/quote';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
@@ -4519,6 +4519,96 @@ export async function sbSetQuoteShare(
 ): Promise<void> {
   const { error } = await client.from('quotes').update({ share: share ?? null }).eq('cloud_id', cloudId);
   if (error) throw new Error('sbSetQuoteShare: ' + error.message);
+}
+
+// ── Link khách xem danh sách visa (public_visa_lists/{token}) ──
+// Nhân viên GỬI YÊU CẦU (status='pending'); Trưởng phòng Visa (RPC định danh)
+// duyệt → status='approved' → anon mới đọc được. Mỗi dự án giữ 1 link (token cố
+// định) — gửi lại chỉ cập nhật payload/cột và đưa về 'pending'.
+
+function rowToVisaListRecord(r: Record<string, unknown>): PublicVisaListRecord {
+  return {
+    token: r.token as string,
+    projectId: r.project_id as string,
+    payload: r.payload as PublicVisaListDoc,
+    columns: (r.columns as string[]) ?? [],
+    note: (r.note as string) ?? undefined,
+    status: r.status as PublicVisaListStatus,
+    requestedByUsername: (r.requested_by_username as string) ?? undefined,
+    requestedByName: (r.requested_by_name as string) ?? undefined,
+    requestedAt: (r.requested_at as string) ?? undefined,
+    approvedByName: (r.approved_by_name as string) ?? undefined,
+    approvedAt: (r.approved_at as string) ?? undefined,
+    rejectReason: (r.reject_reason as string) ?? undefined,
+  };
+}
+
+/** Lấy link (kèm trạng thái) của một dự án visa — null nếu chưa từng tạo. */
+export async function sbGetVisaListForProject(
+  projectId: string,
+  client: SupabaseClient = sb,
+): Promise<PublicVisaListRecord | null> {
+  const { data, error } = await client.from('public_visa_lists').select('*').eq('project_id', projectId).maybeSingle();
+  if (error) throw new Error('sbGetVisaListForProject: ' + error.message);
+  return data ? rowToVisaListRecord(data as Record<string, unknown>) : null;
+}
+
+/** Gửi/cập nhật YÊU CẦU tạo link (đưa về 'pending', xoá dấu duyệt cũ). */
+export async function sbRequestVisaList(
+  opts: { token: string; doc: PublicVisaListDoc; columns: string[]; note?: string; requestedByUsername: string; requestedByName: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { data: me } = await client.auth.getUser();
+  const { error } = await client.from('public_visa_lists').upsert({
+    token: opts.token,
+    project_id: opts.doc.projectId,
+    payload: opts.doc,
+    columns: opts.columns,
+    note: opts.note ?? null,
+    status: 'pending',
+    requested_by: me.user?.id ?? null,
+    requested_by_username: opts.requestedByUsername,
+    requested_by_name: opts.requestedByName,
+    requested_at: new Date().toISOString(),
+    approved_by: null,
+    approved_by_name: null,
+    approved_at: null,
+    reject_reason: null,
+  }, { onConflict: 'project_id' });
+  if (error) throw new Error('sbRequestVisaList: ' + error.message);
+}
+
+/** Duyệt link (chỉ Trưởng phòng Visa / CEO / BGĐ — server kiểm). */
+export async function sbApproveVisaList(token: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('approve_visa_list', { p_token: token });
+  if (error) throw new Error('sbApproveVisaList: ' + error.message);
+}
+
+/** Từ chối link (chỉ Trưởng phòng Visa / CEO / BGĐ — server kiểm). */
+export async function sbRejectVisaList(token: string, reason: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('reject_visa_list', { p_token: token, p_reason: reason });
+  if (error) throw new Error('sbRejectVisaList: ' + error.message);
+}
+
+/** Làm mới SỐ LIỆU của link đã duyệt (giữ nguyên cột & trạng thái). Dùng để cập
+ *  nhật tình trạng mới nhất mà KHÔNG cần duyệt lại (không lộ thêm trường mới). */
+export async function sbRefreshVisaListPayload(token: string, doc: PublicVisaListDoc, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('public_visa_lists').update({ payload: doc }).eq('token', token);
+  if (error) throw new Error('sbRefreshVisaListPayload: ' + error.message);
+}
+
+/** Gỡ link đang chia sẻ (đưa về 'revoked' — khách không xem được nữa). */
+export async function sbRevokeVisaList(token: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('public_visa_lists').update({ status: 'revoked' }).eq('token', token);
+  if (error) throw new Error('sbRevokeVisaList: ' + error.message);
+}
+
+/** Anon đọc danh sách visa qua token — CHỈ khi đã được duyệt. */
+export async function sbGetPublicVisaList(token: string, client: SupabaseClient = sb): Promise<PublicVisaListDoc | null> {
+  const { data, error } = await client.rpc('get_public_visa_list', { p_token: token });
+  if (error) throw new Error('sbGetPublicVisaList: ' + error.message);
+  const row = (data as { payload: unknown }[] | null)?.[0];
+  return row ? (row.payload as PublicVisaListDoc) : null;
 }
 
 // ── HR (Nhân sự) ──────────────────────────────────────────────────────────────

@@ -132,6 +132,7 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 | `guide_schedule` | Lịch đi tour HDV (single shared row) |
 | `email_links` | Outbound email link tracking |
 | `public_quotes` | Báo giá chia sẻ công khai cho khách (token-based, anon-readable) |
+| `public_visa_lists` | Link KHÁCH xem danh sách & tình trạng xin visa (token-based). Nhân viên gửi yêu cầu (`status='pending'`); **chỉ Trưởng phòng Visa + CEO/BGĐ** duyệt (RPC `approve_visa_list`/`reject_visa_list`, gate `can_approve_visa_share`) → anon đọc qua `get_public_visa_list` chỉ khi `approved`. 1 dự án : 1 link (`project_id` unique). Route `?visa=<token>` → `PublicVisaListView`; tạo/duyệt ở `VisaShareListDialog`. |
 | `app_config` | Application configuration (e.g. CEO bootstrap, feature flags) |
 | `chat_messages` | AI assistant conversation history |
 | `hr_employees` | Hồ sơ nhân sự in-house (master, KHÔNG đồng nhất với `profiles`); `manager_legacy_id` tự tham chiếu → org chart. Tab "👥 Nhân sự" (view `hr`, gate `viewHR`/`manageHR`). |

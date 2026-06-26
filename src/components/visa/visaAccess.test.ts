@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { canViewVisaProject, visibleVisaProjects, canViewVisaReports } from './visaAccess';
-import type { Role, User, VisaProjectDoc } from '@/types';
+import { canApproveVisaShareLink, canViewVisaProject, visibleVisaProjects, canViewVisaReports } from './visaAccess';
+import type { Department, Role, User, VisaProjectDoc } from '@/types';
 
-const user = (u: string, role: Role): User =>
-  ({ u, role, name: u, email: `${u}@viettours.com.vn`, p: '', color: '#000' } as User);
+const user = (u: string, role: Role, department?: Department): User =>
+  ({ u, role, name: u, email: `${u}@viettours.com.vn`, p: '', color: '#000', department } as User);
 
 const proj = (p: Partial<VisaProjectDoc>): VisaProjectDoc =>
   ({ createdByUsername: 'owner', mainStaff: [], supportStaff: [], collaborators: [], ...p } as VisaProjectDoc);
@@ -48,6 +48,23 @@ describe('visibleVisaProjects', () => {
     expect(visibleVisaProjects(user('op1', 'Operations'), projs)).toHaveLength(2);
     expect(visibleVisaProjects(user('tp', 'Trưởng Phòng'), projs)).toHaveLength(3);
     expect(visibleVisaProjects(user('sale1', 'Sales'), projs)).toHaveLength(0);
+  });
+});
+
+describe('canApproveVisaShareLink', () => {
+  it('Trưởng phòng Visa duyệt được; Trưởng Phòng phòng khác thì KHÔNG', () => {
+    expect(canApproveVisaShareLink(user('tpv', 'Trưởng Phòng', 'visa'))).toBe(true);
+    expect(canApproveVisaShareLink(user('tpk', 'Trưởng Phòng', 'ketoan'))).toBe(false);
+    expect(canApproveVisaShareLink(user('tp0', 'Trưởng Phòng'))).toBe(false);
+  });
+  it('CEO & Ban Giám Đốc luôn duyệt được (bất kể phòng)', () => {
+    expect(canApproveVisaShareLink(user('ceo', 'CEO'))).toBe(true);
+    expect(canApproveVisaShareLink(user('bgd', 'Ban Giám Đốc', 'sukien'))).toBe(true);
+  });
+  it('nhân viên thường & null không duyệt được', () => {
+    expect(canApproveVisaShareLink(user('op', 'Operations', 'visa'))).toBe(false);
+    expect(canApproveVisaShareLink(user('po', 'Phó Phòng', 'visa'))).toBe(false);
+    expect(canApproveVisaShareLink(null)).toBe(false);
   });
 });
 

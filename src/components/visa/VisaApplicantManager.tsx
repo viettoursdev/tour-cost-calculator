@@ -22,6 +22,7 @@ import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import HistoryIcon from '@mui/icons-material/History';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import SaveIcon from '@mui/icons-material/Save';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import TableViewIcon from '@mui/icons-material/TableView';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import UploadIcon from '@mui/icons-material/Upload';
@@ -38,6 +39,7 @@ import { VisaApplicantTimeline } from './VisaApplicantTimeline';
 import { BulkStatusDialog, ReminderDialog } from './VisaApplicantActions';
 import { VisaCostDialog } from './VisaCostDialog';
 import { VisaExportDialog } from './VisaExportDialog';
+import { VisaShareListDialog } from './VisaShareListDialog';
 import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, passengersToApplicants } from './guestAdapters';
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
@@ -170,6 +172,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [reminderOpen, setReminderOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
   const [exportListOpen, setExportListOpen] = useState(false);
+  const [shareLinkOpen, setShareLinkOpen] = useState(false);
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -375,6 +378,11 @@ export function VisaApplicantManager({ project, onClose }: Props) {
               onClick={() => setCostOpen(true)} sx={toolbarBtn.menu}>
               Chi phí
             </Button>
+
+            <Button color="inherit" variant="outlined" startIcon={<ShareOutlinedIcon />}
+              onClick={() => setShareLinkOpen(true)} sx={toolbarBtn.menu}>
+              Link khách
+            </Button>
           </Stack>
 
           <Button
@@ -578,6 +586,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
       {reminderOpen && <ReminderDialog project={project} applicants={list} onClose={() => setReminderOpen(false)} />}
       {costOpen && <VisaCostDialog project={project} count={list.length} onClose={() => setCostOpen(false)} />}
       {exportListOpen && <VisaExportDialog project={project} applicants={list} onClose={() => setExportListOpen(false)} />}
+      {shareLinkOpen && <VisaShareListDialog project={project} applicants={list} onClose={() => setShareLinkOpen(false)} />}
 
       <Dialog open={!!guestSeed} onClose={() => setGuestSeed(null)} fullWidth maxWidth="md">
         <DialogTitle sx={{ pr: 6 }}>
