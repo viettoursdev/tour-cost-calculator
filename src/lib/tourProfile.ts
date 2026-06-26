@@ -211,6 +211,15 @@ export function tourProfileTimeline(
 //  Cổng đóng hồ sơ (B1) + Mốc thời gian & đếm ngược (B2) — hàm THUẦN.
 // ════════════════════════════════════════════════════════════════════════
 
+/** Tiền tố tên bản sao khi nhân bản hồ sơ/báo giá làm tour mẫu. */
+export const CLONE_PREFIX = '(Bản sao) ';
+
+/** Tên bản sao — không nhân đôi tiền tố nếu đã là bản sao. */
+export function clonedQuoteName(name: string): string {
+  const n = (name ?? '').trim();
+  return n.startsWith(CLONE_PREFIX.trim()) ? n : `${CLONE_PREFIX}${n}`.trim();
+}
+
 export type ClosingItem = { key: string; label: string; done: boolean };
 
 /**

@@ -34,6 +34,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -57,7 +58,7 @@ import {
   TOUR_CATEGORIES, categoryMeta, tourCategoryOf, categoryKind,
   deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
-  tourProfileClosingChecklist, closingPending, tourProfileMilestones,
+  tourProfileClosingChecklist, closingPending, tourProfileMilestones, clonedQuoteName,
   type TourRisk, type TourRiskLevel, type ClosingItem, type Milestone, type MilestoneLevel,
 } from '@/lib/tourProfile';
 import { fmtVND } from './calc';
@@ -331,6 +332,27 @@ export function TourProfilesView() {
     if (await openQuote(pq.cloudId, true)) setDetailId(p.id);
   };
 
+  // Nhân bản tour mẫu: lấy báo giá ĐANG MỞ làm bản sao MỚI (chưa lưu) → khi Lưu sẽ
+  // sinh báo giá + hồ sơ tour mới (saveCloud tự tạo vì currentQuoteId=null). Tái dùng
+  // toàn bộ luồng có sẵn; chỉ "tẩy" danh tính của draft + đổi tên.
+  const cloneCurrent = () => {
+    const draft = useQuoteStore.getState().draft;
+    if (!draft.currentQuoteId) { window.alert('Chưa có báo giá đang mở để nhân bản.'); return; }
+    if (!window.confirm('Nhân bản báo giá đang mở thành BÁO GIÁ + HỒ SƠ TOUR MỚI?\nBản sao sẽ mở ở màn báo giá để bạn kiểm tra rồi bấm Lưu (chưa tạo gì cho tới khi Lưu).')) return;
+    useQuoteStore.setState((s) => ({
+      draft: {
+        ...s.draft,
+        currentQuoteId: null,      // → saveCloud coi là báo giá MỚI
+        tourProfileId: undefined,  // → tự tạo hồ sơ tour MỚI khi lưu
+        tourCode: undefined,
+        status: 'in_progress',     // reset trạng thái pipeline
+        info: { ...s.draft.info, name: clonedQuoteName(s.draft.info.name) },
+      },
+    }));
+    setDetailId(null);
+    useQuoteStore.getState().setView('cost'); // rời tab Hồ sơ tour → màn báo giá để kiểm tra & Lưu
+  };
+
   // Cổng đóng hồ sơ thông minh: khi lưu trữ deal đã thắng mà checklist còn thiếu → hỏi lại.
   const handleArchive = (p: TourProfile, on: boolean) => {
     if (!on) { void archive(p.id, false); return; } // mở lại → trực tiếp
@@ -362,6 +384,11 @@ export function TourProfilesView() {
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
           <Button size="small" startIcon={<ArrowBackIcon />} onClick={() => setDetailId(null)}>Danh sách hồ sơ</Button>
           {p && <Chip size="small" label={p.code} sx={{ fontWeight: 800, bgcolor: 'rgba(13,122,106,0.12)', color: '#0d7a6a' }} />}
+          {p && (
+            <Tooltip title="Nhân bản thành báo giá + hồ sơ tour mới (tour mẫu lặp lại)">
+              <Button size="small" startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />} onClick={cloneCurrent}>Nhân bản</Button>
+            </Tooltip>
+          )}
           {opts.length > 1 && (
             <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
               <Typography variant="caption" color="text.secondary">Phương án:</Typography>

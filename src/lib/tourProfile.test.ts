@@ -4,6 +4,7 @@ import {
   categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones,
+  clonedQuoteName,
 } from './tourProfile';
 import type { AuditEntry, Department, Role, TourCategory, TourProfile, User } from '@/types';
 
@@ -149,6 +150,19 @@ describe('tourProfileRisks — thẻ "cần chú ý"', () => {
   });
   it('topRiskLevel: rỗng → null', () => {
     expect(topRiskLevel([])).toBeNull();
+  });
+});
+
+describe('clonedQuoteName — đặt tên bản sao', () => {
+  it('thêm tiền tố cho tên thường', () => {
+    expect(clonedQuoteName('Đà Lạt – Đoàn ABC')).toBe('(Bản sao) Đà Lạt – Đoàn ABC');
+  });
+  it('KHÔNG nhân đôi tiền tố nếu đã là bản sao', () => {
+    expect(clonedQuoteName('(Bản sao) Đà Lạt')).toBe('(Bản sao) Đà Lạt');
+  });
+  it('tên rỗng → chỉ tiền tố (trim)', () => {
+    expect(clonedQuoteName('')).toBe('(Bản sao)');
+    expect(clonedQuoteName('   ')).toBe('(Bản sao)');
   });
 });
 
