@@ -1,11 +1,15 @@
 import { useState, type ChangeEvent } from 'react';
 import {
-  AppBar, Box, Button, Checkbox, Chip, Dialog, DialogTitle, FormControlLabel, IconButton, Menu,
-  MenuItem, Stack, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography,
+  AppBar, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogTitle, Divider, FormControlLabel,
+  IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack, TextField,
+  ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography,
 } from '@mui/material';
 import { toast } from '@/stores/toastStore';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import TuneIcon from '@mui/icons-material/Tune';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -117,6 +121,32 @@ type Props = {
   onClose: () => void;
 };
 
+/** Style dùng chung cho các nút/menu trên thanh công cụ — viền trắng mảnh, bo góc nhất quán. */
+const outlinedBtnSx = {
+  borderColor: 'rgba(255,255,255,0.45)',
+  color: '#fff',
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  borderRadius: 2,
+  whiteSpace: 'nowrap' as const,
+  '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.12)' },
+};
+const toolbarBtn = {
+  wrap: {},
+  group: {
+    borderRadius: 2,
+    '& .MuiButton-root': {
+      borderColor: 'rgba(255,255,255,0.45)',
+      color: '#fff',
+      textTransform: 'none' as const,
+      '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.12)' },
+    },
+    '& .MuiButtonGroup-grouped:not(:last-of-type)': { borderColor: 'rgba(255,255,255,0.45)' },
+  },
+  menu: outlinedBtnSx,
+};
+const menuPaperSx = { borderRadius: 2, mt: 0.5, minWidth: 224, boxShadow: '0 8px 28px rgba(0,0,0,0.18)' };
+
 function fmtDt(s?: string): string {
   if (!s) return '—';
   try { return new Date(s).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
@@ -131,6 +161,9 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [guestSeed, setGuestSeed] = useState<GuestKey | null>(null);
   const [view, setView] = useState<'list' | 'timeline'>('list');
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  const [addAnchor, setAddAnchor] = useState<HTMLElement | null>(null);
+  const [bulkAnchor, setBulkAnchor] = useState<HTMLElement | null>(null);
+  const [quoteAnchor, setQuoteAnchor] = useState<HTMLElement | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
@@ -139,6 +172,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
 
   // Quét hộ chiếu bằng AI: mỗi ảnh → 1 khách mới (tự điền tên/HC/ngày sinh…).
   const onScanPassports = async (e: ChangeEvent<HTMLInputElement>) => {
+    setAddAnchor(null);
     const files = Array.from(e.target.files ?? []);
     e.target.value = '';
     if (!files.length) return;
@@ -180,6 +214,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   };
 
   const onImport = async (e: ChangeEvent<HTMLInputElement>) => {
+    setAddAnchor(null);
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -278,81 +313,144 @@ export function VisaApplicantManager({ project, onClose }: Props) {
 
   return (
     <Dialog open fullScreen onClose={busy ? undefined : onClose}>
-      <AppBar position="sticky" sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)' }}>
-        <Toolbar sx={{ gap: 1, flexWrap: 'wrap' }}>
-          <IconButton edge="start" color="inherit" onClick={onClose} disabled={busy}>
+      <AppBar position="sticky" elevation={0} sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 45%,#14a08c)', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
+        <Toolbar sx={{ gap: 1.25, flexWrap: 'wrap', minHeight: { xs: 56, sm: 60 }, py: 0.75 }}>
+          <IconButton edge="start" color="inherit" onClick={onClose} disabled={busy} sx={{ mr: 0.25 }}>
             <ArrowBackIcon />
           </IconButton>
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography fontWeight={900} noWrap>👥 Danh sách khách</Typography>
-            <Typography variant="caption" sx={{ opacity: 0.85 }} noWrap>
+            <Typography fontWeight={800} fontSize={17} noWrap sx={{ lineHeight: 1.2 }}>
+              Danh sách khách
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.78, letterSpacing: 0.2 }} noWrap>
               {project.name || '(Chưa đặt tên)'} · {project.code} · {list.length} khách
             </Typography>
           </Box>
+
+          {/* Chế độ xem */}
           <ToggleButtonGroup
             exclusive size="small" value={view} onChange={(_, v: 'list' | 'timeline' | null) => v && setView(v)}
-            sx={{ bgcolor: 'rgba(255,255,255,0.16)', '& .MuiToggleButton-root': { color: '#fff', border: 'none', textTransform: 'none', fontWeight: 700, px: 1.5 }, '& .Mui-selected': { bgcolor: 'rgba(255,255,255,0.34) !important', color: '#fff !important' } }}>
-            <ToggleButton value="list">📋 Danh sách</ToggleButton>
-            <ToggleButton value="timeline">🗓️ Timeline</ToggleButton>
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.14)', borderRadius: 2, p: 0.25,
+              '& .MuiToggleButton-root': { color: 'rgba(255,255,255,0.85)', border: 'none', borderRadius: '6px !important', textTransform: 'none', fontWeight: 600, px: 1.75, py: 0.4, lineHeight: 1 },
+              '& .Mui-selected': { bgcolor: '#fff !important', color: '#0d7a6a !important', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' },
+            }}>
+            <ToggleButton value="list">Danh sách</ToggleButton>
+            <ToggleButton value="timeline">Timeline</ToggleButton>
           </ToggleButtonGroup>
-          {project.linkedQuoteId && (
-            <>
-              <Button color="inherit" variant="outlined" startIcon={<DownloadIcon />} onClick={pullFromQuote}>
-                Kéo từ báo giá
+
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.22)', my: 1, mx: 0.25 }} />
+
+          {/* Nhóm hành động — gọn vào các menu thả xuống */}
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center" sx={toolbarBtn.wrap}>
+            {/* Thêm khách (split): thêm thủ công + menu nhập liệu */}
+            <ButtonGroup variant="outlined" color="inherit" sx={toolbarBtn.group}>
+              <Button startIcon={<AddIcon />} onClick={add} sx={{ fontWeight: 700 }}>Thêm khách</Button>
+              <Button size="small" onClick={(e) => setAddAnchor(e.currentTarget)} sx={{ px: 0.5 }} aria-label="Tùy chọn thêm khách">
+                <ArrowDropDownIcon />
               </Button>
-              <Button color="inherit" variant="outlined" startIcon={<UploadIcon />} onClick={pushToQuote}>
-                Đẩy sang báo giá
+            </ButtonGroup>
+
+            <Button color="inherit" variant="outlined" startIcon={<TuneIcon />} endIcon={<ArrowDropDownIcon />}
+              onClick={(e) => setBulkAnchor(e.currentTarget)} sx={toolbarBtn.menu}>
+              Xử lý loạt
+            </Button>
+
+            <Button color="inherit" variant="outlined" startIcon={<FileDownloadIcon />} endIcon={<ArrowDropDownIcon />}
+              onClick={(e) => setExportAnchor(e.currentTarget)} sx={toolbarBtn.menu}>
+              Xuất
+            </Button>
+
+            {project.linkedQuoteId && (
+              <Button color="inherit" variant="outlined" startIcon={<SwapHorizIcon />} endIcon={<ArrowDropDownIcon />}
+                onClick={(e) => setQuoteAnchor(e.currentTarget)} sx={toolbarBtn.menu}>
+                Báo giá
               </Button>
-            </>
-          )}
-          <Button color="inherit" variant="outlined" startIcon={<UploadFileIcon />} component="label">
-            Import Excel
-            <input type="file" hidden accept=".xlsx,.xls" onChange={onImport} />
-          </Button>
-          <Button color="inherit" variant="outlined" startIcon={<FileDownloadIcon />}
-            onClick={() => void import('@/lib/exports/importVisaApplicants').then((m) => m.downloadVisaApplicantsTemplate())}>
-            Tải mẫu
-          </Button>
-          {project.departureDate && (
-            <Tooltip title="Tự điền các mốc timeline còn trống cho cả đoàn (tính ngược từ ngày khởi hành)">
-              <Button color="inherit" variant="outlined" startIcon={<EventRepeatIcon />} onClick={bulkTimelineFromDeparture}>
-                Tính timeline đoàn
-              </Button>
-            </Tooltip>
-          )}
-          <Button color="inherit" variant="outlined" startIcon={<FileDownloadIcon />} onClick={(e) => setExportAnchor(e.currentTarget)}>
-            Xuất timeline
-          </Button>
-          <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)}>
-            <MenuItem onClick={() => void exportTimeline('excel')}>📊 Excel tình trạng & timeline</MenuItem>
-            <MenuItem onClick={() => void exportTimeline('pdf')}>📄 PDF tình trạng & timeline</MenuItem>
-            <MenuItem onClick={() => void exportChecklist()}>📋 PDF checklist hồ sơ từng khách</MenuItem>
-          </Menu>
-          <Button color="inherit" variant="outlined" startIcon={<PlaylistAddCheckIcon />} onClick={() => setBulkOpen(true)} disabled={list.length === 0}>
-            Đổi trạng thái loạt
-          </Button>
-          <Button color="inherit" variant="outlined" startIcon={<CampaignOutlinedIcon />} onClick={() => setReminderOpen(true)} disabled={list.length === 0}>
-            Nhắc khách
-          </Button>
-          <Button color="inherit" variant="outlined" startIcon={<PaidOutlinedIcon />} onClick={() => setCostOpen(true)}>
-            Chi phí
-          </Button>
-          <Button color="inherit" variant="outlined" startIcon={<PlaylistRemoveIcon />} onClick={onDedupe}>
-            Loại trùng
-          </Button>
-          <Button color="inherit" variant="outlined" startIcon={<DocumentScannerIcon />} component="label" disabled={busy}>
-            Quét hộ chiếu
-            <input type="file" hidden accept="image/*" multiple onChange={onScanPassports} />
-          </Button>
-          <Button color="inherit" variant="outlined" startIcon={<AddIcon />} onClick={add}>
-            Thêm khách
-          </Button>
+            )}
+
+            <Button color="inherit" variant="outlined" startIcon={<PaidOutlinedIcon />}
+              onClick={() => setCostOpen(true)} sx={toolbarBtn.menu}>
+              Chi phí
+            </Button>
+          </Stack>
+
           <Button
             variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={busy}
-            sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, '&:hover': { bgcolor: '#eafaf6' } }}
+            sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, borderRadius: 2, boxShadow: 'none', px: 2.25, '&:hover': { bgcolor: '#eafaf6', boxShadow: 'none' } }}
           >
             {busy ? 'Đang lưu…' : 'Lưu'}
           </Button>
+
+          {/* Menu: thêm khách */}
+          <Menu anchorEl={addAnchor} open={!!addAnchor} onClose={() => setAddAnchor(null)} slotProps={{ paper: { sx: menuPaperSx } }}>
+            <MenuItem component="label" disabled={busy}>
+              <ListItemIcon><DocumentScannerIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Quét hộ chiếu (AI)" secondary="Mỗi ảnh → 1 khách" />
+              <input type="file" hidden accept="image/*" multiple onChange={onScanPassports} />
+            </MenuItem>
+            <MenuItem component="label">
+              <ListItemIcon><UploadFileIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Nhập từ Excel" />
+              <input type="file" hidden accept=".xlsx,.xls" onChange={onImport} />
+            </MenuItem>
+            <MenuItem onClick={() => { setAddAnchor(null); void import('@/lib/exports/importVisaApplicants').then((m) => m.downloadVisaApplicantsTemplate()); }}>
+              <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Tải mẫu Excel" />
+            </MenuItem>
+          </Menu>
+
+          {/* Menu: xử lý loạt */}
+          <Menu anchorEl={bulkAnchor} open={!!bulkAnchor} onClose={() => setBulkAnchor(null)} slotProps={{ paper: { sx: menuPaperSx } }}>
+            <MenuItem disabled={list.length === 0} onClick={() => { setBulkAnchor(null); setBulkOpen(true); }}>
+              <ListItemIcon><PlaylistAddCheckIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Đổi trạng thái loạt" />
+            </MenuItem>
+            <MenuItem disabled={list.length === 0} onClick={() => { setBulkAnchor(null); setReminderOpen(true); }}>
+              <ListItemIcon><CampaignOutlinedIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Nhắc khách" />
+            </MenuItem>
+            <MenuItem onClick={() => { setBulkAnchor(null); onDedupe(); }}>
+              <ListItemIcon><PlaylistRemoveIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Loại khách trùng" />
+            </MenuItem>
+            {project.departureDate && [
+              <Divider key="d" />,
+              <MenuItem key="t" onClick={() => { setBulkAnchor(null); bulkTimelineFromDeparture(); }}>
+                <ListItemIcon><EventRepeatIcon fontSize="small" /></ListItemIcon>
+                <ListItemText primary="Tính timeline cả đoàn" secondary="Điền mốc trống từ ngày khởi hành" />
+              </MenuItem>,
+            ]}
+          </Menu>
+
+          {/* Menu: xuất */}
+          <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)} slotProps={{ paper: { sx: menuPaperSx } }}>
+            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Xuất tình trạng & timeline</ListSubheader>
+            <MenuItem onClick={() => void exportTimeline('excel')}>
+              <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Excel" />
+            </MenuItem>
+            <MenuItem onClick={() => void exportTimeline('pdf')}>
+              <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="PDF" />
+            </MenuItem>
+            <Divider />
+            <MenuItem onClick={() => void exportChecklist()}>
+              <ListItemIcon><PlaylistAddCheckIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="PDF checklist hồ sơ từng khách" />
+            </MenuItem>
+          </Menu>
+
+          {/* Menu: báo giá */}
+          <Menu anchorEl={quoteAnchor} open={!!quoteAnchor} onClose={() => setQuoteAnchor(null)} slotProps={{ paper: { sx: menuPaperSx } }}>
+            <MenuItem onClick={() => { setQuoteAnchor(null); pullFromQuote(); }}>
+              <ListItemIcon><DownloadIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Kéo từ báo giá" />
+            </MenuItem>
+            <MenuItem onClick={() => { setQuoteAnchor(null); pushToQuote(); }}>
+              <ListItemIcon><UploadIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Đẩy sang báo giá" />
+            </MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
 
