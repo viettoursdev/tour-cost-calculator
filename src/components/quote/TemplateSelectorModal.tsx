@@ -9,6 +9,7 @@ import PeopleAltOutlinedIcon from '@mui/icons-material/PeopleAltOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -38,9 +39,10 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const canNcc = hasPerm(currentUser, 'manageNCC');
   const canHR = hasPerm(currentUser, 'viewHR');
   const canInv = hasPerm(currentUser, 'manageInventory');
-  // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC / Nhân sự / Kho). Cần có draft
-  // để render — chưa có thì tạo nháp báo giá nội địa (dữ liệu này độc lập với báo giá).
-  const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory') => {
+  const canTraining = hasPerm(currentUser, 'viewTraining');
+  // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC / Nhân sự / Kho / Đào tạo). Cần
+  // có draft để render — chưa có thì tạo nháp báo giá nội địa (dữ liệu này độc lập).
+  const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory' | 'training') => {
     if (!hasDraft) newDraft('domestic');
     setView(v);
     onClose?.();
@@ -217,6 +219,59 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
               </Card>
             );
           })}
+
+          {/* Thẻ Đào tạo (view, không phải template) — cạnh "Lịch đi tour HDV". */}
+          {canTraining && (() => {
+            const grad = 'linear-gradient(135deg, #0d7a6a, #14a08c)';
+            const accent = '#0d7a6a';
+            return (
+              <Card
+                elevation={0}
+                sx={{
+                  position: 'relative', borderRadius: 3, overflow: 'hidden',
+                  border: '1px solid rgba(15,58,74,0.08)', background: '#fff',
+                  transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s, border-color .28s',
+                  boxShadow: '0 2px 10px rgba(15,58,74,0.05)',
+                  '&:hover': {
+                    transform: 'translateY(-6px)',
+                    boxShadow: `0 20px 44px ${accent}26`,
+                    borderColor: `${accent}55`,
+                  },
+                  '&:hover .tpl-badge': { transform: 'scale(1.08) rotate(-3deg)' },
+                  '&:hover .tpl-go': { opacity: 1, transform: 'translateX(0)' },
+                  '&:hover .tpl-bar': { opacity: 1 },
+                }}
+              >
+                <Box className="tpl-bar" sx={{ height: 4, background: grad, opacity: 0.75, transition: 'opacity .28s' }} />
+                <CardActionArea onClick={() => gotoManage('training')} sx={{ height: '100%', p: 2.5, alignItems: 'flex-start' }}>
+                  <CardContent sx={{ p: 0, width: '100%' }}>
+                    <Box
+                      className="tpl-badge"
+                      sx={{
+                        width: 58, height: 58, borderRadius: '17px', mb: 1.75,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: grad, color: '#fff',
+                        boxShadow: `0 10px 24px ${accent}55, inset 0 1px 0 rgba(255,255,255,0.45)`,
+                        transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s',
+                        '& svg': { fontSize: 30, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))' },
+                      }}
+                    >
+                      <SchoolOutlinedIcon />
+                    </Box>
+                    <Typography sx={{ fontWeight: 800, fontSize: 15.5, color: '#0f3a4a', lineHeight: 1.3 }}>
+                      Đào tạo
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.6, lineHeight: 1.55 }}>
+                      Onboarding & nghiệp vụ nhân viên mới
+                    </Typography>
+                    <Box className="tpl-go" sx={{ mt: 1.5, display: 'inline-flex', alignItems: 'center', gap: 0.4, color: accent, fontWeight: 800, fontSize: 13, opacity: 0, transform: 'translateX(-6px)', transition: 'opacity .28s, transform .28s' }}>
+                      Bắt đầu →
+                    </Box>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            );
+          })()}
         </Box>
 
         {(canCust || canNcc || canHR || canInv) && (
