@@ -28,11 +28,19 @@ const GREEN: RGB = [33, 145, 90];
 const GREENH: RGB = [233, 247, 239];
 const GOLD: RGB = [191, 132, 16];
 
-export function exportItineraryExecutionPDF(
+export interface ExecExportOpts {
+  /** Trang bìa riêng (nên bật cho tour dài). */
+  coverPage?: boolean;
+  /** QR Google Maps cho từng khách sạn trong mục "Khách sạn lưu trú". */
+  hotelQR?: boolean;
+}
+
+export async function exportItineraryExecutionPDF(
   it: Itinerary,
   menu: Menu | null | undefined,
   restaurants: Restaurant[],
-): void {
+  opts: ExecExportOpts = {},
+): Promise<void> {
   const m = buildExecModel(it, menu, restaurants);
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const hasFont = loadVNFont(pdf);
@@ -47,6 +55,44 @@ export function exportItineraryExecutionPDF(
   const tw = (t: string) => pdf.getTextWidth(t);
   // Font subset DejaVu thiếu glyph mũi tên (→/›) → thay bằng "-" (ASCII) để không mất chữ.
   const safeArrow = (s: string) => (s ?? '').replace(/\s*[→⟶➔➜➞›»]\s*/g, ' - ');
+
+  // Khách sạn theo đêm + QR Google Maps (tùy chọn) — chuẩn bị trước vì QR tạo bất đồng bộ.
+  const hotelNights = m.dayVMs.filter((d) => d.hotelName || d.hotelContact);
+  let hotelQRs: (string | null)[] = [];
+  if (opts.hotelQR && hotelNights.length) {
+    const QRCode = (await import('qrcode')).default;
+    hotelQRs = await Promise.all(hotelNights.map(async (d) => {
+      const q = [d.hotelName, m.destination].filter(Boolean).join(' ').trim();
+      if (!q) return null;
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+      try { return await QRCode.toDataURL(url, { margin: 0, width: 180 }); } catch { return null; }
+    }));
+  }
+
+  // ── Trang bìa (tùy chọn — cho tour dài) ──
+  if (opts.coverPage) {
+    const lx = (PW - 46.5) / 2;
+    let cy = 50;
+    drawLogo(pdf, lx, cy); cy += 12.5 + 14;
+    pdf.setDrawColor(...TEAL); pdf.setLineWidth(0.7); pdf.line(PW / 2 - 18, cy, PW / 2 + 18, cy); cy += 13;
+    setF('bold'); pdf.setFontSize(9.5); pdf.setTextColor(...TEAL);
+    pdf.text('B Ả N   Đ I Ề U   H À N H   T O U R', PW / 2, cy, { align: 'center' }); cy += 6;
+    setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
+    pdf.text('I T I N E R A R Y   E X E C U T I O N', PW / 2, cy, { align: 'center' }); cy += 20;
+    setF('bold'); pdf.setFontSize(27); pdf.setTextColor(...NAVY);
+    wrap(safeArrow(m.title).toUpperCase(), CW - 14).forEach((l) => { pdf.text(l, PW / 2, cy, { align: 'center' }); cy += 11.5; });
+    cy += 5;
+    const sub = [m.destination, `${m.days} ngày ${m.nights} đêm`, m.departure && `Khởi hành ${fmtDayDate(m.departure)}`].filter(Boolean).join('     ·     ');
+    setF('normal'); pdf.setFontSize(11.5); pdf.setTextColor(...TEAL);
+    pdf.text(sub, PW / 2, cy, { align: 'center' });
+    const by = PH - 52;
+    pdf.setFillColor(...TEALH); pdf.roundedRect(PW / 2 - 34, by - 6, 68, 22, 2.5, 2.5, 'F');
+    setF('bold'); pdf.setFontSize(8); pdf.setTextColor(...TEAL); pdf.text('MÃ TOUR', PW / 2, by, { align: 'center' });
+    setF('bold'); pdf.setFontSize(15); pdf.setTextColor(...NAVY); pdf.text(m.code || '—', PW / 2, by + 7, { align: 'center' });
+    setF('normal'); pdf.setFontSize(7.5); pdf.setTextColor(...MUTE); pdf.text('Lập ngày ' + fmtDayDate(new Date().toISOString().slice(0, 10)), PW / 2, by + 13, { align: 'center' });
+    pdf.addPage(); y = TOP;
+  }
+  const firstContentPage = pdf.internal.pages.length - 1; // trang masthead — running header chỉ từ trang sau
 
   // ── Masthead (logo + mã tour + ngày lập) ──
   const logoBottom = drawLogo(pdf, M, y);
@@ -363,12 +409,30 @@ export function exportItineraryExecutionPDF(
   });
 
   // ── Khách sạn lưu trú (tổng quan theo đêm) ──
-  const hotelNights = m.dayVMs.filter((d) => d.hotelName || d.hotelContact);
   if (hotelNights.length) {
     sectionHead('Khách sạn lưu trú');
-    const w = [CW * 0.16, CW * 0.2, CW * 0.36, CW * 0.28];
-    table(['Đêm', 'Ngày', 'Khách sạn', 'Liên hệ'],
-      hotelNights.map((d) => [`Đêm ${dayLabel(d.dayNum, it.dayStart)}`, d.date ? fmtDayDate(d.date) : '—', d.hotelName || '—', d.hotelContact || '—']), w);
+    if (opts.hotelQR && hotelQRs.some(Boolean)) {
+      hotelNights.forEach((d, i) => {
+        const cardH = 22;
+        ensure(cardH + 3);
+        pdf.setFillColor(...ZEBRA); pdf.setDrawColor(...LINE); pdf.setLineWidth(0.2);
+        pdf.roundedRect(M, y, CW, cardH, 1.6, 1.6, 'FD');
+        const qr = hotelQRs[i];
+        if (qr) { pdf.setFillColor(...WHITE); pdf.roundedRect(M + 2.5, y + 2, 18, 18, 1, 1, 'F'); try { pdf.addImage(qr, 'PNG', M + 3.5, y + 3, 16, 16); } catch { /* bỏ qua nếu lỗi ảnh */ } }
+        const tx = M + 24;
+        setF('bold'); pdf.setFontSize(8); pdf.setTextColor(...TEAL);
+        pdf.text(`Đêm ${dayLabel(d.dayNum, it.dayStart)}${d.date ? '  ·  ' + fmtDayDate(d.date) : ''}`, tx, y + 6);
+        setF('bold'); pdf.setFontSize(9.5); pdf.setTextColor(...NAVY);
+        (wrap(d.hotelName || '—', CW - (tx - M) - 4)[0] ? [wrap(d.hotelName || '—', CW - (tx - M) - 4)[0]] : []).forEach((l) => pdf.text(l, tx, y + 11.5));
+        if (d.hotelContact) { setF('normal'); pdf.setFontSize(8.3); pdf.setTextColor(...INK); pdf.text(d.hotelContact, tx, y + 16); }
+        setF('normal'); pdf.setFontSize(7); pdf.setTextColor(...MUTE); pdf.text('Quét QR → Google Maps', tx, y + 20);
+        y += cardH + 3;
+      });
+    } else {
+      const w = [CW * 0.16, CW * 0.2, CW * 0.36, CW * 0.28];
+      table(['Đêm', 'Ngày', 'Khách sạn', 'Liên hệ'],
+        hotelNights.map((d) => [`Đêm ${dayLabel(d.dayNum, it.dayStart)}`, d.date ? fmtDayDate(d.date) : '—', d.hotelName || '—', d.hotelContact || '—']), w);
+    }
     y += 4;
   }
 
@@ -431,7 +495,7 @@ export function exportItineraryExecutionPDF(
   for (let p = 1; p <= pages; p++) {
     pdf.setPage(p);
     pdf.setFillColor(...TEAL); pdf.rect(0, 0, PW, 2.4, 'F');
-    if (p > 1) { // running header trang tiếp: mã tour trái + tên tour phải
+    if (p > firstContentPage) { // running header trang tiếp: mã tour trái + tên tour phải
       setF('bold'); pdf.setFontSize(8); pdf.setTextColor(...NAVY); pdf.text(m.code || '', M, 12);
       setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
       pdf.text(wrap(safeArrow(m.title), CW * 0.72)[0] || '', PW - M, 12, { align: 'right' });

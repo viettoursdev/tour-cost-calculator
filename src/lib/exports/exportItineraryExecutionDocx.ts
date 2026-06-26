@@ -14,6 +14,7 @@ import { buildExecModel, mealsLabel } from './execModel';
 import { BRAND_TEAL_HEX, LOGO_W_PX, LOGO_H_PX } from './brand';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
 import { dayLabel, weekdayVN } from '@/components/itinerary/itinCode';
+import type { ExecExportOpts } from './exportItineraryExecutionPDF';
 import type { ExecContact, Itinerary, Menu, Restaurant } from '@/types';
 
 const FONT = 'Aptos';
@@ -87,9 +88,23 @@ export async function exportItineraryExecutionDocx(
   it: Itinerary,
   menu: Menu | null | undefined,
   restaurants: Restaurant[],
+  opts: ExecExportOpts = {},
 ): Promise<void> {
   const m = buildExecModel(it, menu, restaurants);
   const kids: (Paragraph | Table)[] = [];
+
+  // Khách sạn theo đêm + QR Google Maps (tùy chọn) — chuẩn bị trước (QR bất đồng bộ).
+  const hotelNights = m.dayVMs.filter((d) => d.hotelName || d.hotelContact);
+  let hotelQRs: (Uint8Array | null)[] = [];
+  if (opts.hotelQR && hotelNights.length) {
+    const QRCode = (await import('qrcode')).default;
+    hotelQRs = await Promise.all(hotelNights.map(async (d) => {
+      const q = [d.hotelName, m.destination].filter(Boolean).join(' ').trim();
+      if (!q) return null;
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+      try { const u = await QRCode.toDataURL(url, { margin: 0, width: 200 }); return b64ToU8(u.split(',')[1] ?? ''); } catch { return null; }
+    }));
+  }
 
   // ── Letterhead: logo + mã tour (KHÔNG in tên thương hiệu ở tiêu đề) ──
   kids.push(new Table({
@@ -244,12 +259,35 @@ export async function exportItineraryExecutionDocx(
   });
 
   // ── Khách sạn lưu trú ──
-  const hotelNights = m.dayVMs.filter((d) => d.hotelName || d.hotelContact);
   if (hotelNights.length) {
     kids.push(heading('Khách sạn lưu trú'));
-    kids.push(simpleTable(['Đêm', 'Ngày', 'Khách sạn', 'Liên hệ'],
-      hotelNights.map((d) => [`Đêm ${dayLabel(d.dayNum, it.dayStart)}`, d.date ? fmtDayDate(d.date) : '—', d.hotelName || '—', d.hotelContact || '—']),
-      [14, 20, 38, 28]));
+    if (opts.hotelQR && hotelQRs.some(Boolean)) {
+      const border = { style: BorderStyle.SINGLE, size: 2, color: LIGHT };
+      const rows = hotelNights.map((d, i) => new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 1500, type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, margins: { top: 70, bottom: 70, left: 90, right: 90 },
+            children: [hotelQRs[i]
+              ? new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ type: 'png', data: hotelQRs[i] as Uint8Array, transformation: { width: 66, height: 66 } })] })
+              : new Paragraph({ children: [tr('—', { color: MUTE })] })],
+          }),
+          new TableCell({
+            verticalAlign: VerticalAlign.CENTER, margins: { top: 70, bottom: 70, left: 160, right: 140 },
+            children: [
+              new Paragraph({ spacing: { after: 10 }, children: [tr(`Đêm ${dayLabel(d.dayNum, it.dayStart)}${d.date ? '  ·  ' + fmtDayDate(d.date) : ''}`, { bold: true, color: TEAL, size: 15 })] }),
+              new Paragraph({ spacing: { after: 10 }, children: [tr(d.hotelName || '—', { bold: true, color: NAVY, size: 19 })] }),
+              ...(d.hotelContact ? [new Paragraph({ spacing: { after: 10 }, children: [tr(d.hotelContact, { color: INK, size: 17 })] })] : []),
+              new Paragraph({ children: [tr('Quét QR → Google Maps', { color: MUTE, size: 13 })] }),
+            ],
+          }),
+        ],
+      }));
+      kids.push(new Table({ width: { size: CW, type: WidthType.DXA }, columnWidths: [1500, CW - 1500], borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: { style: BorderStyle.NONE } }, rows }));
+    } else {
+      kids.push(simpleTable(['Đêm', 'Ngày', 'Khách sạn', 'Liên hệ'],
+        hotelNights.map((d) => [`Đêm ${dayLabel(d.dayNum, it.dayStart)}`, d.date ? fmtDayDate(d.date) : '—', d.hotelName || '—', d.hotelContact || '—']),
+        [14, 20, 38, 28]));
+    }
   }
 
   // ── Khách ──
@@ -317,14 +355,39 @@ export async function exportItineraryExecutionDocx(
   });
   const firstHeader = new Header({ children: [new Paragraph({ children: [] })] });
 
+  const pageProps = { size: { width: 11906, height: 16838 }, margin: { top: 800, right: 800, bottom: 800, left: 800 } };
+
+  // ── Trang bìa (tùy chọn — section riêng để không dính running header) ──
+  const coverKids: (Paragraph | Table)[] = [];
+  if (opts.coverPage) {
+    coverKids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1700, after: 240 }, children: [new ImageRun({ type: 'png', data: b64ToU8(VTE_LOGO), transformation: { width: Math.round(LOGO_W_PX * 1.5), height: Math.round(LOGO_H_PX * 1.5) } })] }));
+    coverKids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 40 }, children: [tr('BẢN ĐIỀU HÀNH TOUR', { bold: true, color: TEAL, size: 20 })] }));
+    coverKids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 360 }, children: [tr('ITINERARY EXECUTION', { color: MUTE, size: 15 })] }));
+    coverKids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [tr(safeArrow(m.title).toUpperCase(), { bold: true, color: NAVY, size: 50 })] }));
+    coverKids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 700 }, children: [tr([m.destination, `${m.days} ngày ${m.nights} đêm`, m.departure && `Khởi hành ${fmtDayDate(m.departure)}`].filter(Boolean).join('     ·     '), { color: TEAL, size: 22, bold: true })] }));
+    coverKids.push(new Table({
+      width: { size: 5200, type: WidthType.DXA }, alignment: AlignmentType.CENTER, columnWidths: [5200], borders: noBorders,
+      rows: [new TableRow({ children: [new TableCell({ shading: { type: ShadingType.SOLID, color: TEALH, fill: TEALH }, margins: { top: 160, bottom: 160, left: 220, right: 220 }, children: [
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [tr('MÃ TOUR', { bold: true, color: TEAL, size: 14 })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 }, children: [tr(m.code || '—', { bold: true, color: NAVY, size: 28 })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, children: [tr('Lập ngày ' + fmtDayDate(new Date().toISOString().slice(0, 10)), { color: MUTE, size: 14 })] }),
+      ] })] })],
+    }));
+  }
+
+  const contentSection = {
+    properties: { titlePage: true, page: pageProps },
+    headers: { default: runHeader, first: firstHeader },
+    footers: { default: footer, first: footer },
+    children: kids,
+  };
+  const sections = opts.coverPage
+    ? [{ properties: { page: pageProps }, footers: { default: footer }, children: coverKids }, contentSection]
+    : [contentSection];
+
   const doc = new Document({
     styles: { default: { document: { run: { font: FONT, size: 19 } } } },
-    sections: [{
-      properties: { titlePage: true, page: { size: { width: 11906, height: 16838 }, margin: { top: 800, right: 800, bottom: 800, left: 800 } } },
-      headers: { default: runHeader, first: firstHeader },
-      footers: { default: footer, first: footer },
-      children: kids,
-    }],
+    sections,
   });
   const blob = await Packer.toBlob(doc);
   const slug = (m.title || '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);

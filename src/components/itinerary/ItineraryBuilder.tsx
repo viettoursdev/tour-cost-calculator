@@ -1,6 +1,6 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Autocomplete, Box, Button, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
+  Autocomplete, Box, Button, Checkbox, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Select, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -100,6 +100,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [aiSchedOpen, setAiSchedOpen] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  // Tùy chọn bản điều hành (HDV): trang bìa cho tour dài + QR Google Maps khách sạn.
+  const [execCover, setExecCover] = useState(false);
+  const [execHotelQR, setExecHotelQR] = useState(false);
   // Mốc giờ đang mở ô nhập vận hành (theo activity.id).
   const [opsOpenIds, setOpsOpenIds] = useState<Set<string>>(new Set());
   const toggleOps = (id: string) => setOpsOpenIds((prev) => {
@@ -151,8 +154,9 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
     const idx = useMenuStore.getState().list.find((x) => x.linkedItineraryId === it.id);
     const menu = idx ? await useMenuStore.getState().load(idx.id) : null;
     const restaurants = useRestaurantStore.getState().list;
-    if (format === 'pdf') await import('@/lib/exports/exportItineraryExecutionPDF').then((m) => m.exportItineraryExecutionPDF(withCode, menu, restaurants));
-    else await import('@/lib/exports/exportItineraryExecutionDocx').then((m) => m.exportItineraryExecutionDocx(withCode, menu, restaurants));
+    const opts = { coverPage: execCover, hotelQR: execHotelQR };
+    if (format === 'pdf') await import('@/lib/exports/exportItineraryExecutionPDF').then((m) => m.exportItineraryExecutionPDF(withCode, menu, restaurants, opts));
+    else await import('@/lib/exports/exportItineraryExecutionDocx').then((m) => m.exportItineraryExecutionDocx(withCode, menu, restaurants, opts));
   };
 
   const groupOf = (f: Flight) => f.group?.trim() || 'Nhóm 1';
@@ -500,6 +504,15 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               </MenuItem>
               <MenuItem onClick={() => { void handleExec('docx'); setExportAnchor(null); }}>
                 <ListItemIcon><ExploreIcon fontSize="small" /></ListItemIcon><ListItemText>Execution Word (HDV)</ListItemText>
+              </MenuItem>
+              <Divider />
+              <MenuItem dense onClick={() => setExecCover((v) => !v)}>
+                <ListItemIcon><Checkbox edge="start" size="small" checked={execCover} tabIndex={-1} disableRipple sx={{ p: 0 }} /></ListItemIcon>
+                <ListItemText primary="Kèm trang bìa" secondary="cho tour dài" primaryTypographyProps={{ fontSize: 13 }} secondaryTypographyProps={{ fontSize: 11 }} />
+              </MenuItem>
+              <MenuItem dense onClick={() => setExecHotelQR((v) => !v)}>
+                <ListItemIcon><Checkbox edge="start" size="small" checked={execHotelQR} tabIndex={-1} disableRipple sx={{ p: 0 }} /></ListItemIcon>
+                <ListItemText primary="QR khách sạn" secondary="quét ra Google Maps" primaryTypographyProps={{ fontSize: 13 }} secondaryTypographyProps={{ fontSize: 11 }} />
               </MenuItem>
             </Menu>
             <Tooltip title="Cài đặt AI">
