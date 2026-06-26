@@ -1,5 +1,7 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
+import { lazyView as lazy } from '@/lib/lazyView';
+import { ChunkErrorBoundary } from '@/components/shell/ChunkErrorBoundary';
 import { TemplateSelectorModal } from './TemplateSelectorModal';
 import { NewQuoteDialog } from './NewQuoteDialog';
 import { QuoteToolbar } from './QuoteToolbar';
@@ -92,6 +94,7 @@ export function QuoteView() {
   if (template === 'itinerary' || template === 'menu' || template === 'visa' || template === 'doctranslate' || template === 'guideschedule') {
     const exit = () => useQuoteStore.getState().abandon();
     return (
+      <ChunkErrorBoundary key={template}>
       <Suspense fallback={<ViewFallback />}>
         {template === 'itinerary' && <ItineraryApp onExit={exit} />}
         {template === 'menu' && <MenuApp onExit={exit} />}
@@ -99,6 +102,7 @@ export function QuoteView() {
         {template === 'doctranslate' && <DocTranslateApp onExit={exit} />}
         {template === 'guideschedule' && <GuideScheduleApp onExit={exit} />}
       </Suspense>
+      </ChunkErrorBoundary>
     );
   }
 
@@ -119,6 +123,7 @@ export function QuoteView() {
           />
 
           <Box sx={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+           <ChunkErrorBoundary key={view}>
            <Suspense fallback={<ViewFallback />}>
             {view === 'home' && <HomeView />}
             {view === 'cost' && (locked ? <LockedQuoteView /> : <CostView />)}
@@ -151,6 +156,7 @@ export function QuoteView() {
             {view === 'inventory' && <InventoryView />}
             {view === 'training' && <TrainingView />}
            </Suspense>
+           </ChunkErrorBoundary>
           </Box>
 
           {/* "Báo giá mới" trong sheet nội địa/nước ngoài → mở thẳng bảng nhập
