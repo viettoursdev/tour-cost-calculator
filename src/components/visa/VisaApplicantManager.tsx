@@ -22,6 +22,7 @@ import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import HistoryIcon from '@mui/icons-material/History';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import SaveIcon from '@mui/icons-material/Save';
+import TableViewIcon from '@mui/icons-material/TableView';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import UploadIcon from '@mui/icons-material/Upload';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
@@ -36,6 +37,7 @@ import { RoomingPanel } from '../quote/RoomingPanel';
 import { VisaApplicantTimeline } from './VisaApplicantTimeline';
 import { BulkStatusDialog, ReminderDialog } from './VisaApplicantActions';
 import { VisaCostDialog } from './VisaCostDialog';
+import { VisaExportDialog } from './VisaExportDialog';
 import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, passengersToApplicants } from './guestAdapters';
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
@@ -167,6 +169,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
+  const [exportListOpen, setExportListOpen] = useState(false);
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -424,7 +427,14 @@ export function VisaApplicantManager({ project, onClose }: Props) {
 
           {/* Menu: xuất */}
           <Menu anchorEl={exportAnchor} open={!!exportAnchor} onClose={() => setExportAnchor(null)} slotProps={{ paper: { sx: menuPaperSx } }}>
-            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Xuất tình trạng & timeline</ListSubheader>
+            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Danh sách khách</ListSubheader>
+            <MenuItem disabled={list.length === 0}
+              onClick={() => { setExportAnchor(null); setExportListOpen(true); }}>
+              <ListItemIcon><TableViewIcon fontSize="small" sx={{ color: '#0d7a6a' }} /></ListItemIcon>
+              <ListItemText primary="Tải danh sách khách (Excel)" secondary="Chọn cột & thứ tự · cần mật khẩu" />
+            </MenuItem>
+            <Divider />
+            <ListSubheader sx={{ lineHeight: '32px', fontWeight: 700 }}>Tình trạng & timeline</ListSubheader>
             <MenuItem onClick={() => void exportTimeline('excel')}>
               <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
               <ListItemText primary="Excel" />
@@ -572,6 +582,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
       {bulkOpen && <BulkStatusDialog applicants={list} onApply={setList} onClose={() => setBulkOpen(false)} />}
       {reminderOpen && <ReminderDialog project={project} applicants={list} onClose={() => setReminderOpen(false)} />}
       {costOpen && <VisaCostDialog project={project} count={list.length} onClose={() => setCostOpen(false)} />}
+      {exportListOpen && <VisaExportDialog project={project} applicants={list} onClose={() => setExportListOpen(false)} />}
 
       <Dialog open={!!guestSeed} onClose={() => setGuestSeed(null)} fullWidth maxWidth="md">
         <DialogTitle sx={{ pr: 6 }}>

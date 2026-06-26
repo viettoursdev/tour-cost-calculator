@@ -3256,6 +3256,26 @@ export async function sbNextTourCode(kind: TourKind, client: SupabaseClient = sb
   return data as string;
 }
 
+/** Đặt / đổi mật khẩu xuất danh sách khách visa (chỉ Trưởng Phòng+ — DB chặn). */
+export async function sbSetVisaExportPassword(pw: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('set_visa_export_password', { new_pw: pw });
+  if (error) throw new Error(error.message);
+}
+
+/** Kiểm tra mật khẩu xuất (DB so bcrypt, không lộ hash). */
+export async function sbVerifyVisaExportPassword(pw: string, client: SupabaseClient = sb): Promise<boolean> {
+  const { data, error } = await client.rpc('verify_visa_export_password', { pw });
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
+/** Đã có người đặt mật khẩu xuất hay chưa. */
+export async function sbVisaExportPasswordIsSet(client: SupabaseClient = sb): Promise<boolean> {
+  const { data, error } = await client.rpc('visa_export_password_is_set');
+  if (error) throw new Error(error.message);
+  return data === true;
+}
+
 export function sbSubscribeTourProfiles(
   cb: (list: TourProfile[]) => void,
   client: SupabaseClient = sb,
