@@ -20,6 +20,7 @@ import { userLabel, canReceivePush } from '@/auth/ROLES';
 import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
+import { useTourProfileStore } from '@/stores/tourProfileStore';
 import {
   sbSubscribeNotifThread, sbAddThreadComment, sbEnsureNotifThread, sbSendNotificationMany,
 } from '@/lib/supabase';
@@ -53,6 +54,7 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 const LINK_LABEL: Record<string, string> = {
   quote: 'Mở báo giá', dmc: 'Mở DMC', payment: 'Mở phiếu thanh toán',
   contract: 'Mở hợp đồng', itinerary: 'Mở chương trình', menu: 'Mở thực đơn', collab: 'Mở',
+  tourProfile: 'Mở hồ sơ tour',
 };
 
 type FilterKey = 'all' | 'mine' | 'unread' | NotificationType;
@@ -151,6 +153,17 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
       }
       case 'contract': {
         setView('contract');
+        onClose();
+        break;
+      }
+      case 'tourProfile': {
+        // link.id = id hồ sơ tour → mở tab Hồ sơ tour & focus đúng hồ sơ.
+        // Thoát template 'dmc' (bị setView ép về 'cost') để vào được tab cockpit.
+        if (useQuoteStore.getState().draft.template === 'dmc') {
+          useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } }));
+        }
+        useTourProfileStore.getState().requestFocus(link.id);
+        setView('cockpit');
         onClose();
         break;
       }

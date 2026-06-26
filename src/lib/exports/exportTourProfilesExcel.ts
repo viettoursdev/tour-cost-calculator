@@ -14,7 +14,7 @@ const NAVY = 'FF0F3A4A', WHITE = 'FFFFFFFF', LINE = 'FFE4E8EB';
 export type TourProfileExportRow = {
   code: string;
   name: string;
-  kind: string;          // 'Nội địa' | 'Nước ngoài'
+  category: string;      // nhãn loại hồ sơ (Incentive NĐ/NN, Visa, Event, Dịch vụ)
   customer: string;
   departDate: string;    // dd/mm/yyyy hoặc ''
   pax: number;
@@ -25,7 +25,9 @@ export type TourProfileExportRow = {
   menus: number;
   itineraries: number;
   guide: number;
-  value: number;         // giá trị báo giá chính (VND)
+  valueCurrent: number | '';    // báo giá hiện tại (VND)
+  valueContract: number | '';   // báo giá hợp đồng (VND)
+  valueSettlement: number | ''; // báo giá nghiệm thu (VND)
   payableRemaining: number; // công nợ NCC còn lại (VND)
   actualProfit: number | '';  // biên lợi thực (nếu đã quyết toán)
   owner: string;
@@ -33,9 +35,10 @@ export type TourProfileExportRow = {
 };
 
 const HEADERS = [
-  'Mã hồ sơ', 'Tên tour', 'Loại', 'Khách hàng', 'Ngày khởi hành', 'Số khách', 'Giai đoạn',
+  'Mã hồ sơ', 'Tên tour', 'Loại hồ sơ', 'Khách hàng', 'Ngày khởi hành', 'Số khách', 'Giai đoạn',
   'Số báo giá', 'Hợp đồng', 'Visa', 'Thực đơn', 'Chương trình', 'Lịch HDV',
-  'Giá trị (VND)', 'Công nợ còn lại (VND)', 'Biên lợi thực (VND)', 'Chủ sở hữu', 'Trạng thái',
+  'Báo giá hiện tại (VND)', 'Báo giá hợp đồng (VND)', 'Báo giá nghiệm thu (VND)',
+  'Công nợ còn lại (VND)', 'Biên lợi thực (VND)', 'Chủ sở hữu', 'Trạng thái',
 ];
 
 export async function exportTourProfilesExcel(rows: TourProfileExportRow[]): Promise<void> {
@@ -54,9 +57,9 @@ export async function exportTourProfilesExcel(rows: TourProfileExportRow[]): Pro
   });
 
   const data: (string | number)[][] = rows.map((r) => [
-    r.code, r.name, r.kind, r.customer, r.departDate, r.pax, r.stage,
+    r.code, r.name, r.category, r.customer, r.departDate, r.pax, r.stage,
     r.quotes, r.contracts, r.visa, r.menus, r.itineraries, r.guide,
-    r.value, r.payableRemaining, r.actualProfit, r.owner, r.status,
+    r.valueCurrent, r.valueContract, r.valueSettlement, r.payableRemaining, r.actualProfit, r.owner, r.status,
   ]);
   data.forEach((r) => {
     const row = ws.addRow(r);
@@ -67,8 +70,8 @@ export async function exportTourProfilesExcel(rows: TourProfileExportRow[]): Pro
     });
   });
 
-  // Định dạng số tiền cho 3 cột VND (14,15,16).
-  [14, 15, 16].forEach((col) => { ws.getColumn(col).numFmt = '#,##0'; });
+  // Định dạng số tiền cho các cột VND (14..18).
+  [14, 15, 16, 17, 18].forEach((col) => { ws.getColumn(col).numFmt = '#,##0'; });
 
   HEADERS.forEach((h, i) => {
     const maxLen = Math.max(h.length, ...data.map((r) => String(r[i] ?? '').length));

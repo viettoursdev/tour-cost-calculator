@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, Dialog, DialogActions,
   DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
-  TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+  TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -20,6 +20,10 @@ import AddIcon from '@mui/icons-material/Add';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
+import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
+import GavelIcon from '@mui/icons-material/Gavel';
 import { useAuthStore } from '@/stores/authStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -30,22 +34,34 @@ import { useMenuStore } from '@/stores/menuStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { canShareRecord } from '@/auth/recordAccess';
-import { userLabel } from '@/auth/ROLES';
-import { sbSendNotification } from '@/lib/supabase';
+import { userLabel, isApprover } from '@/auth/ROLES';
+import { sbSendNotification, sbGetQuoteFlights } from '@/lib/supabase';
 import { filterRank } from '@/lib/search';
 import { canSeePrices } from '@/auth/quotePerms';
+import {
+  TOUR_CATEGORIES, categoryMeta, tourCategoryOf, categoryKind,
+  deleteNeedsApproval, canApproveDelete,
+} from '@/lib/tourProfile';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
 import { DealCockpit } from './DealCockpit';
+import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
 import { LEGACY } from '@/theme';
-import type { CloudQuoteEntry, Collaborator, TourKind, TourProfile, User } from '@/types';
+import type { CloudQuoteEntry, Collaborator, DeleteRequest, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
   st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
 
 /** Số lượng thực thể liên kết gom theo hồ sơ (qua các báo giá thuộc hồ sơ). */
 type ProfileLinks = { contract: number; visa: number; menu: number; itinerary: number };
+
+/** 3 mốc giá trị tour — tự suy từ dữ liệu liên kết (không nhập tay). */
+type ProfileValues = {
+  current?: number;     // báo giá chính (totalCost)
+  contract?: number;    // hợp đồng liên kết (contractPax × pricePerPax)
+  settlement?: number;  // nghiệm thu — doanh thu thực (actualCost + actualProfit)
+};
 
 const prefsKey = (u: string) => `vte_tourprofile_prefs_${u}`;
 const loadExpanded = (u?: string): Set<string> => {
@@ -76,16 +92,25 @@ export function TourProfilesView() {
   const removeProfile = useTourProfileStore((s) => s.remove);
   const createProfile = useTourProfileStore((s) => s.create);
   const moveQuote = useTourProfileStore((s) => s.moveQuote);
+  const requestDelete = useTourProfileStore((s) => s.requestDelete);
+  const approveDelete = useTourProfileStore((s) => s.approveDelete);
+  const rejectDelete = useTourProfileStore((s) => s.rejectDelete);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const showPrice = canSeePrices(currentUser);
 
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showDash, setShowDash] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [fltCustomer, setFltCustomer] = useState<string>('');
+  const [fltCategory, setFltCategory] = useState<TourCategory | ''>('');
+  const [fltCountry, setFltCountry] = useState<string>('');
+  const [fltStage, setFltStage] = useState<DealStage | ''>('');
   const [exporting, setExporting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
   const [deleteState, setDeleteState] = useState<TourProfile | null>(null);
+  const [requestDeleteState, setRequestDeleteState] = useState<TourProfile | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
 
@@ -109,17 +134,21 @@ export function TourProfilesView() {
     const contractByQuote = new Map<string, typeof contracts[number]>();
     for (const c of contracts) if (c.linkedQuoteId) contractByQuote.set(c.linkedQuoteId, c);
 
-    const m = new Map<string, { primary?: CloudQuoteEntry; stage: DealStage; links: ProfileLinks; guide: number }>();
+    type MetaVal = { primary?: CloudQuoteEntry; stage: DealStage; links: ProfileLinks; guide: number; values: ProfileValues; country?: string };
+    const m = new Map<string, MetaVal>();
     // Đọc kép: thực thể thuộc hồ sơ nào (ưu tiên tourProfileId, fallback qua báo giá).
     const profOf = (e: { tourProfileId?: string | null; linkedQuoteId?: string | null }): string | undefined =>
       e.tourProfileId ?? (e.linkedQuoteId ? quoteToProfile.get(e.linkedQuoteId) : undefined);
-    const ensure = (pid: string) => {
+    const ensure = (pid: string): MetaVal => {
       let v = m.get(pid);
-      if (!v) { v = { stage: 'request', links: { contract: 0, visa: 0, menu: 0, itinerary: 0 }, guide: 0 }; m.set(pid, v); }
+      if (!v) { v = { stage: 'request', links: { contract: 0, visa: 0, menu: 0, itinerary: 0 }, guide: 0, values: {} }; m.set(pid, v); }
       return v;
     };
-    for (const c of contracts) { const pid = profOf(c); if (pid) ensure(pid).links.contract++; }
-    for (const v of visaProjects) { const pid = profOf(v); if (pid) ensure(pid).links.visa++; }
+    // Hợp đồng đầu tiên + quốc gia (từ visa) gom theo hồ sơ — cho 3 mốc giá trị & lọc.
+    const firstContractByProfile = new Map<string, typeof contracts[number]>();
+    const countryByProfile = new Map<string, string>();
+    for (const c of contracts) { const pid = profOf(c); if (pid) { ensure(pid).links.contract++; if (!firstContractByProfile.has(pid)) firstContractByProfile.set(pid, c); } }
+    for (const v of visaProjects) { const pid = profOf(v); if (pid) { ensure(pid).links.visa++; if (v.country && !countryByProfile.has(pid)) countryByProfile.set(pid, v.country); } }
     for (const mn of menus) { const pid = profOf(mn); if (pid) ensure(pid).links.menu++; }
     for (const it of itineraries) { const pid = profOf(it); if (pid) ensure(pid).links.itinerary++; }
     // Lịch HDV keyed theo tourCloudId → quy về hồ sơ.
@@ -127,7 +156,7 @@ export function TourProfilesView() {
       const pid = quoteToProfile.get(key);
       if (pid) ensure(pid).guide++;
     }
-    // Báo giá chính + giai đoạn (suy từ báo giá chính).
+    // Báo giá chính + giai đoạn + 3 mốc giá trị + quốc gia (suy từ báo giá chính / liên kết).
     for (const p of profiles) {
       const list = quotesByProfile.get(p.id) ?? [];
       const primary = list.find((q) => q.cloudId === p.primaryQuoteId) ?? list[0];
@@ -136,22 +165,53 @@ export function TourProfilesView() {
       v.stage = primary
         ? dealStage({ status: primary.status, contract: contractFlags(contractByQuote.get(primary.cloudId)), departureISO: primary.departDate })
         : 'request';
+      // 3 mốc giá trị.
+      const ct = (primary ? contractByQuote.get(primary.cloudId) : undefined) ?? firstContractByProfile.get(p.id);
+      const st = primary?.settlementSummary;
+      v.values = {
+        current: primary?.totalCost,
+        contract: ct ? (ct.contractPax || 0) * (ct.pricePerPax || 0) : undefined,
+        settlement: st ? st.actualCost + st.actualProfit : undefined,
+      };
+      // Quốc gia: visa → nước của dự án visa; còn lại → điểm đến (intl chủ yếu).
+      v.country = countryByProfile.get(p.id) ?? (primary?.dest ?? p.dest ?? undefined);
     }
     return m;
   }, [quotes, contracts, visaProjects, menus, itineraries, guideAssignments, profiles, quotesByProfile]);
 
-  const metaOf = (id: string) => meta.get(id) ?? { primary: undefined, stage: 'request' as DealStage, links: { contract: 0, visa: 0, menu: 0, itinerary: 0 }, guide: 0 };
+  const metaOf = (id: string) => meta.get(id) ?? { primary: undefined, stage: 'request' as DealStage, links: { contract: 0, visa: 0, menu: 0, itinerary: 0 }, guide: 0, values: {} as ProfileValues, country: undefined };
   const primaryOf = (p: TourProfile): CloudQuoteEntry | undefined => metaOf(p.id).primary;
 
   const rows = useMemo(() => {
     let list = visible().slice();
     if (!showArchived) list = list.filter((p) => p.status !== 'archived');
+    // ── Bộ lọc đa chiều: khách / loại / quốc gia / giai đoạn ──
+    if (fltCustomer) list = list.filter((p) => (metaOf(p.id).primary?.customerName ?? p.customerName) === fltCustomer);
+    if (fltCategory) list = list.filter((p) => tourCategoryOf(p) === fltCategory);
+    if (fltCountry) list = list.filter((p) => (metaOf(p.id).country ?? '') === fltCountry);
+    if (fltStage) list = list.filter((p) => metaOf(p.id).stage === fltStage);
     list.sort((a, b) => {
       if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
     return filterRank(list, search, (p) => [p.code, p.name, p.customerName].filter(Boolean).join(' '));
-  }, [visible, profiles, search, showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tùy chọn cho bộ lọc — suy từ các hồ sơ user được xem.
+  const filterOptions = useMemo(() => {
+    const all = visible();
+    const customers = new Set<string>();
+    const countries = new Set<string>();
+    for (const p of all) {
+      const cn = metaOf(p.id).primary?.customerName ?? p.customerName;
+      if (cn) customers.add(cn);
+      const co = metaOf(p.id).country;
+      if (co) countries.add(co);
+    }
+    return { customers: [...customers].sort(), countries: [...countries].sort() };
+  }, [visible, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage ? 1 : 0);
 
   // ── Tổng quan điều hành (gom theo các hồ sơ đang hiển thị) ──
   const summary = useMemo(() => {
@@ -178,17 +238,20 @@ export function TourProfilesView() {
       const data: TourProfileExportRow[] = rows.map((p) => {
         const mt = metaOf(p.id);
         const pr = mt.primary;
+        const v = mt.values;
         return {
           code: p.code,
           name: p.name || '(chưa đặt tên)',
-          kind: p.kind === 'intl' ? 'Nước ngoài' : 'Nội địa',
+          category: categoryMeta(tourCategoryOf(p)).short,
           customer: pr?.customerName ?? p.customerName ?? '',
           departDate: (pr?.departDate ?? p.startDate) ? new Date((pr?.departDate ?? p.startDate) as string).toLocaleDateString('vi-VN') : '',
           pax: pr?.pax ?? p.pax ?? 0,
           stage: STAGE_META(mt.stage).short,
           quotes: (quotesByProfile.get(p.id) ?? []).length,
           contracts: mt.links.contract, visa: mt.links.visa, menus: mt.links.menu, itineraries: mt.links.itinerary, guide: mt.guide,
-          value: pr?.totalCost ?? 0,
+          valueCurrent: typeof v.current === 'number' ? v.current : '',
+          valueContract: typeof v.contract === 'number' ? v.contract : '',
+          valueSettlement: typeof v.settlement === 'number' ? v.settlement : '',
           payableRemaining: pr?.paymentSummary?.remaining ?? 0,
           actualProfit: typeof pr?.settlementSummary?.actualProfit === 'number' ? pr.settlementSummary.actualProfit : '',
           owner: p.createdBy ?? '',
@@ -290,6 +353,11 @@ export function TourProfilesView() {
           />
           <TextField size="small" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="🔍 Tìm mã, tên tour, khách…" sx={{ minWidth: 220 }} />
+          <Tooltip title="Bộ lọc">
+            <IconButton size="small" color={showFilters || activeFilters ? 'primary' : 'default'} onClick={() => setShowFilters((v) => !v)}>
+              <FilterListIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Tổng quan điều hành">
             <IconButton size="small" color={showDash ? 'primary' : 'default'} onClick={() => setShowDash((v) => !v)}><BarChartIcon /></IconButton>
           </Tooltip>
@@ -301,6 +369,19 @@ export function TourProfilesView() {
           </Button>
         </Stack>
       </Stack>
+
+      <Collapse in={showFilters} unmountOnExit>
+        <FilterPanel
+          customers={filterOptions.customers}
+          countries={filterOptions.countries}
+          fltCustomer={fltCustomer} setFltCustomer={setFltCustomer}
+          fltCategory={fltCategory} setFltCategory={setFltCategory}
+          fltCountry={fltCountry} setFltCountry={setFltCountry}
+          fltStage={fltStage} setFltStage={setFltStage}
+          onClear={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage(''); }}
+          activeFilters={activeFilters}
+        />
+      </Collapse>
 
       {showDash && <DashboardPanel summary={summary} showPrice={showPrice} />}
 
@@ -324,6 +405,7 @@ export function TourProfilesView() {
                 guideCount={mt.guide}
                 quotes={quotesByProfile.get(p.id) ?? []}
                 links={mt.links}
+                values={mt.values}
                 expanded={expanded.has(p.id)}
                 showPrice={showPrice}
                 currentUser={currentUser}
@@ -333,8 +415,10 @@ export function TourProfilesView() {
                 onOpenQuote={(cid) => void openQuote(cid, false)}
                 onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
                 onArchive={(on) => void archive(p.id, on)}
-                onDelete={() => setDeleteState(p)}
+                onDelete={() => (deleteNeedsApproval(currentUser) ? setRequestDeleteState(p) : setDeleteState(p))}
                 onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
+                onApproveDelete={() => void approveDelete(p.id)}
+                onRejectDelete={() => void rejectDelete(p.id)}
               />
             );
           })}
@@ -344,8 +428,8 @@ export function TourProfilesView() {
       <CreateEmptyDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreate={async (kind, name) => {
-          const created = await createProfile({ kind, name });
+        onCreate={async (category, name) => {
+          const created = await createProfile({ kind: categoryKind(category), category, name });
           setCreateOpen(false);
           if (created) setExpanded((prev) => new Set(prev).add(created.id));
         }}
@@ -369,6 +453,35 @@ export function TourProfilesView() {
         onDelete={async () => {
           if (deleteState) await removeProfile(deleteState.id);
           setDeleteState(null);
+        }}
+      />
+
+      <RequestDeleteDialog
+        profile={requestDeleteState}
+        users={users}
+        currentUser={currentUser}
+        onClose={() => setRequestDeleteState(null)}
+        onRequest={async (approver, reason) => {
+          if (requestDeleteState && currentUser) {
+            const req: DeleteRequest = {
+              byU: currentUser.u, byName: currentUser.name,
+              approverU: approver.u, approverName: approver.name,
+              reason: reason.trim() || undefined,
+              requestedAt: new Date().toISOString(),
+            };
+            await requestDelete(requestDeleteState.id, req);
+            try {
+              await sbSendNotification(approver.u, {
+                type: 'delete_approval',
+                title: `Yêu cầu duyệt XOÁ hồ sơ tour ${requestDeleteState.code}`,
+                message: `${currentUser.name} xin xoá hồ sơ "${requestDeleteState.name || requestDeleteState.code}".${req.reason ? ' Lý do: ' + req.reason : ''}`,
+                createdBy: currentUser.name,
+                priority: 'high',
+                link: { kind: 'tourProfile', id: requestDeleteState.id, label: requestDeleteState.code },
+              });
+            } catch { /* thông báo không chặn */ }
+          }
+          setRequestDeleteState(null);
         }}
       />
     </Box>
@@ -451,32 +564,122 @@ function MoveQuoteDialog({ state, options, onClose, onMove }: {
 }
 
 function CreateEmptyDialog({ open, onClose, onCreate }: {
-  open: boolean; onClose: () => void; onCreate: (kind: TourKind, name: string) => Promise<void>;
+  open: boolean; onClose: () => void; onCreate: (category: TourCategory, name: string) => Promise<void>;
 }) {
-  const [kind, setKind] = useState<TourKind>('domestic');
+  const [category, setCategory] = useState<TourCategory>('incentive_domestic');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setKind('domestic'); setName(''); setBusy(false); } }, [open]);
-  const submit = async () => { setBusy(true); try { await onCreate(kind, name.trim()); } finally { setBusy(false); } };
+  useEffect(() => { if (open) { setCategory('incentive_domestic'); setName(''); setBusy(false); } }, [open]);
+  const submit = async () => { setBusy(true); try { await onCreate(category, name.trim()); } finally { setBusy(false); } };
+  const cm = categoryMeta(category);
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Tạo hồ sơ tour trống</DialogTitle>
+      <DialogTitle>Tạo hồ sơ trống</DialogTitle>
       <DialogContent>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          Mở một hồ sơ tour chưa có báo giá — gắn thực đơn / chương trình / visa / hợp đồng vào sau (DirectLinkPanel).
+          Mở một hồ sơ chưa có báo giá — gắn thực đơn / chương trình / visa / hợp đồng vào sau (DirectLinkPanel).
+          Mã sinh theo loại (prefix <strong>{cm.prefix}</strong>).
         </Typography>
-        <ToggleButtonGroup exclusive size="small" value={kind} sx={{ mb: 2 }}
-          onChange={(_, v: TourKind | null) => { if (v) setKind(v); }}>
-          <ToggleButton value="domestic">Nội địa (NĐ)</ToggleButton>
-          <ToggleButton value="intl">Nước ngoài (NN)</ToggleButton>
-        </ToggleButtonGroup>
-        <TextField fullWidth autoFocus label="Tên tour" value={name}
+        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Loại hồ sơ</Typography>
+        <Stack direction="row" spacing={0.75} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+          {TOUR_CATEGORIES.map((c) => (
+            <Chip key={c.key} clickable size="small"
+              label={`${c.icon} ${c.short}`}
+              variant={category === c.key ? 'filled' : 'outlined'}
+              onClick={() => setCategory(c.key)}
+              sx={category === c.key ? { bgcolor: `${c.color}22`, color: c.color, fontWeight: 800, borderColor: c.color } : {}}
+            />
+          ))}
+        </Stack>
+        <TextField fullWidth autoFocus label="Tên hồ sơ / tour" value={name}
           onChange={(e) => setName(e.target.value)} placeholder="VD: Đà Lạt – Đoàn ABC" />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>Huỷ</Button>
         <Button variant="contained" disabled={busy || !name.trim()} onClick={() => void submit()}
           sx={{ background: LEGACY.headerGradient }}>{busy ? 'Đang tạo…' : 'Tạo hồ sơ'}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Bộ lọc đa chiều: khách hàng / loại hồ sơ / quốc gia / giai đoạn. */
+function FilterPanel({
+  customers, countries, fltCustomer, setFltCustomer, fltCategory, setFltCategory,
+  fltCountry, setFltCountry, fltStage, setFltStage, onClear, activeFilters,
+}: {
+  customers: string[]; countries: string[];
+  fltCustomer: string; setFltCustomer: (v: string) => void;
+  fltCategory: TourCategory | ''; setFltCategory: (v: TourCategory | '') => void;
+  fltCountry: string; setFltCountry: (v: string) => void;
+  fltStage: DealStage | ''; setFltStage: (v: DealStage | '') => void;
+  onClear: () => void; activeFilters: number;
+}) {
+  const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(4,1fr)' }, gap: 1 }}>
+        <Autocomplete size="small" options={customers} value={fltCustomer || null}
+          onChange={(_, v) => setFltCustomer(v ?? '')}
+          renderInput={(pr) => <TextField {...pr} label="Khách hàng" placeholder="Tất cả" />} />
+        <TextField select size="small" label="Loại hồ sơ" value={fltCategory}
+          onChange={(e) => setFltCategory(e.target.value as TourCategory | '')}
+          SelectProps={{ native: true }}>
+          <option value="">Tất cả</option>
+          {TOUR_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+        </TextField>
+        <Autocomplete size="small" options={countries} value={fltCountry || null}
+          onChange={(_, v) => setFltCountry(v ?? '')}
+          renderInput={(pr) => <TextField {...pr} label="Quốc gia / điểm đến" placeholder="Tất cả" />} />
+        <TextField select size="small" label="Giai đoạn" value={fltStage}
+          onChange={(e) => setFltStage(e.target.value as DealStage | '')}
+          SelectProps={{ native: true }}>
+          <option value="">Tất cả</option>
+          {stageCols.map((s) => <option key={s.key} value={s.key}>{s.short}</option>)}
+        </TextField>
+      </Box>
+      {activeFilters > 0 && (
+        <Box sx={{ mt: 1, textAlign: 'right' }}>
+          <Button size="small" onClick={onClear}>Xoá bộ lọc ({activeFilters})</Button>
+        </Box>
+      )}
+    </Paper>
+  );
+}
+
+/** Gửi yêu cầu duyệt XOÁ hồ sơ (người dưới Trưởng Phòng) — chọn 1 người duyệt + lý do. */
+function RequestDeleteDialog({ profile, users, currentUser, onClose, onRequest }: {
+  profile: TourProfile | null; users: User[]; currentUser: User | null;
+  onClose: () => void; onRequest: (approver: User, reason: string) => Promise<void>;
+}) {
+  const [approver, setApprover] = useState<User | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (profile) { setApprover(null); setReason(''); setBusy(false); } }, [profile]);
+  const approvers = users.filter((u) => isApprover(u.role));
+  const submit = async () => { if (!approver) return; setBusy(true); try { await onRequest(approver, reason); } finally { setBusy(false); } };
+  return (
+    <Dialog open={!!profile} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Gửi yêu cầu xoá hồ sơ</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
+          Bạn không đủ quyền xoá trực tiếp. Yêu cầu xoá hồ sơ <strong>{profile?.code}</strong>
+          {profile?.name ? <> — {profile.name}</> : null} sẽ được gửi tới <strong>Trưởng Phòng</strong> (hoặc cấp cao hơn) để duyệt.
+        </Typography>
+        <Autocomplete
+          options={approvers} value={approver} onChange={(_, v) => setApprover(v)}
+          getOptionLabel={(u) => userLabel(u, currentUser)}
+          isOptionEqualToValue={(a, b) => a.u === b.u}
+          renderInput={(pr) => <TextField {...pr} autoFocus label="Người duyệt" placeholder="Chọn người duyệt…" />}
+          sx={{ mb: 1.5 }}
+        />
+        <TextField fullWidth multiline minRows={2} label="Lý do (tuỳ chọn)" value={reason}
+          onChange={(e) => setReason(e.target.value)} placeholder="VD: tạo nhầm, trùng hồ sơ…" />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Huỷ</Button>
+        <Button variant="contained" disabled={busy || !approver} onClick={() => void submit()}
+          sx={{ background: LEGACY.headerGradient }}>{busy ? 'Đang gửi…' : 'Gửi yêu cầu'}</Button>
       </DialogActions>
     </Dialog>
   );
@@ -525,18 +728,22 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 }
 
 function ProfileRow({
-  profile, stage, primary, guideCount, quotes, links, expanded, showPrice,
+  profile, stage, primary, guideCount, quotes, links, values, expanded, showPrice,
   currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
+  onApproveDelete, onRejectDelete,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
-  links: ProfileLinks; expanded: boolean; showPrice: boolean;
+  links: ProfileLinks; values: ProfileValues; expanded: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
   onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void; onDelete: () => void;
   onMoveQuote: (cloudId: string, quoteName: string) => void;
+  onApproveDelete: () => void; onRejectDelete: () => void;
 }) {
   const sm = STAGE_META(stage);
+  const cm = categoryMeta(tourCategoryOf(profile));
   const canShare = canShareRecord(currentUser, profile, users);
+  const canApprove = canApproveDelete(currentUser, profile);
   const pay = primary?.paymentSummary;
   // A2 — KHÁCH/NGÀY/PAX suy từ BÁO GIÁ CHÍNH (không tin bản sao cứng trong hồ sơ → tránh lệch).
   const custName = primary?.customerName ?? profile.customerName;
@@ -553,6 +760,9 @@ function ProfileRow({
             <Typography fontWeight={800} fontSize={14.5} noWrap sx={{ maxWidth: { xs: 180, sm: 360 } }}>
               {profile.name || '(chưa đặt tên)'}
             </Typography>
+            <Tooltip title={cm.label}>
+              <Chip size="small" label={`${cm.icon} ${cm.short}`} sx={{ height: 20, bgcolor: `${cm.color}1a`, color: cm.color, fontWeight: 700 }} />
+            </Tooltip>
             <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
             {archived && <Chip size="small" label="Lưu trữ" variant="outlined" sx={{ height: 20 }} />}
           </Stack>
@@ -566,7 +776,9 @@ function ProfileRow({
             {links.menu > 0 && <Meta label="Thực đơn" value={String(links.menu)} />}
             {links.itinerary > 0 && <Meta label="Chương trình" value={String(links.itinerary)} />}
             {guideCount > 0 && <Meta label="Lịch HDV" value={String(guideCount)} />}
-            {showPrice && primary && <Meta label="Giá trị" value={fmtVND(primary.totalCost ?? 0)} />}
+            {showPrice && typeof values.current === 'number' && <Meta label="Báo giá hiện tại" value={fmtVND(values.current)} />}
+            {showPrice && typeof values.contract === 'number' && values.contract > 0 && <Meta label="Báo giá hợp đồng" value={fmtVND(values.contract)} />}
+            {showPrice && typeof values.settlement === 'number' && <Meta label="Báo giá nghiệm thu" value={fmtVND(values.settlement)} />}
           </Stack>
           <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} alignItems="center" flexWrap="wrap" useFlexGap>
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
@@ -582,6 +794,15 @@ function ProfileRow({
                 {(profile.collaborators ?? []).map((c) => (
                   <Chip key={c.u} size="small" icon={<GroupAddIcon sx={{ fontSize: 13 }} />} label={c.name}
                     sx={{ height: 20, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
+                ))}
+              </Stack>
+            )}
+            {(profile.eventStaff?.length ?? 0) > 0 && (
+              <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Typography variant="caption" color="text.secondary">Nhân sự event:</Typography>
+                {(profile.eventStaff ?? []).map((c) => (
+                  <Chip key={c.u} size="small" icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 13 }} />} label={c.name}
+                    sx={{ height: 20, bgcolor: 'rgba(217,119,6,0.12)', color: '#d97706' }} />
                 ))}
               </Stack>
             )}
@@ -614,6 +835,26 @@ function ProfileRow({
           <IconButton size="small" onClick={onToggle}>{expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}</IconButton>
         </Stack>
       </Stack>
+
+      {profile.deleteRequest && (
+        <Box sx={{ mt: 1, p: 1, borderRadius: 1.5, bgcolor: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.25)' }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <GavelIcon sx={{ fontSize: 18, color: '#dc2626' }} />
+            <Typography variant="caption" sx={{ flex: 1, minWidth: 140 }}>
+              <strong>{profile.deleteRequest.byName}</strong> xin xoá hồ sơ này
+              {profile.deleteRequest.reason ? <> — “{profile.deleteRequest.reason}”</> : null}
+              {!canApprove && <> · chờ <strong>{profile.deleteRequest.approverName}</strong> duyệt</>}
+            </Typography>
+            {canApprove && (
+              <>
+                <Button size="small" color="error" variant="contained" startIcon={<DeleteOutlineIcon sx={{ fontSize: 16 }} />}
+                  onClick={onApproveDelete}>Duyệt xoá</Button>
+                <Button size="small" onClick={onRejectDelete}>Từ chối</Button>
+              </>
+            )}
+          </Stack>
+        </Box>
+      )}
 
       <Collapse in={expanded} unmountOnExit>
         <Divider sx={{ my: 1.25 }} />
@@ -665,8 +906,46 @@ function ProfileRow({
             <ShareControl profile={profile} users={users} currentUser={currentUser} canShare={canShare} />
           </Box>
         </Box>
+        {/* ✈️ Chuyến bay của báo giá chính — nạp lười khi mở rộng dòng */}
+        <FlightPanel primaryCloudId={primary?.cloudId} expanded={expanded} />
       </Collapse>
     </Paper>
+  );
+}
+
+/** Khung chuyến bay (nạp lười) của báo giá chính trong hồ sơ. */
+function FlightPanel({ primaryCloudId, expanded }: { primaryCloudId?: string; expanded: boolean }) {
+  const [flights, setFlights] = useState<QuoteFlight[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expanded || !primaryCloudId || flights !== null || loading) return;
+    let alive = true;
+    setLoading(true);
+    sbGetQuoteFlights(primaryCloudId)
+      .then((f) => { if (alive) setFlights(f); })
+      .catch((e: Error) => { if (alive) setError(e.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [expanded, primaryCloudId, flights, loading]);
+
+  return (
+    <Box sx={{ mt: 1.5 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+        <FlightTakeoffIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+        <Typography variant="caption" fontWeight={800} color="text.secondary">Chuyến bay (báo giá chính)</Typography>
+      </Stack>
+      {!primaryCloudId ? (
+        <Typography variant="body2" color="text.secondary">Hồ sơ chưa có báo giá chính để lấy chuyến bay.</Typography>
+      ) : loading || flights === null ? (
+        <Typography variant="body2" color="text.secondary">Đang tải chuyến bay…</Typography>
+      ) : error ? (
+        <Typography variant="body2" color="error">⚠ {error}</Typography>
+      ) : (
+        <FlightSummary flights={flights} />
+      )}
+    </Box>
   );
 }
 
@@ -777,6 +1056,8 @@ function ShareControl({ profile, users, currentUser, canShare }: {
 }) {
   const addCollaborator = useTourProfileStore((s) => s.addCollaborator);
   const addFollower = useTourProfileStore((s) => s.addFollower);
+  const addEventStaff = useTourProfileStore((s) => s.addEventStaff);
+  const removeEventStaff = useTourProfileStore((s) => s.removeEventStaff);
   const [pick, setPick] = useState<User | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -784,24 +1065,35 @@ function ShareControl({ profile, users, currentUser, canShare }: {
     profile.createdByU,
     ...(profile.collaborators ?? []).map((c) => c.u),
     ...(profile.followers ?? []).map((c) => c.u),
+    ...(profile.eventStaff ?? []).map((c) => c.u),
   ]);
   const options = users.filter((u) => !taken.has(u.u));
 
-  const add = async (role: 'collab' | 'follow') => {
+  const ROLE_TITLE: Record<'collab' | 'follow' | 'event', string> = {
+    collab: `Bạn được thêm cộng tác hồ sơ tour ${profile.code}`,
+    follow: `Bạn đang theo dõi hồ sơ tour ${profile.code}`,
+    event: `Bạn là nhân sự event của hồ sơ tour ${profile.code}`,
+  };
+  const ROLE_VERB: Record<'collab' | 'follow' | 'event', string> = {
+    collab: 'cộng tác (sửa được)', follow: 'theo dõi', event: 'làm nhân sự event',
+  };
+
+  const add = async (role: 'collab' | 'follow' | 'event') => {
     if (!pick) return;
     setBusy(true);
     const c: Collaborator = { u: pick.u, name: pick.name };
     try {
       if (role === 'collab') await addCollaborator(profile.id, c);
-      else await addFollower(profile.id, c);
-      // Báo cho người được thêm (cả Collab lẫn Follow) — tái dùng notificationStore.
+      else if (role === 'follow') await addFollower(profile.id, c);
+      else await addEventStaff(profile.id, c);
+      // Báo cho người được thêm — tái dùng notificationStore.
       try {
         await sbSendNotification(pick.u, {
           type: 'collab_invite',
-          title: role === 'collab' ? `Bạn được thêm cộng tác hồ sơ tour ${profile.code}` : `Bạn đang theo dõi hồ sơ tour ${profile.code}`,
-          message: `${currentUser?.name ?? 'Ai đó'} đã thêm bạn ${role === 'collab' ? 'cộng tác (sửa được)' : 'theo dõi'} hồ sơ "${profile.name || profile.code}".`,
+          title: ROLE_TITLE[role],
+          message: `${currentUser?.name ?? 'Ai đó'} đã thêm bạn ${ROLE_VERB[role]} hồ sơ "${profile.name || profile.code}".`,
           createdBy: currentUser?.name ?? '',
-          ...(profile.primaryQuoteId ? { link: { kind: 'quote' as const, id: profile.primaryQuoteId, label: profile.code } } : {}),
+          link: { kind: 'tourProfile' as const, id: profile.id, label: profile.code },
         });
       } catch { /* thông báo không chặn */ }
       setPick(null);
@@ -810,7 +1102,7 @@ function ShareControl({ profile, users, currentUser, canShare }: {
 
   return (
     <Box>
-      <Typography variant="caption" fontWeight={800} color="text.secondary">Cộng tác · Theo dõi</Typography>
+      <Typography variant="caption" fontWeight={800} color="text.secondary">Cộng tác · Theo dõi · Nhân sự event</Typography>
       <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, mb: 0.75 }} flexWrap="wrap" useFlexGap>
         {(profile.collaborators ?? []).map((c) => (
           <Chip key={'c' + c.u} size="small" icon={<GroupAddIcon sx={{ fontSize: 14 }} />} label={c.name}
@@ -820,12 +1112,17 @@ function ShareControl({ profile, users, currentUser, canShare }: {
           <Chip key={'f' + c.u} size="small" icon={<VisibilityIcon sx={{ fontSize: 14 }} />} label={c.name}
             variant="outlined" sx={{ height: 22 }} />
         ))}
-        {!profile.collaborators?.length && !profile.followers?.length && (
+        {(profile.eventStaff ?? []).map((c) => (
+          <Chip key={'e' + c.u} size="small" icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 14 }} />} label={c.name}
+            onDelete={canShare ? () => void removeEventStaff(profile.id, c.u) : undefined}
+            sx={{ height: 22, bgcolor: 'rgba(217,119,6,0.12)', color: '#d97706' }} />
+        ))}
+        {!profile.collaborators?.length && !profile.followers?.length && !profile.eventStaff?.length && (
           <Typography variant="caption" color="text.secondary">Chỉ mình bạn.</Typography>
         )}
       </Stack>
       {canShare ? (
-        <Stack direction="row" spacing={0.75} alignItems="center">
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
           <Autocomplete
             size="small" sx={{ flex: 1, minWidth: 140 }} options={options} value={pick}
             onChange={(_, v) => setPick(v)}
@@ -835,6 +1132,8 @@ function ShareControl({ profile, users, currentUser, canShare }: {
           />
           <Button size="small" variant="outlined" disabled={!pick || busy} onClick={() => void add('collab')}>+ Collab</Button>
           <Button size="small" disabled={!pick || busy} onClick={() => void add('follow')}>+ Follow</Button>
+          <Button size="small" disabled={!pick || busy} onClick={() => void add('event')}
+            sx={{ color: '#d97706' }}>+ Nhân sự event</Button>
         </Stack>
       ) : (
         <Typography variant="caption" color="text.disabled">Chỉ người tạo / Trưởng phòng / BGĐ mới thêm được cộng tác.</Typography>

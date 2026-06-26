@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { generateTourCode, tourPrefix, tourDatePart, canViewTourProfile, visibleTourProfiles, nextPrimaryAfterDelete } from './tourProfile';
-import type { Department, Role, TourProfile, User } from '@/types';
+import {
+  generateTourCode, tourPrefix, tourDatePart, canViewTourProfile, visibleTourProfiles, nextPrimaryAfterDelete,
+  categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
+} from './tourProfile';
+import type { Department, Role, TourCategory, TourProfile, User } from '@/types';
 
 const user = (u: string, role: Role, department?: Department): User =>
   ({ u, name: u.toUpperCase(), role, department, color: '#000' });
@@ -43,6 +46,55 @@ describe('generateTourCode — mã NĐ/NN.DD.MM.YY.NN', () => {
     ];
     expect(generateTourCode('domestic', existing, NOW)).toBe('NĐ.25.06.26.03');
     expect(generateTourCode('intl', existing, NOW)).toBe('NN.25.06.26.02');
+  });
+});
+
+describe('phân loại hồ sơ (5 loại) — prefix & kind', () => {
+  it('categoryPrefix đúng cho cả 5 loại', () => {
+    const cases: [TourCategory, string][] = [
+      ['incentive_domestic', 'NĐ'], ['incentive_intl', 'NN'],
+      ['visa', 'VS'], ['event', 'EV'], ['other', 'DV'],
+    ];
+    for (const [cat, pfx] of cases) expect(categoryPrefix(cat)).toBe(pfx);
+  });
+  it('categoryKind: chỉ incentive_intl là intl', () => {
+    expect(categoryKind('incentive_intl')).toBe('intl');
+    expect(categoryKind('incentive_domestic')).toBe('domestic');
+    expect(categoryKind('visa')).toBe('domestic');
+    expect(categoryKind('event')).toBe('domestic');
+  });
+  it('tourCategoryOf suy từ kind khi thiếu category (dữ liệu cũ)', () => {
+    expect(tourCategoryOf({ kind: 'domestic' })).toBe('incentive_domestic');
+    expect(tourCategoryOf({ kind: 'intl' })).toBe('incentive_intl');
+    expect(tourCategoryOf({ kind: 'domestic', category: 'visa' })).toBe('visa');
+  });
+});
+
+describe('duyệt xoá hồ sơ — quyền theo role', () => {
+  it('người dưới Trưởng Phòng phải gửi duyệt', () => {
+    expect(deleteNeedsApproval(find('an'))).toBe(true);        // Sales
+    expect(deleteNeedsApproval(find('cuong'))).toBe(true);     // Operations
+  });
+  it('Trưởng Phòng / BGĐ / CEO xoá trực tiếp', () => {
+    expect(deleteNeedsApproval(find('tp_noidia'))).toBe(false);
+    expect(deleteNeedsApproval(find('bgd'))).toBe(false);
+  });
+  it('không có user → không cần duyệt (không xoá được)', () => {
+    expect(deleteNeedsApproval(null)).toBe(false);
+  });
+  it('canApproveDelete: người được chọn hoặc approver bất kỳ', () => {
+    const p = profile({ deleteRequest: { byU: 'an', byName: 'AN', approverU: 'tp_noidia', approverName: 'TP', requestedAt: '2026-06-26T00:00:00Z' } });
+    expect(canApproveDelete(find('tp_noidia'), p)).toBe(true);   // được chọn
+    expect(canApproveDelete(find('bgd'), p)).toBe(true);          // approver khác
+    expect(canApproveDelete(find('an'), p)).toBe(false);          // người xin, không phải approver
+    expect(canApproveDelete(find('tp_noidia'), profile())).toBe(false); // không có yêu cầu
+  });
+});
+
+describe('canViewTourProfile — nhân sự event cũng được xem', () => {
+  it('eventStaff được xem (như follower)', () => {
+    const pe = profile({ createdByU: 'an', eventStaff: [{ u: 'cuong', name: 'CUONG' }] });
+    expect(canViewTourProfile(find('cuong'), pe, USERS)).toBe(true);
   });
 });
 

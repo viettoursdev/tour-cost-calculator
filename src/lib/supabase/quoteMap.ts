@@ -87,47 +87,28 @@ const str = (v: unknown): string => (v == null ? '' : String(v));
 const num = (v: unknown): number => (v == null ? 0 : Number(v));
 const bool = (v: unknown): boolean => Boolean(v);
 
-export function assembleQuote(rows: AssembleInput): QuoteDraft {
-  const q = rows.quote;
-
-  // ── line items → Partial<Record<CategoryId, Item[]>> ──
-  const sortedLineItems = [...rows.lineItems].sort((a, b) => num(a.sort_order) - num(b.sort_order));
-  const items: Partial<Record<CategoryId, Item[]>> = {};
-  for (const r of sortedLineItems) {
-    const cat = str(r.category) as CategoryId;
-    if (!items[cat]) items[cat] = [];
-    (items[cat] as Item[]).push({
-      id: num(r.legacy_item_id),
-      name: str(r.name),
-      note: str(r.note),
-      cur: str(r.cur),
-      price: num(r.price),
-      times: num(r.times),
-      qtyMode: str(r.qty_mode) as Item['qtyMode'],
-      customQty: num(r.custom_qty),
-      unit: str(r.unit),
-      enabled: bool(r.enabled),
-      foc: bool(r.foc),
-      ...(r.optional != null ? { optional: bool(r.optional) } : {}),
-      ...(r.included != null ? { included: bool(r.included) } : {}),
-    });
-  }
-
-  // ── flights — nest segments and fares by flight id ──
+/**
+ * Lắp ráp QuoteFlight[] từ các dòng shredded (flights + segments + fares).
+ * Tách riêng để dùng lại ở `sbGetQuoteFlights` (nạp lười cho Hồ sơ tour).
+ */
+export function assembleFlights(
+  flightRows: Record<string, unknown>[],
+  segmentRows: Record<string, unknown>[],
+  fareRows: Record<string, unknown>[],
+): QuoteFlight[] {
   const segsByFlight = new Map<string, Record<string, unknown>[]>();
-  for (const s of rows.segments) {
+  for (const s of segmentRows) {
     const fid = str(s.flight_id);
     if (!segsByFlight.has(fid)) segsByFlight.set(fid, []);
     segsByFlight.get(fid)!.push(s);
   }
   const faresByFlight = new Map<string, Record<string, unknown>[]>();
-  for (const fa of rows.fares) {
+  for (const fa of fareRows) {
     const fid = str(fa.flight_id);
     if (!faresByFlight.has(fid)) faresByFlight.set(fid, []);
     faresByFlight.get(fid)!.push(fa);
   }
-
-  const flights: QuoteFlight[] = [...rows.flights]
+  return [...flightRows]
     .sort((a, b) => num(a.sort_order) - num(b.sort_order))
     .map((f) => {
       const fid = str(f.id);
@@ -158,6 +139,36 @@ export function assembleQuote(rows: AssembleInput): QuoteDraft {
         })),
       };
     });
+}
+
+export function assembleQuote(rows: AssembleInput): QuoteDraft {
+  const q = rows.quote;
+
+  // ── line items → Partial<Record<CategoryId, Item[]>> ──
+  const sortedLineItems = [...rows.lineItems].sort((a, b) => num(a.sort_order) - num(b.sort_order));
+  const items: Partial<Record<CategoryId, Item[]>> = {};
+  for (const r of sortedLineItems) {
+    const cat = str(r.category) as CategoryId;
+    if (!items[cat]) items[cat] = [];
+    (items[cat] as Item[]).push({
+      id: num(r.legacy_item_id),
+      name: str(r.name),
+      note: str(r.note),
+      cur: str(r.cur),
+      price: num(r.price),
+      times: num(r.times),
+      qtyMode: str(r.qty_mode) as Item['qtyMode'],
+      customQty: num(r.custom_qty),
+      unit: str(r.unit),
+      enabled: bool(r.enabled),
+      foc: bool(r.foc),
+      ...(r.optional != null ? { optional: bool(r.optional) } : {}),
+      ...(r.included != null ? { included: bool(r.included) } : {}),
+    });
+  }
+
+  // ── flights — nest segments and fares by flight id ──
+  const flights: QuoteFlight[] = assembleFlights(rows.flights, rows.segments, rows.fares);
 
   // ── workflow — nest logs by step id ──
   const logsByStep = new Map<string, Record<string, unknown>[]>();

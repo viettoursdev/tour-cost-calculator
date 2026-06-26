@@ -3,6 +3,7 @@ import type { FileAttachment } from './quote';
 export type NotificationType =
   | 'payment_due'
   | 'payment_approval'
+  | 'delete_approval'
   | 'collab_invite'
   | 'announcement'
   | 'task'
@@ -10,7 +11,7 @@ export type NotificationType =
 
 /** A link from a notification to a domain object (deep-link target). */
 export type NotifLink = {
-  kind: 'quote' | 'dmc' | 'contract' | 'payment' | 'itinerary' | 'menu' | 'collab';
+  kind: 'quote' | 'dmc' | 'contract' | 'payment' | 'itinerary' | 'menu' | 'collab' | 'tourProfile';
   id: string;       // cloudId / contract id / itinerary id … (for 'payment' use the quote cloudId)
   label: string;    // human label shown on the chip
 };

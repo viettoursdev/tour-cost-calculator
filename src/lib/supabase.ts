@@ -5,7 +5,7 @@ import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, Vis
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
 import type { CloudQuoteEntry, Template, Collaborator } from '@/types/quote';
-import type { TourProfile, TourKind } from '@/types/tour';
+import type { TourProfile, TourKind, TourCategory } from '@/types/tour';
 import { subscribeTable, replaceChildren, usernamesToIds, serializeWrites } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -3360,6 +3360,8 @@ const rowToTourProfile = (r: Record<string, unknown>): TourProfile => ({
   id: r.id as string,
   code: (r.code as string) ?? '',
   kind: (r.kind as TourKind) ?? 'domestic',
+  // Đọc kép: category mới; nếu thiếu (dữ liệu cũ) suy từ kind ở tầng helper.
+  category: (r.category as TourProfile['category']) ?? undefined,
   name: (r.name as string) ?? '',
   customerId: (r.customer_id as string) ?? undefined,
   customerName: (r.customer_name as string) ?? undefined,
@@ -3371,6 +3373,8 @@ const rowToTourProfile = (r: Record<string, unknown>): TourProfile => ({
   note: (r.note as string) ?? undefined,
   collaborators: (r.collaborators as Collaborator[]) ?? [],
   followers: (r.followers as Collaborator[]) ?? [],
+  eventStaff: (r.event_staff as Collaborator[]) ?? [],
+  deleteRequest: (r.delete_request as TourProfile['deleteRequest']) ?? null,
   createdByU: (r.created_by_username as string) ?? undefined,
   createdBy: (r.created_by_name as string) ?? undefined,
   createdAt: r.created_at ? new Date(r.created_at as string).toISOString() : new Date().toISOString(),
@@ -3382,6 +3386,7 @@ const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
   id: p.id,
   code: p.code,
   kind: p.kind,
+  category: p.category ?? null,
   name: p.name,
   customer_id: p.customerId ?? null,
   customer_name: p.customerName ?? null,
@@ -3393,6 +3398,8 @@ const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
   note: p.note ?? '',
   collaborators: p.collaborators ?? [],
   followers: p.followers ?? [],
+  event_staff: p.eventStaff ?? [],
+  delete_request: p.deleteRequest ?? null,
   created_by_username: p.createdByU ?? '',
   created_by_name: p.createdBy ?? '',
   created_at: p.createdAt,
@@ -3401,8 +3408,12 @@ const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
 });
 
 /** Sinh mã hồ sơ tour ATOMIC ở DB (advisory lock theo ngày → chống trùng STT). */
-export async function sbNextTourCode(kind: TourKind, client: SupabaseClient = sb): Promise<string> {
-  const { data, error } = await client.rpc('next_tour_code', { p_kind: kind });
+export async function sbNextTourCode(
+  kindOrCategory: TourKind | TourCategory,
+  client: SupabaseClient = sb,
+): Promise<string> {
+  // RPC nhận cả kind cũ (domestic/intl) lẫn category mới (visa/event/other…).
+  const { data, error } = await client.rpc('next_tour_code', { p_kind: kindOrCategory });
   if (error) throw new Error('sbNextTourCode: ' + error.message);
   return data as string;
 }
@@ -3455,8 +3466,8 @@ export async function sbDeleteTourProfile(id: string, client: SupabaseClient = s
 // ── Phase 2 Task 5 — Quote Project State ────────────────────────────────────
 // Functions: sbSaveQuoteState/sbSaveDMCQuoteState, sbGetQuoteProject/sbGetDMCQuoteProject
 
-import type { QuoteDraft, QuoteVersion, CloudQuoteProject } from '@/types/quote';
-import { decomposeQuote, assembleQuote } from './supabase/quoteMap';
+import type { QuoteDraft, QuoteVersion, CloudQuoteProject, QuoteFlight } from '@/types/quote';
+import { decomposeQuote, assembleQuote, assembleFlights } from './supabase/quoteMap';
 
 // ── shared save implementation ────────────────────────────────────────────────
 
@@ -3728,6 +3739,41 @@ export async function sbGetDMCQuoteProject(
   client: SupabaseClient = sb,
 ): Promise<CloudQuoteProject | null> {
   return getQuoteProjectImpl(cloudId, client);
+}
+
+/**
+ * Nạp LƯỜI chỉ thông tin chuyến bay của một báo giá (theo cloudId) — dùng cho
+ * khung "✈️ Chuyến bay" trong Hồ sơ tour mà không tải cả dự án. Trả [] nếu
+ * báo giá không tồn tại / không có chuyến bay.
+ */
+export async function sbGetQuoteFlights(
+  cloudId: string,
+  client: SupabaseClient = sb,
+): Promise<QuoteFlight[]> {
+  const { data: qRow, error: qErr } = await client
+    .from('quotes').select('id').eq('cloud_id', cloudId).maybeSingle();
+  if (qErr) throw new Error('sbGetQuoteFlights quotes: ' + qErr.message);
+  if (!qRow) return [];
+  const quoteId = (qRow as Record<string, unknown>).id as string;
+
+  const { data: flights, error: flErr } = await client
+    .from('quote_flights').select('*').eq('quote_id', quoteId).order('sort_order');
+  if (flErr) throw new Error('sbGetQuoteFlights flights: ' + flErr.message);
+  const flightIds = (flights ?? []).map((f) => (f as Record<string, unknown>).id as string);
+  if (flightIds.length === 0) return [];
+
+  const [{ data: segments, error: segErr }, { data: fares, error: farErr }] = await Promise.all([
+    client.from('quote_flight_segments').select('*').in('flight_id', flightIds).order('sort_order'),
+    client.from('quote_flight_fares').select('*').in('flight_id', flightIds).order('sort_order'),
+  ]);
+  if (segErr) throw new Error('sbGetQuoteFlights segments: ' + segErr.message);
+  if (farErr) throw new Error('sbGetQuoteFlights fares: ' + farErr.message);
+
+  return assembleFlights(
+    (flights ?? []) as Record<string, unknown>[],
+    (segments ?? []) as Record<string, unknown>[],
+    (fares ?? []) as Record<string, unknown>[],
+  );
 }
 
 // ── Phase 2 Task 6 — Quote delete + collaborators ────────────────────────────
