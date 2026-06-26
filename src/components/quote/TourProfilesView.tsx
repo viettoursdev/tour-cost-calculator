@@ -35,6 +35,9 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -59,9 +62,9 @@ import {
   deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones, clonedQuoteName,
-  customerPortfolio, marginSummary,
+  customerPortfolio, marginSummary, groupByDepartureDay,
   type TourRisk, type TourRiskLevel, type ClosingItem, type Milestone, type MilestoneLevel,
-  type MarginSummary, type CustomerPortfolio, type ProfilePortfolioRow,
+  type MarginSummary, type CustomerPortfolio, type ProfilePortfolioRow, type DepartureRow,
 } from '@/lib/tourProfile';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
@@ -149,6 +152,7 @@ export function TourProfilesView() {
   const [showArchived, setShowArchived] = useState(false);
   const [showDash, setShowDash] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [fltCustomer, setFltCustomer] = useState<string>('');
   const [fltCategory, setFltCategory] = useState<TourCategory | ''>('');
   const [fltCountry, setFltCountry] = useState<string>('');
@@ -519,6 +523,9 @@ export function TourProfilesView() {
               <FilterListIcon />
             </IconButton>
           </Tooltip>
+          <Tooltip title="Lịch khởi hành">
+            <IconButton size="small" color={showCalendar ? 'primary' : 'default'} onClick={() => setShowCalendar((v) => !v)}><CalendarMonthIcon /></IconButton>
+          </Tooltip>
           <Tooltip title="Tổng quan điều hành">
             <IconButton size="small" color={showDash ? 'primary' : 'default'} onClick={() => setShowDash((v) => !v)}><BarChartIcon /></IconButton>
           </Tooltip>
@@ -546,7 +553,12 @@ export function TourProfilesView() {
 
       {showDash && <DashboardPanel summary={summary} showPrice={showPrice} />}
 
-      {rows.length === 0 ? (
+      {showCalendar ? (
+        <DepartureCalendar
+          rows={rows.map((p) => { const mt = metaOf(p.id); return { id: p.id, code: p.code, name: p.name, stage: mt.stage, departDate: mt.primary?.departDate ?? p.startDate }; })}
+          onOpen={(id) => { const tp = profiles.find((x) => x.id === id); if (tp) void openProfile(tp); }}
+        />
+      ) : rows.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="text.secondary">
             Chưa có hồ sơ tour nào. Bấm <strong>＋ Tạo báo giá và tour mới</strong> để mở hồ sơ đầu tiên,
@@ -1292,6 +1304,66 @@ function DocumentHub({ profile, canEdit }: { profile: TourProfile; canEdit: bool
           <input type="file" hidden multiple onChange={(e) => void onPick(e)} />
         </Button>
       )}
+    </Paper>
+  );
+}
+
+/** Lịch khởi hành — lưới tháng, mỗi ngày hiện các tour khởi hành. */
+const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+function DepartureCalendar({ rows, onOpen }: { rows: DepartureRow[]; onOpen: (id: string) => void }) {
+  const today = new Date();
+  const [anchor, setAnchor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const byDay = useMemo(() => groupByDepartureDay(rows), [rows]);
+  const y = anchor.getFullYear(), mo = anchor.getMonth();
+  const first = new Date(y, mo, 1);
+  const lead = (first.getDay() + 6) % 7; // T2 đầu tuần
+  const daysInMonth = new Date(y, mo + 1, 0).getDate();
+  const cells: (number | null)[] = [...Array(lead).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  while (cells.length % 7 !== 0) cells.push(null);
+  const dayKey = (d: number) => `${y}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const isToday = (d: number) => today.getFullYear() === y && today.getMonth() === mo && today.getDate() === d;
+  const totalMonth = Object.entries(byDay).filter(([k]) => k.startsWith(`${y}-${String(mo + 1).padStart(2, '0')}`)).reduce((a, [, v]) => a + v.length, 0);
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+        <IconButton size="small" onClick={() => setAnchor(new Date(y, mo - 1, 1))}><ChevronLeftIcon /></IconButton>
+        <Stack alignItems="center">
+          <Typography fontWeight={900} fontSize={15}>Tháng {mo + 1}/{y}</Typography>
+          <Typography variant="caption" color="text.secondary">{totalMonth} tour khởi hành</Typography>
+        </Stack>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <Button size="small" onClick={() => setAnchor(new Date(today.getFullYear(), today.getMonth(), 1))}>Hôm nay</Button>
+          <IconButton size="small" onClick={() => setAnchor(new Date(y, mo + 1, 1))}><ChevronRightIcon /></IconButton>
+        </Stack>
+      </Stack>
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 0.5 }}>
+        {WEEKDAYS.map((w) => (
+          <Typography key={w} variant="caption" fontWeight={800} color="text.secondary" sx={{ textAlign: 'center', py: 0.25 }}>{w}</Typography>
+        ))}
+        {cells.map((d, i) => {
+          if (d === null) return <Box key={`b${i}`} sx={{ minHeight: 64, borderRadius: 1, bgcolor: 'rgba(0,0,0,0.015)' }} />;
+          const items = byDay[dayKey(d)] ?? [];
+          return (
+            <Box key={d} sx={{ minHeight: 64, p: 0.5, borderRadius: 1, border: '1px solid', borderColor: isToday(d) ? '#0d7a6a' : 'rgba(15,58,74,0.1)', bgcolor: isToday(d) ? 'rgba(13,122,106,0.06)' : 'transparent' }}>
+              <Typography variant="caption" fontWeight={isToday(d) ? 900 : 600} sx={{ color: isToday(d) ? '#0d7a6a' : 'text.secondary' }}>{d}</Typography>
+              <Stack spacing={0.25} sx={{ mt: 0.25 }}>
+                {items.slice(0, 3).map((it) => {
+                  const sm = STAGE_META(it.stage as DealStage);
+                  return (
+                    <Box key={it.id} component="button" type="button" onClick={() => onOpen(it.id)}
+                      title={`${it.code} — ${it.name}`}
+                      sx={{ border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: 0.5, px: 0.5, py: 0.1, bgcolor: `${sm.color}1a`, color: sm.color, fontSize: 10.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
+                      {it.code}
+                    </Box>
+                  );
+                })}
+                {items.length > 3 && <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>+{items.length - 3} nữa</Typography>}
+              </Stack>
+            </Box>
+          );
+        })}
+      </Box>
     </Paper>
   );
 }

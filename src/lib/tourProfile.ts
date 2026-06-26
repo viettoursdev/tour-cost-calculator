@@ -314,6 +314,21 @@ export type CustomerPortfolio = {
 
 const normName = (s?: string) => (s ?? '').trim().toLowerCase();
 
+export type DepartureRow = { id: string; code: string; name: string; stage: string; departDate?: string | null };
+
+/** Gom hồ sơ theo NGÀY khởi hành ('YYYY-MM-DD') — cho lịch khởi hành. HÀM THUẦN. */
+export function groupByDepartureDay(rows: DepartureRow[]): Record<string, DepartureRow[]> {
+  const m: Record<string, DepartureRow[]> = {};
+  for (const r of rows) {
+    if (!r.departDate) continue;
+    const d = new Date(r.departDate);
+    if (Number.isNaN(d.getTime())) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    (m[key] ??= []).push(r);
+  }
+  return m;
+}
+
 /**
  * Gom toàn bộ hồ sơ của MỘT khách hàng (theo tên, không phân biệt hoa/thường) →
  * tổng giá trị / biên lợi thực / số thắng-thua. HÀM THUẦN.

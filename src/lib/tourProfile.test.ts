@@ -4,8 +4,8 @@ import {
   categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones,
-  clonedQuoteName, customerPortfolio, marginSummary,
-  type ProfilePortfolioRow,
+  clonedQuoteName, customerPortfolio, marginSummary, groupByDepartureDay,
+  type ProfilePortfolioRow, type DepartureRow,
 } from './tourProfile';
 import type { AuditEntry, Department, Role, TourCategory, TourProfile, User } from '@/types';
 
@@ -151,6 +151,22 @@ describe('tourProfileRisks — thẻ "cần chú ý"', () => {
   });
   it('topRiskLevel: rỗng → null', () => {
     expect(topRiskLevel([])).toBeNull();
+  });
+});
+
+describe('groupByDepartureDay — lịch khởi hành', () => {
+  const rows: DepartureRow[] = [
+    { id: '1', code: 'A', name: 'T1', stage: 'won', departDate: '2026-07-10' },
+    { id: '2', code: 'B', name: 'T2', stage: 'request', departDate: '2026-07-10' },
+    { id: '3', code: 'C', name: 'T3', stage: 'won', departDate: '2026-08-01' },
+    { id: '4', code: 'D', name: 'T4', stage: 'won' },            // không có ngày → bỏ
+    { id: '5', code: 'E', name: 'T5', stage: 'won', departDate: 'bad-date' }, // không hợp lệ → bỏ
+  ];
+  it('gom đúng theo ngày, bỏ ngày trống/không hợp lệ', () => {
+    const m = groupByDepartureDay(rows);
+    expect(m['2026-07-10'].map((r) => r.id)).toEqual(['1', '2']);
+    expect(m['2026-08-01'].map((r) => r.id)).toEqual(['3']);
+    expect(Object.keys(m).sort()).toEqual(['2026-07-10', '2026-08-01']);
   });
 });
 
