@@ -81,6 +81,26 @@ describe('restaurantStore', () => {
     expect(useRestaurantStore.getState().list.map((r) => r.id)).toEqual(['r2', 'r1', 'r3']);
   });
 
+  it('skips a no-op echo (same content) → keeps same list reference, no re-render', () => {
+    useRestaurantStore.getState().init();
+    const cb = vi.mocked(sb.sbSubscribeRestaurants).mock.calls[vi.mocked(sb.sbSubscribeRestaurants).mock.calls.length - 1][0];
+    cb([rest({ id: 'r1', name: 'A' })]);
+    const ref = useRestaurantStore.getState().list;
+    // Echo of the same content (fresh objects) must NOT replace the list.
+    cb([rest({ id: 'r1', name: 'A' })]);
+    expect(useRestaurantStore.getState().list).toBe(ref);
+  });
+
+  it('applies an echo that genuinely changes content', () => {
+    useRestaurantStore.getState().init();
+    const cb = vi.mocked(sb.sbSubscribeRestaurants).mock.calls[vi.mocked(sb.sbSubscribeRestaurants).mock.calls.length - 1][0];
+    cb([rest({ id: 'r1', name: 'A' })]);
+    const ref = useRestaurantStore.getState().list;
+    cb([rest({ id: 'r1', name: 'A2' })]);
+    expect(useRestaurantStore.getState().list).not.toBe(ref);
+    expect(useRestaurantStore.getState().list[0].name).toBe('A2');
+  });
+
   it('save shows an alert when supabase rejects but keeps optimistic state', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     vi.mocked(sb.sbSaveRestaurants).mockRejectedValueOnce(new Error('boom'));

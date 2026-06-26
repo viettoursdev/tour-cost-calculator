@@ -30,6 +30,22 @@ function reconcileOrder(prev: Restaurant[], next: Restaurant[]): Restaurant[] {
   );
 }
 
+/** Deep value-equality (ignores key order, treats undefined values as equal). */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (typeof a !== 'object') return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((x, i) => deepEqual(x, b[i]));
+  }
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
+  for (const k of keys) if (!deepEqual(ao[k], bo[k])) return false;
+  return true;
+}
+
 // Debounce state for the (heavy, full-overwrite) network push. The optimistic
 // in-memory `set` stays synchronous; only the DB write is deferred so we don't
 // write + echo on every keystroke.
@@ -56,7 +72,16 @@ export const useRestaurantStore = create<State>()((set) => ({
   init: () => {
     set({ loading: true });
     return sbSubscribeRestaurants((items) => {
-      set((s) => ({ list: reconcileOrder(s.list, items), loading: false }));
+      set((s) => {
+        const next = reconcileOrder(s.list, items);
+        // Bỏ qua echo realtime KHÔNG thay đổi nội dung (hầu hết là echo của
+        // chính mình sau mỗi lần lưu). Không set lại `list` → không re-render →
+        // không cắt ngang thao tác đang nhập ở BẤT KỲ ô nào (kể cả Autocomplete).
+        if (s.list.length && deepEqual(s.list, next)) {
+          return s.loading ? { loading: false } : s;
+        }
+        return { list: next, loading: false };
+      });
     });
   },
 
