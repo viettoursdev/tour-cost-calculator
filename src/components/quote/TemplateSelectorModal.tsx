@@ -20,8 +20,65 @@ import { DEPT_LABEL } from '@/auth/departments';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Template } from '@/types';
+import type { ReactNode } from 'react';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
+
+/**
+ * Thẻ "quản lý" trên lưới chính (Đào tạo / Nhân sự / Kho) — không phải template.
+ * Cùng kiểu hover/đổ bóng với thẻ template để đồng nhất hàng "Bạn muốn tạo gì hôm nay?".
+ */
+function ManageCard({ grad, accent, icon, title, desc, onClick }: {
+  grad: string; accent: string; icon: ReactNode; title: string; desc: string; onClick: () => void;
+}) {
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        position: 'relative', borderRadius: 3, overflow: 'hidden',
+        border: '1px solid rgba(15,58,74,0.08)', background: '#fff',
+        transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s, border-color .28s',
+        boxShadow: '0 2px 10px rgba(15,58,74,0.05)',
+        '&:hover': {
+          transform: 'translateY(-6px)',
+          boxShadow: `0 20px 44px ${accent}26`,
+          borderColor: `${accent}55`,
+        },
+        '&:hover .tpl-badge': { transform: 'scale(1.08) rotate(-3deg)' },
+        '&:hover .tpl-go': { opacity: 1, transform: 'translateX(0)' },
+        '&:hover .tpl-bar': { opacity: 1 },
+      }}
+    >
+      <Box className="tpl-bar" sx={{ height: 4, background: grad, opacity: 0.75, transition: 'opacity .28s' }} />
+      <CardActionArea onClick={onClick} sx={{ height: '100%', p: 2.5, alignItems: 'flex-start' }}>
+        <CardContent sx={{ p: 0, width: '100%' }}>
+          <Box
+            className="tpl-badge"
+            sx={{
+              width: 58, height: 58, borderRadius: '17px', mb: 1.75,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: grad, color: '#fff',
+              boxShadow: `0 10px 24px ${accent}55, inset 0 1px 0 rgba(255,255,255,0.45)`,
+              transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s',
+              '& svg': { fontSize: 30, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))' },
+            }}
+          >
+            {icon}
+          </Box>
+          <Typography sx={{ fontWeight: 800, fontSize: 15.5, color: '#0f3a4a', lineHeight: 1.3 }}>
+            {title}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.6, lineHeight: 1.55 }}>
+            {desc}
+          </Typography>
+          <Box className="tpl-go" sx={{ mt: 1.5, display: 'inline-flex', alignItems: 'center', gap: 0.4, color: accent, fontWeight: 800, fontSize: 13, opacity: 0, transform: 'translateX(-6px)', transition: 'opacity .28s, transform .28s' }}>
+            Bắt đầu →
+          </Box>
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  );
+}
 
 export function TemplateSelectorModal({ open, onClose, canCancel = false }: Props) {
   // Narrow selectors — modal only needs to know whether a draft exists and whether
@@ -220,61 +277,44 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
             );
           })}
 
+          {/* Thẻ Nhân sự (view, không phải template) — đẩy lên lưới chính. */}
+          {canHR && (
+            <ManageCard
+              grad="linear-gradient(135deg, #0369a1, #0ea5e9)"
+              accent="#0369a1"
+              icon={<BadgeOutlinedIcon />}
+              title="Nhân sự"
+              desc="Hồ sơ nhân viên, tuyển dụng, nghỉ phép"
+              onClick={() => gotoManage('hr')}
+            />
+          )}
+
+          {/* Thẻ Quản lý kho (view, không phải template) — đẩy lên lưới chính. */}
+          {canInv && (
+            <ManageCard
+              grad="linear-gradient(135deg, #b45309, #f59e0b)"
+              accent="#b45309"
+              icon={<Inventory2OutlinedIcon />}
+              title="Quản lý kho"
+              desc="Tồn kho, lô hàng & tài sản theo tour"
+              onClick={() => gotoManage('inventory')}
+            />
+          )}
+
           {/* Thẻ Đào tạo (view, không phải template) — cạnh "Lịch đi tour HDV". */}
-          {canTraining && (() => {
-            const grad = 'linear-gradient(135deg, #0d7a6a, #14a08c)';
-            const accent = '#0d7a6a';
-            return (
-              <Card
-                elevation={0}
-                sx={{
-                  position: 'relative', borderRadius: 3, overflow: 'hidden',
-                  border: '1px solid rgba(15,58,74,0.08)', background: '#fff',
-                  transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s, border-color .28s',
-                  boxShadow: '0 2px 10px rgba(15,58,74,0.05)',
-                  '&:hover': {
-                    transform: 'translateY(-6px)',
-                    boxShadow: `0 20px 44px ${accent}26`,
-                    borderColor: `${accent}55`,
-                  },
-                  '&:hover .tpl-badge': { transform: 'scale(1.08) rotate(-3deg)' },
-                  '&:hover .tpl-go': { opacity: 1, transform: 'translateX(0)' },
-                  '&:hover .tpl-bar': { opacity: 1 },
-                }}
-              >
-                <Box className="tpl-bar" sx={{ height: 4, background: grad, opacity: 0.75, transition: 'opacity .28s' }} />
-                <CardActionArea onClick={() => gotoManage('training')} sx={{ height: '100%', p: 2.5, alignItems: 'flex-start' }}>
-                  <CardContent sx={{ p: 0, width: '100%' }}>
-                    <Box
-                      className="tpl-badge"
-                      sx={{
-                        width: 58, height: 58, borderRadius: '17px', mb: 1.75,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: grad, color: '#fff',
-                        boxShadow: `0 10px 24px ${accent}55, inset 0 1px 0 rgba(255,255,255,0.45)`,
-                        transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s',
-                        '& svg': { fontSize: 30, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.18))' },
-                      }}
-                    >
-                      <SchoolOutlinedIcon />
-                    </Box>
-                    <Typography sx={{ fontWeight: 800, fontSize: 15.5, color: '#0f3a4a', lineHeight: 1.3 }}>
-                      Đào tạo
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.6, lineHeight: 1.55 }}>
-                      Onboarding & nghiệp vụ nhân viên mới
-                    </Typography>
-                    <Box className="tpl-go" sx={{ mt: 1.5, display: 'inline-flex', alignItems: 'center', gap: 0.4, color: accent, fontWeight: 800, fontSize: 13, opacity: 0, transform: 'translateX(-6px)', transition: 'opacity .28s, transform .28s' }}>
-                      Bắt đầu →
-                    </Box>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            );
-          })()}
+          {canTraining && (
+            <ManageCard
+              grad="linear-gradient(135deg, #0d7a6a, #14a08c)"
+              accent="#0d7a6a"
+              icon={<SchoolOutlinedIcon />}
+              title="Đào tạo"
+              desc="Onboarding & nghiệp vụ nhân viên mới"
+              onClick={() => gotoManage('training')}
+            />
+          )}
         </Box>
 
-        {(canCust || canNcc || canHR || canInv) && (
+        {(canCust || canNcc) && (
           <Box sx={{ maxWidth: 1200, mx: 'auto', mb: 5 }}>
             <Typography sx={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'rgba(15,58,74,0.5)', textTransform: 'uppercase', letterSpacing: 0.5, mb: 1.5 }}>
               Quản lý danh mục
@@ -294,22 +334,6 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
                     color: '#7c3aed', border: '1.5px solid rgba(124,58,237,0.35)', bgcolor: '#fff',
                     '&:hover': { bgcolor: 'rgba(124,58,237,0.06)', borderColor: '#7c3aed' } }}>
                   Quản lý NCC
-                </Button>
-              )}
-              {canHR && (
-                <Button onClick={() => gotoManage('hr')} startIcon={<BadgeOutlinedIcon />}
-                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
-                    color: '#0369a1', border: '1.5px solid rgba(3,105,161,0.35)', bgcolor: '#fff',
-                    '&:hover': { bgcolor: 'rgba(3,105,161,0.06)', borderColor: '#0369a1' } }}>
-                  Nhân sự
-                </Button>
-              )}
-              {canInv && (
-                <Button onClick={() => gotoManage('inventory')} startIcon={<Inventory2OutlinedIcon />}
-                  sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
-                    color: '#0d7a6a', border: '1.5px solid rgba(13,122,106,0.35)', bgcolor: '#fff',
-                    '&:hover': { bgcolor: 'rgba(13,122,106,0.06)', borderColor: '#0d7a6a' } }}>
-                  Quản lý kho
                 </Button>
               )}
             </Stack>
