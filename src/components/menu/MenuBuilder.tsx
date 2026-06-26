@@ -10,11 +10,14 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SaveIcon from '@mui/icons-material/Save';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMenuStore } from '@/stores/menuStore';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
-import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY } from '@/components/itinerary/itinCode';
+import { useQuoteStore } from '@/stores/quoteStore';
+import { useLinkNavStore } from '@/stores/linkNavStore';
+import { ITIN_TYPE, ITIN_CONTINENT, ITIN_COUNTRY, vnDateToISO } from '@/components/itinerary/itinCode';
 import { SortableList } from '@/components/itinerary/SortableList';
 import {
   MEAL_TYPES, MENU_CUR, freshMenu, generateMenuCode, newMenuDay, newMenuMeal,
@@ -45,6 +48,7 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
   useUndoRedoShortcuts(undo, redo);
   const [saving, setSaving] = useState(false);
   const [includePrices, setIncludePrices] = useState(true);
+  const [departISO, setDepartISO] = useState('');
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   const restaurants = useRestaurantStore((s) => s.list);
   const quotes = useQuoteHistoryStore((s) => s.quotes);
@@ -94,6 +98,22 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
     schedule: p.schedule.filter((d) => d.id !== id).map((d, i) => ({ ...d, dayNum: i + 1 })),
   }));
   const updDay = (id: string, patch: Partial<MenuDay>) => updDayById(id, (d) => ({ ...d, ...patch }));
+  const fmtVN = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  // Ngày khởi hành → tự điền ngày cho từng ngày của thực đơn (dd/MM/yyyy).
+  const fillDates = (startISO: string) => {
+    setDepartISO(startISO);
+    const base = new Date(startISO + 'T00:00:00');
+    if (Number.isNaN(base.getTime())) return;
+    setIt((p) => ({ ...p, schedule: p.schedule.map((d, i) => ({ ...d, date: fmtVN(new Date(base.getTime() + i * 86400000)) })) }));
+  };
+  // Chọn ngày cho 1 ngày cụ thể (từ lịch) → tịnh tiến cho các ngày sau.
+  const fillDatesFrom = (dayId: string, iso: string) => setIt((p) => {
+    const idx = p.schedule.findIndex((d) => d.id === dayId);
+    if (idx < 0) return p;
+    const base = new Date(iso + 'T00:00:00');
+    if (Number.isNaN(base.getTime())) return p;
+    return { ...p, schedule: p.schedule.map((d, i) => (i >= idx ? { ...d, date: fmtVN(new Date(base.getTime() + (i - idx) * 86400000)) } : d)) };
+  });
   const reorderDays = (from: number, to: number) =>
     setIt((p) => ({
       ...p,
@@ -168,19 +188,32 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
       linkedQuoteName: q.name ?? '',
     }));
   };
-  const linkItin = (iId: string) => {
+  // Link chương trình → tự kéo NGÀY của lịch trình về từng ngày thực đơn tương ứng.
+  const linkItin = async (iId: string) => {
     if (!iId) {
       setIt((p) => ({ ...p, linkedItineraryId: null, linkedItineraryName: '' }));
       return;
     }
     const i = itins.find((x) => x.id === iId);
     if (!i) return;
+    const full = await useItineraryStore.getState().load(iId).catch(() => null);
+    const dateByDay = new Map((full?.schedule ?? []).map((d) => [d.dayNum, d.date]));
     setIt((p) => ({
       ...p,
       linkedItineraryId: i.id,
       linkedItineraryName: i.destination || i.title || '',
       destination: p.destination || (i.destination ?? ''),
+      days: p.days || full?.days || full?.schedule?.length || p.days,
+      schedule: p.schedule.map((d) => ({ ...d, date: dateByDay.get(d.dayNum) ?? d.date })),
     }));
+  };
+
+  // Mở Chương trình tour đã liên kết (đổi template báo giá → ItineraryApp tự mở).
+  const openLinkedItinerary = () => {
+    if (!it.linkedItineraryId) return;
+    if (!window.confirm('Rời thực đơn để mở Chương trình tour đã liên kết? Thay đổi chưa lưu có thể mất.')) return;
+    useLinkNavStore.getState().request('itinerary', it.linkedItineraryId);
+    useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'itinerary' }, view: 'cost' }));
   };
 
   // Nút icon trắng mờ trên thanh header (gọn như thanh báo giá).
@@ -295,15 +328,26 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
               <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                 🗺️ Link Chương trình tour
               </Typography>
-              <Select fullWidth size="small" value={it.linkedItineraryId ?? ''}
-                onChange={(e) => linkItin(e.target.value)} displayEmpty>
-                <MenuItem value="">— Không —</MenuItem>
-                {itins.map((i) => (
-                  <MenuItem key={i.id} value={i.id}>
-                    {i.code ? `[${i.code}] ` : ''}{i.destination || i.title}
-                  </MenuItem>
-                ))}
-              </Select>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Select fullWidth size="small" value={it.linkedItineraryId ?? ''}
+                  onChange={(e) => void linkItin(e.target.value)} displayEmpty>
+                  <MenuItem value="">— Không —</MenuItem>
+                  {itins.map((i) => (
+                    <MenuItem key={i.id} value={i.id}>
+                      {i.code ? `[${i.code}] ` : ''}{i.destination || i.title}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {it.linkedItineraryId && (
+                  <Tooltip title="Mở Chương trình tour đã liên kết">
+                    <Button size="small" variant="outlined" onClick={openLinkedItinerary}
+                      startIcon={<OpenInNewIcon fontSize="small" />}
+                      sx={{ flexShrink: 0, whiteSpace: 'nowrap', color: '#0d7a6a', borderColor: 'rgba(13,122,106,0.4)' }}>
+                      Mở CT
+                    </Button>
+                  </Tooltip>
+                )}
+              </Stack>
             </Box>
             <Box>
               <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
@@ -329,10 +373,16 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
               · kéo ⋮⋮ đổi thứ tự
             </Typography>
           </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
-            sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
-            Thêm ngày
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <TextField size="small" type="date" label="Ngày khởi hành" InputLabelProps={{ shrink: true }}
+              value={departISO} onChange={(e) => fillDates(e.target.value)}
+              sx={{ width: 160, '& .MuiOutlinedInput-root': { height: 36, fontSize: 13 } }}
+              title="Chọn ngày khởi hành → tự điền ngày cho từng ngày thực đơn" />
+            <Button variant="contained" startIcon={<AddIcon />} onClick={addDay}
+              sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>
+              Thêm ngày
+            </Button>
+          </Stack>
         </Stack>
 
         <SortableList
@@ -346,11 +396,11 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
               <Box sx={{ background: 'linear-gradient(135deg,#0f3a4a,#14566b)', color: '#fff', px: 1.75, py: 1.25, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Box component="span" className="mday-handle" sx={{ cursor: 'grab', fontSize: 16, opacity: 0.7, userSelect: 'none' }}>⋮⋮</Box>
                 <Typography fontWeight={900} fontSize={14}>NGÀY {d.dayNum}</Typography>
-                <TextField size="small" variant="outlined"
-                  value={d.date} onChange={(e) => updDay(d.id, { date: e.target.value })}
-                  placeholder="Date"
-                  sx={{ width: 130, '& .MuiInputBase-input': { color: '#fff', fontSize: 12 },
-                        '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
+                <TextField size="small" variant="outlined" type="date"
+                  value={vnDateToISO(d.date)} onChange={(e) => fillDatesFrom(d.id, e.target.value)}
+                  title="Chọn ngày (từ lịch) — các ngày sau tự tịnh tiến"
+                  InputProps={{ sx: { color: '#fff', fontSize: 12, colorScheme: 'dark' } }}
+                  sx={{ width: 150, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' } }} />
                 <TextField size="small" variant="outlined" fullWidth
                   value={d.city} onChange={(e) => updDay(d.id, { city: e.target.value })}
                   placeholder="Khu vực / TP chính (mỗi bữa lấy TP theo nhà hàng)"

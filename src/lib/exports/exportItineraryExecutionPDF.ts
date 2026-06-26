@@ -5,8 +5,8 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
-import { fmtDate } from '@/lib/dateUtils';
+import { BRAND_TEAL, drawLogo } from './brand';
+import { fmtDayDate } from '@/lib/dateUtils';
 import { buildExecModel, mealsLabel } from './execModel';
 import { dayLabel } from '@/components/itinerary/itinCode';
 import type { ExecContact, Itinerary, Menu, Restaurant } from '@/types';
@@ -21,6 +21,7 @@ const ZEBRA: RGB = [247, 249, 250];
 const LINE: RGB = [215, 222, 226];
 const RED: RGB = [192, 57, 43];
 const REDH: RGB = [252, 237, 235];
+const GREEN: RGB = [39, 174, 96];
 
 export function exportItineraryExecutionPDF(
   it: Itinerary,
@@ -38,10 +39,8 @@ export function exportItineraryExecutionPDF(
   const ensure = (h: number) => { if (y + h > PH - M) { pdf.addPage(); y = M; } };
   const wrap = (t: string, w: number) => pdf.splitTextToSize(String(t ?? ''), w) as string[];
 
-  // ── Header ──
+  // ── Header (logo trái + mã tour phải — KHÔNG in tên thương hiệu) ──
   const logoBottom = drawLogo(pdf, M, y);
-  setF('bold'); pdf.setFontSize(13); pdf.setTextColor(...TEAL);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS', M + LOGO_W_MM + 5, y + 7);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
   pdf.text('MÃ TOUR', PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(12); pdf.setTextColor(...NAVY);
@@ -55,7 +54,7 @@ export function exportItineraryExecutionPDF(
   wrap(m.title.toUpperCase(), CW).forEach((l) => { pdf.text(l, PW / 2, y, { align: 'center' }); y += 7; });
   setF('normal'); pdf.setFontSize(9); pdf.setTextColor(...TEAL);
   const sub = [m.destination && `Điểm đến: ${m.destination}`, `${m.days} ngày ${m.nights} đêm`,
-    m.departure && `Khởi hành: ${fmtDate(m.departure)}`, m.guests.length ? `${m.guests.length} khách` : '']
+    m.departure && `Khởi hành: ${fmtDayDate(m.departure)}`, m.guests.length ? `${m.guests.length} khách` : '']
     .filter(Boolean).join('   ·   ');
   if (sub) { pdf.text(sub, PW / 2, y, { align: 'center' }); y += 5; }
   pdf.setDrawColor(...TEAL); pdf.setLineWidth(0.5); pdf.line(M, y, PW - M, y);
@@ -134,46 +133,88 @@ export function exportItineraryExecutionPDF(
   }
 
   // ── Day by day ──
-  m.dayVMs.forEach((d) => {
-    sectionHead(`Ngày ${dayLabel(d.dayNum, it.dayStart)}${d.date ? ' · ' + fmtDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`);
-    para('Ăn:', mealsLabel(d.meals) + (d.mealNote ? ` (${d.mealNote})` : ''));
+  // Cột thời gian dời nhẹ qua phải; cột lịch trình bắt đầu xa hơn cho rộng rãi.
+  const X_TIME = M + 4;
+  const X_TEXT = M + 26;
+  const TEXT_W = CW - (X_TEXT - M) - 2;
+  m.dayVMs.forEach((d, di) => {
+    if (di > 0) y += 5; // #12 khoảng cách giữa các ngày rộng rãi hơn
+    sectionHead(`Ngày ${dayLabel(d.dayNum, it.dayStart)}${d.date ? ' · ' + fmtDayDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`);
+    // #8/#9 "Bữa ăn bao gồm:  Sáng · Trưa · Tối"; #3 ẩn nếu không chọn bữa & không ghi chú
+    const anyMeal = d.meals.B || d.meals.L || d.meals.D;
+    if (anyMeal || d.mealNote) {
+      const mealVal = [anyMeal ? mealsLabel(d.meals) : '', d.mealNote].filter(Boolean).join('   ·   ');
+      para('Bữa ăn bao gồm:', mealVal, 42);
+      y += 1.5;
+    }
     // schedule
     d.segments.forEach((s) => {
       if (s.groupLabel || s.transport) {
-        ensure(5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...TEAL);
-        pdf.text([s.groupLabel, s.transport && `Xe: ${s.transport}`].filter(Boolean).join('  ·  '), M, y + 3.5); y += 5;
+        ensure(5.5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...TEAL);
+        pdf.text([s.groupLabel, s.transport && `Xe: ${s.transport}`].filter(Boolean).join('  ·  '), M, y + 3.6); y += 5.5;
       }
       s.activities.forEach((a) => {
         if (!a.time && !a.text && !a.ops) return;
-        ensure(4.5); setF('normal'); pdf.setFontSize(8.5); pdf.setTextColor(...INK);
-        const head = a.time ? `${a.time}  ` : '';
-        wrap(head + a.text, CW - 6).forEach((l, i) => { ensure(4.3); pdf.text((i ? '   ' : '• ') + l, M + 2, y + 3.3); y += 4.3; });
+        const lines = wrap(a.text || '', TEXT_W);
+        const blockH = Math.max(4.8, lines.length * 4.8);
+        ensure(blockH);
+        if (a.time) { setF('bold'); pdf.setFontSize(8.6); pdf.setTextColor(...TEAL); pdf.text(a.time, X_TIME, y + 3.6); }
+        setF('normal'); pdf.setFontSize(8.8); pdf.setTextColor(...INK);
+        lines.forEach((l, i) => pdf.text(l, X_TEXT, y + 3.6 + i * 4.8));
+        y += blockH;
         if (a.ops) {
           setF('bold'); pdf.setFontSize(8); pdf.setTextColor(...TEAL);
-          wrap('Vận hành: ' + a.ops, CW - 12).forEach((l) => { ensure(4); pdf.text(l, M + 6, y + 3); y += 4; });
+          wrap('Vận hành: ' + a.ops, TEXT_W).forEach((l) => { ensure(4.2); pdf.text(l, X_TEXT, y + 3); y += 4.2; });
           setF('normal');
         }
+        y += 1; // hơi thoáng giữa các mốc
       });
     });
-    // meals from menu
+    // ── THỰC ĐƠN (mỗi nội dung xuống hàng) ──
     if (d.menuMeals.length) {
-      ensure(5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...NAVY); pdf.text('THUC DON', M, y + 3.5); y += 5;
-      d.menuMeals.forEach((ml) => {
-        const t = [`${ml.mealType}:`, ml.restaurant, ml.dishes && `— ${ml.dishes}`].filter(Boolean).join(' ');
-        ensure(4.5); setF('normal'); pdf.setFontSize(8.3); pdf.setTextColor(...INK);
-        wrap('• ' + t, CW - 4).forEach((l, i) => { ensure(4.2); pdf.text(l, M + (i ? 4 : 2), y + 3.3); y += 4.2; });
-        if (ml.contact) { ensure(4); pdf.setTextColor(...MUTE); pdf.setFontSize(7.8); wrap(`   DT ${ml.contact}`, CW - 6).forEach((l) => { pdf.text(l, M + 4, y + 3); y += 3.8; }); }
-        if (ml.note) { ensure(4); pdf.setTextColor(...MUTE); pdf.setFontSize(7.8); wrap(`   📝 ${ml.note}`, CW - 6).forEach((l) => { pdf.text(l, M + 4, y + 3); y += 3.8; }); }
+      y += 2.5;
+      ensure(7); setF('bold'); pdf.setFontSize(9.2); pdf.setTextColor(...NAVY);
+      pdf.text('THỰC ĐƠN', M, y + 4); y += 7;
+      d.menuMeals.forEach((ml, mi) => {
+        if (mi > 0) y += 4.5; // #13 cách giữa các bữa & nhà hàng rộng rãi
+        ensure(5.4); setF('bold'); pdf.setFontSize(8.8); pdf.setTextColor(...TEAL);
+        pdf.text(ml.mealType || 'Bữa ăn', M + 2, y + 3.7); y += 5.6;
+        if (ml.restaurant) {
+          setF('bold'); pdf.setFontSize(8.4); pdf.setTextColor(...INK);
+          wrap('Nhà hàng: ' + ml.restaurant, CW - 8).forEach((l) => { ensure(4.5); pdf.text(l, M + 6, y + 3.2); y += 4.5; });
+        }
+        if (ml.address) {
+          setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
+          wrap('Địa chỉ · SĐT: ' + ml.address, CW - 8).forEach((l) => { ensure(4.2); pdf.text(l, M + 6, y + 3); y += 4.2; });
+        }
+        if (ml.contact) {
+          setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
+          wrap('Website: ' + ml.contact, CW - 8).forEach((l) => { ensure(4.2); pdf.text(l, M + 6, y + 3); y += 4.2; });
+        }
+        const dishLines = (ml.dishes || '').split(/\n/).map((x) => x.trim()).filter(Boolean);
+        if (dishLines.length) {
+          ensure(4.6); setF('bold'); pdf.setFontSize(8.3); pdf.setTextColor(...NAVY);
+          pdf.text('Menu:', M + 6, y + 3.2); y += 4.8; // #14 menu xuống 1 hàng so với dòng bữa ăn
+          setF('normal'); pdf.setFontSize(8.4); pdf.setTextColor(...INK);
+          dishLines.forEach((dl) => {
+            wrap('•  ' + dl, CW - 16).forEach((l, i) => { ensure(4.3); pdf.text(l, M + 10 + (i ? 3 : 0), y + 3); y += 4.3; });
+          });
+        }
+        if (ml.note) {
+          setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
+          wrap('Nhận xét set: ' + ml.note, CW - 8).forEach((l) => { ensure(4.2); pdf.text(l, M + 6, y + 3); y += 4.2; });
+        }
       });
+      y += 2.5;
     }
-    if (d.hotelName || d.hotelContact) para('Khach san:', [d.hotelName, d.hotelContact].filter(Boolean).join(' · '));
-    if (d.venues.length) { ensure(5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...NAVY); pdf.text('Diem tham quan', M, y + 3.5); y += 5; contactLines(d.venues); }
-    if (d.notes) para('Lưu ý:', d.notes);
+    if (d.hotelName || d.hotelContact) { y += 1; para('Khách sạn:', [d.hotelName, d.hotelContact].filter(Boolean).join('  ·  '), 30); }
+    if (d.venues.length) { y += 1; ensure(5.5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...NAVY); pdf.text('Điểm tham quan', M, y + 3.6); y += 5.5; contactLines(d.venues); }
+    if (d.notes) { y += 1; para('Lưu ý:', d.notes); }
     if (d.checklist.length) {
-      ensure(5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...NAVY); pdf.text('Checklist', M, y + 3.5); y += 5;
-      d.checklist.forEach((c) => { if (!c.text) return; ensure(4.2); setF('normal'); pdf.setFontSize(8.3); pdf.setTextColor(...INK); pdf.text(`${c.done ? '[x]' : '[ ]'} ${c.text}`, M + 2, y + 3.2); y += 4.2; });
+      y += 1; ensure(5.5); setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...NAVY); pdf.text('Checklist', M, y + 3.6); y += 5.5;
+      d.checklist.forEach((c) => { if (!c.text) return; ensure(4.4); setF('normal'); pdf.setFontSize(8.3); pdf.setTextColor(...INK); pdf.text(`${c.done ? '[x]' : '[ ]'} ${c.text}`, M + 2, y + 3.3); y += 4.4; });
     }
-    y += 3;
+    y += 4;
   });
 
   // ── Guests ──
@@ -195,12 +236,26 @@ export function exportItineraryExecutionPDF(
     y += 3;
   }
 
-  // ── Includes / Excludes ──
+  // ── Includes / Excludes (2 cột, trình bày đẹp như file lịch trình) ──
   if (m.includes.length || m.excludes.length) {
     sectionHead('Bao gồm / Không bao gồm');
-    if (m.includes.length) { para('Bao gom:', m.includes.join('; ')); }
-    if (m.excludes.length) { para('Khong gom:', m.excludes.join('; ')); }
-    y += 2;
+    const gap = 8;
+    const colW = (CW - gap) / 2;
+    const x1 = M, x2 = M + colW + gap;
+    ensure(8);
+    setF('bold'); pdf.setFontSize(9.2);
+    pdf.setTextColor(...GREEN); pdf.text('✓  GIÁ BAO GỒM', x1, y + 4);
+    pdf.setTextColor(...RED); pdf.text('✕  KHÔNG BAO GỒM', x2, y + 4);
+    y += 7.5;
+    const incW = m.includes.filter(Boolean).map((t) => wrap('•  ' + t, colW - 4));
+    const excW = m.excludes.filter(Boolean).map((t) => wrap('•  ' + t, colW - 4));
+    const incRows = incW.reduce((s, a) => s + a.length, 0);
+    const excRows = excW.reduce((s, a) => s + a.length, 0);
+    ensure(Math.max(incRows, excRows) * 4.4 + 3);
+    setF('normal'); pdf.setFontSize(8.4); pdf.setTextColor(...INK);
+    let yL = y; incW.forEach((a) => a.forEach((l, i) => { pdf.text(l, x1 + (i ? 3 : 0), yL + 3.2); yL += 4.4; }));
+    let yR = y; excW.forEach((a) => a.forEach((l, i) => { pdf.text(l, x2 + (i ? 3 : 0), yR + 3.2); yR += 4.4; }));
+    y = Math.max(yL, yR) + 3;
   }
 
   if (m.generalNotes) { sectionHead('Lưu ý vận hành khác'); para('', m.generalNotes, 2); y += 2; }

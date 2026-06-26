@@ -43,22 +43,22 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
   pdf.text('Tour Cost Calculator', brandX, y + 11);
 
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
-  pdf.text('MA THUC DON', PW - M, y + 5, { align: 'right' });
+  pdf.text('MÃ THỰC ĐƠN', PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(13); pdf.setTextColor(...NAVY);
   pdf.text(code, PW - M, y + 11, { align: 'right' });
   y += 22;
 
   setF('normal'); pdf.setFontSize(10); pdf.setTextColor(...MUTE);
-  pdf.text('THUC DON CHUONG TRINH', PW / 2, y, { align: 'center' });
+  pdf.text('THỰC ĐƠN CHƯƠNG TRÌNH', PW / 2, y, { align: 'center' });
   y += 8;
   setF('bold'); pdf.setFontSize(20); pdf.setTextColor(...NAVY);
-  pdf.text((it.destination || it.title || 'THUC DON').toUpperCase(), PW / 2, y, { align: 'center' });
+  pdf.text((it.destination || it.title || 'THỰC ĐƠN').toUpperCase(), PW / 2, y, { align: 'center' });
   y += 7;
 
   const sub: string[] = [];
-  if (it.days) sub.push(`${it.days} ngay`);
-  if (it.linkedItineraryName) sub.push('CT: ' + it.linkedItineraryName);
-  if (it.linkedQuoteName) sub.push('BG: ' + it.linkedQuoteName);
+  if (it.days) sub.push(`${it.days} ngày`);
+  if (it.linkedItineraryName) sub.push('Chương trình: ' + it.linkedItineraryName);
+  if (it.linkedQuoteName) sub.push('Báo giá: ' + it.linkedQuoteName);
   if (sub.length) {
     setF('normal'); pdf.setFontSize(9); pdf.setTextColor(...TEAL);
     pdf.text(sub.join('   ·   '), PW / 2, y, { align: 'center' });
@@ -73,7 +73,7 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
     ensure(14);
     pdf.setFillColor(...NAVY); pdf.rect(M, y, CW, 8, 'F');
     setF('bold'); pdf.setFontSize(11); pdf.setTextColor(...WHITE);
-    let dl = `NGAY ${d.dayNum}`;
+    let dl = `NGÀY ${d.dayNum}`;
     if (d.date) dl += '   ·   ' + d.date;
     if (d.city) dl += '   ·   ' + d.city;
     pdf.text(dl, M + 3, y + 5.6);
@@ -84,7 +84,7 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
       const aCur = meal.adjustedCur || meal.cur || 'VND';
       ensure(12);
       setF('bold'); pdf.setFontSize(10); pdf.setTextColor(...TEAL);
-      let mh = meal.mealType || 'Bua an';
+      let mh = meal.mealType || 'Bữa ăn';
       if (meal.restaurantName) mh += '  —  ' + meal.restaurantName;
       if (meal.city) mh += '  (' + meal.city + ')';
       const lines: string[] = pdf.splitTextToSize(mh, CW);
@@ -115,9 +115,9 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
       pdf.setFillColor(...ADJ_FILL); pdf.rect(x2, y, colW, boxH, 'F');
 
       setF('bold'); pdf.setFontSize(7.5); pdf.setTextColor(...TEAL);
-      pdf.text('DE XUAT TU NHA HANG', x1 + 2, y + 4);
+      pdf.text('ĐỀ XUẤT TỪ NHÀ HÀNG', x1 + 2, y + 4);
       pdf.setTextColor(...PURP);
-      pdf.text('DIEU CHINH THEO FEEDBACK', x2 + 2, y + 4);
+      pdf.text('ĐIỀU CHỈNH THEO FEEDBACK', x2 + 2, y + 4);
 
       setF('normal'); pdf.setFontSize(8.5); pdf.setTextColor(...INK);
       const yy = y + headH + 2;
@@ -127,9 +127,9 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
       if (includePrices) {
         const py = y + headH + rows * lineH + 5;
         setF('bold'); pdf.setFontSize(8.5); pdf.setTextColor(...TEAL);
-        pdf.text('Don gia: ' + money(meal.suggestedPrice, sCur), x1 + 2, py);
+        pdf.text('Đơn giá: ' + money(meal.suggestedPrice, sCur), x1 + 2, py);
         pdf.setTextColor(...PURP);
-        pdf.text('Don gia: ' + money(meal.adjustedPrice, aCur), x2 + 2, py);
+        pdf.text('Đơn giá: ' + money(meal.adjustedPrice, aCur), x2 + 2, py);
       }
 
       y += boxH + 2;
@@ -137,7 +137,7 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
       if (meal.note && meal.note.trim()) {
         ensure(7);
         setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
-        const nl: string[] = pdf.splitTextToSize('Luu y: ' + meal.note.trim(), CW);
+        const nl: string[] = pdf.splitTextToSize('Lưu ý: ' + meal.note.trim(), CW);
         pdf.text(nl, M, y + 3);
         y += nl.length * 4 + 2;
       }
@@ -154,7 +154,7 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
   if (includePrices && keys.length) {
     ensure(12 + keys.length * 6);
     setF('bold'); pdf.setFontSize(10); pdf.setTextColor(...NAVY);
-    pdf.text('TONG HOP DON GIA (theo dieu chinh)', M, y + 4);
+    pdf.text('TỔNG HỢP ĐƠN GIÁ (theo điều chỉnh)', M, y + 4);
     y += 6;
     pdf.setDrawColor(...TEAL); pdf.line(M, y, PW - M, y);
     y += 5;
@@ -167,7 +167,7 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
 
   ensure(14);
   setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
-  const dl2: string[] = pdf.splitTextToSize('* Thuc don co the dieu chinh theo mua, nguyen lieu va yeu cau thuc te cua doan.', CW);
+  const dl2: string[] = pdf.splitTextToSize('✱ Thực đơn có thể điều chỉnh theo mùa, tình hình nguyên liệu và yêu cầu thực tế của đoàn.', CW);
   pdf.text(dl2, M, y + 4);
   y += dl2.length * 4 + 4;
   pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn', PW / 2, y + 2, { align: 'center' });

@@ -7,7 +7,7 @@ import {
   Table, TableCell, TableRow, TextRun, WidthType,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { fmtDate } from '@/lib/dateUtils';
+import { fmtDayDate } from '@/lib/dateUtils';
 import { buildExecModel, mealsLabel } from './execModel';
 import { BRAND_TEAL_HEX } from './brand';
 import { dayLabel } from '@/components/itinerary/itinCode';
@@ -25,7 +25,7 @@ const tr = (t: string | number | null | undefined, o: RunOpts = {}) =>
   new TextRun({ text: t == null ? '' : String(t), font: FONT, size: o.size ?? 19, bold: !!o.bold, italics: !!o.italics, color: o.color });
 
 const heading = (t: string, color = NAVY) =>
-  new Paragraph({ shading: { type: ShadingType.SOLID, color, fill: color }, spacing: { before: 200, after: 90 },
+  new Paragraph({ shading: { type: ShadingType.SOLID, color, fill: color }, spacing: { before: 360, after: 110 },
     children: [tr(' ' + t.toUpperCase(), { bold: true, color: 'FFFFFF', size: 22 })] });
 
 const line = (children: TextRun[], indent = 0) =>
@@ -64,12 +64,11 @@ export async function exportItineraryExecutionDocx(
   const m = buildExecModel(it, menu, restaurants);
   const kids: (Paragraph | Table)[] = [];
 
-  // Title
-  kids.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [tr('VIETTOURS INCENTIVES & EVENTS', { bold: true, color: TEAL, size: 22 })] }));
+  // Title (KHÔNG in tên thương hiệu "Viettours Incentives & Events")
   kids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [tr('BẢN ĐIỀU HÀNH TOUR · ITINERARY EXECUTION', { color: MUTE, size: 16 })] }));
   kids.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [tr(m.title.toUpperCase(), { bold: true, color: NAVY, size: 30 })] }));
   const sub = [m.code && `Mã: ${m.code}`, m.destination, `${m.days} ngày ${m.nights} đêm`,
-    m.departure && `Khởi hành ${fmtDate(m.departure)}`, m.guests.length ? `${m.guests.length} khách` : '']
+    m.departure && `Khởi hành ${fmtDayDate(m.departure)}`, m.guests.length ? `${m.guests.length} khách` : '']
     .filter(Boolean).join('   ·   ');
   kids.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 120 }, children: [tr(sub, { color: TEAL, size: 17 })] }));
 
@@ -89,24 +88,38 @@ export async function exportItineraryExecutionDocx(
 
   // Days
   m.dayVMs.forEach((d) => {
-    kids.push(heading(`Ngày ${dayLabel(d.dayNum, it.dayStart)}${d.date ? ' · ' + fmtDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`));
-    kids.push(line([tr('Ăn: ', { bold: true }), tr(mealsLabel(d.meals) + (d.mealNote ? ` (${d.mealNote})` : ''))]));
+    kids.push(heading(`Ngày ${dayLabel(d.dayNum, it.dayStart)}${d.date ? ' · ' + fmtDayDate(d.date) : ''}${d.title ? ' · ' + d.title : ''}`));
+    // #8/#9 "Bữa ăn bao gồm:  Sáng · Trưa · Tối"; #3 ẩn nếu không có bữa & không ghi chú
+    const anyMeal = d.meals.B || d.meals.L || d.meals.D;
+    if (anyMeal || d.mealNote) {
+      const mealVal = [anyMeal ? mealsLabel(d.meals) : '', d.mealNote].filter(Boolean).join('   ·   ');
+      kids.push(line([tr('🍽 Bữa ăn bao gồm: ', { bold: true }), tr(mealVal)]));
+    }
     d.segments.forEach((s) => {
       if (s.groupLabel || s.transport) kids.push(line([tr([s.groupLabel, s.transport && `🚌 ${s.transport}`].filter(Boolean).join('  ·  '), { bold: true, color: TEAL })]));
       s.activities.forEach((a) => {
-        if (a.time || a.text) kids.push(line([tr('• ', { color: TEAL }), ...(a.time ? [tr(a.time + '  ', { bold: true })] : []), tr(a.text)], 120));
-        if (a.ops) kids.push(line([tr('🧭 Vận hành: ', { bold: true, color: TEAL }), tr(a.ops)], 260));
+        if (a.time || a.text) kids.push(line([...(a.time ? [tr(a.time + '   ', { bold: true, color: TEAL })] : []), tr(a.text)], 160));
+        if (a.ops) kids.push(line([tr('🧭 Vận hành: ', { bold: true, color: TEAL }), tr(a.ops)], 360));
       });
     });
+    // ── THỰC ĐƠN (mỗi nội dung xuống hàng) ──
     if (d.menuMeals.length) {
-      kids.push(line([tr('🍽️ Thực đơn', { bold: true, color: NAVY })]));
-      d.menuMeals.forEach((ml) => {
-        kids.push(line([tr('• ', { color: TEAL }), tr(`${ml.mealType}: `, { bold: true }), tr([ml.restaurant, ml.dishes && `— ${ml.dishes}`].filter(Boolean).join(' '))], 120));
-        if (ml.contact) kids.push(line([tr(`☎ ${ml.contact}`, { color: MUTE, size: 16 })], 260));
-        if (ml.note) kids.push(line([tr(`📝 ${ml.note}`, { color: MUTE, size: 16 })], 260));
+      kids.push(line([tr('🍽️ THỰC ĐƠN', { bold: true, color: NAVY })], 0));
+      d.menuMeals.forEach((ml, mi) => {
+        kids.push(new Paragraph({ spacing: { before: mi > 0 ? 140 : 60, after: 20 }, indent: { left: 160 },
+          children: [tr(ml.mealType || 'Bữa ăn', { bold: true, color: TEAL, size: 20 })] }));
+        if (ml.restaurant) kids.push(line([tr('Nhà hàng: ', { bold: true }), tr(ml.restaurant)], 320));
+        if (ml.address) kids.push(line([tr('Địa chỉ · SĐT: ', { bold: true, color: MUTE }), tr(ml.address, { color: MUTE })], 320));
+        if (ml.contact) kids.push(line([tr('Website: ', { bold: true, color: MUTE }), tr(ml.contact, { color: MUTE })], 320));
+        const dishLines = (ml.dishes || '').split(/\n/).map((x) => x.trim()).filter(Boolean);
+        if (dishLines.length) {
+          kids.push(line([tr('Menu:', { bold: true, color: NAVY })], 320)); // #14 menu xuống 1 hàng
+          dishLines.forEach((dl) => kids.push(line([tr('•  ', { color: TEAL }), tr(dl)], 480)));
+        }
+        if (ml.note) kids.push(line([tr('Nhận xét set: ', { bold: true, color: MUTE }), tr(ml.note, { color: MUTE })], 320));
       });
     }
-    if (d.hotelName || d.hotelContact) kids.push(line([tr('🏨 Khách sạn: ', { bold: true }), tr([d.hotelName, d.hotelContact].filter(Boolean).join(' · '))]));
+    if (d.hotelName || d.hotelContact) kids.push(line([tr('🏨 Khách sạn: ', { bold: true }), tr([d.hotelName, d.hotelContact].filter(Boolean).join('  ·  '))]));
     if (d.venues.length) { kids.push(line([tr('📍 Điểm tham quan', { bold: true, color: NAVY })])); kids.push(...contactParas(d.venues)); }
     if (d.notes) kids.push(line([tr('Lưu ý: ', { bold: true }), tr(d.notes)]));
     if (d.checklist.length) {
@@ -131,11 +144,30 @@ export async function exportItineraryExecutionDocx(
       m.suppliers.map((s) => [s.role || '', s.name || '', s.phone || '', s.note || '']), [26, 30, 20, 24]));
   }
 
-  // Includes / Excludes
+  // Includes / Excludes — 2 cột trình bày đẹp
   if (m.includes.length || m.excludes.length) {
     kids.push(heading('Bao gồm / Không bao gồm'));
-    if (m.includes.length) kids.push(line([tr('✅ Bao gồm: ', { bold: true, color: '27AE60' }), tr(m.includes.join('; '))]));
-    if (m.excludes.length) kids.push(line([tr('❌ Không gồm: ', { bold: true, color: RED }), tr(m.excludes.join('; '))]));
+    const GREEN = '27AE60';
+    const bulletCell = (items: string[], color: string, header: string) => {
+      const ps: Paragraph[] = [new Paragraph({ spacing: { after: 60 }, children: [tr(header, { bold: true, color, size: 19 })] })];
+      const real = items.filter(Boolean);
+      if (real.length) real.forEach((t) => ps.push(new Paragraph({ spacing: { after: 30 }, children: [tr('•  ', { bold: true, color }), tr(t)] })));
+      else ps.push(new Paragraph({ children: [tr('—', { color: MUTE })] }));
+      return new TableCell({
+        width: { size: 50, type: WidthType.PERCENTAGE },
+        margins: { top: 80, bottom: 80, left: 140, right: 140 },
+        children: ps,
+      });
+    };
+    const noB = { style: BorderStyle.NONE };
+    kids.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: { top: noB, bottom: noB, left: noB, right: noB, insideHorizontal: noB, insideVertical: { style: BorderStyle.SINGLE, size: 6, color: 'D7DEE2' } },
+      rows: [new TableRow({ children: [
+        bulletCell(m.includes, GREEN, '✓  GIÁ BAO GỒM'),
+        bulletCell(m.excludes, RED, '✕  KHÔNG BAO GỒM'),
+      ] })],
+    }));
   }
 
   if (m.generalNotes) { kids.push(heading('Lưu ý vận hành khác')); kids.push(line([tr(m.generalNotes)])); }

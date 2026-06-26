@@ -31,11 +31,14 @@ import { AIScheduleDialog } from './AIScheduleDialog';
 import { callAIWorker } from '@/lib/aiWorker';
 // Trình xuất lịch trình nạp động khi bấm.
 import { useMenuStore } from '@/stores/menuStore';
+import { useQuoteStore } from '@/stores/quoteStore';
+import { useLinkNavStore } from '@/stores/linkNavStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { filterRank } from '@/lib/search';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
+import { DebouncedTextField } from '@/components/common/DebouncedTextField';
 import { useRestaurantStore } from '@/stores/restaurantStore';
 import { ItineraryExecEditor } from './ItineraryExecEditor';
 import type { Activity, Day, ExecDayOps, Flight, Itinerary, ItineraryType, QuoteFlight, Segment, User } from '@/types';
@@ -46,6 +49,8 @@ import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ImageIcon from '@mui/icons-material/Image';
 import NoteAltOutlinedIcon from '@mui/icons-material/NoteAltOutlined';
+import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
+import FormatSizeIcon from '@mui/icons-material/FormatSize';
 
 type Props = {
   initial: Itinerary | null;
@@ -109,6 +114,15 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
   const doExportWord = () => void import('@/lib/exports/exportItineraryDocx').then((m) => m.exportItineraryDocx(it, code));
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const pois = usePoiStore((s) => s.pois);
+  const menuList = useMenuStore((s) => s.list);
+  const linkedMenu = useMemo(() => menuList.find((x) => x.linkedItineraryId === it.id), [menuList, it.id]);
+  // Mở Thực đơn đã liên kết (đổi template báo giá → MenuApp tự mở đúng thực đơn).
+  const openLinkedMenu = () => {
+    if (!linkedMenu) return;
+    if (!window.confirm('Rời chương trình để mở Thực đơn đã liên kết? Thay đổi chưa lưu có thể mất.')) return;
+    useLinkNavStore.getState().request('menu', linkedMenu.id);
+    useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'menu' }, view: 'cost' }));
+  };
 
   // Giữ mã đã lưu cho chương trình cũ; chương trình mới sinh mã NN.MY.STT.DD.MM.YY.
   const code = useMemo(
@@ -459,6 +473,14 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
               sx={{ bgcolor: '#fff', color: '#0d7a6a', fontWeight: 800, '&:hover': { bgcolor: '#eef6f4' } }}>
               {saving ? 'Đang lưu…' : 'Lưu'}
             </Button>
+            {linkedMenu && (
+              <Tooltip title="Mở Thực đơn đã liên kết">
+                <Button size="small" variant="outlined" color="inherit" startIcon={<RestaurantMenuIcon fontSize="small" />}
+                  onClick={openLinkedMenu} sx={headBtnOutlineSx}>
+                  Thực đơn
+                </Button>
+              </Tooltip>
+            )}
             <Tooltip title="Kiểm tra">
               <IconButton size="small" sx={headBtnSx} onClick={() => setCheckOpen(true)}><CheckCircleOutlineIcon fontSize="small" /></IconButton>
             </Tooltip>
@@ -897,6 +919,13 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                               <NoteAltOutlinedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                          <Tooltip title="VIẾT HOA toàn bộ nội dung mốc này">
+                            <IconButton size="small" onClick={() => updAct(d.id, seg.id, a.id, { text: (a.text || '').toUpperCase() })}
+                              sx={{ flexShrink: 0, color: '#0f3a4a', border: '1px solid rgba(15,58,74,0.25)', borderRadius: 1.5,
+                                '&:hover': { borderColor: '#0f3a4a', background: 'rgba(15,58,74,0.06)' } }}>
+                              <FormatSizeIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           <Button size="small" variant="outlined"
                             disabled={aiBusy === a.id}
                             onClick={() => void genActivity(d.id, seg.id, a.id, a.text)}
@@ -911,10 +940,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                         </Stack>
                         {opsOn && (
                           <Box sx={{ pl: '106px', pr: '76px', mt: 0.5, mb: 0.25 }}>
-                            <TextField size="small" fullWidth multiline minRows={1}
+                            <DebouncedTextField size="small" fullWidth multiline minRows={1}
                               value={a.ops ?? ''}
                               autoFocus={opsOpenIds.has(a.id) && !a.ops}
-                              onChange={(e) => updAct(d.id, seg.id, a.id, { ops: e.target.value })}
+                              onCommit={(v) => updAct(d.id, seg.id, a.id, { ops: v })}
                               placeholder="📝 Vận hành (giờ này): NCC · contact · số xác nhận · điểm đón-trả…"
                               sx={{ bgcolor: 'rgba(13,122,106,0.05)', borderRadius: 1,
                                 '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(13,122,106,0.3)' },
@@ -967,15 +996,15 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
                     🧭 Vận hành ngày này (cho HDV)
                   </Typography>
                   <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
-                    <TextField size="small" label="Khách sạn" value={dayOpsFor(d.dayNum)?.hotelName ?? ''}
-                      onChange={(e) => setDayOps(d.dayNum, { hotelName: e.target.value })} />
-                    <TextField size="small" label="Contact khách sạn" value={dayOpsFor(d.dayNum)?.hotelContact ?? ''}
-                      onChange={(e) => setDayOps(d.dayNum, { hotelContact: e.target.value })} />
+                    <DebouncedTextField size="small" label="Khách sạn" value={dayOpsFor(d.dayNum)?.hotelName ?? ''}
+                      onCommit={(v) => setDayOps(d.dayNum, { hotelName: v })} />
+                    <DebouncedTextField size="small" label="Contact khách sạn" value={dayOpsFor(d.dayNum)?.hotelContact ?? ''}
+                      onCommit={(v) => setDayOps(d.dayNum, { hotelContact: v })} />
                   </Box>
-                  <TextField size="small" fullWidth multiline minRows={2} sx={{ mt: 1 }}
+                  <DebouncedTextField size="small" fullWidth multiline minRows={2} sx={{ mt: 1 }}
                     label="Lưu ý điều hành trong ngày"
                     value={dayOpsFor(d.dayNum)?.notes ?? ''}
-                    onChange={(e) => setDayOps(d.dayNum, { notes: e.target.value })} />
+                    onCommit={(v) => setDayOps(d.dayNum, { notes: v })} />
                 </Box>
               </Box>
             </Paper>

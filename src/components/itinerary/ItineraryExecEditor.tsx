@@ -1,11 +1,12 @@
 import { type ReactNode } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Box, Button, Checkbox, Divider,
-  FormControlLabel, IconButton, Stack, TextField, Typography,
+  FormControlLabel, IconButton, Stack, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { DebouncedTextField } from '@/components/common/DebouncedTextField';
 import { newExecChecklistItem, newExecContact, newExecGuest } from './constants';
 import type { Day, ExecChecklistItem, ExecContact, ExecData, ExecDayOps, ExecGuest } from '@/types';
 
@@ -42,11 +43,11 @@ export function ItineraryExecEditor({ exec, days, onChange }: Props) {
           <Box>
             <SectionLabel>🆘 Thẻ liên hệ khẩn cấp (SOS 24/7)</SectionLabel>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-              <TextField size="small" label="Hotline 24/7" value={e.sosHotline ?? ''} onChange={(ev) => upd({ sosHotline: ev.target.value })} />
-              <TextField size="small" label="Điều hành trực" value={e.sosOperator ?? ''} onChange={(ev) => upd({ sosOperator: ev.target.value })} />
-              <TextField size="small" label="Bảo hiểm (hotline/đơn vị)" value={e.sosInsurance ?? ''} onChange={(ev) => upd({ sosInsurance: ev.target.value })} />
-              <TextField size="small" label="Đại sứ quán / Lãnh sự" value={e.sosEmbassy ?? ''} onChange={(ev) => upd({ sosEmbassy: ev.target.value })} />
-              <TextField size="small" label="Cấp cứu / Y tế" value={e.sosMedical ?? ''} onChange={(ev) => upd({ sosMedical: ev.target.value })} />
+              <DebouncedTextField size="small" label="Hotline 24/7" value={e.sosHotline ?? ''} onCommit={(v) => upd({ sosHotline: v })} />
+              <DebouncedTextField size="small" label="Điều hành trực" value={e.sosOperator ?? ''} onCommit={(v) => upd({ sosOperator: v })} />
+              <DebouncedTextField size="small" label="Bảo hiểm (hotline/đơn vị)" value={e.sosInsurance ?? ''} onCommit={(v) => upd({ sosInsurance: v })} />
+              <DebouncedTextField size="small" label="Đại sứ quán / Lãnh sự" value={e.sosEmbassy ?? ''} onCommit={(v) => upd({ sosEmbassy: v })} />
+              <DebouncedTextField size="small" label="Cấp cứu / Y tế" value={e.sosMedical ?? ''} onCommit={(v) => upd({ sosMedical: v })} />
             </Box>
           </Box>
 
@@ -58,9 +59,9 @@ export function ItineraryExecEditor({ exec, days, onChange }: Props) {
           <Box>
             <SectionLabel>👥 Danh sách khách & lưu ý đặc biệt</SectionLabel>
             <GuestTable rows={e.guests} onChange={(v) => upd({ guests: v })} />
-            <TextField fullWidth multiline minRows={2} size="small" sx={{ mt: 1 }}
+            <DebouncedTextField fullWidth multiline minRows={2} size="small" sx={{ mt: 1 }}
               label="Lưu ý chung về đoàn khách"
-              value={e.guestNotes ?? ''} onChange={(ev) => upd({ guestNotes: ev.target.value })} />
+              value={e.guestNotes ?? ''} onCommit={(v) => upd({ guestNotes: v })} />
           </Box>
 
           {/* Per-day ops */}
@@ -80,12 +81,12 @@ export function ItineraryExecEditor({ exec, days, onChange }: Props) {
                       <AccordionDetails>
                         <Stack spacing={1.25}>
                           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
-                            <TextField size="small" label="Khách sạn" value={ops.hotelName ?? ''} onChange={(ev) => setDayOps(d.dayNum, { hotelName: ev.target.value })} />
-                            <TextField size="small" label="Contact khách sạn" value={ops.hotelContact ?? ''} onChange={(ev) => setDayOps(d.dayNum, { hotelContact: ev.target.value })} />
+                            <DebouncedTextField size="small" label="Khách sạn" value={ops.hotelName ?? ''} onCommit={(v) => setDayOps(d.dayNum, { hotelName: v })} />
+                            <DebouncedTextField size="small" label="Contact khách sạn" value={ops.hotelContact ?? ''} onCommit={(v) => setDayOps(d.dayNum, { hotelContact: v })} />
                           </Box>
                           <ContactSection dense label="📍 Điểm tham quan & contact" rolePh="Tên điểm / lưu ý" rows={ops.venues} onChange={(v) => setDayOps(d.dayNum, { venues: v })} />
-                          <TextField size="small" fullWidth multiline minRows={2} label="Lưu ý điều hành trong ngày"
-                            value={ops.notes ?? ''} onChange={(ev) => setDayOps(d.dayNum, { notes: ev.target.value })} />
+                          <DebouncedTextField size="small" fullWidth multiline minRows={2} label="Lưu ý điều hành trong ngày"
+                            value={ops.notes ?? ''} onCommit={(v) => setDayOps(d.dayNum, { notes: v })} />
                           <ChecklistEditor rows={ops.checklist} onChange={(v) => setDayOps(d.dayNum, { checklist: v })} />
                         </Stack>
                       </AccordionDetails>
@@ -96,8 +97,8 @@ export function ItineraryExecEditor({ exec, days, onChange }: Props) {
             </Box>
           )}
 
-          <TextField fullWidth multiline minRows={2} size="small" label="📝 Các lưu ý vận hành khác"
-            value={e.generalNotes ?? ''} onChange={(ev) => upd({ generalNotes: ev.target.value })} />
+          <DebouncedTextField fullWidth multiline minRows={2} size="small" label="📝 Các lưu ý vận hành khác"
+            value={e.generalNotes ?? ''} onCommit={(v) => upd({ generalNotes: v })} />
         </Stack>
       </AccordionDetails>
     </Accordion>
@@ -123,10 +124,10 @@ function ContactSection({
       <Stack spacing={0.75}>
         {list.map((r) => (
           <Stack key={r.id} direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
-            <TextField size="small" placeholder={rolePh} value={r.role} onChange={(e) => upd(r.id, { role: e.target.value })} sx={{ width: 170 }} />
-            <TextField size="small" placeholder="Tên" value={r.name} onChange={(e) => upd(r.id, { name: e.target.value })} sx={{ flex: 1, minWidth: 120 }} />
-            <TextField size="small" placeholder="SĐT" value={r.phone} onChange={(e) => upd(r.id, { phone: e.target.value })} sx={{ width: 130 }} />
-            <TextField size="small" placeholder="Ghi chú" value={r.note ?? ''} onChange={(e) => upd(r.id, { note: e.target.value })} sx={{ flex: 1, minWidth: 120 }} />
+            <DebouncedTextField size="small" placeholder={rolePh} value={r.role} onCommit={(v) => upd(r.id, { role: v })} sx={{ width: 170 }} />
+            <DebouncedTextField size="small" placeholder="Tên" value={r.name} onCommit={(v) => upd(r.id, { name: v })} sx={{ flex: 1, minWidth: 120 }} />
+            <DebouncedTextField size="small" placeholder="SĐT" value={r.phone} onCommit={(v) => upd(r.id, { phone: v })} sx={{ width: 130 }} />
+            <DebouncedTextField size="small" placeholder="Ghi chú" value={r.note ?? ''} onCommit={(v) => upd(r.id, { note: v })} sx={{ flex: 1, minWidth: 120 }} />
             <IconButton size="small" color="error" onClick={() => onChange(list.filter((x) => x.id !== r.id))}><DeleteOutlineIcon fontSize="inherit" /></IconButton>
           </Stack>
         ))}
@@ -146,10 +147,10 @@ function GuestTable({ rows, onChange }: { rows: ExecGuest[] | undefined; onChang
       {list.map((g, i) => (
         <Stack key={g.id} direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
           <Typography variant="caption" color="text.disabled" sx={{ width: 16, textAlign: 'right' }}>{i + 1}</Typography>
-          <TextField size="small" placeholder="Tên khách" value={g.name} onChange={(e) => upd(g.id, { name: e.target.value })} sx={{ flex: 1, minWidth: 130 }} />
-          <TextField size="small" placeholder="Phòng" value={g.room ?? ''} onChange={(e) => upd(g.id, { room: e.target.value })} sx={{ width: 90 }} />
-          <TextField size="small" placeholder="Ăn kiêng/dị ứng" value={g.dietary ?? ''} onChange={(e) => upd(g.id, { dietary: e.target.value })} sx={{ width: 150 }} />
-          <TextField size="small" placeholder="Y tế" value={g.medical ?? ''} onChange={(e) => upd(g.id, { medical: e.target.value })} sx={{ width: 120 }} />
+          <DebouncedTextField size="small" placeholder="Tên khách" value={g.name} onCommit={(v) => upd(g.id, { name: v })} sx={{ flex: 1, minWidth: 130 }} />
+          <DebouncedTextField size="small" placeholder="Phòng" value={g.room ?? ''} onCommit={(v) => upd(g.id, { room: v })} sx={{ width: 90 }} />
+          <DebouncedTextField size="small" placeholder="Ăn kiêng/dị ứng" value={g.dietary ?? ''} onCommit={(v) => upd(g.id, { dietary: v })} sx={{ width: 150 }} />
+          <DebouncedTextField size="small" placeholder="Y tế" value={g.medical ?? ''} onCommit={(v) => upd(g.id, { medical: v })} sx={{ width: 120 }} />
           <FormControlLabel sx={{ mr: 0 }} control={<Checkbox size="small" checked={!!g.vip} onChange={(e) => upd(g.id, { vip: e.target.checked })} />} label="VIP" />
           <IconButton size="small" color="error" onClick={() => onChange(list.filter((x) => x.id !== g.id))}><DeleteOutlineIcon fontSize="inherit" /></IconButton>
         </Stack>
@@ -170,7 +171,7 @@ function ChecklistEditor({ rows, onChange }: { rows: ExecChecklistItem[] | undef
         {list.map((c) => (
           <Stack key={c.id} direction="row" spacing={0.5} alignItems="center">
             <Checkbox size="small" checked={!!c.done} onChange={(e) => onChange(list.map((x) => (x.id === c.id ? { ...x, done: e.target.checked } : x)))} sx={{ p: 0.5 }} />
-            <TextField size="small" fullWidth placeholder="Việc cần làm" value={c.text} onChange={(e) => onChange(list.map((x) => (x.id === c.id ? { ...x, text: e.target.value } : x)))} />
+            <DebouncedTextField size="small" fullWidth placeholder="Việc cần làm" value={c.text} onCommit={(v) => onChange(list.map((x) => (x.id === c.id ? { ...x, text: v } : x)))} />
             <IconButton size="small" color="error" onClick={() => onChange(list.filter((x) => x.id !== c.id))}><DeleteOutlineIcon fontSize="inherit" /></IconButton>
           </Stack>
         ))}

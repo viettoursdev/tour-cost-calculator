@@ -10,6 +10,8 @@ import type {
 export interface ExecMealVM {
   mealType: string;
   restaurant: string;
+  /** Địa chỉ · SĐT nhà hàng — gộp 1 dòng để in. */
+  address?: string;
   dishes: string;
   contact?: string;
   note?: string;
@@ -62,12 +64,13 @@ export function buildExecModel(
     const ops = opsByDay.get(d.dayNum);
     const menuMeals: ExecMealVM[] = (md?.meals ?? []).map((m) => {
       const rest = m.restaurantId ? restById.get(m.restaurantId) : undefined;
-      const contactBits = [rest?.contact, rest?.website].filter(Boolean).join(' · ');
+      const addrBits = [rest?.address, rest?.contact].filter(Boolean).join('  ·  ');
       return {
         mealType: m.mealType,
         restaurant: m.restaurantName || rest?.name || '',
+        address: addrBits || undefined,
         dishes: m.adjustedDishes || m.suggestedDishes || '',
-        contact: contactBits || undefined,
+        contact: rest?.website || undefined,
         note: [m.note, rest?.note].filter(Boolean).join(' · ') || undefined,
       };
     });
