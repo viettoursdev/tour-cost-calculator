@@ -69,6 +69,8 @@ export type TourProfile = {
   eventStaff?: Collaborator[];    // Nhân sự event — XEM + nhận thông báo (vai trò riêng)
   /** Tài liệu cấp hồ sơ (HĐ scan, vé, voucher, ảnh…) — tham chiếu file R2. */
   documents?: FileAttachment[];
+  /** Nhãn tự do (VIP / lặp lại / cần gấp…) — để phân loại & lọc nhanh. */
+  tags?: string[];
   /** Yêu cầu duyệt xoá đang chờ (người dưới Trưởng Phòng gửi). */
   deleteRequest?: DeleteRequest | null;
   createdAt: string;

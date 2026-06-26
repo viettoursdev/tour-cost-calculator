@@ -55,6 +55,8 @@ type State = {
   addFollower: (id: string, c: Collaborator) => Promise<void>;
   addEventStaff: (id: string, c: Collaborator) => Promise<void>;
   removeEventStaff: (id: string, u: string) => Promise<void>;
+  /** Đặt lại danh sách nhãn (tags) cho hồ sơ. */
+  setTags: (id: string, tags: string[]) => Promise<void>;
   /** Thêm tài liệu (file R2 đã upload) vào hồ sơ. */
   addDocuments: (id: string, docs: FileAttachment[]) => Promise<void>;
   /** Gỡ tài liệu khỏi hồ sơ theo key R2. */
@@ -218,6 +220,14 @@ export const useTourProfileStore = create<State>()(
       if (!(p.eventStaff ?? []).some((x) => x.u === u)) return;
       await get().save({ ...p, eventStaff: (p.eventStaff ?? []).filter((x) => x.u !== u) });
       logAudit('update', 'Hồ sơ tour', p.code, 'Gỡ nhân sự event');
+    },
+
+    setTags: async (id, tags) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+      await get().save({ ...p, tags: clean });
+      logAudit('update', 'Hồ sơ tour', p.code, `Cập nhật nhãn: ${clean.join(', ') || '(trống)'}`);
     },
 
     addDocuments: async (id, docs) => {

@@ -157,6 +157,7 @@ export function TourProfilesView() {
   const [fltCategory, setFltCategory] = useState<TourCategory | ''>('');
   const [fltCountry, setFltCountry] = useState<string>('');
   const [fltStage, setFltStage] = useState<DealStage | ''>('');
+  const [fltTag, setFltTag] = useState<string>('');
   const [exporting, setExporting] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
@@ -242,28 +243,31 @@ export function TourProfilesView() {
     if (fltCategory) list = list.filter((p) => tourCategoryOf(p) === fltCategory);
     if (fltCountry) list = list.filter((p) => (metaOf(p.id).country ?? '') === fltCountry);
     if (fltStage) list = list.filter((p) => metaOf(p.id).stage === fltStage);
+    if (fltTag) list = list.filter((p) => (p.tags ?? []).includes(fltTag));
     list.sort((a, b) => {
       if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
     return filterRank(list, search, (p) => [p.code, p.name, p.customerName].filter(Boolean).join(' '));
-  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, fltTag, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tùy chọn cho bộ lọc — suy từ các hồ sơ user được xem.
   const filterOptions = useMemo(() => {
     const all = visible();
     const customers = new Set<string>();
     const countries = new Set<string>();
+    const tags = new Set<string>();
     for (const p of all) {
       const cn = metaOf(p.id).primary?.customerName ?? p.customerName;
       if (cn) customers.add(cn);
       const co = metaOf(p.id).country;
       if (co) countries.add(co);
+      for (const t of p.tags ?? []) tags.add(t);
     }
-    return { customers: [...customers].sort(), countries: [...countries].sort() };
+    return { customers: [...customers].sort(), countries: [...countries].sort(), tags: [...tags].sort() };
   }, [visible, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage ? 1 : 0);
+  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage ? 1 : 0) + (fltTag ? 1 : 0);
 
   // ── Tổng quan điều hành (gom theo các hồ sơ đang hiển thị) ──
   const summary = useMemo(() => {
@@ -465,6 +469,7 @@ export function TourProfilesView() {
         })()}
         <DealCockpit />
         {p && <DirectLinkPanel profile={p} />}
+        {p && <TagEditor profile={p} canEdit={canEdit} />}
         {p && <DocumentHub profile={p} canEdit={canEdit} />}
         {p && opts.length > 1 && (
           <CompareOptionsPanel
@@ -542,11 +547,13 @@ export function TourProfilesView() {
         <FilterPanel
           customers={filterOptions.customers}
           countries={filterOptions.countries}
+          tags={filterOptions.tags}
           fltCustomer={fltCustomer} setFltCustomer={setFltCustomer}
           fltCategory={fltCategory} setFltCategory={setFltCategory}
           fltCountry={fltCountry} setFltCountry={setFltCountry}
           fltStage={fltStage} setFltStage={setFltStage}
-          onClear={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage(''); }}
+          fltTag={fltTag} setFltTag={setFltTag}
+          onClear={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage(''); setFltTag(''); }}
           activeFilters={activeFilters}
         />
       </Collapse>
@@ -828,14 +835,15 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
 
 /** Bộ lọc đa chiều: khách hàng / loại hồ sơ / quốc gia / giai đoạn. */
 function FilterPanel({
-  customers, countries, fltCustomer, setFltCustomer, fltCategory, setFltCategory,
-  fltCountry, setFltCountry, fltStage, setFltStage, onClear, activeFilters,
+  customers, countries, tags, fltCustomer, setFltCustomer, fltCategory, setFltCategory,
+  fltCountry, setFltCountry, fltStage, setFltStage, fltTag, setFltTag, onClear, activeFilters,
 }: {
-  customers: string[]; countries: string[];
+  customers: string[]; countries: string[]; tags: string[];
   fltCustomer: string; setFltCustomer: (v: string) => void;
   fltCategory: TourCategory | ''; setFltCategory: (v: TourCategory | '') => void;
   fltCountry: string; setFltCountry: (v: string) => void;
   fltStage: DealStage | ''; setFltStage: (v: DealStage | '') => void;
+  fltTag: string; setFltTag: (v: string) => void;
   onClear: () => void; activeFilters: number;
 }) {
   const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
@@ -860,6 +868,11 @@ function FilterPanel({
           <option value="">Tất cả</option>
           {stageCols.map((s) => <option key={s.key} value={s.key}>{s.short}</option>)}
         </TextField>
+        {tags.length > 0 && (
+          <Autocomplete size="small" options={tags} value={fltTag || null}
+            onChange={(_, v) => setFltTag(v ?? '')}
+            renderInput={(pr) => <TextField {...pr} label="Nhãn" placeholder="Tất cả" />} />
+        )}
       </Box>
       {activeFilters > 0 && (
         <Box sx={{ mt: 1, textAlign: 'right' }}>
@@ -997,6 +1010,9 @@ function ProfileRow({
             <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
             {archived && <Chip size="small" label="Lưu trữ" variant="outlined" sx={{ height: 20 }} />}
             <RiskChip risks={risks} />
+            {(profile.tags ?? []).map((t) => (
+              <Chip key={t} size="small" label={`# ${t}`} variant="outlined" sx={{ height: 20, borderColor: '#7c3aed', color: '#7c3aed' }} />
+            ))}
           </Stack>
           <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
             <Meta label="Khách" value={custName || '—'} />
@@ -1243,6 +1259,40 @@ function MilestonePanel({ milestones }: { milestones: Milestone[] }) {
           );
         })}
       </Box>
+    </Paper>
+  );
+}
+
+/** Nhãn (tag) tự do của hồ sơ — thêm/gỡ (gate canEdit). */
+function TagEditor({ profile, canEdit }: { profile: TourProfile; canEdit: boolean }) {
+  const setTags = useTourProfileStore((s) => s.setTags);
+  const [input, setInput] = useState('');
+  const tags = profile.tags ?? [];
+  const add = () => {
+    const t = input.trim();
+    if (!t || tags.includes(t)) { setInput(''); return; }
+    void setTags(profile.id, [...tags, t]);
+    setInput('');
+  };
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }}>
+      <Typography fontWeight={800} fontSize={13.5} sx={{ mb: 0.75 }}># Nhãn ({tags.length})</Typography>
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: canEdit ? 1 : 0 }}>
+        {tags.length === 0 && <Typography variant="body2" color="text.secondary">Chưa có nhãn.</Typography>}
+        {tags.map((t) => (
+          <Chip key={t} size="small" label={t}
+            onDelete={canEdit ? () => void setTags(profile.id, tags.filter((x) => x !== t)) : undefined}
+            sx={{ bgcolor: 'rgba(124,58,237,0.1)', color: '#7c3aed' }} />
+        ))}
+      </Stack>
+      {canEdit && (
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <TextField size="small" sx={{ flex: 1, maxWidth: 280 }} placeholder="Thêm nhãn (VIP, lặp lại, cần gấp…) — Enter"
+            value={input} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+          <Button size="small" variant="outlined" disabled={!input.trim()} onClick={add}>+ Nhãn</Button>
+        </Stack>
+      )}
     </Paper>
   );
 }
