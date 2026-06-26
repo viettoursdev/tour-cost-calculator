@@ -74,6 +74,12 @@ export type TourProfile = {
   startDate?: string | null;
   /** Số lượng khách — đồng bộ từ báo giá chính. */
   pax?: number;
+  /**
+   * KHOÁ thông tin cơ bản: khi người dùng SỬA TAY (tên/khách/ngày/số khách/điểm đến)
+   * thì đặt `true` → hồ sơ trở thành nguồn sự thật, KHÔNG bị `syncFromPrimary` ghi đè
+   * và được ƯU TIÊN hiển thị hơn báo giá chính. Bỏ tích để cho tự đồng bộ trở lại.
+   */
+  infoLocked?: boolean;
   /** cloudId của BÁO GIÁ CHÍNH → Cockpit suy giai đoạn/tổng từ đây. */
   primaryQuoteId?: string;
   status: TourProfileStatus;

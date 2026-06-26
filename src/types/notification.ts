@@ -4,6 +4,7 @@ export type NotificationType =
   | 'payment_due'
   | 'payment_approval'
   | 'delete_approval'
+  | 'export_approval'
   | 'collab_invite'
   | 'announcement'
   | 'task'

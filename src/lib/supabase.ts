@@ -6,6 +6,7 @@ import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/ty
 import type { AuditEntry } from '@/types/audit';
 import type { CloudQuoteEntry, Template, Collaborator } from '@/types/quote';
 import type { TourProfile, TourKind, TourCategory } from '@/types/tour';
+import type { ExportRequest, ExportScope } from '@/types/exportRequest';
 import { subscribeTable, replaceChildren, usernamesToIds, serializeWrites } from './supabase/helpers';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -3370,6 +3371,7 @@ const rowToTourProfile = (r: Record<string, unknown>): TourProfile => ({
   dest: (r.dest as string) ?? undefined,
   startDate: r.start_date ? new Date(r.start_date as string).toISOString().slice(0, 10) : null,
   pax: (r.pax as number) ?? 0,
+  infoLocked: (r.info_locked as boolean) ?? false,
   primaryQuoteId: (r.primary_quote_id as string) ?? undefined,
   status: (r.status as TourProfile['status']) ?? 'open',
   note: (r.note as string) ?? undefined,
@@ -3398,6 +3400,7 @@ const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
   dest: p.dest ?? null,
   start_date: p.startDate ?? null,
   pax: p.pax ?? 0,
+  info_locked: p.infoLocked ?? false,
   primary_quote_id: p.primaryQuoteId ?? null,
   status: p.status ?? 'open',
   note: p.note ?? '',
@@ -3469,6 +3472,73 @@ export async function sbUpsertTourProfile(p: TourProfile, client: SupabaseClient
 export async function sbDeleteTourProfile(id: string, client: SupabaseClient = sb): Promise<void> {
   const { error } = await client.from('tour_profiles').delete().eq('id', id);
   if (error) throw new Error('sbDeleteTourProfile: ' + error.message);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Yêu cầu duyệt XUẤT FILE (Excel) — cần Trưởng Phòng trở lên (migration 0065).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const rowToExportRequest = (r: Record<string, unknown>): ExportRequest => ({
+  id: r.id as string,
+  scope: ((r.scope as ExportScope) ?? 'tour_profiles'),
+  detail: (r.detail as string) ?? undefined,
+  status: (r.status as ExportRequest['status']) ?? 'pending',
+  requestedByU: (r.requested_by_username as string) ?? undefined,
+  requestedByName: (r.requested_by_name as string) ?? undefined,
+  requestedAt: r.requested_at ? new Date(r.requested_at as string).toISOString() : new Date().toISOString(),
+  decidedByName: (r.decided_by_name as string) ?? undefined,
+  decidedAt: r.decided_at ? new Date(r.decided_at as string).toISOString() : undefined,
+  rejectReason: (r.reject_reason as string) ?? undefined,
+});
+
+export function sbSubscribeExportRequests(
+  cb: (list: ExportRequest[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'export_requests', async (cl) => {
+    const { data, error } = await cl
+      .from('export_requests')
+      .select('*')
+      .order('requested_at', { ascending: false });
+    if (error) throw new Error('sbSubscribeExportRequests: ' + error.message);
+    return (data ?? []).map(rowToExportRequest);
+  }, cb);
+}
+
+/** Người gửi tạo yêu cầu xuất (status='pending'). `requested_by` lấy từ phiên đăng nhập. */
+export async function sbCreateExportRequest(
+  input: { id: string; scope: ExportScope; detail?: string; requestedByUsername?: string; requestedByName?: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { data: auth } = await client.auth.getUser();
+  const { error } = await client.from('export_requests').insert({
+    id: input.id,
+    scope: input.scope,
+    detail: input.detail ?? null,
+    status: 'pending',
+    requested_by: auth.user?.id ?? null,
+    requested_by_username: input.requestedByUsername ?? null,
+    requested_by_name: input.requestedByName ?? null,
+  });
+  if (error) throw new Error('sbCreateExportRequest: ' + error.message);
+}
+
+/** DUYỆT yêu cầu xuất (DB chặn: chỉ Trưởng Phòng+). */
+export async function sbApproveExportRequest(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('approve_export_request', { p_id: id });
+  if (error) throw new Error(error.message);
+}
+
+/** TỪ CHỐI yêu cầu xuất (DB chặn: chỉ Trưởng Phòng+). */
+export async function sbRejectExportRequest(id: string, reason: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('reject_export_request', { p_id: id, p_reason: reason });
+  if (error) throw new Error(error.message);
+}
+
+/** Xoá yêu cầu (người gửi tiêu thụ sau khi tải, hoặc dọn yêu cầu bị từ chối). */
+export async function sbDeleteExportRequest(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('export_requests').delete().eq('id', id);
+  if (error) throw new Error('sbDeleteExportRequest: ' + error.message);
 }
 
 // ── Phase 2 Task 5 — Quote Project State ────────────────────────────────────

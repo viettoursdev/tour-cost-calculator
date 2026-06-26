@@ -7,6 +7,7 @@ import { useRateCardStore } from '@/stores/rateCardStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
+import { useExportRequestStore } from '@/stores/exportRequestStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useNccProductsStore } from '@/stores/nccProductsStore';
@@ -105,6 +106,7 @@ export function MainApp() {
     const hrLeaveUnsub = useHrLeaveStore.getState().init();
     const invUnsub = useInventoryStore.getState().init();
     const trainingUnsub = useTrainingStore.getState().init();
+    const exportReqUnsub = useExportRequestStore.getState().init();
 
     const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
     const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
@@ -171,6 +173,7 @@ export function MainApp() {
       hrLeaveUnsub?.();
       invUnsub?.();
       trainingUnsub?.();
+      exportReqUnsub?.();
     };
   }, [currentUser]);
 

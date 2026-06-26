@@ -21,3 +21,4 @@ export * from './process';
 export * from './hr';
 export * from './inventory';
 export * from './training';
+export * from './exportRequest';

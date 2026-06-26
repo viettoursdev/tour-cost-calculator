@@ -48,6 +48,10 @@ type State = {
   save: (p: TourProfile) => Promise<void>;
   remove: (id: string) => Promise<void>;
   setPrimaryQuote: (id: string, quoteId: string) => Promise<void>;
+  /** SỬA TAY thông tin cơ bản (tên/khách/điểm đến/ngày/số khách/ghi chú). Khi `lock`
+   *  = true (mặc định) đặt `infoLocked` → hồ sơ thành nguồn sự thật, không bị
+   *  `syncFromPrimary` ghi đè và được ưu tiên hiển thị. Bỏ `lock` để cho tự đồng bộ lại. */
+  setBasicInfo: (id: string, info: { name?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number; note?: string }, lock?: boolean) => Promise<void>;
   /** Đồng bộ NGƯỢC thông tin hiển thị (tên/khách/ngày/pax) từ báo giá chính vào hồ sơ
    *  để báo cáo trực tiếp trên DB cũng đúng. Bỏ qua nếu không có gì đổi. */
   syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
@@ -178,9 +182,28 @@ export const useTourProfileStore = create<State>()(
       logAudit('update', 'Hồ sơ tour', p.code, 'Đổi báo giá chính');
     },
 
+    setBasicInfo: async (id, info, lock = true) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      const next: TourProfile = {
+        ...p,
+        name: info.name !== undefined ? info.name.trim() : p.name,
+        customerName: info.customerName !== undefined ? (info.customerName.trim() || undefined) : p.customerName,
+        dest: info.dest !== undefined ? (info.dest.trim() || undefined) : p.dest,
+        startDate: info.startDate !== undefined ? (info.startDate || null) : p.startDate,
+        pax: info.pax !== undefined ? info.pax : p.pax,
+        note: info.note !== undefined ? (info.note.trim() || undefined) : p.note,
+        infoLocked: lock,
+      };
+      await get().save(next);
+      logAudit('update', 'Hồ sơ tour', p.code, lock ? 'Sửa thông tin cơ bản (khoá đồng bộ)' : 'Sửa thông tin cơ bản (tự đồng bộ)');
+    },
+
     syncFromPrimary: async (id, info) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
+      // Hồ sơ đã KHOÁ (người dùng sửa tay) → KHÔNG ghi đè từ báo giá chính.
+      if (p.infoLocked) return;
       const next: TourProfile = {
         ...p,
         name: info.name?.trim() || p.name,
