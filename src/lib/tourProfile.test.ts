@@ -4,7 +4,8 @@ import {
   categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones,
-  clonedQuoteName,
+  clonedQuoteName, customerPortfolio, marginSummary,
+  type ProfilePortfolioRow,
 } from './tourProfile';
 import type { AuditEntry, Department, Role, TourCategory, TourProfile, User } from '@/types';
 
@@ -150,6 +151,52 @@ describe('tourProfileRisks — thẻ "cần chú ý"', () => {
   });
   it('topRiskLevel: rỗng → null', () => {
     expect(topRiskLevel([])).toBeNull();
+  });
+});
+
+describe('customerPortfolio — Khách hàng 360', () => {
+  const rows: ProfilePortfolioRow[] = [
+    { id: '1', code: 'A', name: 'T1', customerName: 'Manulife', stage: 'closed', value: 100, profit: 20 },
+    { id: '2', code: 'B', name: 'T2', customerName: 'manulife ', stage: 'lost', value: 50 },
+    { id: '3', code: 'C', name: 'T3', customerName: 'Manulife', stage: 'won', value: 80, profit: 10 },
+    { id: '4', code: 'D', name: 'T4', customerName: 'Herbalife', stage: 'won', value: 200, profit: 40 },
+  ];
+  it('gom theo tên (không phân biệt hoa/thường/space), tổng đúng', () => {
+    const p = customerPortfolio(rows, 'Manulife');
+    expect(p.count).toBe(3);
+    expect(p.won).toBe(2);          // closed + won
+    expect(p.lost).toBe(1);
+    expect(p.totalValue).toBe(230);
+    expect(p.totalProfit).toBe(30); // 20 + 10 (chỉ 2 hồ sơ có profit)
+    expect(p.profitN).toBe(2);
+  });
+  it('khách rỗng → portfolio rỗng', () => {
+    expect(customerPortfolio(rows, '').count).toBe(0);
+  });
+});
+
+describe('marginSummary — biên lợi kế hoạch vs thực', () => {
+  const mk = (planned: number, actual: number, budget = 100, actualCost = 100, profit = 0) =>
+    ({ budgetCost: budget, actualCost, actualProfit: profit, actualMarginPct: actual, plannedMarginPct: planned });
+  it('không có quyết toán → null', () => {
+    const s = marginSummary([undefined, undefined]);
+    expect(s.n).toBe(0);
+    expect(s.plannedAvgPct).toBeNull();
+    expect(s.variancePct).toBeNull();
+  });
+  it('trung bình + chênh lệch đúng (bỏ qua undefined)', () => {
+    const s = marginSummary([mk(20, 15), mk(30, 35), undefined]);
+    expect(s.n).toBe(2);
+    expect(s.plannedAvgPct).toBe(25);
+    expect(s.actualAvgPct).toBe(25);
+    expect(s.variancePct).toBe(0);
+  });
+  it('cộng tổng chi phí dự toán/thực', () => {
+    const s = marginSummary([mk(10, 8, 100, 120, -20), mk(10, 12, 200, 180, 20)]);
+    expect(s.totalBudgetCost).toBe(300);
+    expect(s.totalActualCost).toBe(300);
+    expect(s.totalActualProfit).toBe(0);
+    expect(s.variancePct).toBe(0);
   });
 });
 

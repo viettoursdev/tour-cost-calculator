@@ -294,3 +294,71 @@ export function tourProfileMilestones(args: {
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
+
+// ════════════════════════════════════════════════════════════════════════
+//  Khách hàng 360 (C1) + Biên lợi kế hoạch vs thực (C2) — hàm THUẦN.
+// ════════════════════════════════════════════════════════════════════════
+
+/** Một dòng rút gọn của hồ sơ (đã suy giai đoạn + giá trị ở tầng gọi). */
+export type ProfilePortfolioRow = {
+  id: string; code: string; name: string; customerName?: string;
+  stage: string; value?: number; profit?: number;
+};
+
+export type CustomerPortfolio = {
+  customer: string;
+  count: number; won: number; lost: number;
+  totalValue: number; totalProfit: number; profitN: number;
+  items: ProfilePortfolioRow[];
+};
+
+const normName = (s?: string) => (s ?? '').trim().toLowerCase();
+
+/**
+ * Gom toàn bộ hồ sơ của MỘT khách hàng (theo tên, không phân biệt hoa/thường) →
+ * tổng giá trị / biên lợi thực / số thắng-thua. HÀM THUẦN.
+ */
+export function customerPortfolio(rows: ProfilePortfolioRow[], customerName: string): CustomerPortfolio {
+  const key = normName(customerName);
+  const items = key ? rows.filter((r) => normName(r.customerName) === key) : [];
+  let won = 0, lost = 0, totalValue = 0, totalProfit = 0, profitN = 0;
+  for (const r of items) {
+    if (r.stage === 'lost') lost++; else if (WON_STAGES.has(r.stage)) won++;
+    totalValue += r.value ?? 0;
+    if (typeof r.profit === 'number') { totalProfit += r.profit; profitN++; }
+  }
+  return { customer: customerName, count: items.length, won, lost, totalValue, totalProfit, profitN, items };
+}
+
+export type MarginSummary = {
+  n: number;                 // số hồ sơ đã quyết toán
+  plannedAvgPct: number | null;
+  actualAvgPct: number | null;
+  variancePct: number | null; // actual − planned (điểm %)
+  totalBudgetCost: number;
+  totalActualCost: number;
+  totalActualProfit: number;
+};
+
+/** Tóm tắt biên lợi KẾ HOẠCH vs THỰC trên các hồ sơ đã quyết toán. HÀM THUẦN. */
+export function marginSummary(
+  settlements: Array<Pick<CloudQuoteEntry, 'settlementSummary'>['settlementSummary']>,
+): MarginSummary {
+  const ss = settlements.filter((s): s is NonNullable<typeof s> => !!s);
+  const n = ss.length;
+  if (n === 0) {
+    return { n: 0, plannedAvgPct: null, actualAvgPct: null, variancePct: null, totalBudgetCost: 0, totalActualCost: 0, totalActualProfit: 0 };
+  }
+  const sum = (f: (s: NonNullable<typeof ss[number]>) => number) => ss.reduce((a, s) => a + f(s), 0);
+  const plannedAvgPct = sum((s) => s.plannedMarginPct) / n;
+  const actualAvgPct = sum((s) => s.actualMarginPct) / n;
+  return {
+    n,
+    plannedAvgPct,
+    actualAvgPct,
+    variancePct: actualAvgPct - plannedAvgPct,
+    totalBudgetCost: sum((s) => s.budgetCost),
+    totalActualCost: sum((s) => s.actualCost),
+    totalActualProfit: sum((s) => s.actualProfit),
+  };
+}

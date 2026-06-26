@@ -59,7 +59,9 @@ import {
   deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones, clonedQuoteName,
+  customerPortfolio, marginSummary,
   type TourRisk, type TourRiskLevel, type ClosingItem, type Milestone, type MilestoneLevel,
+  type MarginSummary, type CustomerPortfolio, type ProfilePortfolioRow,
 } from '@/lib/tourProfile';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
@@ -274,7 +276,8 @@ export function TourProfilesView() {
       if (typeof ap === 'number') { profit += ap; profitN++; }
     }
     const decided = won + lost;
-    return { total: rows.length, open, archived, won, lost, byStage, value, remaining, profit, profitN, winRate: decided ? Math.round((won / decided) * 100) : null };
+    const margin = marginSummary(rows.map((p) => metaOf(p.id).primary?.settlementSummary));
+    return { total: rows.length, open, archived, won, lost, byStage, value, remaining, profit, profitN, margin, winRate: decided ? Math.round((won / decided) * 100) : null };
   }, [rows, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doExport = async () => {
@@ -424,6 +427,22 @@ export function TourProfilesView() {
         <DealCockpit />
         {p && <DirectLinkPanel profile={p} />}
         {p && <DocumentHub profile={p} canEdit={canEdit} />}
+        {p && (() => {
+          const custName = metaOf(p.id).primary?.customerName ?? p.customerName ?? '';
+          if (!custName) return null;
+          const portRows: ProfilePortfolioRow[] = visible().map((x) => {
+            const m = metaOf(x.id);
+            return { id: x.id, code: x.code, name: x.name, customerName: m.primary?.customerName ?? x.customerName, stage: m.stage, value: m.values.current, profit: m.primary?.settlementSummary?.actualProfit };
+          });
+          return (
+            <CustomerPortfolioPanel
+              portfolio={customerPortfolio(portRows, custName)}
+              currentId={p.id}
+              showPrice={showPrice}
+              onOpen={(id) => { const tp = profiles.find((x) => x.id === id); if (tp) void openProfile(tp); }}
+            />
+          );
+        })()}
         {p && (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2 }}>
             <ProfileDiscussion profile={p} users={users} currentUser={currentUser} />
@@ -836,8 +855,10 @@ function RequestDeleteDialog({ profile, users, currentUser, onClose, onRequest }
 type Summary = {
   total: number; open: number; archived: number; won: number; lost: number;
   byStage: Record<string, number>; value: number; remaining: number;
-  profit: number; profitN: number; winRate: number | null;
+  profit: number; profitN: number; margin: MarginSummary; winRate: number | null;
 };
+
+const pct1 = (n: number) => `${n.toFixed(1)}%`;
 
 /** Bảng tổng quan điều hành theo các hồ sơ đang hiển thị. */
 function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: boolean }) {
@@ -852,6 +873,12 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
     cards.push({ label: 'Tổng giá trị', value: fmtVND(summary.value) });
     cards.push({ label: 'Công nợ còn lại', value: fmtVND(summary.remaining), color: '#d97706' });
     if (summary.profitN > 0) cards.push({ label: `Biên lợi thực (${summary.profitN})`, value: fmtVND(summary.profit), color: summary.profit >= 0 ? '#16a34a' : '#dc2626' });
+    const m = summary.margin;
+    if (m.n > 0 && m.plannedAvgPct !== null && m.actualAvgPct !== null && m.variancePct !== null) {
+      cards.push({ label: `Biên KH (TB, ${m.n})`, value: pct1(m.plannedAvgPct), color: '#6b7280' });
+      cards.push({ label: 'Biên thực (TB)', value: pct1(m.actualAvgPct), color: m.actualAvgPct >= m.plannedAvgPct ? '#16a34a' : '#dc2626' });
+      cards.push({ label: 'Chênh KH↔thực', value: `${m.variancePct >= 0 ? '+' : ''}${m.variancePct.toFixed(1)}đ%`, color: m.variancePct >= 0 ? '#16a34a' : '#dc2626' });
+    }
   }
   const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
   return (
@@ -1221,6 +1248,56 @@ function DocumentHub({ profile, canEdit }: { profile: TourProfile; canEdit: bool
           <input type="file" hidden multiple onChange={(e) => void onPick(e)} />
         </Button>
       )}
+    </Paper>
+  );
+}
+
+/** Khách hàng 360 — toàn bộ tour của khách hiện tại + tổng quan. */
+function CustomerPortfolioPanel({ portfolio, currentId, showPrice, onOpen }: {
+  portfolio: CustomerPortfolio; currentId: string; showPrice: boolean; onOpen: (id: string) => void;
+}) {
+  if (!portfolio.customer || portfolio.count === 0) return null;
+  const others = portfolio.items.filter((i) => i.id !== currentId);
+  const stats: { label: string; value: string; color?: string }[] = [
+    { label: 'Hồ sơ', value: String(portfolio.count) },
+    { label: 'Đã chốt', value: String(portfolio.won), color: '#0d7a6a' },
+    { label: 'Thua / Huỷ', value: String(portfolio.lost), color: '#dc2626' },
+  ];
+  if (showPrice) {
+    stats.push({ label: 'Tổng giá trị', value: fmtVND(portfolio.totalValue) });
+    if (portfolio.profitN > 0) stats.push({ label: `Biên lợi thực (${portfolio.profitN})`, value: fmtVND(portfolio.totalProfit), color: portfolio.totalProfit >= 0 ? '#16a34a' : '#dc2626' });
+  }
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+        <PersonOutlineIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <Typography fontWeight={800} fontSize={13.5}>Khách hàng 360 · {portfolio.customer}</Typography>
+      </Stack>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(3,1fr)', sm: 'repeat(5,1fr)' }, gap: 1, mb: 1 }}>
+        {stats.map((s) => (
+          <Box key={s.label} sx={{ textAlign: 'center', p: 0.75, borderRadius: 1.5, bgcolor: 'rgba(0,0,0,0.02)' }}>
+            <Typography fontSize={15} fontWeight={900} sx={{ color: s.color ?? 'text.primary', lineHeight: 1.1 }}>{s.value}</Typography>
+            <Typography variant="caption" color="text.secondary">{s.label}</Typography>
+          </Box>
+        ))}
+      </Box>
+      <Typography variant="caption" fontWeight={800} color="text.secondary">Các tour khác của khách ({others.length})</Typography>
+      <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+        {others.length === 0 && <Typography variant="body2" color="text.secondary">Đây là hồ sơ duy nhất của khách này.</Typography>}
+        {others.map((o) => {
+          const sm = STAGE_META(o.stage as DealStage);
+          return (
+            <Stack key={o.id} direction="row" alignItems="center" spacing={1}
+              sx={{ border: '1px solid rgba(15,58,74,0.12)', borderRadius: 1.5, px: 1, py: 0.5 }}>
+              <Chip size="small" label={o.code} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
+              <Typography fontSize={13} fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>{o.name || '(chưa đặt tên)'}</Typography>
+              <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
+              {showPrice && typeof o.value === 'number' && <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{fmtVND(o.value)}</Typography>}
+              <Button size="small" onClick={() => onOpen(o.id)}>Mở</Button>
+            </Stack>
+          );
+        })}
+      </Stack>
     </Paper>
   );
 }
