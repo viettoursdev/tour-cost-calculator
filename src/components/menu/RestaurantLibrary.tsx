@@ -47,6 +47,10 @@ export function RestaurantLibrary({ onBack }: Props) {
       .catch(() => { /* không chặn UI nếu lỗi tải liên kết */ });
     return () => { alive = false; };
   }, []);
+  // Flush any debounced restaurant write when leaving the library, so the last
+  // edit before navigating away is never lost.
+  useEffect(() => () => { void useRestaurantStore.getState().flush(); }, []);
+
   const [search, setSearch] = useState('');
   const [filterCont, setFilterCont] = useState('');
   const [filterCountry, setFilterCountry] = useState('');

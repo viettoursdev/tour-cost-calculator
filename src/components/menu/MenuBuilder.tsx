@@ -54,6 +54,8 @@ export function MenuBuilder({ initial, user, onBack }: Props) {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const itins = useItineraryStore((s) => s.list);
   const savedBy = `${user.name} (${user.role})`;
+  // Flush any debounced restaurant sync (syncSuggestedToRestaurant) on unmount.
+  useEffect(() => () => { void useRestaurantStore.getState().flush(); }, []);
   const code = useMemo(
     () => generateMenuCode(it.type, it.continent, it.country, it.seq),
     [it.type, it.continent, it.country, it.seq],
