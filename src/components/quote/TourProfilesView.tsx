@@ -52,6 +52,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useMenuStore } from '@/stores/menuStore';
 import { useItineraryStore } from '@/stores/itineraryStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { canShareRecord } from '@/auth/recordAccess';
 import { userLabel, isApprover } from '@/auth/ROLES';
@@ -77,7 +78,7 @@ import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
 import type { TourProfilePdfData } from '@/lib/exports/exportTourProfilePDF';
 import { LEGACY } from '@/theme';
-import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, DeleteRequest, ExportRequest, FileAttachment, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
+import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, Customer, DeleteRequest, ExportRequest, FileAttachment, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
   st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
@@ -940,10 +941,14 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
   onClose: () => void;
-  onSave: (info: { name: string; customerName: string; dest: string; startDate: string | null; pax: number; note: string }, lock: boolean) => Promise<void>;
+  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; startDate: string | null; pax: number; note: string }, lock: boolean) => Promise<void>;
 }) {
+  const customers = useCustomerStore((s) => s.customers);
   const b = displayBasics(profile, primary);
+  // Khách hàng: ưu tiên hồ sơ KH đã gắn (customerId) → đồng bộ với hồ sơ khách hàng thật.
+  const initialCustomer = profile.customerId ? customers.find((c) => c.id === profile.customerId) ?? null : null;
   const [name, setName] = useState(profile.name ?? '');
+  const [customer, setCustomer] = useState<Customer | null>(initialCustomer);
   const [customerName, setCustomerName] = useState(b.custName ?? '');
   const [dest, setDest] = useState(b.dest ?? '');
   const [startDate, setStartDate] = useState<string>(b.departDate ? b.departDate.slice(0, 10) : '');
@@ -953,10 +958,24 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const [busy, setBusy] = useState(false);
   const hasPrimary = !!primary;
 
+  // Giá trị ĐỒNG BỘ ban đầu (theo báo giá chính). Nếu người dùng sửa tay bất kỳ
+  // trường nào trong số này thì PHẢI tự khoá, nếu không displayBasics sẽ lấy lại
+  // giá trị báo giá chính đè lên → "sửa xong không đổi".
+  const syncedDirty =
+    customerName.trim() !== (b.custName ?? '') ||
+    dest.trim() !== (b.dest ?? '') ||
+    startDate !== (b.departDate ? b.departDate.slice(0, 10) : '') ||
+    pax !== (b.pax ? String(b.pax) : '');
+
   const submit = async () => {
     setBusy(true);
+    // Sửa tay trường đồng bộ → tự khoá để giá trị sửa tay được giữ & hiển thị.
+    const effectiveLock = lock || syncedDirty;
     try {
-      await onSave({ name, customerName, dest, startDate: startDate || null, pax: Number(pax) || 0, note }, lock);
+      await onSave(
+        { name, customerId: customer?.id ?? null, customerName, dest, startDate: startDate || null, pax: Number(pax) || 0, note },
+        effectiveLock,
+      );
     } finally { setBusy(false); }
   };
 
@@ -969,7 +988,34 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
       <DialogContent dividers>
         <Stack spacing={1.75} sx={{ mt: 0.5 }}>
           <TextField size="small" label="Tên tour / hồ sơ" value={name} onChange={(e) => setName(e.target.value)} autoFocus fullWidth />
-          <TextField size="small" label="Tên khách hàng" value={customerName} onChange={(e) => setCustomerName(e.target.value)} fullWidth />
+          <Autocomplete<Customer, false, false, true>
+            freeSolo
+            size="small"
+            options={customers}
+            value={customer}
+            inputValue={customerName}
+            getOptionLabel={(o) => (typeof o === 'string' ? o : o.name)}
+            isOptionEqualToValue={(a, b2) => a.id === b2.id}
+            onChange={(_, v) => {
+              if (v && typeof v !== 'string') { setCustomer(v); setCustomerName(v.name); }
+              else { setCustomer(null); setCustomerName(typeof v === 'string' ? v : ''); }
+            }}
+            onInputChange={(_, v, reason) => {
+              if (reason === 'input') { setCustomerName(v); setCustomer(null); }
+            }}
+            renderOption={(props, o) => (
+              <li {...props} key={o.id}>
+                <Box>
+                  <Typography variant="body2">{o.name}</Typography>
+                  {o.contacts?.[0] && <Typography variant="caption" color="text.secondary">{o.contacts[0].name} · {o.contacts[0].phone}</Typography>}
+                </Box>
+              </li>
+            )}
+            renderInput={(pr) => (
+              <TextField {...pr} label="Tên khách hàng" placeholder="Chọn hồ sơ khách hàng hoặc gõ tên…"
+                helperText={customer ? '🔗 Đã liên kết hồ sơ khách hàng' : 'Chưa liên kết — gõ tên hoặc chọn từ danh sách'} />
+            )}
+          />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             <TextField size="small" label="Số lượng khách" type="number" value={pax} onChange={(e) => setPax(e.target.value)} inputProps={{ min: 0 }} fullWidth />
@@ -980,7 +1026,12 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
             control={<Switch size="small" checked={lock} onChange={(e) => setLock(e.target.checked)} />}
             label={<Typography variant="caption">Khoá thông tin — ưu tiên giá trị này, không tự đồng bộ lại từ báo giá chính</Typography>}
           />
-          {hasPrimary && !lock && (
+          {hasPrimary && !lock && syncedDirty && (
+            <Typography variant="caption" sx={{ color: 'warning.main' }}>
+              Bạn đã sửa tay thông tin khách / ngày / số khách → hồ sơ sẽ TỰ KHOÁ để giữ giá trị này (không bị báo giá chính ghi đè).
+            </Typography>
+          )}
+          {hasPrimary && !lock && !syncedDirty && (
             <Typography variant="caption" color="text.secondary">
               Khi KHÔNG khoá, thông tin khách / ngày / số khách sẽ tiếp tục đồng bộ theo báo giá chính mỗi lần lưu báo giá.
             </Typography>
