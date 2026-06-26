@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   generateTourCode, tourPrefix, tourDatePart, canViewTourProfile, visibleTourProfiles, nextPrimaryAfterDelete,
   categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
+  tourProfileRisks, topRiskLevel, tourProfileTimeline,
 } from './tourProfile';
-import type { Department, Role, TourCategory, TourProfile, User } from '@/types';
+import type { AuditEntry, Department, Role, TourCategory, TourProfile, User } from '@/types';
 
 const user = (u: string, role: Role, department?: Department): User =>
   ({ u, name: u.toUpperCase(), role, department, color: '#000' });
@@ -95,6 +96,78 @@ describe('canViewTourProfile — nhân sự event cũng được xem', () => {
   it('eventStaff được xem (như follower)', () => {
     const pe = profile({ createdByU: 'an', eventStaff: [{ u: 'cuong', name: 'CUONG' }] });
     expect(canViewTourProfile(find('cuong'), pe, USERS)).toBe(true);
+  });
+});
+
+describe('tourProfileRisks — thẻ "cần chú ý"', () => {
+  const NOW = new Date('2026-06-26T00:00:00Z');
+  const iso = (offsetDays: number) => new Date(NOW.getTime() + offsetDays * 86_400_000).toISOString();
+
+  it('không có báo giá chính → không rủi ro', () => {
+    expect(tourProfileRisks({ stage: 'request', contractCount: 0, now: NOW })).toEqual([]);
+  });
+  it('báo giá quá hạn (chưa chốt) → urgent', () => {
+    const r = tourProfileRisks({ primary: { deadline: iso(-1) }, stage: 'quoted', contractCount: 0, now: NOW });
+    expect(r.map((x) => x.key)).toContain('quote_overdue');
+    expect(topRiskLevel(r)).toBe('urgent');
+  });
+  it('đã chốt thì KHÔNG cảnh báo báo giá quá hạn', () => {
+    const r = tourProfileRisks({ primary: { deadline: iso(-1) }, stage: 'won', contractCount: 1, now: NOW });
+    expect(r.map((x) => x.key)).not.toContain('quote_overdue');
+  });
+  it('bước quy trình quá hạn → đếm đúng', () => {
+    const r = tourProfileRisks({
+      primary: { workflowDue: [{ label: 'A', dueDate: iso(-2) }, { label: 'B', dueDate: iso(3) }] },
+      stage: 'operating', contractCount: 1, now: NOW,
+    });
+    expect(r.find((x) => x.key === 'workflow_overdue')?.label).toContain('1 bước');
+  });
+  it('sắp khởi hành (≤14 ngày) đã thắng mà CHƯA có hợp đồng → urgent', () => {
+    const r = tourProfileRisks({ primary: { departDate: iso(10) }, stage: 'won', contractCount: 0, now: NOW });
+    expect(r.map((x) => x.key)).toContain('no_contract');
+  });
+  it('có hợp đồng thì KHÔNG cảnh báo thiếu hợp đồng', () => {
+    const r = tourProfileRisks({ primary: { departDate: iso(10) }, stage: 'won', contractCount: 1, now: NOW });
+    expect(r.map((x) => x.key)).not.toContain('no_contract');
+  });
+  it('còn công nợ NCC khi sắp khởi hành (≤7 ngày) → warn', () => {
+    const r = tourProfileRisks({ primary: { departDate: iso(3), paymentSummary: { payable: 10, paid: 5, remaining: 5 } }, stage: 'operating', contractCount: 1, now: NOW });
+    expect(r.map((x) => x.key)).toContain('payable_remaining');
+  });
+  it('đã qua khởi hành mà chưa quyết toán → warn', () => {
+    const r = tourProfileRisks({ primary: { departDate: iso(-3) }, stage: 'acceptance', contractCount: 1, now: NOW });
+    expect(r.map((x) => x.key)).toContain('no_settlement');
+  });
+  it('đã quyết toán thì KHÔNG cảnh báo', () => {
+    const r = tourProfileRisks({ primary: { departDate: iso(-3), settlementSummary: { budgetCost: 1, actualCost: 1, actualProfit: 0, actualMarginPct: 0, plannedMarginPct: 0 } }, stage: 'acceptance', contractCount: 1, now: NOW });
+    expect(r.map((x) => x.key)).not.toContain('no_settlement');
+  });
+  it('giai đoạn đã đóng/thua → bỏ qua rủi ro tác nghiệp', () => {
+    expect(tourProfileRisks({ primary: { deadline: iso(-5) }, stage: 'closed', contractCount: 1, now: NOW })).toEqual([]);
+    expect(tourProfileRisks({ primary: { deadline: iso(-5) }, stage: 'lost', contractCount: 0, now: NOW })).toEqual([]);
+  });
+  it('topRiskLevel: rỗng → null', () => {
+    expect(topRiskLevel([])).toBeNull();
+  });
+});
+
+describe('tourProfileTimeline — lọc audit_log theo hồ sơ', () => {
+  const e = (over: Partial<AuditEntry>): AuditEntry =>
+    ({ id: 'x', at: '2026-06-26T00:00:00Z', byU: 'an', byName: 'AN', action: 'update', entity: 'Hồ sơ tour', name: 'NĐ.26.06.26.01', ...over });
+  const entries: AuditEntry[] = [
+    e({ id: '1', at: '2026-06-26T03:00:00Z', name: 'NĐ.26.06.26.01' }),
+    e({ id: '2', at: '2026-06-26T01:00:00Z', name: 'NĐ.26.06.26.01' }),
+    e({ id: '3', name: 'NĐ.26.06.26.02' }),                 // hồ sơ khác
+    e({ id: '4', entity: 'Báo giá', name: 'NĐ.26.06.26.01' }), // entity khác
+    e({ id: '5', at: '2026-06-25T00:00:00Z', name: 'Tour ABC' }), // entry CŨ theo tên
+  ];
+  it('lọc theo mã + tên, mới nhất trước', () => {
+    const out = tourProfileTimeline(entries, { code: 'NĐ.26.06.26.01', name: 'Tour ABC' });
+    expect(out.map((x) => x.id)).toEqual(['1', '2', '5']);
+  });
+  it('không khớp hồ sơ khác / entity khác', () => {
+    const out = tourProfileTimeline(entries, { code: 'NĐ.26.06.26.01', name: '' });
+    expect(out.map((x) => x.id)).toEqual(['1', '2']);
   });
 });
 

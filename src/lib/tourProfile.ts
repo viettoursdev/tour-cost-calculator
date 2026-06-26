@@ -5,7 +5,7 @@
 //   • canViewTourProfile / visibleTourProfiles: quyền XEM = quyền bản ghi
 //     (recordAccess) HOẶC là follower (theo dõi → cũng được xem).
 // ════════════════════════════════════════════════════════════════════════
-import type { TourCategory, TourKind, TourProfile, User } from '@/types';
+import type { AuditEntry, CloudQuoteEntry, TourCategory, TourKind, TourProfile, User } from '@/types';
 import { canViewRecord } from '@/auth/recordAccess';
 import { isApprover } from '@/auth/ROLES';
 
@@ -108,4 +108,101 @@ export function visibleTourProfiles(
 ): TourProfile[] {
   if (!user) return [];
   return list.filter((p) => canViewTourProfile(user, p, users));
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  Thẻ "Cần chú ý" (A2) + Dòng thời gian hoạt động (A1) — hàm THUẦN.
+// ════════════════════════════════════════════════════════════════════════
+
+/** Nhãn entity trong audit_log cho hồ sơ tour (lọc dòng thời gian theo đây). */
+export const TOUR_AUDIT_ENTITY = 'Hồ sơ tour';
+
+const DAY = 86_400_000;
+const days = (a: number, b: number) => Math.round((a - b) / DAY);
+
+export type TourRiskLevel = 'urgent' | 'warn';
+export type TourRisk = { key: string; level: TourRiskLevel; label: string };
+
+/** Giai đoạn được coi là "đã thắng/đang chạy" (đã có cam kết với khách). */
+const WON_STAGES = new Set(['won', 'contract', 'operating', 'acceptance', 'closed']);
+/** Giai đoạn đã đóng (không còn rủi ro tác nghiệp). */
+const DONE_STAGES = new Set(['closed', 'lost']);
+
+/**
+ * Suy ra các cảnh báo "cần chú ý" của một hồ sơ từ báo giá chính + số hợp đồng +
+ * giai đoạn. HÀM THUẦN (truyền `now` để test). Trả [] nếu không có rủi ro.
+ *  - Báo giá quá hạn deadline (khi chưa chốt).
+ *  - Bước quy trình vận hành quá hạn.
+ *  - Sắp tới hạn / quá hạn trả NCC.
+ *  - Sắp khởi hành mà CHƯA có hợp đồng (deal đã thắng).
+ *  - Còn công nợ NCC khi sắp khởi hành.
+ *  - Đã qua ngày khởi hành mà CHƯA quyết toán.
+ */
+export function tourProfileRisks(args: {
+  primary?: Pick<CloudQuoteEntry, 'deadline' | 'departDate' | 'workflowDue' | 'nccDue' | 'paymentSummary' | 'settlementSummary'>;
+  stage: string;
+  contractCount: number;
+  now?: Date;
+}): TourRisk[] {
+  const { primary, stage, contractCount } = args;
+  const now = (args.now ?? new Date()).getTime();
+  const risks: TourRisk[] = [];
+  if (!primary || DONE_STAGES.has(stage)) {
+    // Đã đóng/thua → không còn rủi ro tác nghiệp (trừ "lost" hiển nhiên).
+    if (!primary) return risks;
+    if (stage === 'closed' || stage === 'lost') return risks;
+  }
+  if (!primary) return risks;
+
+  const won = WON_STAGES.has(stage);
+  const dep = primary.departDate ? new Date(primary.departDate).getTime() : null;
+
+  // 1) Báo giá quá hạn (chỉ khi chưa chốt).
+  if (primary.deadline && !won && new Date(primary.deadline).getTime() < now) {
+    risks.push({ key: 'quote_overdue', level: 'urgent', label: 'Báo giá quá hạn' });
+  }
+  // 2) Bước quy trình vận hành quá hạn.
+  const overdueSteps = (primary.workflowDue ?? []).filter((w) => new Date(w.dueDate).getTime() < now).length;
+  if (overdueSteps > 0) {
+    risks.push({ key: 'workflow_overdue', level: 'urgent', label: `${overdueSteps} bước quy trình quá hạn` });
+  }
+  // 3) Tới hạn / quá hạn trả NCC (trong 7 ngày).
+  const nccSoon = (primary.nccDue ?? []).filter((d) => days(new Date(d.dueDate).getTime(), now) <= 7).length;
+  if (nccSoon > 0) {
+    risks.push({ key: 'ncc_due', level: 'warn', label: `${nccSoon} khoản NCC tới hạn` });
+  }
+  // 4) Sắp khởi hành mà chưa có hợp đồng (deal đã thắng).
+  if (won && dep !== null && contractCount === 0 && days(dep, now) <= 14 && dep >= now) {
+    risks.push({ key: 'no_contract', level: 'urgent', label: 'Sắp khởi hành chưa có hợp đồng' });
+  }
+  // 5) Còn công nợ NCC khi sắp khởi hành (≤7 ngày).
+  if (dep !== null && (primary.paymentSummary?.remaining ?? 0) > 0 && days(dep, now) <= 7 && dep >= now) {
+    risks.push({ key: 'payable_remaining', level: 'warn', label: 'Còn công nợ NCC sắp khởi hành' });
+  }
+  // 6) Đã qua khởi hành mà chưa quyết toán.
+  if (dep !== null && dep < now && !primary.settlementSummary && (won || stage === 'operating' || stage === 'acceptance')) {
+    risks.push({ key: 'no_settlement', level: 'warn', label: 'Đã khởi hành chưa quyết toán' });
+  }
+  return risks;
+}
+
+/** Mức cao nhất trong danh sách rủi ro (urgent > warn > null). */
+export function topRiskLevel(risks: TourRisk[]): TourRiskLevel | null {
+  if (risks.some((r) => r.level === 'urgent')) return 'urgent';
+  if (risks.length > 0) return 'warn';
+  return null;
+}
+
+/**
+ * Dòng thời gian hoạt động của MỘT hồ sơ — lọc audit_log theo entity + mã/tên.
+ * Khớp cả entry cũ (name = tên hồ sơ) lẫn mới (name = mã code, ổn định/duy nhất).
+ * Trả về mới-nhất-trước.
+ */
+export function tourProfileTimeline(
+  entries: AuditEntry[],
+  profile: Pick<TourProfile, 'code' | 'name'>,
+): AuditEntry[] {
+  return entries
+    .filter((e) => e.entity === TOUR_AUDIT_ENTITY && (e.name === profile.code || (!!profile.name && e.name === profile.name)))
+    .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 }

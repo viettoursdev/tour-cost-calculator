@@ -125,7 +125,7 @@ export const useTourProfileStore = create<State>()(
       set({ profiles: [profile, ...prev] });
       try {
         await sbUpsertTourProfile(profile);
-        logAudit('create', 'Hồ sơ tour', profile.name || profile.code, profile.code);
+        logAudit('create', 'Hồ sơ tour', profile.code, `Tạo hồ sơ ${profile.name || ''}`.trim());
       } catch (e) {
         set({ profiles: prev, error: (e as Error).message });
         return null;
@@ -163,7 +163,7 @@ export const useTourProfileStore = create<State>()(
       const p = get().profiles.find((x) => x.id === id);
       if (!p || p.primaryQuoteId === quoteId) return;
       await get().save({ ...p, primaryQuoteId: quoteId });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Đổi báo giá chính');
+      logAudit('update', 'Hồ sơ tour', p.code, 'Đổi báo giá chính');
     },
 
     syncFromPrimary: async (id, info) => {
@@ -189,7 +189,7 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       if ((p.collaborators ?? []).some((x) => x.u === c.u)) return;
       await get().save({ ...p, collaborators: [...(p.collaborators ?? []), c] });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, `Thêm cộng tác: ${c.name}`);
+      logAudit('update', 'Hồ sơ tour', p.code, `Thêm cộng tác: ${c.name}`);
     },
 
     addFollower: async (id, c) => {
@@ -197,7 +197,7 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       if ((p.followers ?? []).some((x) => x.u === c.u)) return;
       await get().save({ ...p, followers: [...(p.followers ?? []), c] });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, `Thêm theo dõi: ${c.name}`);
+      logAudit('update', 'Hồ sơ tour', p.code, `Thêm theo dõi: ${c.name}`);
     },
 
     addEventStaff: async (id, c) => {
@@ -205,7 +205,7 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       if ((p.eventStaff ?? []).some((x) => x.u === c.u)) return;
       await get().save({ ...p, eventStaff: [...(p.eventStaff ?? []), c] });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, `Thêm nhân sự event: ${c.name}`);
+      logAudit('update', 'Hồ sơ tour', p.code, `Thêm nhân sự event: ${c.name}`);
     },
 
     removeEventStaff: async (id, u) => {
@@ -213,20 +213,20 @@ export const useTourProfileStore = create<State>()(
       if (!p) return;
       if (!(p.eventStaff ?? []).some((x) => x.u === u)) return;
       await get().save({ ...p, eventStaff: (p.eventStaff ?? []).filter((x) => x.u !== u) });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Gỡ nhân sự event');
+      logAudit('update', 'Hồ sơ tour', p.code, 'Gỡ nhân sự event');
     },
 
     requestDelete: async (id, req) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
       await get().save({ ...p, deleteRequest: req });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, `Gửi yêu cầu xoá → ${req.approverName}`);
+      logAudit('update', 'Hồ sơ tour', p.code, `Gửi yêu cầu xoá → ${req.approverName}`);
     },
 
     approveDelete: async (id) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
-      logAudit('delete', 'Hồ sơ tour', p.name || p.code, `Duyệt xoá (yêu cầu của ${p.deleteRequest?.byName ?? '—'})`);
+      logAudit('delete', 'Hồ sơ tour', p.code, `Duyệt xoá (yêu cầu của ${p.deleteRequest?.byName ?? '—'})`);
       await get().remove(id);
     },
 
@@ -234,14 +234,14 @@ export const useTourProfileStore = create<State>()(
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
       await get().save({ ...p, deleteRequest: null });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Từ chối yêu cầu xoá');
+      logAudit('update', 'Hồ sơ tour', p.code, 'Từ chối yêu cầu xoá');
     },
 
     archive: async (id, on) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
       await get().save({ ...p, status: on ? 'archived' : 'open' });
-      logAudit('update', 'Hồ sơ tour', p.name || p.code, on ? 'Lưu trữ hồ sơ' : 'Mở lại hồ sơ');
+      logAudit('update', 'Hồ sơ tour', p.code, on ? 'Lưu trữ hồ sơ' : 'Mở lại hồ sơ');
     },
 
     onQuoteDeleted: async (profileId, deletedCloudId) => {
@@ -256,10 +256,10 @@ export const useTourProfileStore = create<State>()(
       if (decision.archive) {
         // Báo giá cuối cùng bị xoá → lưu trữ hồ sơ, gỡ con trỏ primary mồ côi.
         await get().save({ ...p, primaryQuoteId: undefined, status: 'archived' });
-        logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Lưu trữ (đã xoá báo giá cuối cùng)');
+        logAudit('update', 'Hồ sơ tour', p.code, 'Lưu trữ (đã xoá báo giá cuối cùng)');
       } else {
         await get().save({ ...p, primaryQuoteId: decision.primaryQuoteId });
-        logAudit('update', 'Hồ sơ tour', p.name || p.code, 'Tự chuyển báo giá chính (báo giá cũ bị xoá)');
+        logAudit('update', 'Hồ sơ tour', p.code, 'Tự chuyển báo giá chính (báo giá cũ bị xoá)');
       }
     },
 

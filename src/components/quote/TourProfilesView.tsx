@@ -24,6 +24,10 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import ConfirmationNumberOutlinedIcon from '@mui/icons-material/ConfirmationNumberOutlined';
 import GavelIcon from '@mui/icons-material/Gavel';
+import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import HistoryIcon from '@mui/icons-material/History';
+import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
+import SendIcon from '@mui/icons-material/Send';
 import { useAuthStore } from '@/stores/authStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -35,12 +39,17 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { canShareRecord } from '@/auth/recordAccess';
 import { userLabel, isApprover } from '@/auth/ROLES';
-import { sbSendNotification, sbGetQuoteFlights } from '@/lib/supabase';
+import {
+  sbSendNotification, sbGetQuoteFlights, sbSubscribeAuditLog,
+  sbEnsureNotifThread, sbSubscribeNotifThread, sbAddThreadComment, sbSendNotificationMany,
+} from '@/lib/supabase';
 import { filterRank } from '@/lib/search';
 import { canSeePrices } from '@/auth/quotePerms';
 import {
   TOUR_CATEGORIES, categoryMeta, tourCategoryOf, categoryKind,
   deleteNeedsApproval, canApproveDelete,
+  tourProfileRisks, topRiskLevel, tourProfileTimeline,
+  type TourRisk, type TourRiskLevel,
 } from '@/lib/tourProfile';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
@@ -48,10 +57,22 @@ import { DealCockpit } from './DealCockpit';
 import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
 import { LEGACY } from '@/theme';
-import type { CloudQuoteEntry, Collaborator, DeleteRequest, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
+import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, DeleteRequest, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
   st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
+
+/** Màu cho mức cảnh báo "cần chú ý". */
+const RISK_COLOR: Record<TourRiskLevel, string> = { urgent: '#dc2626', warn: '#d97706' };
+
+/** Nhãn + màu cho hành động trong dòng thời gian (audit log). */
+const ACTION_META: Record<AuditAction, { label: string; color: string }> = {
+  create: { label: 'Tạo mới', color: '#16a34a' },
+  update: { label: 'Cập nhật', color: '#2563eb' },
+  delete: { label: 'Xoá', color: '#dc2626' },
+};
+
+const genCommentId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 /** Số lượng thực thể liên kết gom theo hồ sơ (qua các báo giá thuộc hồ sơ). */
 type ProfileLinks = { contract: number; visa: number; menu: number; itinerary: number };
@@ -330,8 +351,19 @@ export function TourProfilesView() {
             </Stack>
           )}
         </Stack>
+        {p && (() => {
+          const mt = metaOf(p.id);
+          const risks = tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract });
+          return risks.length > 0 ? <RiskPanel risks={risks} /> : null;
+        })()}
         <DealCockpit />
         {p && <DirectLinkPanel profile={p} />}
+        {p && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2 }}>
+            <ProfileDiscussion profile={p} users={users} currentUser={currentUser} />
+            <ProfileTimeline profile={p} />
+          </Box>
+        )}
       </Box>
     );
   }
@@ -406,6 +438,7 @@ export function TourProfilesView() {
                 quotes={quotesByProfile.get(p.id) ?? []}
                 links={mt.links}
                 values={mt.values}
+                risks={tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract })}
                 expanded={expanded.has(p.id)}
                 showPrice={showPrice}
                 currentUser={currentUser}
@@ -728,12 +761,12 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 }
 
 function ProfileRow({
-  profile, stage, primary, guideCount, quotes, links, values, expanded, showPrice,
+  profile, stage, primary, guideCount, quotes, links, values, risks, expanded, showPrice,
   currentUser, users, onToggle, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
   onApproveDelete, onRejectDelete,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
-  links: ProfileLinks; values: ProfileValues; expanded: boolean; showPrice: boolean;
+  links: ProfileLinks; values: ProfileValues; risks: TourRisk[]; expanded: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
   onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void; onDelete: () => void;
@@ -765,6 +798,7 @@ function ProfileRow({
             </Tooltip>
             <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
             {archived && <Chip size="small" label="Lưu trữ" variant="outlined" sx={{ height: 20 }} />}
+            <RiskChip risks={risks} />
           </Stack>
           <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
             <Meta label="Khách" value={custName || '—'} />
@@ -955,6 +989,167 @@ function Meta({ label, value }: { label: string; value: string }) {
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.1 }}>{label}</Typography>
       <Typography fontSize={13} fontWeight={700} noWrap>{value}</Typography>
     </Box>
+  );
+}
+
+/** Chip gọn "⚠ Cần chú ý (N)" trên thẻ hồ sơ — tooltip liệt kê chi tiết. */
+function RiskChip({ risks }: { risks: TourRisk[] }) {
+  const level = topRiskLevel(risks);
+  if (!level) return null;
+  const color = RISK_COLOR[level];
+  return (
+    <Tooltip title={<Box>{risks.map((r) => <Typography key={r.key} variant="caption" sx={{ display: 'block' }}>• {r.label}</Typography>)}</Box>}>
+      <Chip size="small" icon={<ReportProblemOutlinedIcon sx={{ fontSize: 14, color: `${color} !important` }} />}
+        label={`Cần chú ý (${risks.length})`}
+        sx={{ height: 20, bgcolor: `${color}1a`, color, fontWeight: 800 }} />
+    </Tooltip>
+  );
+}
+
+/** Bảng liệt kê cảnh báo "cần chú ý" ở màn chi tiết hồ sơ. */
+function RiskPanel({ risks }: { risks: TourRisk[] }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, borderColor: 'rgba(220,38,38,0.3)', bgcolor: 'rgba(220,38,38,0.03)' }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }}>
+        <ReportProblemOutlinedIcon sx={{ fontSize: 18, color: '#dc2626' }} />
+        <Typography fontWeight={800} fontSize={13.5}>Cần chú ý ({risks.length})</Typography>
+      </Stack>
+      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+        {risks.map((r) => (
+          <Chip key={r.key} size="small" label={r.label}
+            sx={{ height: 22, bgcolor: `${RISK_COLOR[r.level]}14`, color: RISK_COLOR[r.level], fontWeight: 700 }} />
+        ))}
+      </Stack>
+    </Paper>
+  );
+}
+
+/** Dòng thời gian hoạt động của hồ sơ — đọc audit_log, lọc theo hồ sơ. */
+function ProfileTimeline({ profile }: { profile: TourProfile }) {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    const unsub = sbSubscribeAuditLog((e) => { setEntries(e); setLoaded(true); });
+    return () => unsub();
+  }, []);
+  const items = useMemo(() => tourProfileTimeline(entries, profile).slice(0, 40), [entries, profile]);
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+        <HistoryIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <Typography fontWeight={800} fontSize={13.5}>Dòng thời gian hoạt động</Typography>
+      </Stack>
+      {!loaded ? (
+        <Typography variant="body2" color="text.secondary">Đang tải…</Typography>
+      ) : items.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">Chưa có hoạt động nào được ghi.</Typography>
+      ) : (
+        <Stack spacing={1}>
+          {items.map((e) => {
+            const am = ACTION_META[e.action];
+            return (
+              <Stack key={e.id} direction="row" spacing={1} alignItems="flex-start">
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: am.color, mt: 0.6, flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography fontSize={12.5} fontWeight={600} noWrap>
+                    {e.note || am.label}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {e.byName} · {new Date(e.at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </Typography>
+                </Box>
+              </Stack>
+            );
+          })}
+        </Stack>
+      )}
+    </Paper>
+  );
+}
+
+/** Thảo luận theo hồ sơ — luồng bình luận chung cho nhóm (creator/collab/follow/event). */
+function ProfileDiscussion({ profile, users, currentUser }: { profile: TourProfile; users: User[]; currentUser: User | null }) {
+  const threadId = `tp_${profile.id}`;
+  const [thread, setThread] = useState<NotifThread | null>(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Thành viên luồng = chủ sở hữu + cộng tác + theo dõi + nhân sự event.
+  const members = useMemo(() => {
+    const set = new Set<string>();
+    if (profile.createdByU) set.add(profile.createdByU);
+    for (const c of [...(profile.collaborators ?? []), ...(profile.followers ?? []), ...(profile.eventStaff ?? [])]) set.add(c.u);
+    return [...set];
+  }, [profile]);
+
+  useEffect(() => {
+    let alive = true;
+    void sbEnsureNotifThread({
+      id: threadId,
+      title: `Hồ sơ tour ${profile.code}`,
+      members,
+      link: { kind: 'tourProfile', id: profile.id, label: profile.code },
+      comments: [],
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.name ?? '',
+      actType: 'collab_comment',
+    }).catch(() => { /* không chặn */ });
+    const unsub = sbSubscribeNotifThread(threadId, (t) => { if (alive) setThread(t); });
+    return () => { alive = false; unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId, members.join(',')]);
+
+  const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
+
+  const send = async () => {
+    const body = text.trim();
+    if (!body || !currentUser) return;
+    setBusy(true);
+    const c: NotifComment = { id: genCommentId(), by: currentUser.u, byName: currentUser.name, text: body, at: new Date().toISOString() };
+    try {
+      await sbAddThreadComment(threadId, c);
+      const others = members.filter((u) => u !== currentUser.u);
+      if (others.length) {
+        await sbSendNotificationMany(others, {
+          type: 'collab_comment',
+          title: `💬 Bình luận mới · hồ sơ ${profile.code}`,
+          message: `${currentUser.name}: ${body.slice(0, 140)}`,
+          createdBy: currentUser.name,
+          link: { kind: 'tourProfile', id: profile.id, label: profile.code },
+          threadId,
+        }).catch(() => { /* thông báo không chặn */ });
+      }
+      setText('');
+    } catch (e) {
+      window.alert('❌ ' + (e as Error).message);
+    } finally { setBusy(false); }
+  };
+
+  const comments = thread?.comments ?? [];
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', flexDirection: 'column' }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+        <ForumOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <Typography fontWeight={800} fontSize={13.5}>Thảo luận ({comments.length})</Typography>
+      </Stack>
+      <Stack spacing={1} sx={{ maxHeight: 260, overflowY: 'auto', mb: 1 }}>
+        {comments.length === 0 && <Typography variant="body2" color="text.secondary">Chưa có bình luận. Bắt đầu trao đổi với nhóm hồ sơ.</Typography>}
+        {comments.map((c) => (
+          <Box key={c.id} sx={{ bgcolor: 'rgba(0,0,0,0.03)', borderRadius: 1.5, px: 1, py: 0.5 }}>
+            <Typography variant="caption" fontWeight={800} color="text.secondary">
+              {nameOf(c.by)} · {new Date(c.at).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </Typography>
+            <Typography fontSize={13} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{c.text}</Typography>
+          </Box>
+        ))}
+      </Stack>
+      <Stack direction="row" spacing={0.75} alignItems="flex-end">
+        <TextField size="small" fullWidth multiline maxRows={4} placeholder="Viết bình luận… (⌘/Ctrl+Enter để gửi)"
+          value={text} onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void send(); }} />
+        <IconButton color="primary" disabled={busy || !text.trim()} onClick={() => void send()}><SendIcon /></IconButton>
+      </Stack>
+    </Paper>
   );
 }
 
