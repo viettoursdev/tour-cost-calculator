@@ -68,6 +68,7 @@ import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage 
 import { DealCockpit } from './DealCockpit';
 import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
+import type { TourProfilePdfData } from '@/lib/exports/exportTourProfilePDF';
 import { LEGACY } from '@/theme';
 import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, DeleteRequest, FileAttachment, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
@@ -356,6 +357,35 @@ export function TourProfilesView() {
     useQuoteStore.getState().setView('cost'); // rời tab Hồ sơ tour → màn báo giá để kiểm tra & Lưu
   };
 
+  // Xuất hồ sơ ra PDF 1 trang (gửi/in nội bộ). Nạp động exportTourProfilePDF.
+  const exportProfilePDF = (p: TourProfile) => {
+    const mt = metaOf(p.id);
+    const dep = mt.primary?.departDate ?? p.startDate;
+    const data: TourProfilePdfData = {
+      code: p.code,
+      name: p.name || '(chưa đặt tên)',
+      category: categoryMeta(tourCategoryOf(p)).label,
+      customer: mt.primary?.customerName ?? p.customerName ?? '',
+      departDate: dep ? new Date(dep).toLocaleDateString('vi-VN') : '',
+      pax: mt.primary?.pax ?? p.pax ?? 0,
+      stage: STAGE_META(mt.stage).short,
+      owner: p.createdBy ?? '',
+      collaborators: (p.collaborators ?? []).map((c) => c.name),
+      followers: (p.followers ?? []).map((c) => c.name),
+      eventStaff: (p.eventStaff ?? []).map((c) => c.name),
+      documents: (p.documents ?? []).length,
+      showPrice,
+      values: mt.values,
+      links: { quotes: (quotesByProfile.get(p.id) ?? []).length, contract: mt.links.contract, visa: mt.links.visa, menu: mt.links.menu, itinerary: mt.links.itinerary, guide: mt.guide },
+      risks: tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract }).map((r) => r.label),
+      milestones: tourProfileMilestones({ primary: mt.primary, stage: mt.stage })
+        .map((m) => ({ label: m.label, date: new Date(m.date).toLocaleDateString('vi-VN'), status: countdownLabel(m) })),
+    };
+    void import('@/lib/exports/exportTourProfilePDF')
+      .then((m) => m.exportTourProfilePDF(data))
+      .catch((e) => window.alert('❌ Xuất PDF lỗi: ' + (e as Error).message));
+  };
+
   // Cổng đóng hồ sơ thông minh: khi lưu trữ deal đã thắng mà checklist còn thiếu → hỏi lại.
   const handleArchive = (p: TourProfile, on: boolean) => {
     if (!on) { void archive(p.id, false); return; } // mở lại → trực tiếp
@@ -390,6 +420,11 @@ export function TourProfilesView() {
           {p && (
             <Tooltip title="Nhân bản thành báo giá + hồ sơ tour mới (tour mẫu lặp lại)">
               <Button size="small" startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />} onClick={cloneCurrent}>Nhân bản</Button>
+            </Tooltip>
+          )}
+          {p && (
+            <Tooltip title="Xuất hồ sơ ra PDF 1 trang (gửi/in nội bộ)">
+              <Button size="small" startIcon={<FileDownloadOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => exportProfilePDF(p)}>Xuất PDF</Button>
             </Tooltip>
           )}
           {opts.length > 1 && (
