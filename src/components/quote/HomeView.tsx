@@ -425,14 +425,14 @@ export function HomeView() {
     });
   };
 
-  // Mỗi thẻ là 1 node theo id ổn định; render theo `layout` (thứ tự + ẩn/hiện + thu gọn).
-  const nodes: Record<string, React.ReactNode | null> = {
-    digest: (
+  // Mỗi thẻ là 1 THUNK — chỉ dựng JSX cho thẻ đang hiển thị (render lười, 18 thẻ).
+  const nodes: Record<string, () => React.ReactNode | null> = {
+    digest: () => (
       <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(13,122,106,0.06)', borderColor: 'rgba(13,122,106,0.25)' }}>
         <Typography fontSize={14} fontWeight={700} sx={{ color: '#0d7a6a' }}>🌅 {digest}</Typography>
       </Paper>
     ),
-    week: (
+    week: () => (
       <Section icon="🗓️" title="Lịch tuần" count={agendaTotal} color="#2563eb" onAll={() => go('departures')} {...collapseProps('week')}>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 0.5 }}>
           {agenda.map((d) => (
@@ -457,7 +457,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    kpi: (
+    kpi: () => (
       <Section icon="📊" title="Chỉ số nhanh" count={1} color="#0d7a6a" {...collapseProps('kpi')}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
           <Kpi label="Báo giá đang mở" value={String(data.stats.open)} color="#0d7a6a" onClick={() => go('cost')} />
@@ -468,7 +468,7 @@ export function HomeView() {
         </Box>
       </Section>
     ),
-    targets: (
+    targets: () => (
       <Section icon="🎯" title="Mục tiêu tháng" count={1} color="#14a08c"
         onAll={editTargets} {...collapseProps('targets')}>
         {targets.quotes === 0 && targets.revenue === 0 ? (
@@ -497,7 +497,7 @@ export function HomeView() {
         )}
       </Section>
     ),
-    recent: (
+    recent: () => (
       <Section icon="🕘" title="Vừa xem gần đây" count={recentItems.length} color="#7c3aed" {...collapseProps('recent')}>
         <Stack spacing={0.75}>
           {recentItems.slice(0, rows).map((r) => (
@@ -509,7 +509,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    notifs: (
+    notifs: () => (
       <Section icon="🔔" title="Thông báo" count={unreadNotifs.length} color="#dc3250" {...collapseProps('notifs')}>
         <Stack spacing={0.75}>
           {unreadNotifs.slice(0, rows).map((n) => (
@@ -526,7 +526,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    priority: (
+    priority: () => (
       <Section icon="🔥" title="Ưu tiên hôm nay" count={priority.length} color="#dc3250" {...collapseProps('priority')}>
         <Stack spacing={0.75}>
           {priority.slice(0, rows).map((p) => (
@@ -540,8 +540,8 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    todo: <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />,
-    process: (
+    todo: () => <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />,
+    process: () => (
       <Section icon="🗂️" title="Quy trình phòng ban" count={PROCESS_SEED.length} color="#0d7a6a" onAll={() => go('process')} {...collapseProps('process')}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
           {DEPARTMENTS.filter((d) => PROCESS_DEPTS.includes(d.id)).map((d) => {
@@ -559,7 +559,7 @@ export function HomeView() {
         </Box>
       </Section>
     ),
-    myRuns: myRuns.length === 0 ? null : (
+    myRuns: () => myRuns.length === 0 ? null : (
       <Section icon="▶️" title="Quy trình đang chạy của tôi" count={myRuns.length} color="#0d7a6a" onAll={() => go('process')} {...collapseProps('myRuns')}>
         <Stack spacing={0.75}>
           {myRuns.slice(0, rows).map((r) => {
@@ -584,7 +584,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    deadlines: (
+    deadlines: () => (
       <Section icon="⏳" title="Deadline công việc (2 tuần)" count={data.deadlines.length} color="#7c3aed" onAll={() => go('workflow')} {...collapseProps('deadlines')}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.75 }}>
           {data.deadlines.slice(0, rows).map((d) => {
@@ -608,7 +608,7 @@ export function HomeView() {
         </Box>
       </Section>
     ),
-    soon: (
+    soon: () => (
       <Section icon="🛫" title={`Tour sắp khởi hành (${tourDays} ngày)`} count={data.soon.length} color="#14a08c" onAll={() => go('departures')} {...collapseProps('soon')}>
         <Stack spacing={0.75}>
           {data.soon.slice(0, rows).map((q) => (
@@ -621,7 +621,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    myOverdue: (
+    myOverdue: () => (
       <Section icon="⏱" title="Việc quá hạn của tôi" count={data.myOverdue.length} color="#dc3250" onAll={() => go('opsboard')} {...collapseProps('myOverdue')}>
         <Stack spacing={0.75}>
           {data.myOverdue.slice(0, rows).map(({ q, w }, i) => (
@@ -633,7 +633,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    nccDue: (
+    nccDue: () => (
       <Section icon="🏦" title="Đến hạn trả NCC (2 tuần)" count={data.nccDue.length} color="#f5a623" onAll={() => go('payboard')} {...collapseProps('nccDue')}>
         <Stack spacing={0.75}>
           {data.nccDue.slice(0, rows).map((d) => {
@@ -654,7 +654,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    owing: (
+    owing: () => (
       <Section icon="💰" title="Đã khởi hành còn nợ NCC" count={data.owing.length} color="#f5a623" onAll={() => go('payboard')} {...collapseProps('owing')}>
         <Stack spacing={0.75}>
           {data.owing.slice(0, rows).map((q) => (
@@ -666,7 +666,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    docs: (
+    docs: () => (
       <Section icon="🛂" title="Giấy tờ khách sắp hết hạn" count={data.docs.length} color="#dc3250" onAll={() => go('customer')} {...collapseProps('docs')}>
         <Stack spacing={0.75}>
           {data.docs.slice(0, rows).map((d) => (
@@ -679,7 +679,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    leaves: !amApprover ? null : (
+    leaves: () => !amApprover ? null : (
       <Section icon="🌴" title="Nghỉ phép chờ duyệt" count={leavesPending.length} color="#2563eb" onAll={() => go('hr')} {...collapseProps('leaves')}>
         <Stack spacing={0.75}>
           {leavesPending.slice(0, rows).map((l) => (
@@ -696,7 +696,7 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
-    followups: (
+    followups: () => (
       <Section icon="📅" title="Hẹn liên hệ khách hôm nay" count={data.followups.length} color="#2563eb" onAll={() => go('customer')} {...collapseProps('followups')}>
         <Stack spacing={0.75}>
           {data.followups.slice(0, rows).map((c) => (
@@ -717,7 +717,11 @@ export function HomeView() {
     ),
   };
 
-  const visibleIds = layout.order.filter((id) => !layout.hidden.includes(id) && nodes[id] != null);
+  // Chỉ gọi thunk cho thẻ KHÔNG ẩn; bỏ thẻ trả null (myRuns rỗng / leaves không phải người duyệt).
+  const rendered = layout.order
+    .filter((id) => !layout.hidden.includes(id) && nodes[id])
+    .map((id) => ({ id, el: nodes[id]() }))
+    .filter((x) => x.el != null);
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1000, mx: 'auto' }}>
@@ -771,15 +775,15 @@ export function HomeView() {
         onPresetChange={savePresets}
       />
 
-      {visibleIds.length === 0 ? (
+      {rendered.length === 0 ? (
         <Typography variant="body2" color="text.disabled" sx={{ mt: 2 }}>
           Tất cả thẻ đang ẩn. Bấm ⚙️ ở góc trên để hiện lại.
         </Typography>
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
-          {visibleIds.map((id) => (
+          {rendered.map(({ id, el }) => (
             <Box key={id} sx={FULL_SPAN.has(id) ? { gridColumn: { md: '1 / -1' } } : undefined}>
-              {nodes[id]}
+              {el}
             </Box>
           ))}
         </Box>
