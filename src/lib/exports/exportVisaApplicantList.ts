@@ -8,7 +8,7 @@
  */
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
-import { BRAND_TEAL_ARGB } from './brand';
+import { BRAND_TEAL_ARGB, LOGO_H_PX, LOGO_W_PX } from './brand';
 import { VTE_LOGO } from './vteLogo';
 import { VISA_EXPORT_COLUMNS, type VisaExportColumn } from './visaExportColumns';
 import { fmtDate } from '@/lib/dateUtils';
@@ -53,11 +53,12 @@ export async function exportVisaApplicantListExcel(
   const lastColLetter = ws.getColumn(nCol).letter;
 
   // ── Khối tiêu đề (rows 1–5) ─────────────────────────────────────────────
-  // Hàng 1: logo (ảnh nổi bên trái) + chừa chỗ.
-  ws.getRow(1).height = 30;
+  // Hàng 1: logo (ảnh nổi bên trái) ở KÍCH THƯỚC CHUẨN THƯƠNG HIỆU (brand.ts),
+  // đồng bộ với mọi file xuất khác — wordmark teal "Viettours®".
+  ws.getRow(1).height = 36; // ~47px để chứa trọn logo
   try {
     const logoId = wb.addImage({ base64: VTE_LOGO.split(',')[1] ?? VTE_LOGO, extension: 'png' });
-    ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 40 } });
+    ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: LOGO_W_PX, height: LOGO_H_PX } });
   } catch { /* logo lỗi vẫn xuất bình thường */ }
 
   // Hàng 2: tiêu đề lớn.
