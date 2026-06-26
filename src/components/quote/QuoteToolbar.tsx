@@ -40,6 +40,7 @@ import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
+import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import BarChartOutlinedIcon from '@mui/icons-material/BarChartOutlined';
@@ -378,6 +379,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
         cat('salesanalytics', 'grp:sales', 'Phân tích bán hàng', { v: 'salesanalytics' }),
       ] : []),
       cat('todo', 'grp:ops', 'Việc cần làm', { v: 'todo' }),
+      ...(hasPerm(currentUser, 'viewTraining') ? [cat('training', 'grp:ops', 'Đào tạo', { v: 'training', icon: <SchoolOutlinedIcon /> })] : []),
       cat('process', 'grp:ops', 'Quy trình phòng ban', { v: 'process' }),
       cat('workflow', 'grp:ops', 'Quy trình điều hành', { v: 'workflow' }),
       cat('passengers', 'grp:ops', 'Khách đoàn', { v: 'passengers' }),

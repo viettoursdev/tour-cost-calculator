@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus, TrainingProgram, TrainingEnrollment, TrainingModule, ModuleProgress, GateState, TrainingPhase, EnrollmentStatus } from '@/types';
 import type { WorkflowStep } from '@/types/quote';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
@@ -1599,6 +1599,150 @@ export async function sbDeleteProcessRun(
 ): Promise<void> {
   const { error } = await client.from('process_runs').delete().eq('legacy_id', id);
   if (error) throw new Error('sbDeleteProcessRun: ' + error.message);
+}
+
+// ── training_programs (Curriculum đào tạo) ──────────────────────────────────
+
+const rowToTrainingProgram = (r: Record<string, unknown>): TrainingProgram => ({
+  id: (r.legacy_id as string) ?? '',
+  department: (r.department as Department),
+  roleTarget: (r.role_target as string) || undefined,
+  name: (r.name as string) ?? '',
+  description: (r.description as string) || undefined,
+  certTitle: (r.cert_title as string) || undefined,
+  icon: (r.icon as string) || undefined,
+  color: (r.color as string) || undefined,
+  modules: (r.modules as TrainingModule[]) ?? [],
+  version: (r.version as number) ?? 1,
+  isPublished: (r.is_published as boolean) ?? false,
+  createdByUsername: (r.created_by_username as string) || undefined,
+  createdByName: (r.created_by_name as string) || undefined,
+  createdAt: (r.created_at as string) || undefined,
+  updatedAt: (r.updated_at as string) || undefined,
+  updatedBy: (r.updated_by_name as string) || undefined,
+});
+
+export function sbSubscribeTrainingPrograms(
+  cb: (list: TrainingProgram[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'training_programs', async (cl) => {
+    const { data, error } = await cl
+      .from('training_programs')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false });
+    if (error) throw new Error('sbSubscribeTrainingPrograms: ' + error.message);
+    return (data ?? []).map(rowToTrainingProgram);
+  }, cb);
+}
+
+export async function sbSaveTrainingProgram(
+  p: TrainingProgram,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await client.from('training_programs').upsert({
+    legacy_id: p.id,
+    department: p.department,
+    role_target: p.roleTarget ?? 'L2',
+    name: p.name ?? '',
+    description: p.description ?? '',
+    cert_title: p.certTitle ?? '',
+    icon: p.icon ?? '',
+    color: p.color ?? '',
+    modules: p.modules ?? [],
+    version: p.version ?? 1,
+    is_published: p.isPublished ?? false,
+    created_by_username: p.createdByUsername ?? '',
+    created_by_name: p.createdByName ?? '',
+    created_at: p.createdAt,
+    updated_at: now,
+    updated_by_name: savedBy || '',
+  }, { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbSaveTrainingProgram: ' + error.message);
+}
+
+export async function sbDeleteTrainingProgram(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('training_programs').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteTrainingProgram: ' + error.message);
+}
+
+// ── training_enrollments (Ghi danh học viên) ────────────────────────────────
+
+const rowToTrainingEnrollment = (r: Record<string, unknown>): TrainingEnrollment => ({
+  id: (r.legacy_id as string) ?? '',
+  programId: (r.program_id as string) || undefined,
+  employeeId: (r.employee_id as string) || undefined,
+  learnerUsername: (r.learner_username as string) ?? '',
+  learnerName: (r.learner_name as string) || undefined,
+  mentorUsername: (r.mentor_username as string) || undefined,
+  department: (r.department as Department),
+  status: (r.status as EnrollmentStatus) ?? 'active',
+  startDate: (r.start_date as string) || undefined,
+  progress: (r.progress as Record<string, ModuleProgress>) ?? {},
+  gates: (r.gates as Partial<Record<TrainingPhase, GateState>>) ?? {},
+  certifiedAt: (r.certified_at as string) || undefined,
+  certCode: (r.cert_code as string) || undefined,
+  createdByUsername: (r.created_by_username as string) || undefined,
+  createdByName: (r.created_by_name as string) || undefined,
+  createdAt: (r.created_at as string) || undefined,
+  updatedAt: (r.updated_at as string) || undefined,
+  updatedBy: (r.updated_by_name as string) || undefined,
+});
+
+export function sbSubscribeTrainingEnrollments(
+  cb: (list: TrainingEnrollment[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'training_enrollments', async (cl) => {
+    const { data, error } = await cl
+      .from('training_enrollments')
+      .select('*')
+      .order('updated_at', { ascending: false, nullsFirst: false });
+    if (error) throw new Error('sbSubscribeTrainingEnrollments: ' + error.message);
+    return (data ?? []).map(rowToTrainingEnrollment);
+  }, cb);
+}
+
+export async function sbSaveTrainingEnrollment(
+  e: TrainingEnrollment,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await client.from('training_enrollments').upsert({
+    legacy_id: e.id,
+    program_id: e.programId ?? null,
+    employee_id: e.employeeId ?? null,
+    learner_username: e.learnerUsername ?? '',
+    learner_name: e.learnerName ?? '',
+    mentor_username: e.mentorUsername ?? '',
+    department: e.department,
+    status: e.status ?? 'active',
+    start_date: e.startDate ?? null,
+    progress: e.progress ?? {},
+    gates: e.gates ?? {},
+    certified_at: e.certifiedAt ?? null,
+    cert_code: e.certCode ?? null,
+    created_by_username: e.createdByUsername ?? '',
+    created_by_name: e.createdByName ?? '',
+    created_at: e.createdAt,
+    updated_at: now,
+    updated_by_name: savedBy || '',
+  }, { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbSaveTrainingEnrollment: ' + error.message);
+}
+
+export async function sbDeleteTrainingEnrollment(
+  id: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('training_enrollments').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteTrainingEnrollment: ' + error.message);
 }
 
 // ── visa_projects ─────────────────────────────────────────────────────────────

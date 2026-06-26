@@ -32,6 +32,7 @@ import { useHrRecruitStore } from '@/stores/hrRecruitStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
+import { useTrainingStore } from '@/stores/trainingStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers } from '@/lib/notifications';
 import { checkHrExpiry } from '@/lib/hrNotifications';
 import { checkLowStock } from '@/lib/inventoryNotifications';
@@ -103,6 +104,7 @@ export function MainApp() {
     const hrRecruitUnsub = useHrRecruitStore.getState().init();
     const hrLeaveUnsub = useHrLeaveStore.getState().init();
     const invUnsub = useInventoryStore.getState().init();
+    const trainingUnsub = useTrainingStore.getState().init();
 
     const rcUnsub = sync ? useRateCardStore.getState().init() : undefined;
     const custUnsub = sync ? useCustomerStore.getState().init() : undefined;
@@ -167,6 +169,7 @@ export function MainApp() {
       hrRecruitUnsub?.();
       hrLeaveUnsub?.();
       invUnsub?.();
+      trainingUnsub?.();
     };
   }, [currentUser]);
 

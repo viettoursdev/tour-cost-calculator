@@ -51,6 +51,8 @@ export type PermissionKey =
   | 'manageVisa'
   | 'viewHR'
   | 'manageHR'
-  | 'manageInventory';
+  | 'manageInventory'
+  | 'viewTraining'
+  | 'manageTraining';
 
 export type Permissions = Record<PermissionKey, boolean>;
