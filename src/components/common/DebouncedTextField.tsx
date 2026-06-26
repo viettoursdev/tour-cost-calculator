@@ -17,9 +17,13 @@ export function DebouncedTextField({ value, onCommit, debounceMs = 350, ...rest 
   const [local, setLocal] = useState(value);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const committed = useRef(value);
+  const focused = useRef(false);
 
-  // Đồng bộ khi prop đổi từ bên ngoài (reset/undo) — không đè khi đang gõ.
+  // Đồng bộ khi prop đổi từ bên ngoài (reset/undo/realtime echo) — nhưng TUYỆT
+  // ĐỐI không đè khi ô đang được gõ, kẻo echo trễ ghi đè ký tự/xuống-dòng đang
+  // nhập (nhảy con trỏ, dính dòng). Giá trị ngoài sẽ được áp khi rời ô (blur).
   useEffect(() => {
+    if (focused.current) return;
     if (value !== committed.current) {
       committed.current = value;
       setLocal(value);
@@ -40,5 +44,13 @@ export function DebouncedTextField({ value, onCommit, debounceMs = 350, ...rest 
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  return <TextField {...rest} value={local} onChange={onChange} onBlur={() => flush(local)} />;
+  return (
+    <TextField
+      {...rest}
+      value={local}
+      onChange={onChange}
+      onFocus={(e) => { focused.current = true; rest.onFocus?.(e); }}
+      onBlur={(e) => { focused.current = false; flush(local); rest.onBlur?.(e); }}
+    />
+  );
 }

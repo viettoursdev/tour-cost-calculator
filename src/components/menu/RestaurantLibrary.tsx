@@ -18,6 +18,7 @@ import { StarRating } from './StarRating';
 import { AIRestaurantImportDialog } from './AIRestaurantImportDialog';
 import type { ParsedRestaurant } from '@/lib/restaurantFileParse';
 import { AiButton } from '@/components/common/AiButton';
+import { DebouncedTextField } from '@/components/common/DebouncedTextField';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import type { ChangeEvent } from 'react';
 import type { Restaurant, RestaurantTourLink } from '@/types';
@@ -220,8 +221,8 @@ export function RestaurantLibrary({ onBack }: Props) {
                 '& .MuiInputBase-inputMultiline': { py: 0 },
                 '& .MuiAutocomplete-input': { py: '2.5px !important' } }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 36px', gap: 1, mb: 1, alignItems: 'center' }}>
-                <TextField size="small" value={r.name}
-                  onChange={(e) => updR(r.id, { name: e.target.value })}
+                <DebouncedTextField size="small" value={r.name}
+                  onCommit={(v) => updR(r.id, { name: v })}
                   placeholder="Tên nhà hàng"
                   InputProps={{ sx: { fontWeight: 700 } }} />
                 <Autocomplete freeSolo size="small" options={contOpts} value={r.continent || ''}
@@ -238,8 +239,8 @@ export function RestaurantLibrary({ onBack }: Props) {
                 </IconButton>
               </Box>
 
-              <TextField fullWidth size="small" value={r.address ?? ''}
-                onChange={(e) => updR(r.id, { address: e.target.value })}
+              <DebouncedTextField fullWidth size="small" value={r.address ?? ''}
+                onCommit={(v) => updR(r.id, { address: v })}
                 placeholder="📍 Địa chỉ"
                 sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
@@ -263,9 +264,9 @@ export function RestaurantLibrary({ onBack }: Props) {
                   Đánh giá chất lượng:
                 </Typography>
                 <StarRating value={r.rating} onChange={(v) => updR(r.id, { rating: v })} size={17} />
-                <TextField
+                <DebouncedTextField
                   size="small" fullWidth value={r.review}
-                  onChange={(e) => updR(r.id, { review: e.target.value })}
+                  onCommit={(v) => updR(r.id, { review: v })}
                   placeholder="Lưu ý cho tour sau (phục vụ, vị trí, chất lượng...)"
                   sx={{ flex: 1, minWidth: 200, '& .MuiInputBase-input': { fontSize: 12 } }}
                 />
@@ -273,8 +274,8 @@ export function RestaurantLibrary({ onBack }: Props) {
 
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1.25, mb: 1 }}>
                 <Stack direction="row" spacing={0.5} alignItems="center">
-                  <TextField fullWidth size="small" value={r.website ?? ''}
-                    onChange={(e) => updR(r.id, { website: e.target.value })}
+                  <DebouncedTextField fullWidth size="small" value={r.website ?? ''}
+                    onCommit={(v) => updR(r.id, { website: v })}
                     placeholder="Website"
                     sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
                   {r.website && (
@@ -282,22 +283,22 @@ export function RestaurantLibrary({ onBack }: Props) {
                   )}
                 </Stack>
                 <Stack direction="row" spacing={0.5} alignItems="center">
-                  <TextField fullWidth size="small" value={r.menuLink ?? ''}
-                    onChange={(e) => updR(r.id, { menuLink: e.target.value })}
+                  <DebouncedTextField fullWidth size="small" value={r.menuLink ?? ''}
+                    onCommit={(v) => updR(r.id, { menuLink: v })}
                     placeholder="Link menu"
                     sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
                   {r.menuLink && (
                     <Link href={normalizeUrl(r.menuLink)} target="_blank" rel="noopener" title="Mở link menu">📋</Link>
                   )}
                 </Stack>
-                <TextField fullWidth size="small" value={r.contact ?? ''}
-                  onChange={(e) => updR(r.id, { contact: e.target.value })}
+                <DebouncedTextField fullWidth size="small" value={r.contact ?? ''}
+                  onCommit={(v) => updR(r.id, { contact: v })}
                   placeholder="Contact (SĐT / email / người LH)"
                   sx={{ '& .MuiInputBase-input': { fontSize: 12 } }} />
               </Box>
 
-              <TextField fullWidth size="small" multiline minRows={2} value={r.note ?? ''}
-                onChange={(e) => updR(r.id, { note: e.target.value })}
+              <DebouncedTextField fullWidth size="small" multiline minRows={2} value={r.note ?? ''}
+                onCommit={(v) => updR(r.id, { note: v })}
                 placeholder="📝 Thông tin / ghi chú (đặc sản, lưu ý đặt bàn, sức chứa…)"
                 sx={{ mb: 1, '& .MuiInputBase-input': { fontSize: 12 } }} />
 
@@ -327,20 +328,20 @@ export function RestaurantLibrary({ onBack }: Props) {
                     bgcolor: 'rgba(168,230,221,0.12)', borderRadius: 1.5, p: 1.25,
                   }}>
                     <Stack spacing={0.75}>
-                      <TextField size="small" value={m.name}
-                        onChange={(e) => updMenu(r.id, m.id, { name: e.target.value })}
+                      <DebouncedTextField size="small" value={m.name}
+                        onCommit={(v) => updMenu(r.id, m.id, { name: v })}
                         placeholder="Tên set"
                         InputProps={{ sx: { fontSize: 12, fontWeight: 600 } }} />
                       <StarRating value={m.rating} onChange={(v) => updMenu(r.id, m.id, { rating: v })} size={14} />
                     </Stack>
-                    <TextField size="small" multiline minRows={3} value={m.dishes}
-                      onChange={(e) => updMenu(r.id, m.id, { dishes: e.target.value })}
+                    <DebouncedTextField size="small" multiline minRows={3} value={m.dishes}
+                      onCommit={(v) => updMenu(r.id, m.id, { dishes: v })}
                       placeholder={'Gỏi cuốn\nCá kho tộ\nCanh chua...'}
                       InputProps={{ sx: { fontSize: 12 } }} />
                     <Stack spacing={0.75}>
                       <Stack direction="row" spacing={0.5}>
-                        <TextField size="small" type="number" value={m.price}
-                          onChange={(e) => updMenu(r.id, m.id, { price: +e.target.value })}
+                        <DebouncedTextField size="small" type="number" value={String(m.price ?? 0)}
+                          onCommit={(v) => updMenu(r.id, m.id, { price: +v || 0 })}
                           placeholder="Giá"
                           InputProps={{ sx: { fontSize: 12, textAlign: 'right' } }} />
                         <Select size="small" value={m.cur}
@@ -351,8 +352,8 @@ export function RestaurantLibrary({ onBack }: Props) {
                           ))}
                         </Select>
                       </Stack>
-                      <TextField size="small" value={m.review}
-                        onChange={(e) => updMenu(r.id, m.id, { review: e.target.value })}
+                      <DebouncedTextField size="small" value={m.review}
+                        onCommit={(v) => updMenu(r.id, m.id, { review: v })}
                         placeholder="Nhận xét set"
                         InputProps={{ sx: { fontSize: 11, fontStyle: m.review ? 'normal' : 'italic' } }} />
                     </Stack>
