@@ -72,6 +72,92 @@ export function progressStats(program: TrainingProgram, enrollment: TrainingEnro
   return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 
+export type TrainingAnalytics = {
+  totalLearners: number;
+  active: number;
+  certified: number;
+  certRate: number;                       // %
+  avgProgress: number;                    // % tiến độ trung bình (học viên đang học)
+  avgDaysToCert: number | null;           // ngày trung bình từ bắt đầu → chứng nhận
+  byDept: { dept: Department; total: number; certified: number; avgProgress: number }[];
+  mentorLoad: { mentor: string; count: number }[];
+  bottlenecks: { code: string; title: string; stuck: number }[];   // module nhiều người chưa qua
+};
+
+/** Tổng hợp số liệu đào tạo cho dashboard (Kirkpatrick L4). `programs` nên gồm cả
+ *  seed để tra cứu được mọi enrollment. Thuần → test được. */
+export function trainingAnalytics(
+  programs: TrainingProgram[], enrollments: TrainingEnrollment[],
+): TrainingAnalytics {
+  const byId = (id?: string) => programs.find((p) => p.id === id);
+  const totalLearners = enrollments.length;
+  const certified = enrollments.filter((e) => e.status === 'certified').length;
+  const active = enrollments.filter((e) => e.status === 'active').length;
+
+  // Tiến độ trung bình của học viên đang học.
+  const activeProgs = enrollments
+    .filter((e) => e.status === 'active')
+    .map((e) => { const p = byId(e.programId); return p ? programProgressPct(p, e) : null; })
+    .filter((x): x is number => x != null);
+  const avgProgress = activeProgs.length
+    ? Math.round(activeProgs.reduce((a, b) => a + b, 0) / activeProgs.length) : 0;
+
+  // Ngày trung bình đạt chứng nhận.
+  const spans = enrollments
+    .filter((e) => e.status === 'certified' && e.startDate && e.certifiedAt)
+    .map((e) => (new Date(e.certifiedAt as string).getTime() - new Date(e.startDate as string).getTime()) / 86400000)
+    .filter((d) => d >= 0);
+  const avgDaysToCert = spans.length ? Math.round(spans.reduce((a, b) => a + b, 0) / spans.length) : null;
+
+  // Theo phòng ban.
+  const deptMap = new Map<Department, { total: number; certified: number; sumProg: number; nProg: number }>();
+  for (const e of enrollments) {
+    const d = e.department;
+    if (!deptMap.has(d)) deptMap.set(d, { total: 0, certified: 0, sumProg: 0, nProg: 0 });
+    const row = deptMap.get(d)!;
+    row.total += 1;
+    if (e.status === 'certified') row.certified += 1;
+    const p = byId(e.programId);
+    if (p) { row.sumProg += programProgressPct(p, e); row.nProg += 1; }
+  }
+  const byDept = [...deptMap.entries()].map(([dept, r]) => ({
+    dept, total: r.total, certified: r.certified,
+    avgProgress: r.nProg ? Math.round(r.sumProg / r.nProg) : 0,
+  })).sort((a, b) => b.total - a.total);
+
+  // Tải mentor (chỉ học viên đang học).
+  const mentorMap = new Map<string, number>();
+  for (const e of enrollments) {
+    if (e.status === 'active' && e.mentorUsername) {
+      mentorMap.set(e.mentorUsername, (mentorMap.get(e.mentorUsername) ?? 0) + 1);
+    }
+  }
+  const mentorLoad = [...mentorMap.entries()].map(([mentor, count]) => ({ mentor, count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Module "kẹt": học viên đang học chưa hoàn tất module đó.
+  const stuckMap = new Map<string, { code: string; title: string; stuck: number }>();
+  for (const e of enrollments) {
+    if (e.status !== 'active') continue;
+    const p = byId(e.programId);
+    if (!p) continue;
+    for (const m of p.modules) {
+      if (isModuleComplete(m, e.progress[m.id])) continue;
+      const key = `${p.id}:${m.id}`;
+      const cur = stuckMap.get(key) ?? { code: m.code, title: m.title, stuck: 0 };
+      cur.stuck += 1;
+      stuckMap.set(key, cur);
+    }
+  }
+  const bottlenecks = [...stuckMap.values()].sort((a, b) => b.stuck - a.stuck).slice(0, 6);
+
+  return {
+    totalLearners, active, certified,
+    certRate: totalLearners ? Math.round((certified / totalLearners) * 100) : 0,
+    avgProgress, avgDaysToCert, byDept, mentorLoad, bottlenecks,
+  };
+}
+
 /** Điểm quiz trung bình của học viên (chỉ tính module có quiz). undefined nếu chưa
  *  có module quiz nào được làm. */
 export function averageQuizScore(program: TrainingProgram, enrollment: TrainingEnrollment): number | undefined {

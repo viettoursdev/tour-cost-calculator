@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   scoreQuiz, isModuleComplete, isPhasePassed, programProgressPct,
   isCertEligible, currentPhase, averageQuizScore, buildCertEvaluation,
-  pickProgramForDept, resolveLearner,
+  pickProgramForDept, resolveLearner, trainingAnalytics,
 } from './training';
 import type {
   TrainingProgram, TrainingModule, TrainingEnrollment, QuizQuestion, ModuleProgress,
@@ -142,5 +142,40 @@ describe('pickProgramForDept & resolveLearner', () => {
     const users = [user({ u: 'an', email: 'a@viettours.com.vn', name: 'An VT' })];
     expect(resolveLearner(emp({}), users)).toEqual({ u: 'an', name: 'An VT' });
     expect(resolveLearner(emp({ email: 'nobody@x.com' }), users)).toEqual({ u: 'nobody@x.com', name: 'Nguyễn Văn A' });
+  });
+});
+
+describe('trainingAnalytics', () => {
+  const p: TrainingProgram = {
+    ...program([mod('a', 'gd1'), mod('b', 'gd2')]), id: 'p1', department: 'visa',
+  };
+  const e = (over: Partial<TrainingEnrollment>): TrainingEnrollment => ({
+    id: 'x', programId: 'p1', learnerUsername: 'u', department: 'visa', status: 'active',
+    progress: {}, gates: {}, ...over,
+  });
+
+  it('summarises learners, cert rate, dept rows, mentor load and bottlenecks', () => {
+    const a = trainingAnalytics([p], [
+      e({ id: 'e1', status: 'certified', startDate: '2026-01-01', certifiedAt: '2026-01-11T00:00:00.000Z' }),
+      e({ id: 'e2', status: 'active', mentorUsername: 'men', progress: { a: { status: 'done' } } }),
+      e({ id: 'e3', status: 'active', mentorUsername: 'men' }),
+    ]);
+    expect(a.totalLearners).toBe(3);
+    expect(a.certified).toBe(1);
+    expect(a.active).toBe(2);
+    expect(a.certRate).toBe(33);
+    expect(a.avgDaysToCert).toBe(10);
+    expect(a.byDept[0]).toMatchObject({ dept: 'visa', total: 3, certified: 1 });
+    expect(a.mentorLoad[0]).toEqual({ mentor: 'men', count: 2 });
+    // 'b' chưa ai làm (2 active) → kẹt nhất; 'a' chỉ 1 active chưa làm.
+    expect(a.bottlenecks[0]).toMatchObject({ code: 'B', stuck: 2 });
+  });
+
+  it('handles empty input', () => {
+    const a = trainingAnalytics([], []);
+    expect(a.totalLearners).toBe(0);
+    expect(a.certRate).toBe(0);
+    expect(a.avgDaysToCert).toBeNull();
+    expect(a.bottlenecks).toEqual([]);
   });
 });

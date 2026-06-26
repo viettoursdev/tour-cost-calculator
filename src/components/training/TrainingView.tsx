@@ -15,6 +15,8 @@ import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import { ProgramEditor } from './ProgramEditor';
 import { useAuthStore } from '@/stores/authStore';
 import { useTrainingStore, newTrainingId } from '@/stores/trainingStore';
 import { useHrStore } from '@/stores/hrStore';
@@ -30,7 +32,7 @@ import type {
 import { TRAINING_SEED } from '@/lib/trainingSeed';
 import {
   scoreQuiz, isModuleComplete, isPhasePassed, programProgressPct, isCertEligible, currentPhase,
-  modulesOfPhase, buildCertEvaluation, resolveLearner,
+  modulesOfPhase, buildCertEvaluation, resolveLearner, trainingAnalytics,
 } from '@/lib/training';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -45,7 +47,7 @@ function recomputeGates(program: TrainingProgram, e: TrainingEnrollment): Partia
 export function TrainingView() {
   const me = useAuthStore((s) => s.currentUser);
   const enrollments = useTrainingStore((s) => s.enrollments);
-  const [tab, setTab] = useState<'mine' | 'library' | 'roster' | 'certs'>('mine');
+  const [tab, setTab] = useState<'mine' | 'library' | 'roster' | 'certs' | 'report'>('mine');
   const canManage = hasPerm(me, 'manageTraining');
   const isMentor = enrollments.some((e) => e.mentorUsername === me?.u);
   const showRoster = canManage || isMentor;
@@ -65,12 +67,14 @@ export function TrainingView() {
         <Tab value="library" label="Thư viện chương trình" />
         {showRoster && <Tab value="roster" label="Học viên" />}
         {canManage && <Tab value="certs" label="Chứng nhận" />}
+        {canManage && <Tab value="report" label="Báo cáo" />}
       </Tabs>
 
       {tab === 'mine' && <MyTrack />}
       {tab === 'library' && <Library canManage={canManage} />}
       {tab === 'roster' && showRoster && <Roster canManage={canManage} />}
       {tab === 'certs' && canManage && <CertList />}
+      {tab === 'report' && canManage && <TrainingReport />}
     </Box>
   );
 }
@@ -82,8 +86,11 @@ function Library({ canManage }: { canManage: boolean }) {
   const saved = useTrainingStore((s) => s.programs);
   const enrollments = useTrainingStore((s) => s.enrollments);
   const saveProgram = useTrainingStore((s) => s.saveProgram);
+  const deleteProgram = useTrainingStore((s) => s.deleteProgram);
   const saveEnrollment = useTrainingStore((s) => s.saveEnrollment);
   const [open, setOpen] = useState<TrainingProgram | null>(null);
+  // null = đóng; { program: undefined } = tạo mới; { program } = sửa.
+  const [editor, setEditor] = useState<{ program?: TrainingProgram } | null>(null);
 
   // Của tôi (DB) trước, rồi mẫu dựng sẵn chưa bị clone.
   const list = useMemo(() => [...saved, ...TRAINING_SEED], [saved]);
@@ -127,8 +134,23 @@ function Library({ canManage }: { canManage: boolean }) {
     setOpen(null);
   };
 
+  const removeProgram = async (p: TrainingProgram) => {
+    if (!window.confirm(`Xoá chương trình "${p.name}" khỏi thư viện?`)) return;
+    await deleteProgram(p.id);
+    toast('Đã xoá chương trình', 'info');
+    setOpen(null);
+  };
+
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+    <Box>
+      {canManage && (
+        <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
+          <Button size="small" variant="outlined" startIcon={<AddCircleOutlineIcon />} onClick={() => setEditor({})}>
+            Tạo chương trình mới
+          </Button>
+        </Stack>
+      )}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
       {list.map((p) => (
         <Paper key={p.id} variant="outlined" onClick={() => setOpen(p)}
           sx={{ p: 1.75, cursor: 'pointer', borderTop: `3px solid ${p.color ?? '#0d7a6a'}`, '&:hover': { boxShadow: 2 } }}>
@@ -154,18 +176,25 @@ function Library({ canManage }: { canManage: boolean }) {
         enrolled={!!open && myEnrolledProgramIds.has(open.id)}
         onClone={cloneSeed}
         onEnroll={enroll}
+        onEdit={(p) => { setEditor({ program: p }); setOpen(null); }}
+        onDelete={removeProgram}
       />
+      </Box>
+
+      {editor && <ProgramEditor initial={editor.program} onClose={() => setEditor(null)} />}
     </Box>
   );
 }
 
-function ProgramDetailDialog({ program, onClose, canManage, enrolled, onClone, onEnroll }: {
+function ProgramDetailDialog({ program, onClose, canManage, enrolled, onClone, onEnroll, onEdit, onDelete }: {
   program: TrainingProgram | null;
   onClose: () => void;
   canManage: boolean;
   enrolled: boolean;
   onClone: (p: TrainingProgram) => Promise<void>;
   onEnroll: (p: TrainingProgram) => Promise<void>;
+  onEdit: (p: TrainingProgram) => void;
+  onDelete: (p: TrainingProgram) => Promise<void>;
 }) {
   if (!program) return null;
   return (
@@ -196,10 +225,16 @@ function ProgramDetailDialog({ program, onClose, canManage, enrolled, onClone, o
         })}
       </DialogContent>
       <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
-        {canManage && (
+        {canManage && program.isSeed && (
           <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={() => void onClone(program)}>
             Dùng mẫu (thêm vào thư viện)
           </Button>
+        )}
+        {canManage && !program.isSeed && (
+          <>
+            <Button color="error" onClick={() => void onDelete(program)}>Xoá</Button>
+            <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => onEdit(program)}>Sửa nội dung</Button>
+          </>
         )}
         <Button variant="contained" disabled={enrolled} onClick={() => void onEnroll(program)}>
           {enrolled ? 'Đã ghi danh' : 'Ghi danh học'}
@@ -849,6 +884,93 @@ function CertList() {
           </Paper>
         );
       })}
+    </Stack>
+  );
+}
+
+// ── Báo cáo & phân tích (Kirkpatrick L4) ────────────────────────────────────
+
+function StatCard({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, flex: 1, minWidth: 130 }}>
+      <Typography fontSize={26} fontWeight={900} sx={{ color: color ?? '#0d7a6a', lineHeight: 1.1 }}>{value}</Typography>
+      <Typography fontSize={12.5} fontWeight={700}>{label}</Typography>
+      {hint && <Typography variant="caption" color="text.secondary">{hint}</Typography>}
+    </Paper>
+  );
+}
+
+function TrainingReport() {
+  const saved = useTrainingStore((s) => s.programs);
+  const enrollments = useTrainingStore((s) => s.enrollments);
+  const users = useAuthStore((s) => s.users);
+  const a = useMemo(() => trainingAnalytics([...saved, ...TRAINING_SEED], enrollments), [saved, enrollments]);
+  const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
+
+  if (!a.totalLearners) {
+    return (
+      <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
+        <Typography color="text.secondary">Chưa có dữ liệu đào tạo để báo cáo.</Typography>
+      </Paper>
+    );
+  }
+
+  return (
+    <Stack spacing={2.5}>
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+        <StatCard label="Tổng học viên" value={String(a.totalLearners)} />
+        <StatCard label="Đang học" value={String(a.active)} color="#2563eb" />
+        <StatCard label="Đã chứng nhận" value={String(a.certified)} color="#16a34a" />
+        <StatCard label="Tỷ lệ chứng nhận" value={`${a.certRate}%`} color="#16a34a" />
+        <StatCard label="Tiến độ TB (đang học)" value={`${a.avgProgress}%`} />
+        <StatCard label="TG đạt chứng nhận" value={a.avgDaysToCert != null ? `${a.avgDaysToCert} ngày` : '—'} hint="trung bình" color="#7c3aed" />
+      </Stack>
+
+      <Box>
+        <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>Theo phòng ban</Typography>
+        <Stack spacing={1}>
+          {a.byDept.map((d) => (
+            <Paper key={d.dept} variant="outlined" sx={{ p: 1.25 }}>
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Typography fontSize={13} fontWeight={700} sx={{ width: 160 }}>{DEPT_LABEL[d.dept]}</Typography>
+                <Box sx={{ flex: 1 }}><LinearProgress variant="determinate" value={d.avgProgress} sx={{ height: 8, borderRadius: 1 }} /></Box>
+                <Typography fontSize={12.5} sx={{ width: 50, textAlign: 'right' }}>{d.avgProgress}%</Typography>
+                <Chip size="small" label={`${d.certified}/${d.total} đạt`} sx={{ height: 20 }} />
+              </Stack>
+            </Paper>
+          ))}
+        </Stack>
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+        <Box>
+          <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>Module hay "kẹt"</Typography>
+          {a.bottlenecks.length ? (
+            <Stack spacing={0.75}>
+              {a.bottlenecks.map((b) => (
+                <Paper key={b.code + b.title} variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip size="small" label={b.code} sx={{ height: 18, fontSize: 10 }} />
+                  <Typography fontSize={12.5} sx={{ flex: 1 }} noWrap>{b.title}</Typography>
+                  <Chip size="small" color="warning" label={`${b.stuck} người`} sx={{ height: 20 }} />
+                </Paper>
+              ))}
+            </Stack>
+          ) : <Typography variant="caption" color="text.disabled">Không có module nào tồn đọng.</Typography>}
+        </Box>
+        <Box>
+          <Typography fontWeight={800} fontSize={14} sx={{ mb: 1 }}>Tải mentor (đang kèm)</Typography>
+          {a.mentorLoad.length ? (
+            <Stack spacing={0.75}>
+              {a.mentorLoad.map((m) => (
+                <Paper key={m.mentor} variant="outlined" sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography fontSize={12.5} sx={{ flex: 1 }} noWrap>{nameOf(m.mentor)}</Typography>
+                  <Chip size="small" label={`${m.count} học viên`} sx={{ height: 20 }} />
+                </Paper>
+              ))}
+            </Stack>
+          ) : <Typography variant="caption" color="text.disabled">Chưa gán mentor cho học viên nào.</Typography>}
+        </Box>
+      </Box>
     </Stack>
   );
 }
