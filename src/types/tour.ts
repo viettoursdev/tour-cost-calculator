@@ -19,6 +19,23 @@ export type TourCategory =
  *  suy ra từ báo giá chính qua `dealStage`). */
 export type TourProfileStatus = 'open' | 'archived';
 
+/** Yêu cầu/kết quả duyệt BIÊN LỢI THẤP (dưới ngưỡng) để chốt deal. */
+export type MarginApproval = {
+  status: 'pending' | 'approved' | 'rejected';
+  /** Biên lợi % tại thời điểm gửi (để đối chiếu). */
+  marginPct: number;
+  /** Ngưỡng áp dụng lúc gửi. */
+  threshold: number;
+  byU: string;
+  byName: string;
+  approverU: string;
+  approverName: string;
+  reason?: string;
+  requestedAt: string;
+  decidedAt?: string;
+  decidedByName?: string;
+};
+
 /** Yêu cầu duyệt XOÁ hồ sơ — người dưới Trưởng Phòng phải gửi cho 1 người duyệt. */
 export type DeleteRequest = {
   /** Người gửi yêu cầu. */
@@ -71,6 +88,8 @@ export type TourProfile = {
   documents?: FileAttachment[];
   /** Nhãn tự do (VIP / lặp lại / cần gấp…) — để phân loại & lọc nhanh. */
   tags?: string[];
+  /** Duyệt biên lợi thấp (dưới ngưỡng) — chốt kiểm soát giá. */
+  marginApproval?: MarginApproval | null;
   /** Yêu cầu duyệt xoá đang chờ (người dưới Trưởng Phòng gửi). */
   deleteRequest?: DeleteRequest | null;
   createdAt: string;

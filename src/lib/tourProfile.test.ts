@@ -4,9 +4,10 @@ import {
   categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones,
-  clonedQuoteName, customerPortfolio, marginSummary, groupByDepartureDay,
+  clonedQuoteName, customerPortfolio, marginSummary, groupByDepartureDay, marginGuard,
   type ProfilePortfolioRow, type DepartureRow,
 } from './tourProfile';
+import type { MarginApproval } from '@/types';
 import type { AuditEntry, Department, Role, TourCategory, TourProfile, User } from '@/types';
 
 const user = (u: string, role: Role, department?: Department): User =>
@@ -151,6 +152,23 @@ describe('tourProfileRisks — thẻ "cần chú ý"', () => {
   });
   it('topRiskLevel: rỗng → null', () => {
     expect(topRiskLevel([])).toBeNull();
+  });
+});
+
+describe('marginGuard — chốt duyệt biên lợi thấp', () => {
+  const appr = (status: MarginApproval['status']): MarginApproval =>
+    ({ status, marginPct: 5, threshold: 10, byU: 'an', byName: 'AN', approverU: 'tp', approverName: 'TP', requestedAt: '2026-06-26T00:00:00Z' });
+  it('biên lợi ≥ ngưỡng → ok (kể cả chưa duyệt)', () => {
+    expect(marginGuard(12, 10)).toBe('ok');
+    expect(marginGuard(10, 10)).toBe('ok');
+  });
+  it('dưới ngưỡng, chưa gửi → needs', () => {
+    expect(marginGuard(8, 10)).toBe('needs');
+    expect(marginGuard(8, 10, appr('rejected'))).toBe('needs'); // từ chối → vẫn cần
+  });
+  it('đang chờ → pending; đã duyệt → approved', () => {
+    expect(marginGuard(8, 10, appr('pending'))).toBe('pending');
+    expect(marginGuard(8, 10, appr('approved'))).toBe('approved');
   });
 });
 

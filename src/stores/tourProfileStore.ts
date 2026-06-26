@@ -11,7 +11,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { generateTourCode, visibleTourProfiles, nextPrimaryAfterDelete, tourCategoryOf } from '@/lib/tourProfile';
 import { logAudit } from '@/lib/audit';
-import type { Collaborator, DeleteRequest, FileAttachment, TourCategory, TourKind, TourProfile } from '@/types';
+import type { Collaborator, DeleteRequest, FileAttachment, MarginApproval, TourCategory, TourKind, TourProfile } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 const newId = (): string => 'tp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -57,6 +57,12 @@ type State = {
   removeEventStaff: (id: string, u: string) => Promise<void>;
   /** Đặt lại danh sách nhãn (tags) cho hồ sơ. */
   setTags: (id: string, tags: string[]) => Promise<void>;
+  /** Gửi yêu cầu duyệt biên lợi thấp (lưu trên hồ sơ). */
+  requestMarginApproval: (id: string, req: MarginApproval) => Promise<void>;
+  /** Người duyệt CHẤP THUẬN biên lợi thấp. */
+  approveMargin: (id: string) => Promise<void>;
+  /** Người duyệt TỪ CHỐI biên lợi thấp. */
+  rejectMargin: (id: string) => Promise<void>;
   /** Thêm tài liệu (file R2 đã upload) vào hồ sơ. */
   addDocuments: (id: string, docs: FileAttachment[]) => Promise<void>;
   /** Gỡ tài liệu khỏi hồ sơ theo key R2. */
@@ -228,6 +234,29 @@ export const useTourProfileStore = create<State>()(
       const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
       await get().save({ ...p, tags: clean });
       logAudit('update', 'Hồ sơ tour', p.code, `Cập nhật nhãn: ${clean.join(', ') || '(trống)'}`);
+    },
+
+    requestMarginApproval: async (id, req) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      await get().save({ ...p, marginApproval: req });
+      logAudit('update', 'Hồ sơ tour', p.code, `Xin duyệt biên lợi ${req.marginPct.toFixed(1)}% → ${req.approverName}`);
+    },
+
+    approveMargin: async (id) => {
+      const u = useAuthStore.getState().currentUser;
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p || !p.marginApproval) return;
+      await get().save({ ...p, marginApproval: { ...p.marginApproval, status: 'approved', decidedAt: new Date().toISOString(), decidedByName: u?.name } });
+      logAudit('update', 'Hồ sơ tour', p.code, `Duyệt biên lợi ${p.marginApproval.marginPct.toFixed(1)}%`);
+    },
+
+    rejectMargin: async (id) => {
+      const u = useAuthStore.getState().currentUser;
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p || !p.marginApproval) return;
+      await get().save({ ...p, marginApproval: { ...p.marginApproval, status: 'rejected', decidedAt: new Date().toISOString(), decidedByName: u?.name } });
+      logAudit('update', 'Hồ sơ tour', p.code, 'Từ chối biên lợi thấp');
     },
 
     addDocuments: async (id, docs) => {

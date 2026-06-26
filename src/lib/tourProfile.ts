@@ -5,7 +5,7 @@
 //   • canViewTourProfile / visibleTourProfiles: quyền XEM = quyền bản ghi
 //     (recordAccess) HOẶC là follower (theo dõi → cũng được xem).
 // ════════════════════════════════════════════════════════════════════════
-import type { AuditEntry, CloudQuoteEntry, TourCategory, TourKind, TourProfile, User } from '@/types';
+import type { AuditEntry, CloudQuoteEntry, MarginApproval, TourCategory, TourKind, TourProfile, User } from '@/types';
 import { canViewRecord } from '@/auth/recordAccess';
 import { isApprover } from '@/auth/ROLES';
 
@@ -300,6 +300,29 @@ export function tourProfileMilestones(args: {
 // ════════════════════════════════════════════════════════════════════════
 
 /** Một dòng rút gọn của hồ sơ (đã suy giai đoạn + giá trị ở tầng gọi). */
+/** Ngưỡng biên lợi (% trên doanh thu) — dưới mức này cần duyệt mới chốt. */
+export const LOW_MARGIN_THRESHOLD = 10;
+
+export type MarginGuardStatus = 'ok' | 'needs' | 'pending' | 'approved';
+
+/**
+ * Trạng thái chốt-duyệt biên lợi của một báo giá. HÀM THUẦN.
+ *  - 'ok'       : biên lợi ≥ ngưỡng → không cần duyệt.
+ *  - 'approved' : đã được duyệt (kể cả khi vẫn dưới ngưỡng).
+ *  - 'pending'  : đang chờ duyệt.
+ *  - 'needs'    : dưới ngưỡng, chưa gửi / bị từ chối → CẦN duyệt.
+ */
+export function marginGuard(
+  marginPct: number,
+  threshold: number,
+  approval?: MarginApproval | null,
+): MarginGuardStatus {
+  if (marginPct >= threshold) return 'ok';
+  if (approval?.status === 'approved') return 'approved';
+  if (approval?.status === 'pending') return 'pending';
+  return 'needs';
+}
+
 export type ProfilePortfolioRow = {
   id: string; code: string; name: string; customerName?: string;
   stage: string; value?: number; profit?: number;

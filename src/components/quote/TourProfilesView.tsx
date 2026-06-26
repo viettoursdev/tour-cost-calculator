@@ -62,11 +62,11 @@ import {
   deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
   tourProfileClosingChecklist, closingPending, tourProfileMilestones, clonedQuoteName,
-  customerPortfolio, marginSummary, groupByDepartureDay,
+  customerPortfolio, marginSummary, groupByDepartureDay, marginGuard, LOW_MARGIN_THRESHOLD,
   type TourRisk, type TourRiskLevel, type ClosingItem, type Milestone, type MilestoneLevel,
   type MarginSummary, type CustomerPortfolio, type ProfilePortfolioRow, type DepartureRow,
 } from '@/lib/tourProfile';
-import { fmtVND } from './calc';
+import { fmtVND, computeTotals } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
 import { DealCockpit } from './DealCockpit';
 import { FlightSummary } from './FlightSummary';
@@ -474,6 +474,7 @@ export function TourProfilesView() {
             return (
               <>
                 {risks.length > 0 && <RiskPanel risks={risks} />}
+                <MarginGuardPanel profile={p} />
                 <MilestonePanel milestones={milestones} />
               </>
             );
@@ -1223,6 +1224,96 @@ function Meta({ label, value }: { label: string; value: string }) {
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.1 }}>{label}</Typography>
       <Typography fontSize={13} fontWeight={700} noWrap>{value}</Typography>
     </Box>
+  );
+}
+
+/** Chốt duyệt biên lợi thấp — tính biên lợi từ báo giá ĐANG MỞ; cần duyệt nếu dưới ngưỡng. */
+function MarginGuardPanel({ profile }: { profile: TourProfile }) {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const users = useAuthStore((s) => s.users);
+  const draft = useQuoteStore((s) => s.draft);
+  const requestMargin = useTourProfileStore((s) => s.requestMarginApproval);
+  const approveMargin = useTourProfileStore((s) => s.approveMargin);
+  const rejectMargin = useTourProfileStore((s) => s.rejectMargin);
+  const [approver, setApprover] = useState<User | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const isStd = draft.template === 'domestic' || draft.template === 'intl';
+  const totals = isStd ? computeTotals(draft) : null;
+  const marginPct = totals && totals.grandTotal > 0 ? (totals.totalProfit / totals.grandTotal) * 100 : null;
+  if (marginPct === null) return null;
+
+  const ap = profile.marginApproval;
+  const status = marginGuard(marginPct, LOW_MARGIN_THRESHOLD, ap);
+  if (status === 'ok') return null;
+
+  const isApp = !!currentUser && isApprover(currentUser.role);
+  const notify = async (toU: string, title: string, message: string) => {
+    try {
+      await sbSendNotification(toU, { type: 'announcement', priority: 'high', title, message, createdBy: currentUser?.name ?? '', link: { kind: 'tourProfile', id: profile.id, label: profile.code } });
+    } catch { /* không chặn */ }
+  };
+  const run = async (fn: () => Promise<void>) => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
+
+  const doApprove = () => run(async () => {
+    if (ap) await approveMargin(profile.id);
+    else await requestMargin(profile.id, { status: 'approved', marginPct, threshold: LOW_MARGIN_THRESHOLD, byU: currentUser!.u, byName: currentUser!.name, approverU: currentUser!.u, approverName: currentUser!.name, requestedAt: new Date().toISOString(), decidedAt: new Date().toISOString(), decidedByName: currentUser!.name });
+    if (ap && ap.byU !== currentUser!.u) await notify(ap.byU, `✅ Biên lợi hồ sơ ${profile.code} đã được duyệt`, `Biên lợi ${marginPct.toFixed(1)}% đã được ${currentUser!.name} duyệt.`);
+  });
+  const doReject = () => run(async () => {
+    await rejectMargin(profile.id);
+    if (ap && ap.byU !== currentUser!.u) await notify(ap.byU, `❌ Biên lợi hồ sơ ${profile.code} bị từ chối`, `Yêu cầu duyệt biên lợi ${ap.marginPct.toFixed(1)}% đã bị từ chối.`);
+  });
+  const doRequest = () => run(async () => {
+    if (!approver || !currentUser) return;
+    await requestMargin(profile.id, { status: 'pending', marginPct, threshold: LOW_MARGIN_THRESHOLD, byU: currentUser.u, byName: currentUser.name, approverU: approver.u, approverName: approver.name, reason: reason.trim() || undefined, requestedAt: new Date().toISOString() });
+    await notify(approver.u, `⚠️ Xin duyệt biên lợi thấp · hồ sơ ${profile.code}`, `${currentUser.name} xin duyệt biên lợi ${marginPct.toFixed(1)}% (dưới ${LOW_MARGIN_THRESHOLD}%).${reason.trim() ? ' Lý do: ' + reason.trim() : ''}`);
+    setReason('');
+  });
+
+  const color = status === 'approved' ? '#16a34a' : '#dc2626';
+  const approvers = users.filter((u) => isApprover(u.role));
+  const canDecide = isApp || (!!currentUser && ap?.approverU === currentUser.u);
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, borderColor: `${color}55`, bgcolor: `${color}0d` }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
+        <GavelIcon sx={{ fontSize: 18, color }} />
+        <Typography fontWeight={800} fontSize={13.5} sx={{ color }}>
+          Biên lợi {marginPct.toFixed(1)}% {status === 'approved' ? '· đã duyệt' : `· dưới ngưỡng ${LOW_MARGIN_THRESHOLD}%`}
+        </Typography>
+      </Stack>
+      {status === 'approved' ? (
+        <Typography variant="caption" color="text.secondary">✓ Đã được {ap?.decidedByName ?? ap?.approverName} duyệt — có thể chốt.</Typography>
+      ) : status === 'pending' ? (
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="caption" sx={{ flex: 1, minWidth: 160 }}>
+            ⏳ Chờ <strong>{ap?.approverName}</strong> duyệt (xin bởi {ap?.byName}{ap?.reason ? ` — “${ap.reason}”` : ''}).
+          </Typography>
+          {canDecide && (<>
+            <Button size="small" color="success" variant="contained" disabled={busy} onClick={doApprove}>Duyệt</Button>
+            <Button size="small" color="error" disabled={busy} onClick={doReject}>Từ chối</Button>
+          </>)}
+        </Stack>
+      ) : isApp ? (
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="caption" sx={{ flex: 1, minWidth: 160 }}>Biên lợi dưới ngưỡng — bạn có quyền duyệt để chốt.</Typography>
+          <Button size="small" color="success" variant="contained" disabled={busy} onClick={doApprove}>Duyệt biên lợi</Button>
+          <Button size="small" color="error" disabled={busy} onClick={doReject}>Từ chối</Button>
+        </Stack>
+      ) : (
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="caption" sx={{ width: '100%' }}>Cần Trưởng Phòng/BGĐ duyệt trước khi chốt.</Typography>
+          <Autocomplete size="small" sx={{ flex: 1, minWidth: 160 }} options={approvers} value={approver}
+            onChange={(_, v) => setApprover(v)} getOptionLabel={(u) => userLabel(u, currentUser)}
+            isOptionEqualToValue={(a, b) => a.u === b.u}
+            renderInput={(pr) => <TextField {...pr} placeholder="Chọn người duyệt…" />} />
+          <TextField size="small" sx={{ flex: 1, minWidth: 140 }} placeholder="Lý do (tuỳ chọn)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Button size="small" variant="contained" disabled={busy || !approver} onClick={doRequest} sx={{ background: LEGACY.headerGradient }}>Gửi duyệt</Button>
+        </Stack>
+      )}
+    </Paper>
   );
 }
 
