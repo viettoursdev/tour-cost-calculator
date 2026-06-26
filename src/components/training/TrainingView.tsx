@@ -17,6 +17,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { ProgramEditor } from './ProgramEditor';
+import { ProcessHub } from '@/components/process/ProcessHub';
 import { useAuthStore } from '@/stores/authStore';
 import { useTrainingStore, newTrainingId } from '@/stores/trainingStore';
 import { useHrStore } from '@/stores/hrStore';
@@ -47,7 +48,7 @@ function recomputeGates(program: TrainingProgram, e: TrainingEnrollment): Partia
 export function TrainingView() {
   const me = useAuthStore((s) => s.currentUser);
   const enrollments = useTrainingStore((s) => s.enrollments);
-  const [tab, setTab] = useState<'mine' | 'library' | 'roster' | 'certs' | 'report'>('mine');
+  const [tab, setTab] = useState<'mine' | 'library' | 'process' | 'roster' | 'certs' | 'report'>('mine');
   const canManage = hasPerm(me, 'manageTraining');
   const isMentor = enrollments.some((e) => e.mentorUsername === me?.u);
   const showRoster = canManage || isMentor;
@@ -65,6 +66,7 @@ export function TrainingView() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab value="mine" label="Lộ trình của tôi" />
         <Tab value="library" label="Thư viện chương trình" />
+        <Tab value="process" label="Quy trình phòng ban" />
         {showRoster && <Tab value="roster" label="Học viên" />}
         {canManage && <Tab value="certs" label="Chứng nhận" />}
         {canManage && <Tab value="report" label="Báo cáo" />}
@@ -72,6 +74,7 @@ export function TrainingView() {
 
       {tab === 'mine' && <MyTrack />}
       {tab === 'library' && <Library canManage={canManage} />}
+      {tab === 'process' && <ProcessHub />}
       {tab === 'roster' && showRoster && <Roster canManage={canManage} />}
       {tab === 'certs' && canManage && <CertList />}
       {tab === 'report' && canManage && <TrainingReport />}
