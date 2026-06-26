@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import TuneIcon from '@mui/icons-material/Tune';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
@@ -12,9 +13,26 @@ import { DEPARTMENTS } from '@/auth/departments';
 import { PROCESS_SEED, DEPT_COLOR, DEPT_ICON } from '@/components/process/processSeed';
 import { runProgress, currentStep } from '@/components/process/processRun';
 import { useProcessStore } from '@/stores/processStore';
+import { useHomePrefStore } from '@/stores/homePrefStore';
+import { HomeCustomizeModal } from './HomeCustomizeModal';
+import { HOME_SECTION_IDS, reconcileHomeLayout } from './homeLayout';
 import type { CloudQuoteEntry, Department, Todo } from '@/types';
 
 const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa', 'ketoan'];
+
+/** Nhãn từng thẻ trang chủ (hiển thị trong hộp thoại tùy chỉnh). */
+const SECTION_LABELS: Record<string, string> = {
+  todo: '📋 Việc cần làm',
+  process: '🗂️ Quy trình phòng ban',
+  myRuns: '▶️ Quy trình đang chạy của tôi',
+  deadlines: '⏳ Deadline công việc (2 tuần)',
+  soon: '🛫 Tour sắp khởi hành (7 ngày)',
+  myOverdue: '⏱ Việc quá hạn của tôi',
+  owing: '💰 Đã khởi hành còn nợ NCC',
+  followups: '📅 Hẹn liên hệ khách hôm nay',
+};
+/** Thẻ chiếm trọn chiều ngang (phần còn lại xếp lưới 2 cột). */
+const FULL_SPAN = new Set(['todo', 'process', 'myRuns', 'deadlines']);
 
 function Section({ icon, title, count, color, onAll, children }: {
   icon: string; title: string; count: number; color: string; onAll?: () => void; children: React.ReactNode;
@@ -66,8 +84,14 @@ export function HomeView() {
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const processRuns = useProcessStore((s) => s.runs);
   const setOpenRun = useProcessStore((s) => s.setOpenRun);
+  const homeRaw = useHomePrefStore((s) => s.raw);
+  const loadHomePref = useHomePrefStore((s) => s.load);
+  const customizeOpen = useHomePrefStore((s) => s.customizeOpen);
+  const setCustomizeOpen = useHomePrefStore((s) => s.setCustomizeOpen);
   const [todoOpen, setTodoOpen] = useState(false);
   const [editTodo, setEditTodo] = useState<Todo | null>(null);
+  useEffect(() => { loadHomePref(me?.u); }, [me?.u, loadHomePref]);
+  const layout = useMemo(() => reconcileHomeLayout([...HOME_SECTION_IDS], homeRaw), [homeRaw]);
   // Phiên chạy quy trình đang hoạt động của tôi (phụ trách hoặc tự tạo).
   const myRuns = processRuns
     .filter((r) => r.status === 'active' && (r.assignee === me?.u || r.createdByUsername === me?.u))
@@ -129,138 +153,170 @@ export function HomeView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes, customers, me]);
 
+  // Mỗi thẻ là 1 node theo id ổn định; render theo `layout` (thứ tự + ẩn/hiện).
+  // `myRuns` chỉ render khi có phiên đang chạy (= null thì bỏ qua dù đang hiện).
+  const nodes: Record<string, React.ReactNode | null> = {
+    todo: <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />,
+    process: (
+      <Section icon="🗂️" title="Quy trình phòng ban" count={PROCESS_SEED.length} color="#0d7a6a" onAll={() => go('process')}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
+          {DEPARTMENTS.filter((d) => PROCESS_DEPTS.includes(d.id)).map((d) => {
+            const color = DEPT_COLOR[d.id];
+            const n = PROCESS_SEED.filter((t) => t.department === d.id).length;
+            return (
+              <Paper key={d.id} variant="outlined" onClick={() => go('process')}
+                sx={{ p: 1, cursor: 'pointer', textAlign: 'center', borderTop: `3px solid ${color}`, '&:hover': { boxShadow: 1 } }}>
+                <Box sx={{ fontSize: 22 }}>{DEPT_ICON[d.id]}</Box>
+                <Typography fontSize={11.5} fontWeight={700} noWrap>{d.label}</Typography>
+                <Typography variant="caption" color="text.secondary">{n} quy trình</Typography>
+              </Paper>
+            );
+          })}
+        </Box>
+      </Section>
+    ),
+    myRuns: myRuns.length === 0 ? null : (
+      <Section icon="▶️" title="Quy trình đang chạy của tôi" count={myRuns.length} color="#0d7a6a" onAll={() => go('process')}>
+        <Stack spacing={0.75}>
+          {myRuns.slice(0, 6).map((r) => {
+            const p = runProgress(r);
+            const cur = currentStep(r);
+            const color = DEPT_COLOR[r.department];
+            const overdue = r.dueDate ? r.dueDate < today : false;
+            return (
+              <Row key={r.id} onClick={() => openRun(r.id)}
+                primary={r.title}
+                secondary={cur ? `Bước: ${cur.label}${r.ref ? ` · ${r.ref.label}` : ''}` : (r.ref?.label ?? '')}
+                right={
+                  <Stack alignItems="flex-end" spacing={0.25}>
+                    <Chip size="small" label={`${p.done}/${p.total} · ${p.pct}%`} sx={{ height: 20, fontWeight: 700, bgcolor: color + '22', color }} />
+                    {r.dueDate && <Typography variant="caption" sx={{ color: overdue ? '#dc3250' : 'text.disabled', fontWeight: overdue ? 700 : 400 }}>
+                      {new Date(r.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                    </Typography>}
+                  </Stack>
+                } />
+            );
+          })}
+        </Stack>
+      </Section>
+    ),
+    deadlines: (
+      <Section icon="⏳" title="Deadline công việc (2 tuần)" count={data.deadlines.length} color="#7c3aed" onAll={() => go('workflow')}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.75 }}>
+          {data.deadlines.slice(0, 8).map((d) => {
+            const cd = countdown(d.target, nowMs);
+            const color = cd.overdue || cd.urgent ? 'error' : 'warning';
+            return (
+              <Row key={d.key} onClick={() => void openQuote(d.q, d.view)}
+                primary={d.label}
+                secondary={`${d.q.name}${d.q.customerName ? ` · ${d.q.customerName}` : ''}`}
+                right={
+                  <Stack alignItems="flex-end" spacing={0.25}>
+                    <Chip size="small" color={color} variant={cd.overdue ? 'filled' : 'outlined'}
+                      label={cd.text} sx={{ height: 20, fontWeight: 700 }} />
+                    <Typography variant="caption" color="text.disabled">
+                      {new Date(d.target).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </Typography>
+                  </Stack>
+                } />
+            );
+          })}
+        </Box>
+      </Section>
+    ),
+    soon: (
+      <Section icon="🛫" title="Tour sắp khởi hành (7 ngày)" count={data.soon.length} color="#14a08c" onAll={() => go('departures')}>
+        <Stack spacing={0.75}>
+          {data.soon.slice(0, 5).map((q) => (
+            <Row key={q.cloudId} onClick={() => void openQuote(q, 'workflow')}
+              primary={q.name}
+              secondary={`${q.customerName || q.createdByName} · ${q.pax} khách`}
+              right={<Chip size="small" color={(daysUntil(q.departDate!) ?? 9) <= 2 ? 'error' : 'default'} variant="outlined"
+                label={daysUntil(q.departDate!) === 0 ? 'HÔM NAY' : `còn ${daysUntil(q.departDate!)}n`} sx={{ height: 20, fontWeight: 700 }} />} />
+          ))}
+        </Stack>
+      </Section>
+    ),
+    myOverdue: (
+      <Section icon="⏱" title="Việc quá hạn của tôi" count={data.myOverdue.length} color="#dc3250" onAll={() => go('opsboard')}>
+        <Stack spacing={0.75}>
+          {data.myOverdue.slice(0, 5).map(({ q, w }, i) => (
+            <Row key={`${q.cloudId}-${i}`} onClick={() => void openQuote(q, 'workflow')}
+              primary={`${w.label}`}
+              secondary={q.name}
+              right={<Typography variant="caption" sx={{ color: '#dc3250', fontWeight: 700 }}>{new Date(w.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>} />
+          ))}
+        </Stack>
+      </Section>
+    ),
+    owing: (
+      <Section icon="💰" title="Đã khởi hành còn nợ NCC" count={data.owing.length} color="#f5a623" onAll={() => go('payboard')}>
+        <Stack spacing={0.75}>
+          {data.owing.slice(0, 5).map((q) => (
+            <Row key={q.cloudId} onClick={() => void openQuote(q, 'payment')}
+              primary={q.name}
+              secondary={q.customerName || q.createdByName}
+              right={<Typography variant="caption" sx={{ color: '#dc3250', fontWeight: 700 }}>{fmtVND(q.paymentSummary!.remaining)}</Typography>} />
+          ))}
+        </Stack>
+      </Section>
+    ),
+    followups: (
+      <Section icon="📅" title="Hẹn liên hệ khách hôm nay" count={data.followups.length} color="#2563eb" onAll={() => go('customer')}>
+        <Stack spacing={0.75}>
+          {data.followups.slice(0, 5).map((c) => (
+            <Row key={c.id} onClick={() => go('customer')}
+              primary={c.name}
+              secondary={c.nextFollowUp!.note || 'Liên hệ lại'}
+              right={<Typography variant="caption" sx={{ color: c.nextFollowUp!.date < today ? '#dc3250' : '#2563eb', fontWeight: 700 }}>
+                {new Date(c.nextFollowUp!.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>} />
+          ))}
+        </Stack>
+      </Section>
+    ),
+  };
+
+  const visibleIds = layout.order.filter((id) => !layout.hidden.includes(id) && nodes[id] != null);
+
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1000, mx: 'auto' }}>
-      <Typography fontWeight={900} fontSize={18}>👋 Chào {me?.name ?? ''}</Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-        {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} · việc cần để ý hôm nay
-      </Typography>
-
-      <Box sx={{ mb: 1.5 }}>
-        <TodoPanel onEdit={(t) => { setEditTodo(t); setTodoOpen(true); }} />
-      </Box>
+      <Stack direction="row" alignItems="flex-start">
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography fontWeight={900} fontSize={18}>👋 Chào {me?.name ?? ''}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
+            {new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} · việc cần để ý hôm nay
+          </Typography>
+        </Box>
+        <Tooltip title="Tùy chỉnh trang Hôm nay">
+          <IconButton size="small" onClick={() => setCustomizeOpen(true)} sx={{ color: '#0d7a6a' }}>
+            <TuneIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
 
       {todoOpen && <TodoModal todo={editTodo} onClose={() => setTodoOpen(false)} />}
+      <HomeCustomizeModal
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        labels={SECTION_LABELS}
+        layout={layout}
+        onChange={(l) => useHomePrefStore.getState().save(me?.u, l)}
+        onReset={() => useHomePrefStore.getState().reset(me?.u)}
+      />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
-        <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-          <Section icon="🗂️" title="Quy trình phòng ban" count={PROCESS_SEED.length} color="#0d7a6a" onAll={() => go('process')}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(5, 1fr)' }, gap: 0.75 }}>
-              {DEPARTMENTS.filter((d) => PROCESS_DEPTS.includes(d.id)).map((d) => {
-                const color = DEPT_COLOR[d.id];
-                const n = PROCESS_SEED.filter((t) => t.department === d.id).length;
-                return (
-                  <Paper key={d.id} variant="outlined" onClick={() => go('process')}
-                    sx={{ p: 1, cursor: 'pointer', textAlign: 'center', borderTop: `3px solid ${color}`, '&:hover': { boxShadow: 1 } }}>
-                    <Box sx={{ fontSize: 22 }}>{DEPT_ICON[d.id]}</Box>
-                    <Typography fontSize={11.5} fontWeight={700} noWrap>{d.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">{n} quy trình</Typography>
-                  </Paper>
-                );
-              })}
+      {visibleIds.length === 0 ? (
+        <Typography variant="body2" color="text.disabled" sx={{ mt: 2 }}>
+          Tất cả thẻ đang ẩn. Bấm ⚙️ ở góc trên để hiện lại.
+        </Typography>
+      ) : (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+          {visibleIds.map((id) => (
+            <Box key={id} sx={FULL_SPAN.has(id) ? { gridColumn: { md: '1 / -1' } } : undefined}>
+              {nodes[id]}
             </Box>
-          </Section>
+          ))}
         </Box>
-
-        {myRuns.length > 0 && (
-          <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-            <Section icon="▶️" title="Quy trình đang chạy của tôi" count={myRuns.length} color="#0d7a6a" onAll={() => go('process')}>
-              <Stack spacing={0.75}>
-                {myRuns.slice(0, 6).map((r) => {
-                  const p = runProgress(r);
-                  const cur = currentStep(r);
-                  const color = DEPT_COLOR[r.department];
-                  const overdue = r.dueDate ? r.dueDate < today : false;
-                  return (
-                    <Row key={r.id} onClick={() => openRun(r.id)}
-                      primary={r.title}
-                      secondary={cur ? `Bước: ${cur.label}${r.ref ? ` · ${r.ref.label}` : ''}` : (r.ref?.label ?? '')}
-                      right={
-                        <Stack alignItems="flex-end" spacing={0.25}>
-                          <Chip size="small" label={`${p.done}/${p.total} · ${p.pct}%`} sx={{ height: 20, fontWeight: 700, bgcolor: color + '22', color }} />
-                          {r.dueDate && <Typography variant="caption" sx={{ color: overdue ? '#dc3250' : 'text.disabled', fontWeight: overdue ? 700 : 400 }}>
-                            {new Date(r.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-                          </Typography>}
-                        </Stack>
-                      } />
-                  );
-                })}
-              </Stack>
-            </Section>
-          </Box>
-        )}
-
-        <Box sx={{ gridColumn: { md: '1 / -1' } }}>
-          <Section icon="⏳" title="Deadline công việc (2 tuần)" count={data.deadlines.length} color="#7c3aed" onAll={() => go('workflow')}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 0.75 }}>
-              {data.deadlines.slice(0, 8).map((d) => {
-                const cd = countdown(d.target, nowMs);
-                const color = cd.overdue || cd.urgent ? 'error' : 'warning';
-                return (
-                  <Row key={d.key} onClick={() => void openQuote(d.q, d.view)}
-                    primary={d.label}
-                    secondary={`${d.q.name}${d.q.customerName ? ` · ${d.q.customerName}` : ''}`}
-                    right={
-                      <Stack alignItems="flex-end" spacing={0.25}>
-                        <Chip size="small" color={color} variant={cd.overdue ? 'filled' : 'outlined'}
-                          label={cd.text} sx={{ height: 20, fontWeight: 700 }} />
-                        <Typography variant="caption" color="text.disabled">
-                          {new Date(d.target).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </Typography>
-                      </Stack>
-                    } />
-                );
-              })}
-            </Box>
-          </Section>
-        </Box>
-
-        <Section icon="🛫" title="Tour sắp khởi hành (7 ngày)" count={data.soon.length} color="#14a08c" onAll={() => go('departures')}>
-          <Stack spacing={0.75}>
-            {data.soon.slice(0, 5).map((q) => (
-              <Row key={q.cloudId} onClick={() => void openQuote(q, 'workflow')}
-                primary={q.name}
-                secondary={`${q.customerName || q.createdByName} · ${q.pax} khách`}
-                right={<Chip size="small" color={(daysUntil(q.departDate!) ?? 9) <= 2 ? 'error' : 'default'} variant="outlined"
-                  label={daysUntil(q.departDate!) === 0 ? 'HÔM NAY' : `còn ${daysUntil(q.departDate!)}n`} sx={{ height: 20, fontWeight: 700 }} />} />
-            ))}
-          </Stack>
-        </Section>
-
-        <Section icon="⏱" title="Việc quá hạn của tôi" count={data.myOverdue.length} color="#dc3250" onAll={() => go('opsboard')}>
-          <Stack spacing={0.75}>
-            {data.myOverdue.slice(0, 5).map(({ q, w }, i) => (
-              <Row key={`${q.cloudId}-${i}`} onClick={() => void openQuote(q, 'workflow')}
-                primary={`${w.label}`}
-                secondary={q.name}
-                right={<Typography variant="caption" sx={{ color: '#dc3250', fontWeight: 700 }}>{new Date(w.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>} />
-            ))}
-          </Stack>
-        </Section>
-
-        <Section icon="💰" title="Đã khởi hành còn nợ NCC" count={data.owing.length} color="#f5a623" onAll={() => go('payboard')}>
-          <Stack spacing={0.75}>
-            {data.owing.slice(0, 5).map((q) => (
-              <Row key={q.cloudId} onClick={() => void openQuote(q, 'payment')}
-                primary={q.name}
-                secondary={q.customerName || q.createdByName}
-                right={<Typography variant="caption" sx={{ color: '#dc3250', fontWeight: 700 }}>{fmtVND(q.paymentSummary!.remaining)}</Typography>} />
-            ))}
-          </Stack>
-        </Section>
-
-        <Section icon="📅" title="Hẹn liên hệ khách hôm nay" count={data.followups.length} color="#2563eb" onAll={() => go('customer')}>
-          <Stack spacing={0.75}>
-            {data.followups.slice(0, 5).map((c) => (
-              <Row key={c.id} onClick={() => go('customer')}
-                primary={c.name}
-                secondary={c.nextFollowUp!.note || 'Liên hệ lại'}
-                right={<Typography variant="caption" sx={{ color: c.nextFollowUp!.date < today ? '#dc3250' : '#2563eb', fontWeight: 700 }}>
-                  {new Date(c.nextFollowUp!.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>} />
-            ))}
-          </Stack>
-        </Section>
-      </Box>
+      )}
     </Box>
   );
 }
