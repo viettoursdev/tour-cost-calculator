@@ -36,9 +36,6 @@ import { DEPT_LABEL } from '@/auth/departments';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
 
-/** Các template "alt" (app riêng) không có Trang chủ — về Trang chủ phải thoát về màn chọn hồ sơ. */
-const ALT_TEMPLATES = new Set(['itinerary', 'menu', 'visa', 'doctranslate', 'guideschedule']);
-
 /** Viết tắt chữ cái đầu mỗi từ trong tên (tối đa 3 ký tự). VD "Hoàng Anh Tuấn" → "HAT". */
 function initialsOf(name: string): string {
   return name.trim().split(/\s+/).filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
@@ -96,14 +93,8 @@ export function AppShell() {
   };
   const openWhatsNew = () => { setWhatsNewEntries(undefined); setWhatsNewOpen(true); };
 
-  // Logo Viettours trên header = nút Về Trang chủ (hiện trên MỌI màn hình).
-  // Báo giá thường → mở Trang chủ "Hôm nay" (giữ nguyên nháp đang làm).
-  // App mẫu (lịch trình/thực đơn/visa…) không có Trang chủ → thoát về màn chọn hồ sơ.
-  const goHome = () => {
-    const st = useQuoteStore.getState();
-    if (ALT_TEMPLATES.has(st.draft.template ?? '')) st.abandon();
-    else st.setView('home');
-  };
+  // Logo Viettours trên header = nút về màn "Bạn muốn tạo gì hôm nay?" (hiện trên MỌI màn hình).
+  const goHome = () => useQuoteStore.getState().openSelector();
 
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
@@ -138,7 +129,7 @@ export function AppShell() {
                 onClick={goHome}
                 onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); } }}
                 sx={{
-                  height: 30, width: 'auto', display: 'block', flexShrink: 0,
+                  height: 36, width: 'auto', display: 'block', flexShrink: 0,
                   filter: 'brightness(0) invert(1)', cursor: 'pointer',
                   transition: 'opacity .15s, transform .15s',
                   '&:hover': { opacity: 0.82, transform: 'scale(1.03)' },

@@ -77,7 +77,10 @@ export function QuoteView() {
   const cloudDirty = useQuoteStore((s) => s.cloudDirty);
   const locked = useQuoteStore((s) => s.draft.locked);
   const newDraft = useQuoteStore((s) => s.newDraft);
-  const [selectorOpen, setSelectorOpen] = useState(false);
+  // "Bạn muốn tạo gì hôm nay?" mở từ store nên logo header (AppShell) cũng mở được.
+  const selectorOpen = useQuoteStore((s) => s.selectorOpen);
+  const openSelector = useQuoteStore((s) => s.openSelector);
+  const closeSelector = useQuoteStore((s) => s.closeSelector);
   const [newQuoteOpen, setNewQuoteOpen] = useState(false);
   const [saveCloudOpen, setSaveCloudOpen] = useState(false);
   const [aiImportFile, setAiImportFile] = useState<File | null>(null);
@@ -104,13 +107,13 @@ export function QuoteView() {
       <TemplateSelectorModal
         open={gateOpen}
         canCancel={gateDismissable}
-        onClose={() => setSelectorOpen(false)}
+        onClose={closeSelector}
       />
 
       {template !== null && (
         <>
           <QuoteToolbar
-            onOpenSelector={() => setSelectorOpen(true)}
+            onOpenSelector={openSelector}
             onOpenNewQuote={() => setNewQuoteOpen(true)}
             onOpenSaveCloud={() => setSaveCloudOpen(true)}
           />

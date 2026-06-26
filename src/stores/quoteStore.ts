@@ -65,6 +65,8 @@ type QuoteState = {
   currentUsername: string | null;
   /** Có thay đổi chưa lưu lên cloud kể từ lần lưu/tải gần nhất. */
   cloudDirty: boolean;
+  /** Đang mở màn "Bạn muốn tạo gì hôm nay?" (TemplateSelectorModal). UI-only, không persist. */
+  selectorOpen: boolean;
   /** Tỷ giá đồng bộ TOÀN CỤC (chỉ seed báo giá mới; tách khỏi draft.rates). */
   syncedRates: Record<string, number>;
   fxSyncedAt: string | null;
@@ -89,6 +91,9 @@ type QuoteState = {
 
   newDraft: (template: Template, meta?: NewQuoteMeta) => void;
   abandon: () => void;
+  /** Mở màn "Bạn muốn tạo gì hôm nay?" từ bất kỳ đâu (logo header). App mẫu → thoát trước. */
+  openSelector: () => void;
+  closeSelector: () => void;
   setView: (v: QuoteViewKey) => void;
 
   patchInfo: (patch: Partial<QuoteInfo>) => void;
@@ -238,6 +243,7 @@ export const useQuoteStore = create<QuoteState>()(
         snapshots: [],
         currentUsername: null,
         cloudDirty: false,
+        selectorOpen: false,
         syncedRates: { ...RATES_INIT },
         fxSyncedAt: null,
         fxSyncedBy: null,
@@ -380,6 +386,19 @@ export const useQuoteStore = create<QuoteState>()(
         abandon: () => {
           muted(() => set((s) => ({ draft: { ...EMPTY_DRAFT, rates: seedNewRates(s.syncedRates) }, view: 'cost', cloudDirty: false, ...CLEAR_HIST })));
         },
+
+        // Mở "Bạn muốn tạo gì hôm nay?". Báo giá thường → mở chồng (giữ nháp, huỷ được).
+        // App mẫu (lịch trình/thực đơn/visa/dịch hồ sơ/lịch HDV) không render selector
+        // → phải thoát về template null trước; gate trong QuoteView sẽ tự mở selector.
+        openSelector: () => {
+          const t = get().draft.template;
+          if (t === 'itinerary' || t === 'menu' || t === 'visa' || t === 'doctranslate' || t === 'guideschedule') {
+            get().abandon();
+          } else {
+            set({ selectorOpen: true });
+          }
+        },
+        closeSelector: () => set({ selectorOpen: false }),
 
         setView: (v) =>
           set((s) => {
