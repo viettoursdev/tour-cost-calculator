@@ -15,7 +15,7 @@ create or replace function public.set_visa_export_password(new_pw text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   caller_role text;
@@ -41,7 +41,7 @@ create or replace function public.verify_visa_export_password(pw text)
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select case
     when not public.is_viettours_user() then false
@@ -57,7 +57,7 @@ create or replace function public.visa_export_password_is_set()
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select case
     when not public.is_viettours_user() then false
