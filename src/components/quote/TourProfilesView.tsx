@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, Dialog, DialogActions,
+  Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, createFilterOptions, Dialog, DialogActions,
   DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
   Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
@@ -137,6 +137,10 @@ function displayBasics(p: TourProfile, primary?: CloudQuoteEntry): {
     dest: pick(p.dest, primary?.dest),
   };
 }
+
+/** Sentinel id cho tùy chọn "Tạo hồ sơ khách" trong Autocomplete khách hàng. */
+const CREATE_CUSTOMER_ID = '__create_customer__';
+const custFilter = createFilterOptions<Customer>();
 
 const prefsKey = (u: string) => `vte_tourprofile_prefs_${u}`;
 const loadExpanded = (u?: string): Set<string> => {
@@ -944,6 +948,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; startDate: string | null; pax: number; note: string }, lock: boolean) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
+  const saveCustomer = useCustomerStore((s) => s.save);
   const b = displayBasics(profile, primary);
   // Khách hàng: ưu tiên hồ sơ KH đã gắn (customerId) → đồng bộ với hồ sơ khách hàng thật.
   const initialCustomer = profile.customerId ? customers.find((c) => c.id === profile.customerId) ?? null : null;
@@ -966,6 +971,23 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
     dest.trim() !== (b.dest ?? '') ||
     startDate !== (b.departDate ? b.departDate.slice(0, 10) : '') ||
     pax !== (b.pax ? String(b.pax) : '');
+
+  // Tạo nhanh hồ sơ khách mới từ tên gõ vào rồi gắn luôn (id sinh sẵn để dùng lại ngay).
+  const createAndPick = async (rawName: string) => {
+    const nm = rawName.trim();
+    if (!nm) return;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    // createdAt/createdBy do customerStore.save tự điền cho bản ghi mới.
+    const c: Customer = { id, name: nm, type: 'company', contacts: [], note: '', createdAt: '', createdBy: '' };
+    setBusy(true);
+    try {
+      await saveCustomer(c);
+      setCustomer(c);
+      setCustomerName(nm);
+    } catch (e) {
+      window.alert('❌ Không tạo được hồ sơ khách: ' + (e as Error).message);
+    } finally { setBusy(false); }
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -994,21 +1016,36 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
             options={customers}
             value={customer}
             inputValue={customerName}
-            getOptionLabel={(o) => (typeof o === 'string' ? o : o.name)}
+            filterOptions={(opts, params) => {
+              const filtered = custFilter(opts, params);
+              const q = params.inputValue.trim();
+              // Gõ tên chưa có hồ sơ → đề xuất tạo nhanh hồ sơ khách (tránh khách "mồ côi" chỉ có chuỗi tên).
+              if (q && !opts.some((o) => o.name.trim().toLowerCase() === q.toLowerCase())) {
+                filtered.push({ id: CREATE_CUSTOMER_ID, name: q, type: 'company', contacts: [], note: '', createdAt: '', createdBy: '' });
+              }
+              return filtered;
+            }}
+            getOptionLabel={(o) => (typeof o === 'string' ? o : o.id === CREATE_CUSTOMER_ID ? `➕ Tạo hồ sơ khách "${o.name}"` : o.name)}
             isOptionEqualToValue={(a, b2) => a.id === b2.id}
             onChange={(_, v) => {
-              if (v && typeof v !== 'string') { setCustomer(v); setCustomerName(v.name); }
-              else { setCustomer(null); setCustomerName(typeof v === 'string' ? v : ''); }
+              if (v && typeof v !== 'string') {
+                if (v.id === CREATE_CUSTOMER_ID) { void createAndPick(v.name); }
+                else { setCustomer(v); setCustomerName(v.name); }
+              } else { setCustomer(null); setCustomerName(typeof v === 'string' ? v : ''); }
             }}
             onInputChange={(_, v, reason) => {
               if (reason === 'input') { setCustomerName(v); setCustomer(null); }
             }}
             renderOption={(props, o) => (
               <li {...props} key={o.id}>
-                <Box>
-                  <Typography variant="body2">{o.name}</Typography>
-                  {o.contacts?.[0] && <Typography variant="caption" color="text.secondary">{o.contacts[0].name} · {o.contacts[0].phone}</Typography>}
-                </Box>
+                {o.id === CREATE_CUSTOMER_ID ? (
+                  <Typography variant="body2" sx={{ color: '#0d7a6a', fontWeight: 700 }}>➕ Tạo hồ sơ khách “{o.name}”</Typography>
+                ) : (
+                  <Box>
+                    <Typography variant="body2">{o.name}</Typography>
+                    {o.contacts?.[0] && <Typography variant="caption" color="text.secondary">{o.contacts[0].name} · {o.contacts[0].phone}</Typography>}
+                  </Box>
+                )}
               </li>
             )}
             renderInput={(pr) => (

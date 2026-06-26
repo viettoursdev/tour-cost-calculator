@@ -18,6 +18,7 @@ import { useLinkNavStore } from '@/stores/linkNavStore';
 import { canSeePrices } from '@/auth/quotePerms';
 import { VISA_COUNTRIES, VISA_PROC_PRESETS, VISA_STATUS_META, visaPresetKeyForCountry } from '@/components/visa/constants';
 import { computeTotals, fmtVND } from './calc';
+import { summarizeGuests } from './guestStats';
 import { workflowProgress } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
 import { CONTRACT_STATUS } from '@/components/contract/constants';
@@ -66,17 +67,15 @@ export function DealCockpit() {
     const id = draft.customerId || profile?.customerId;
     return id ? customers.find((c) => c.id === id) : undefined;
   }, [customers, draft.customerId, profile?.customerId]);
-  // Một báo giá có thể có NHIỀU bộ hồ sơ visa — mỗi nước một bộ.
-  const linkedVisas = useMemo(
-    () => (cid ? visaProjects.filter((p) => p.linkedQuoteId === cid) : []),
-    [visaProjects, cid],
-  );
   // Liên kết theo HỒ SƠ (đọc kép: ưu tiên tourProfileId, fallback linkedQuoteId của báo giá).
   const ofProfile = <T extends { tourProfileId?: string | null; linkedQuoteId?: string | null }>(x: T) =>
     (!!tpId && x.tourProfileId === tpId) || (!!cid && x.linkedQuoteId === cid);
+  // Một báo giá/hồ sơ có thể có NHIỀU bộ hồ sơ visa — mỗi nước một bộ. Đọc kép cho
+  // nhất quán với Chương trình/Thực đơn (visa gắn qua tourProfileId vẫn hiện).
+  const linkedVisas = useMemo(() => visaProjects.filter(ofProfile), [visaProjects, tpId, cid]); // eslint-disable-line react-hooks/exhaustive-deps
   const linkedMenus = useMemo(() => menus.filter(ofProfile), [menus, tpId, cid]); // eslint-disable-line react-hooks/exhaustive-deps
   const linkedItins = useMemo(() => itineraries.filter(ofProfile), [itineraries, tpId, cid]); // eslint-disable-line react-hooks/exhaustive-deps
-  const paxCount = draft.passengers?.length ?? 0;
+  const guests = useMemo(() => summarizeGuests(draft.passengers ?? []), [draft.passengers]);
 
   const input: DealInput = useMemo(
     () => ({
@@ -131,6 +130,11 @@ export function DealCockpit() {
     const full = await useItineraryStore.getState().load(id);
     if (full) await useItineraryStore.getState().save({ ...full, tourProfileId: on ? tpId : null }, savedBy);
   });
+  const setVisaLink = (id: string, on: boolean) => run(async () => {
+    const v = visaProjects.find((x) => x.id === id);
+    if (v) await useVisaProjectStore.getState().save({ ...v, tourProfileId: on ? tpId : null });
+  });
+  const visaOptions = visaProjects.filter((v) => !ofProfile(v));
   // Thêm một bộ hồ sơ visa cho MỘT quốc gia cụ thể (tour nhiều nước → nhiều bộ).
   // Mở hộp thoại chọn quốc gia chuẩn hoá (vẫn gõ nước ngoài danh sách được).
   const openAddVisa = () => {
@@ -353,8 +357,22 @@ export function DealCockpit() {
         />
 
         <CockpitCard title="👥 Khách đoàn" onOpen={() => go('passengers')}>
-          {paxCount > 0 ? (
-            <Typography variant="body2"><strong>{paxCount}</strong> khách trong danh sách đi tour</Typography>
+          {guests.total > 0 ? (
+            <Stack spacing={0.5}>
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                <Chip size="small" label={`${guests.total} khách`} sx={{ height: 20, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a', fontWeight: 700 }} />
+                <Chip size="small" label={`${guests.male} nam · ${guests.female} nữ`} variant="outlined" sx={{ height: 20 }} />
+                <Chip size="small" label={`${guests.totalRooms} phòng`} variant="outlined" sx={{ height: 20 }} />
+              </Stack>
+              {draft.pax > 0 && guests.total !== draft.pax && (
+                <Typography variant="caption" sx={{ color: 'warning.main' }}>
+                  ⚠ Danh sách {guests.total} ≠ {draft.pax} khách báo giá
+                </Typography>
+              )}
+              {guests.unassigned > 0 && (
+                <Typography variant="caption" color="text.secondary">{guests.unassigned} khách chưa xếp phòng</Typography>
+              )}
+            </Stack>
           ) : (
             <Stack spacing={0.75} alignItems="flex-start">
               <Typography variant="body2" color="text.secondary">Chưa có danh sách khách đoàn.</Typography>
@@ -387,6 +405,8 @@ export function DealCockpit() {
               <Stack spacing={0.75}>
                 {linkedVisas.map((v) => {
                   const apply = v.applyCount || (v.applicants?.length ?? 0);
+                  // Chỉ cho Gỡ bộ visa gắn TRỰC TIẾP vào hồ sơ (không phải bộ sinh từ chính báo giá này).
+                  const detachable = !!tpId && v.tourProfileId === tpId && v.linkedQuoteId !== cid;
                   return (
                     <Stack key={v.id} direction="row" alignItems="center" spacing={0.75}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -401,15 +421,22 @@ export function DealCockpit() {
                         </Stack>
                       </Box>
                       <Button size="small" sx={{ minWidth: 0 }} onClick={() => openVisa(v.id)}>Mở</Button>
+                      {detachable && <Button size="small" color="error" sx={{ minWidth: 0 }} disabled={busy} onClick={() => setVisaLink(v.id, false)}>Gỡ</Button>}
                     </Stack>
                   );
                 })}
                 <Button size="small" variant="outlined" onClick={openAddVisa}>＋ Thêm nước</Button>
+                {tpId && visaOptions.length > 0 && (
+                  <AttachControl options={visaOptions.map((v) => ({ id: v.id, label: v.name || v.code, sub: v.country }))} busy={busy} onAttach={(id) => setVisaLink(id, true)} placeholder="Gắn dự án visa có sẵn…" />
+                )}
               </Stack>
             ) : (
               <Stack spacing={0.75} alignItems="flex-start">
                 <Typography variant="body2" color="text.secondary">Chưa có bộ hồ sơ visa.</Typography>
                 <Button size="small" variant="outlined" onClick={openAddVisa}>Tạo dự án visa</Button>
+                {tpId && visaOptions.length > 0 && (
+                  <AttachControl options={visaOptions.map((v) => ({ id: v.id, label: v.name || v.code, sub: v.country }))} busy={busy} onAttach={(id) => setVisaLink(id, true)} placeholder="Gắn dự án visa có sẵn…" />
+                )}
               </Stack>
             )}
           </CockpitCard>
@@ -481,7 +508,6 @@ function CockpitLinkCard({ title, linked, options, canAttach, busy, onOpen, onAt
   onAttach: (id: string) => void;
   onDetach: (id: string) => void;
 }) {
-  const [pick, setPick] = useState<CockpitLinkItem | null>(null);
   return (
     <CockpitCard title={title}>
       <Stack spacing={0.5} sx={{ mb: linked.length ? 0.75 : 0 }}>
@@ -496,20 +522,33 @@ function CockpitLinkCard({ title, linked, options, canAttach, busy, onOpen, onAt
         {!linked.length && <Typography variant="body2" color="text.secondary">Chưa gắn.</Typography>}
       </Stack>
       {canAttach ? (
-        <Stack direction="row" spacing={0.5}>
-          <Autocomplete
-            size="small" sx={{ flex: 1 }} options={options} value={pick}
-            onChange={(_, v) => setPick(v)}
-            getOptionLabel={(o) => o.label}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            renderOption={(props, o) => (<li {...props} key={o.id}><Box><Typography variant="body2">{o.label}</Typography>{o.sub && <Typography variant="caption" color="text.secondary">{o.sub}</Typography>}</Box></li>)}
-            renderInput={(pr) => <TextField {...pr} placeholder="Chọn để gắn…" />}
-          />
-          <Button size="small" variant="outlined" disabled={busy || !pick} onClick={() => { if (pick) { onAttach(pick.id); setPick(null); } }}>+ Gắn</Button>
-        </Stack>
+        <AttachControl options={options} busy={busy} onAttach={onAttach} placeholder="Chọn để gắn…" />
       ) : (
         <Typography variant="caption" color="text.secondary">Lưu báo giá lên cloud để gắn liên kết.</Typography>
       )}
     </CockpitCard>
+  );
+}
+
+/** Ô chọn + nút "+ Gắn" tái dùng (giữ state lựa chọn riêng). */
+function AttachControl({ options, busy, onAttach, placeholder }: {
+  options: CockpitLinkItem[];
+  busy: boolean;
+  onAttach: (id: string) => void;
+  placeholder: string;
+}) {
+  const [pick, setPick] = useState<CockpitLinkItem | null>(null);
+  return (
+    <Stack direction="row" spacing={0.5}>
+      <Autocomplete
+        size="small" sx={{ flex: 1 }} options={options} value={pick}
+        onChange={(_, v) => setPick(v)}
+        getOptionLabel={(o) => o.label}
+        isOptionEqualToValue={(a, b) => a.id === b.id}
+        renderOption={(props, o) => (<li {...props} key={o.id}><Box><Typography variant="body2">{o.label}</Typography>{o.sub && <Typography variant="caption" color="text.secondary">{o.sub}</Typography>}</Box></li>)}
+        renderInput={(pr) => <TextField {...pr} placeholder={placeholder} />}
+      />
+      <Button size="small" variant="outlined" disabled={busy || !pick} onClick={() => { if (pick) { onAttach(pick.id); setPick(null); } }}>+ Gắn</Button>
+    </Stack>
   );
 }
