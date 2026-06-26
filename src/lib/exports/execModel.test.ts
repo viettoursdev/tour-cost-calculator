@@ -28,7 +28,7 @@ describe('buildExecModel', () => {
   it('merges menu meals + restaurant contact by day, and exec ops', () => {
     const rest: Restaurant = {
       id: 'r1', name: 'Nhà hàng A', continent: '', country: '', city: 'Seoul',
-      contact: '010-1234', website: '', menuLink: '', note: 'Đặt trước', rating: 0, review: '', menus: [],
+      contact: '010-1234', website: 'nhahang-a.kr', menuLink: '', note: 'Đặt trước', rating: 0, review: '', menus: [],
     };
     const menu: Menu = {
       id: 'mn1', type: 'NN', continent: '', country: '', seq: 1, title: 'Menu', destination: '',
@@ -52,7 +52,8 @@ describe('buildExecModel', () => {
     expect(m.guides).toHaveLength(1);
     const d = m.dayVMs[0];
     expect(d.menuMeals[0].dishes).toBe('Set BBQ');       // adjusted wins over suggested
-    expect(d.menuMeals[0].contact).toContain('010-1234'); // restaurant contact merged
+    expect(d.menuMeals[0].address).toContain('010-1234'); // restaurant phone merged into địa chỉ line
+    expect(d.menuMeals[0].contact).toContain('nhahang-a.kr'); // contact field now holds website
     expect(d.hotelName).toBe('Lotte');
     expect(d.notes).toBe('Check-in 14h');
     expect(d.checklist).toHaveLength(1);
