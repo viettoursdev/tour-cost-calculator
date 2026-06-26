@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { sbSubscribeHrEmployees, sbPushHrEmployees } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
+import { useTrainingStore } from './trainingStore';
+import { toast } from './toastStore';
 import type { HrEmployee } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
@@ -36,15 +38,22 @@ export const useHrStore = create<HrState>()(
       const { employees } = get();
       const isNew = !form.id || !employees.find((e) => e.id === form.id);
       const now = new Date().toISOString();
-      const next = isNew
-        ? [
-            { ...form, id: form.id || newId(), createdAt: now, createdBy: u.name },
-            ...employees,
-          ]
+      const created: HrEmployee | null = isNew
+        ? { ...form, id: form.id || newId(), createdAt: now, createdBy: u.name }
+        : null;
+      const next = created
+        ? [created, ...employees]
         : employees.map((e) => (e.id === form.id ? { ...form, updatedAt: now, updatedBy: u.name } : e));
       set({ employees: next, syncing: true });
       try {
         await sbPushHrEmployees(next, { name: u.name, role: u.role });
+        // Tự ghi danh đào tạo cho nhân viên MỚI nếu phòng ban có chương trình.
+        if (created) {
+          try {
+            const program = await useTrainingStore.getState().enrollEmployee(created);
+            if (program) toast(`Đã tự ghi danh ${created.fullName} vào đào tạo "${program.name}"`, 'success');
+          } catch { /* không chặn việc lưu nhân sự nếu auto-enroll lỗi */ }
+        }
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ nhân sự: ' + (e as Error).message);
       } finally {

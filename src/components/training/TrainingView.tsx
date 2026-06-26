@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider,
+  Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider,
   FormControl, FormControlLabel, IconButton, LinearProgress, MenuItem, Paper, Radio, RadioGroup,
   Select, Stack, Tab, Tabs, Tooltip, Typography,
 } from '@mui/material';
@@ -14,6 +14,7 @@ import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { useAuthStore } from '@/stores/authStore';
 import { useTrainingStore, newTrainingId } from '@/stores/trainingStore';
 import { useHrStore } from '@/stores/hrStore';
@@ -24,12 +25,12 @@ import { DEPT_LABEL } from '@/auth/departments';
 import { sbNextCertCode } from '@/lib/supabase';
 import { TRAINING_PHASES, QUIZ_PASS_PCT } from '@/types';
 import type {
-  TrainingProgram, TrainingModule, TrainingEnrollment, ModuleProgress, TrainingPhase, GateState, HrEmployee,
+  TrainingProgram, TrainingModule, TrainingEnrollment, ModuleProgress, TrainingPhase, GateState, QuizQuestion,
 } from '@/types';
 import { TRAINING_SEED } from '@/lib/trainingSeed';
 import {
   scoreQuiz, isModuleComplete, isPhasePassed, programProgressPct, isCertEligible, currentPhase,
-  modulesOfPhase, buildCertEvaluation,
+  modulesOfPhase, buildCertEvaluation, resolveLearner,
 } from '@/lib/training';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -285,6 +286,7 @@ function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff, c
   const me = useAuthStore((s) => s.currentUser);
   const saveEnrollment = useTrainingStore((s) => s.saveEnrollment);
   const [quizFor, setQuizFor] = useState<TrainingModule | null>(null);
+  const [practiceFor, setPracticeFor] = useState<TrainingModule | null>(null);
   const [certifying, setCertifying] = useState(false);
 
   const persist = async (next: TrainingEnrollment) => {
@@ -373,6 +375,7 @@ function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff, c
                   canLearn={canLearn} canSignoff={canSignoff}
                   onTogglePractice={(v) => void patchModule(m.id, { practiceDone: v, status: 'in_progress' })}
                   onOpenQuiz={() => setQuizFor(m)}
+                  onPracticeAI={() => setPracticeFor(m)}
                   onToggleSignoff={() => void toggleSignoff(m)} />
               ))}
             </Stack>
@@ -414,17 +417,19 @@ function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff, c
       )}
 
       {quizFor && <QuizDialog module={quizFor} onClose={() => setQuizFor(null)} onSubmit={submitQuiz} />}
+      {practiceFor && <PracticeQuizDialog module={practiceFor} onClose={() => setPracticeFor(null)} />}
     </Box>
   );
 }
 
-function ModuleCard({ module: m, progress, canLearn, canSignoff, onTogglePractice, onOpenQuiz, onToggleSignoff }: {
+function ModuleCard({ module: m, progress, canLearn, canSignoff, onTogglePractice, onOpenQuiz, onPracticeAI, onToggleSignoff }: {
   module: TrainingModule;
   progress: ModuleProgress | undefined;
   canLearn: boolean;
   canSignoff: boolean;
   onTogglePractice: (v: boolean) => void;
   onOpenQuiz: () => void;
+  onPracticeAI: () => void;
   onToggleSignoff: () => void;
 }) {
   const done = isModuleComplete(m, progress);
@@ -440,6 +445,12 @@ function ModuleCard({ module: m, progress, canLearn, canSignoff, onTogglePractic
             <Typography fontSize={13.5} fontWeight={700}>{m.title}</Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>🎯 {m.objective}</Typography>
+          {canLearn && (
+            <Button size="small" startIcon={<AutoAwesomeIcon fontSize="small" />} onClick={onPracticeAI}
+              sx={{ mt: 0.25, minWidth: 0, px: 0.5, fontSize: 11.5 }}>
+              Luyện thêm với AI
+            </Button>
+          )}
           {m.contentMd && (
             <Typography fontSize={12.5} sx={{ mt: 0.5, whiteSpace: 'pre-line' }}>{m.contentMd}</Typography>
           )}
@@ -523,6 +534,102 @@ function QuizDialog({ module: m, onClose, onSubmit }: {
       <DialogActions>
         <Button onClick={onClose}>Huỷ</Button>
         <Button variant="contained" disabled={!allAnswered} onClick={() => void onSubmit(m, answers)}>Nộp bài</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Luyện tập với AI: sinh câu hỏi từ nội dung module, tự chấm tại chỗ, KHÔNG lưu
+ *  (không ảnh hưởng tiến độ/quiz chuẩn). */
+function PracticeQuizDialog({ module: m, onClose }: { module: TrainingModule; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const load = async () => {
+    setLoading(true); setError(null); setSubmitted(false); setAnswers({});
+    try {
+      const { generatePracticeQuiz } = await import('@/lib/trainingQuiz');
+      const qs = await generatePracticeQuiz(m);
+      if (!qs.length) throw new Error('AI chưa tạo được câu hỏi. Thử lại nhé.');
+      setQuestions(qs);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, []);
+
+  const score = submitted ? scoreQuiz(questions, answers) : null;
+  const allAnswered = questions.length > 0 && questions.every((q) => answers[q.id] != null);
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ pr: 6 }}>
+        <Stack direction="row" alignItems="center" spacing={0.75}>
+          <AutoAwesomeIcon fontSize="small" color="primary" />
+          <span>Luyện tập AI · {m.code}</span>
+        </Stack>
+        <IconButton onClick={onClose} sx={{ position: 'absolute', right: 8, top: 8 }}><CloseIcon /></IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        {loading ? (
+          <Stack alignItems="center" spacing={1.5} sx={{ py: 4 }}>
+            <CircularProgress size={28} />
+            <Typography variant="caption" color="text.secondary">AI đang soạn câu hỏi ôn tập…</Typography>
+          </Stack>
+        ) : error ? (
+          <Stack spacing={1.5} sx={{ py: 2 }}>
+            <Typography color="error" fontSize={13}>{error}</Typography>
+            <Button variant="outlined" onClick={() => void load()}>Thử lại</Button>
+          </Stack>
+        ) : (
+          <Stack spacing={2}>
+            {score != null && (
+              <Paper variant="outlined" sx={{ p: 1.25, bgcolor: score >= QUIZ_PASS_PCT ? 'success.50' : 'warning.50' }}>
+                <Typography fontWeight={800} fontSize={14} color={score >= QUIZ_PASS_PCT ? 'success.main' : 'warning.main'}>
+                  Kết quả luyện tập: {score}% {score >= QUIZ_PASS_PCT ? '✓' : ''}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">Bài luyện không tính vào tiến độ — chỉ để ôn.</Typography>
+              </Paper>
+            )}
+            {questions.map((q, qi) => {
+              const chosen = answers[q.id];
+              return (
+                <Box key={q.id}>
+                  <Typography fontSize={13.5} fontWeight={700} sx={{ mb: 0.5 }}>{qi + 1}. {q.q}</Typography>
+                  <FormControl>
+                    <RadioGroup value={chosen ?? -1}
+                      onChange={(e) => !submitted && setAnswers((a) => ({ ...a, [q.id]: Number(e.target.value) }))}>
+                      {q.options.map((opt, oi) => {
+                        const showRight = submitted && oi === q.answer;
+                        const showWrong = submitted && chosen === oi && oi !== q.answer;
+                        return (
+                          <FormControlLabel key={oi} value={oi} disabled={submitted} control={<Radio size="small" />}
+                            label={<Typography fontSize={13} sx={{ color: showRight ? 'success.main' : showWrong ? 'error.main' : undefined, fontWeight: showRight ? 700 : 400 }}>{opt}{showRight ? ' ✓' : ''}</Typography>} />
+                        );
+                      })}
+                    </RadioGroup>
+                  </FormControl>
+                  {submitted && q.explain && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>💡 {q.explain}</Typography>
+                  )}
+                </Box>
+              );
+            })}
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Đóng</Button>
+        {!loading && !error && !submitted && (
+          <Button variant="contained" disabled={!allAnswered} onClick={() => setSubmitted(true)}>Chấm điểm</Button>
+        )}
+        {submitted && <Button variant="outlined" startIcon={<AutoAwesomeIcon />} onClick={() => void load()}>Bộ câu mới</Button>}
       </DialogActions>
     </Dialog>
   );
@@ -633,12 +740,6 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
   const programs = [...saved, ...TRAINING_SEED];
   const activeEmps = employees.filter((e) => e.status !== 'resigned');
 
-  const resolveUsername = (emp: HrEmployee): { u: string; name: string } => {
-    const email = (emp.profileEmail || emp.email || '').toLowerCase();
-    const u = email ? users.find((x) => (x.email || '').toLowerCase() === email) : undefined;
-    return u ? { u: u.u, name: u.name } : { u: email || emp.id, name: emp.fullName };
-  };
-
   const submit = async () => {
     const program = programs.find((p) => p.id === programId);
     const emp = activeEmps.find((e) => e.id === employeeId);
@@ -647,7 +748,7 @@ function EnrollDialog({ onClose }: { onClose: () => void }) {
     if (dup) { toast('Nhân viên này đã ghi danh chương trình đó', 'warning'); return; }
     setBusy(true);
     try {
-      const learner = resolveUsername(emp);
+      const learner = resolveLearner(emp, users);
       const e: TrainingEnrollment = {
         id: newTrainingId('te'),
         programId: program.id,

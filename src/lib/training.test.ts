@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   scoreQuiz, isModuleComplete, isPhasePassed, programProgressPct,
   isCertEligible, currentPhase, averageQuizScore, buildCertEvaluation,
+  pickProgramForDept, resolveLearner,
 } from './training';
 import type {
   TrainingProgram, TrainingModule, TrainingEnrollment, QuizQuestion, ModuleProgress,
+  HrEmployee, User,
 } from '@/types';
 
 const q = (id: string, answer: number): QuizQuestion => ({ id, q: id, options: ['a', 'b', 'c'], answer });
@@ -116,5 +118,29 @@ describe('averageQuizScore & buildCertEvaluation', () => {
     expect(ev.reviewDate).toBe('2026-06-26');
     expect(ev.overallScore).toBeGreaterThanOrEqual(4);
     expect(ev.promotion).toContain('chứng nhận');
+  });
+});
+
+describe('pickProgramForDept & resolveLearner', () => {
+  const seed: TrainingProgram = { ...program([]), id: 's', isSeed: true, isPublished: true, department: 'visa' };
+  const mine: TrainingProgram = { ...program([]), id: 'm', isSeed: false, isPublished: true, department: 'visa' };
+
+  it('prefers a published non-seed program for the department, else seed', () => {
+    expect(pickProgramForDept([seed, mine], 'visa')?.id).toBe('m');
+    expect(pickProgramForDept([seed], 'visa')?.id).toBe('s');
+    expect(pickProgramForDept([seed, mine], 'muahang')).toBeUndefined();
+  });
+
+  const emp = (over: Partial<HrEmployee>): HrEmployee => ({
+    id: 'e1', employeeCode: 'NV1', fullName: 'Nguyễn Văn A', email: 'a@viettours.com.vn',
+    phone: '', department: 'visa', title: '', level: '', status: 'official', notes: '',
+    documents: [], createdAt: '', createdBy: '', ...over,
+  });
+  const user = (over: Partial<User>): User => ({ u: 'an', role: 'Operations', name: 'An', color: '#000', ...over });
+
+  it('matches an employee to a login user by email, else falls back', () => {
+    const users = [user({ u: 'an', email: 'a@viettours.com.vn', name: 'An VT' })];
+    expect(resolveLearner(emp({}), users)).toEqual({ u: 'an', name: 'An VT' });
+    expect(resolveLearner(emp({ email: 'nobody@x.com' }), users)).toEqual({ u: 'nobody@x.com', name: 'Nguyễn Văn A' });
   });
 });

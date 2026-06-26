@@ -1,6 +1,6 @@
 import type {
   TrainingProgram, TrainingModule, TrainingEnrollment, ModuleProgress,
-  TrainingPhase, QuizQuestion, HrEvaluation,
+  TrainingPhase, QuizQuestion, HrEvaluation, HrEmployee, User, Department,
 } from '@/types';
 import { TRAINING_PHASES, QUIZ_PASS_PCT } from '@/types';
 
@@ -81,6 +81,21 @@ export function averageQuizScore(program: TrainingProgram, enrollment: TrainingE
     .filter((s): s is number => typeof s === 'number');
   if (!scores.length) return undefined;
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+/** Chương trình phù hợp nhất để tự ghi danh theo phòng ban: ưu tiên bản đã lưu &
+ *  published của phòng, rồi đến mẫu dựng sẵn. */
+export function pickProgramForDept(programs: TrainingProgram[], dept: Department): TrainingProgram | undefined {
+  return programs.find((p) => p.department === dept && p.isPublished && !p.isSeed)
+    ?? programs.find((p) => p.department === dept);
+}
+
+/** Khớp hồ sơ nhân sự → tài khoản đăng nhập qua email (để học viên tự thấy lộ
+ *  trình). Không khớp được thì dùng email/id làm định danh tạm. */
+export function resolveLearner(emp: HrEmployee, users: User[]): { u: string; name: string } {
+  const email = (emp.profileEmail || emp.email || '').toLowerCase();
+  const u = email ? users.find((x) => (x.email || '').toLowerCase() === email) : undefined;
+  return u ? { u: u.u, name: u.name } : { u: email || emp.id, name: emp.fullName };
 }
 
 /** Dựng một bản đánh giá HR (đã chốt) khi cấp chứng nhận đào tạo. Học viên phải
