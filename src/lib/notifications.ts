@@ -45,6 +45,7 @@ import { useTrainingStore } from '@/stores/trainingStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK, canReceivePush } from '@/auth/ROLES';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from '@/components/quote/dealStage';
+import { tourProfileRisks } from '@/lib/tourProfile';
 import { daysUntil } from '@/lib/dateUtils';
 import { TRAINING_SEED } from '@/lib/trainingSeed';
 import { isPhasePassed } from '@/lib/training';
@@ -661,6 +662,7 @@ export async function checkDormantCustomers(user: User): Promise<void> {
 // ── Hồ sơ tour: nhắc người THEO DÕI / CỘNG TÁC khi đổi giai đoạn hoặc sắp khởi hành ──
 const TPF_DEP_KEY = 'vte_tour_profile_dep_notified';     // dedup mốc khởi hành (1 lần/mốc)
 const TPF_STAGE_KEY = 'vte_tour_profile_stage_seen';     // baseline giai đoạn đã thấy {pid:u -> stage}
+const TPF_RISK_KEY = 'vte_tour_profile_risk_notified';   // dedup cảnh báo "cần chú ý" (1 lần/ngày/bộ-risk)
 
 const STAGE_LABEL = (st: DealStage): string =>
   (st === 'lost' ? DEAL_STAGE_LOST : DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]).short;
@@ -682,6 +684,9 @@ export async function checkTourProfileFollowers(user: User): Promise<void> {
     const depSet = new Set(depSeen);
     let stageSeen: Record<string, string> = {};
     try { stageSeen = JSON.parse(localStorage.getItem(TPF_STAGE_KEY) ?? '{}') as Record<string, string>; } catch { /* ignore */ }
+    let riskSeen: string[] = [];
+    try { riskSeen = JSON.parse(localStorage.getItem(TPF_RISK_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const riskSet = new Set(riskSeen);
 
     for (const p of profiles) {
       if (p.status === 'archived') continue;
@@ -694,6 +699,7 @@ export async function checkTourProfileFollowers(user: User): Promise<void> {
       const pq = pqs.find((q) => q.cloudId === p.primaryQuoteId) ?? pqs[0];
       if (!pq) continue;
       const c = contracts.find((x) => x.linkedQuoteId === pq.cloudId);
+      const tpLink = { kind: 'tourProfile' as const, id: p.id, label: p.code };
       const stage = dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate });
       const link = p.primaryQuoteId
         ? { kind: 'quote' as const, id: p.primaryQuoteId, label: p.code }
@@ -731,10 +737,30 @@ export async function checkTourProfileFollowers(user: User): Promise<void> {
           }
         }
       }
+
+      // (3) cảnh báo "cần chú ý" — chỉ nhắc khi có rủi ro MỨC GẤP, 1 lần/ngày/bộ-risk.
+      const contractCount = contracts.filter((x) => x.tourProfileId === p.id || pqs.some((q) => q.cloudId === x.linkedQuoteId)).length;
+      const urgent = tourProfileRisks({ primary: pq, stage, contractCount }).filter((r) => r.level === 'urgent');
+      if (urgent.length) {
+        const today = new Date().toISOString().slice(0, 10);
+        const rKey = `${p.id}:${user.u}:${today}:${urgent.map((r) => r.key).sort().join(',')}`;
+        if (!riskSet.has(rKey)) {
+          riskSet.add(rKey);
+          await sbSendNotification(user.u, {
+            type: 'announcement',
+            priority: 'high',
+            title: `⚠️ Hồ sơ ${p.code} cần chú ý`,
+            message: `Tour "${p.name || p.code}": ${urgent.map((r) => r.label).join(' · ')}.`,
+            createdBy: 'Hệ thống',
+            link: tpLink,
+          });
+        }
+      }
     }
 
     try { localStorage.setItem(TPF_DEP_KEY, JSON.stringify([...depSet].slice(-500))); } catch { /* ignore */ }
     try { localStorage.setItem(TPF_STAGE_KEY, JSON.stringify(stageSeen)); } catch { /* ignore */ }
+    try { localStorage.setItem(TPF_RISK_KEY, JSON.stringify([...riskSet].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkTourProfileFollowers failed:', (e as Error).message);
   }
