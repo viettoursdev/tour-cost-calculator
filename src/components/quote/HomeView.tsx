@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Box, Button, Chip, IconButton, MenuItem, Paper, Stack, TextField,
+  Box, Button, Chip, IconButton, LinearProgress, MenuItem, Paper, Stack, TextField,
   ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -10,12 +10,17 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SnoozeIcon from '@mui/icons-material/Snooze';
 import DoneIcon from '@mui/icons-material/Done';
 import CloseIcon from '@mui/icons-material/Close';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useQuoteStore, type QuoteViewKey } from '@/stores/quoteStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { useHrStore } from '@/stores/hrStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useRecentStore } from '@/stores/recentStore';
+import { useHomeTargetsStore } from '@/stores/homeTargetsStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { ROLE_RANK, isApprover } from '@/auth/ROLES';
 import { canViewTravelerDocs } from '@/auth/customerDocs';
@@ -30,7 +35,7 @@ import { useHomePrefStore } from '@/stores/homePrefStore';
 import { useHomeBadgeStore } from '@/stores/homeBadgeStore';
 import { HomeCustomizeModal } from './HomeCustomizeModal';
 import { HOME_SECTION_IDS, isCollapsed, toggleCollapsed, type HomeLayout } from './homeLayout';
-import { computeHomeStats } from './homeStats';
+import { computeHomeStats, computeMonthProgress, pctOf } from './homeStats';
 import { rankPriority, severityOf, type PriKind, type PriSeverity } from './homePriority';
 import { buildDigest } from './homeDigest';
 import { weekAgenda, weeklyQuoteCounts } from './homeAgenda';
@@ -45,8 +50,11 @@ const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa',
 const SECTION_LABELS: Record<string, string> = {
   digest: '🌅 Bản tin sáng',
   kpi: '📊 Chỉ số nhanh',
+  targets: '🎯 Mục tiêu tháng',
   priority: '🔥 Ưu tiên hôm nay',
   week: '🗓️ Lịch tuần',
+  recent: '🕘 Vừa xem gần đây',
+  notifs: '🔔 Thông báo',
   todo: '📋 Việc cần làm',
   process: '🗂️ Quy trình phòng ban',
   myRuns: '▶️ Quy trình đang chạy của tôi',
@@ -60,7 +68,7 @@ const SECTION_LABELS: Record<string, string> = {
   followups: '📅 Hẹn liên hệ khách hôm nay',
 };
 /** Thẻ chiếm trọn chiều ngang (phần còn lại xếp lưới 2 cột). */
-const FULL_SPAN = new Set(['digest', 'kpi', 'priority', 'week', 'todo', 'process', 'myRuns', 'deadlines']);
+const FULL_SPAN = new Set(['digest', 'kpi', 'targets', 'priority', 'week', 'todo', 'process', 'myRuns', 'deadlines']);
 
 const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
   annual: 'Nghỉ phép năm', unpaid: 'Nghỉ không lương', sick: 'Nghỉ ốm', other: 'Nghỉ khác',
@@ -172,6 +180,11 @@ export function HomeView() {
   const loadHomePref = useHomePrefStore((s) => s.load);
   const customizeOpen = useHomePrefStore((s) => s.customizeOpen);
   const setCustomizeOpen = useHomePrefStore((s) => s.setCustomizeOpen);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const recentItems = useRecentStore((s) => s.items);
+  const loadRecent = useRecentStore((s) => s.load);
+  const targets = useHomeTargetsStore((s) => s.targets);
+  const loadTargets = useHomeTargetsStore((s) => s.load);
   const [todoOpen, setTodoOpen] = useState(false);
   const [editTodo, setEditTodo] = useState<Todo | null>(null);
   const [scope, setScope] = useState<Scope>('me');
@@ -180,7 +193,7 @@ export function HomeView() {
   // Quản lý (≥ Phó Phòng) mới được lọc theo phòng / tất cả.
   const canDept = !!me && ROLE_RANK[me.role] >= ROLE_RANK['Phó Phòng'];
 
-  useEffect(() => { loadHomePref(me?.u); }, [me?.u, loadHomePref]);
+  useEffect(() => { loadHomePref(me?.u); loadRecent(me?.u); loadTargets(me?.u); }, [me?.u, loadHomePref, loadRecent, loadTargets]);
   // Người duyệt: nạp đơn nghỉ phép + danh bạ NV để hiện thẻ "Nghỉ phép chờ duyệt".
   useEffect(() => {
     if (!amApprover) return;
@@ -347,6 +360,33 @@ export function HomeView() {
   }, today, 7);
   const agendaTotal = agenda.reduce((s, d) => s + d.total, 0);
 
+  // Mục tiêu tháng (theo updatedAt báo giá đã chốt).
+  const ym = today.slice(0, 7);
+  const month = useMemo(() => computeMonthProgress(visibleQuotes(), ym), [quotes, ym]); // eslint-disable-line react-hooks/exhaustive-deps
+  const editTargets = () => {
+    const qStr = window.prompt('Mục tiêu số báo giá CHỐT trong tháng:', String(targets.quotes || ''));
+    if (qStr == null) return;
+    const rStr = window.prompt('Mục tiêu doanh thu trong tháng (VND):', String(targets.revenue || ''));
+    if (rStr == null) return;
+    useHomeTargetsStore.getState().save(me?.u, { quotes: Math.max(0, Math.round(Number(qStr) || 0)), revenue: Math.max(0, Math.round(Number(rStr) || 0)) });
+  };
+
+  // Thông báo chưa đọc (mới nhất trước).
+  const unreadNotifs = useMemo(
+    () => notifications.filter((n) => !n.read).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [notifications],
+  );
+  const readNotif = (id: string) => { if (me?.u) void useNotificationStore.getState().markRead(me.u, id).catch(() => {}); };
+
+  // Mở lại báo giá từ "Vừa xem".
+  const reopen = async (cloudId: string) => {
+    if (currentQuoteId === cloudId) return;
+    if (currentQuoteId && !window.confirm('Mở báo giá này? Thay đổi cục bộ chưa lưu có thể mất.')) return;
+    const r = await loadCloud(cloudId);
+    if (!r.ok) { window.alert('⚠ ' + r.error); return; }
+    setView('cost');
+  };
+
   // Phiên chạy quy trình đang hoạt động (theo phạm vi).
   const myRuns = processRuns
     .filter((r) => r.status === 'active' && (inScope(r.assignee) || inScope(r.createdByUsername)))
@@ -366,6 +406,24 @@ export function HomeView() {
   };
 
   const wonLost = data.stats.won + data.stats.lost;
+
+  // Xuất ảnh trang Hôm nay ra PDF (giao ban sáng) — nạp lib theo nhu cầu.
+  const exportPdf = async () => {
+    const { exportHomePDF } = await import('@/lib/exports/exportHomePDF');
+    exportHomePDF({
+      name: me?.name ?? '',
+      dateLabel: new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }),
+      digest,
+      kpis: [
+        { label: 'Báo giá đang mở', value: String(data.stats.open) },
+        { label: 'Tỷ lệ thắng', value: `${data.stats.winRatePct}%` },
+        { label: 'Tour 7 ngày', value: String(data.soon.length) },
+        { label: 'Còn nợ NCC', value: fmtVND(data.owingTotal) },
+        { label: 'Biên lợi thực', value: fmtVND(data.stats.settledProfit) },
+      ],
+      priority: priority.slice(0, 12).map((p) => ({ primary: p.primary, secondary: p.secondary, due: p.dueTs == null ? undefined : countdown(p.dueTs, nowMs).text })),
+    });
+  };
 
   // Mỗi thẻ là 1 node theo id ổn định; render theo `layout` (thứ tự + ẩn/hiện + thu gọn).
   const nodes: Record<string, React.ReactNode | null> = {
@@ -408,6 +466,64 @@ export function HomeView() {
           <Kpi label="Còn nợ NCC" value={fmtVND(data.owingTotal)} color="#f5a623" onClick={() => go('payboard')} />
           <Kpi label="Biên lợi thực" value={fmtVND(data.stats.settledProfit)} color="#7c3aed" onClick={() => go('history')} />
         </Box>
+      </Section>
+    ),
+    targets: (
+      <Section icon="🎯" title="Mục tiêu tháng" count={1} color="#14a08c"
+        onAll={editTargets} {...collapseProps('targets')}>
+        {targets.quotes === 0 && targets.revenue === 0 ? (
+          <Button size="small" startIcon={<EditOutlinedIcon />} onClick={editTargets} sx={{ color: '#14a08c' }}>Đặt mục tiêu tháng</Button>
+        ) : (
+          <Stack spacing={1.25}>
+            {[
+              { label: 'Báo giá chốt', cur: month.wonCount, target: targets.quotes, fmt: (n: number) => String(n) },
+              { label: 'Doanh thu', cur: month.revenue, target: targets.revenue, fmt: fmtVND },
+            ].filter((r) => r.target > 0).map((r) => {
+              const pct = pctOf(r.cur, r.target);
+              return (
+                <Box key={r.label}>
+                  <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.25 }}>
+                    <Typography fontSize={12.5} fontWeight={700}>{r.label}</Typography>
+                    <Typography fontSize={12.5} sx={{ color: pct >= 100 ? '#1a9e63' : 'text.secondary' }}>
+                      {r.fmt(r.cur)} / {r.fmt(r.target)} · <b>{pct}%</b>
+                    </Typography>
+                  </Stack>
+                  <LinearProgress variant="determinate" value={pct} color={pct >= 100 ? 'success' : 'primary'} sx={{ height: 7, borderRadius: 4 }} />
+                </Box>
+              );
+            })}
+            <Button size="small" startIcon={<EditOutlinedIcon />} onClick={editTargets} sx={{ alignSelf: 'flex-start', color: 'text.secondary' }}>Sửa mục tiêu</Button>
+          </Stack>
+        )}
+      </Section>
+    ),
+    recent: (
+      <Section icon="🕘" title="Vừa xem gần đây" count={recentItems.length} color="#7c3aed" {...collapseProps('recent')}>
+        <Stack spacing={0.75}>
+          {recentItems.slice(0, rows).map((r) => (
+            <Row key={r.cloudId} onClick={() => void reopen(r.cloudId)}
+              primary={r.name}
+              secondary={r.code ? `Mã ${r.code}` : undefined}
+              right={<Typography variant="caption" color="text.disabled">{new Date(r.at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>} />
+          ))}
+        </Stack>
+      </Section>
+    ),
+    notifs: (
+      <Section icon="🔔" title="Thông báo" count={unreadNotifs.length} color="#dc3250" {...collapseProps('notifs')}>
+        <Stack spacing={0.75}>
+          {unreadNotifs.slice(0, rows).map((n) => (
+            <Row key={n.id} onClick={() => readNotif(n.id)}
+              primary={n.title}
+              secondary={n.message}
+              right={
+                <Stack direction="row" alignItems="center" spacing={0.25}>
+                  <Typography variant="caption" color="text.disabled">{new Date(n.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}</Typography>
+                  <QuickBtn title="Đánh dấu đã đọc" color="#1a9e63" icon={<DoneIcon fontSize="small" />} onClick={() => readNotif(n.id)} />
+                </Stack>
+              } />
+          ))}
+        </Stack>
       </Section>
     ),
     priority: (
@@ -631,6 +747,11 @@ export function HomeView() {
             <ToggleButton value="all">Tất cả</ToggleButton>
           </ToggleButtonGroup>
         )}
+        <Tooltip title="Xuất PDF trang Hôm nay">
+          <IconButton size="small" onClick={() => void exportPdf()} sx={{ color: '#0d7a6a' }}>
+            <PictureAsPdfIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Tùy chỉnh trang Hôm nay">
           <IconButton size="small" onClick={() => setCustomizeOpen(true)} sx={{ color: '#0d7a6a' }}>
             <TuneIcon fontSize="small" />

@@ -32,3 +32,27 @@ export function computeHomeStats(list: CloudQuoteEntry[]): HomeStats {
   const winRatePct = decided === 0 ? 0 : Math.round((won / decided) * 100);
   return { open, won, lost, winRatePct, settledProfit };
 }
+
+export interface MonthProgress {
+  /** Số báo giá chốt (won) trong tháng. */
+  wonCount: number;
+  /** Doanh thu chốt trong tháng (tổng giá báo giá won). */
+  revenue: number;
+}
+
+/** Tiến độ tháng `ym` ('yyyy-mm') theo `updatedAt` của báo giá đã chốt. */
+export function computeMonthProgress(list: CloudQuoteEntry[], ym: string): MonthProgress {
+  let wonCount = 0, revenue = 0;
+  for (const q of list) {
+    if (q.status === 'won' && (q.updatedAt ?? '').slice(0, 7) === ym) {
+      wonCount++;
+      revenue += q.totalCost ?? 0;
+    }
+  }
+  return { wonCount, revenue };
+}
+
+/** % đạt mục tiêu (0–100, làm tròn); target ≤ 0 → 0. */
+export function pctOf(value: number, target: number): number {
+  return target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
+}

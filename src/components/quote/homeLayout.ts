@@ -14,8 +14,11 @@
 export const HOME_SECTION_IDS = [
   'digest',
   'kpi',
+  'targets',
   'priority',
   'week',
+  'recent',
+  'notifs',
   'todo',
   'process',
   'myRuns',
