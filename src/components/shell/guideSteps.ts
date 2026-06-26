@@ -9,7 +9,7 @@
 export type GuideStep = { icon: string; title: string; body: string; tags: string[]; image?: string };
 
 export const GUIDE_STEPS: GuideStep[] = [
-  { icon: '🏠', title: 'Trang chủ "Hôm nay"', tags: ['home'], image: 'home.png', body: 'Mở app là thấy ngay việc cần để ý: tour sắp khởi hành, việc quá hạn, công nợ và hẹn liên hệ khách.' },
+  { icon: '🏠', title: 'Màn hình "Hôm nay"', tags: ['home'], image: 'home.png', body: 'Mở app là thấy ngay việc cần để ý: tour sắp khởi hành, việc quá hạn, công nợ và hẹn liên hệ khách.' },
   { icon: '🧭', title: 'Điều hướng gom nhóm', tags: ['home'], image: 'nav.png', body: 'Tab gom theo nhóm: Hôm nay · Báo giá · Bán hàng · Vận hành · Danh mục. Bấm nhóm để mở menu các màn hình bên trong. Mẹo: Ctrl/⌘ + K để tìm nhanh / "Đi tới" màn hình.' },
   { icon: '🗂️', title: '7 loại hồ sơ', tags: ['home'], image: 'templates.png', body: 'Từ Trang chủ chọn loại cần làm: Báo giá nội địa · nước ngoài · Breakdown DMC · Chương trình tour · Thư viện thực đơn · Quản lý Visa · Dịch hồ sơ. Hệ thống tự cấu hình biểu mẫu phù hợp.' },
   { icon: '💰', title: 'Bảng giá nhập như Excel', tags: ['cost'], image: 'cost-entry.png', body: 'Gõ tên rồi Enter để thêm dòng; "Dán từ Excel" nhập hàng loạt; Ctrl/⌘+D điền ô phía trên xuống; số hiểu kiểu tắt (1tr5, 1500k). Rê ô STT để kéo dòng, kéo ⋮⋮ ở tiêu đề để đổi thứ tự hạng mục.' },
@@ -35,7 +35,7 @@ export const GUIDE_STEPS: GuideStep[] = [
 
 /** Nhãn màn hình cho tiêu đề guide ngữ cảnh. */
 export const CONTEXT_LABEL: Record<string, string> = {
-  home: 'Trang chủ', cost: 'Bảng báo giá', history: 'Lịch sử báo giá', advance: 'Đề nghị tạm ứng',
+  home: 'Hôm nay', cost: 'Bảng báo giá', history: 'Lịch sử báo giá', advance: 'Đề nghị tạm ứng',
   advsettle: 'Tạm ứng - Quyết toán',
   itinerary: 'Chương trình tour', menu: 'Thực đơn', visa: 'Quản lý Visa', doctranslate: 'Dịch hồ sơ',
   ncc: 'Nhà cung cấp', customer: 'Khách hàng', contract: 'Hợp đồng', workflow: 'Quy trình điều hành',

@@ -278,7 +278,7 @@ export const useQuoteStore = create<QuoteState>()(
         init: (user) => {
           const key = persistKey(user.u);
           let storedDraft: QuoteDraft | null = null;
-          let storedView: QuoteState['view'] = 'home'; // mở app vào Trang chủ tổng quan
+          let storedView: QuoteState['view'] = 'home'; // mở app vào màn "Hôm nay" tổng quan
           try {
             const raw = localStorage.getItem(key);
             if (raw) {
