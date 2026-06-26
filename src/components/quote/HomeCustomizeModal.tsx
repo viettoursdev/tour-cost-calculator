@@ -1,12 +1,15 @@
 import {
-  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Tooltip, Typography,
+  Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
+  MenuItem, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { SortableList } from '@/components/itinerary/SortableList';
-import { isHidden, reorderSection, toggleHidden, type HomeLayout } from './homeLayout';
+import { isHidden, reorderSection, setRowsPer, toggleHidden, ROWS_OPTIONS, type HomeLayout } from './homeLayout';
+
+const ROWS_LABEL = (n: number) => (n >= 9999 ? 'Tất cả' : `${n} dòng`);
 
 type Props = {
   open: boolean;
@@ -28,6 +31,13 @@ export function HomeCustomizeModal({ open, onClose, labels, layout, onChange, on
         </Typography>
       </DialogTitle>
       <DialogContent>
+        <TextField
+          select size="small" label="Số dòng mỗi thẻ" value={layout.rowsPer}
+          onChange={(e) => onChange(setRowsPer(layout, Number(e.target.value)))}
+          sx={{ mt: 1, mb: 0.5, minWidth: 160 }}
+        >
+          {ROWS_OPTIONS.map((n) => <MenuItem key={n} value={n}>{ROWS_LABEL(n)}</MenuItem>)}
+        </TextField>
         <SortableList
           handle=".home-drag-handle"
           deps={[layout.order.join(',')]}

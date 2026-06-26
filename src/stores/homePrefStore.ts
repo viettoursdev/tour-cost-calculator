@@ -1,29 +1,37 @@
 import { create } from 'zustand';
 import type { HomeLayout } from '@/components/quote/homeLayout';
+import { fetchHomeLayout, pushHomeLayout } from '@/lib/homePrefSync';
 
 /**
- * Tùy biến trang "Hôm nay" theo TỪNG user — lưu localStorage `vte_home_layout_{username}`.
- * Chỉ là sở thích cá nhân (không đồng bộ đa thiết bị), không đụng dữ liệu báo giá.
- * Cùng khuôn với `navPrefStore`.
+ * Tùy biến trang "Hôm nay" theo TỪNG user.
+ * - Cache nhanh ở localStorage `vte_home_layout_{username}` (tải tức thì, chạy offline).
+ * - Đồng bộ đa thiết bị qua Supabase `user_prefs` (key `home`) — xem `homePrefSync`.
+ *   Khi đăng nhập: lấy bản cloud làm chuẩn (nếu có); chưa có thì đẩy bản local lên.
  */
 const keyFor = (username?: string | null) => `vte_home_layout_${username || 'guest'}`;
 
-function readLayout(username?: string | null): HomeLayout | null {
+function readLocal(username?: string | null): Partial<HomeLayout> | null {
   try {
     const raw = localStorage.getItem(keyFor(username));
     if (!raw) return null;
     const obj = JSON.parse(raw);
-    if (!obj || typeof obj !== 'object') return null;
-    if (!Array.isArray(obj.order) || !Array.isArray(obj.hidden)) return null;
-    return obj as HomeLayout;
+    if (!obj || typeof obj !== 'object' || !Array.isArray(obj.order)) return null;
+    return obj as Partial<HomeLayout>;
   } catch {
     return null;
   }
 }
 
+function writeLocal(username: string | null | undefined, layout: HomeLayout | null) {
+  try {
+    if (layout) localStorage.setItem(keyFor(username), JSON.stringify(layout));
+    else localStorage.removeItem(keyFor(username));
+  } catch { /* quota */ }
+}
+
 interface HomePrefState {
-  /** Layout thô đã lưu của user hiện tại (null = dùng mặc định). */
-  raw: HomeLayout | null;
+  /** Layout thô của user hiện tại (null = dùng mặc định). Có thể là bản phần (partial). */
+  raw: Partial<HomeLayout> | null;
   /** Mở hộp thoại tùy chỉnh (nút ⚙️ ở đầu trang chủ). */
   customizeOpen: boolean;
   setCustomizeOpen: (open: boolean) => void;
@@ -36,13 +44,32 @@ export const useHomePrefStore = create<HomePrefState>((set) => ({
   raw: null,
   customizeOpen: false,
   setCustomizeOpen: (open) => set({ customizeOpen: open }),
-  load: (username) => set({ raw: readLayout(username) }),
+  load: (username) => {
+    // 1) Local trước cho tức thì.
+    set({ raw: readLocal(username) });
+    // 2) Đồng bộ cloud (không chặn UI). Cloud có → làm chuẩn; chưa có → đẩy local lên.
+    if (!username) return;
+    void (async () => {
+      try {
+        const cloud = await fetchHomeLayout(username);
+        if (cloud) {
+          writeLocal(username, cloud as HomeLayout);
+          set({ raw: cloud });
+        } else {
+          const local = readLocal(username);
+          if (local) await pushHomeLayout(username, local as HomeLayout);
+        }
+      } catch { /* offline → giữ local */ }
+    })();
+  },
   save: (username, layout) => {
-    try { localStorage.setItem(keyFor(username), JSON.stringify(layout)); } catch { /* quota */ }
+    writeLocal(username, layout);
     set({ raw: layout });
+    if (username) void pushHomeLayout(username, layout).catch(() => { /* offline */ });
   },
   reset: (username) => {
-    try { localStorage.removeItem(keyFor(username)); } catch { /* ignore */ }
+    writeLocal(username, null);
     set({ raw: null });
+    if (username) void pushHomeLayout(username, null).catch(() => { /* offline */ });
   },
 }));
