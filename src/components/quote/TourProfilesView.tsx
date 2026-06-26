@@ -462,6 +462,15 @@ export function TourProfilesView() {
         <DealCockpit />
         {p && <DirectLinkPanel profile={p} />}
         {p && <DocumentHub profile={p} canEdit={canEdit} />}
+        {p && opts.length > 1 && (
+          <CompareOptionsPanel
+            options={opts}
+            primaryId={p.primaryQuoteId}
+            currentId={currentQuoteId ?? undefined}
+            showPrice={showPrice}
+            onOpen={(cid) => void openQuote(cid, true)}
+          />
+        )}
         {p && (() => {
           const custName = metaOf(p.id).primary?.customerName ?? p.customerName ?? '';
           if (!custName) return null;
@@ -1283,6 +1292,50 @@ function DocumentHub({ profile, canEdit }: { profile: TourProfile; canEdit: bool
           <input type="file" hidden multiple onChange={(e) => void onPick(e)} />
         </Button>
       )}
+    </Paper>
+  );
+}
+
+/** So sánh các phương án báo giá trong cùng hồ sơ (từ chỉ mục, không tải full). */
+function CompareOptionsPanel({ options, primaryId, showPrice, currentId, onOpen }: {
+  options: CloudQuoteEntry[]; primaryId?: string; showPrice: boolean; currentId?: string;
+  onOpen: (cloudId: string) => void;
+}) {
+  if (options.length < 2) return null;
+  const fmtStatus = (s?: CloudQuoteEntry['status']) => STAGE_META(dealStage({ status: s, departureISO: undefined })).short;
+  const rows: { label: string; cell: (q: CloudQuoteEntry) => string; show: boolean }[] = [
+    { label: 'Số khách', cell: (q: CloudQuoteEntry) => String(q.pax ?? 0), show: true },
+    { label: 'Giá trị', cell: (q: CloudQuoteEntry) => fmtVND(q.totalCost ?? 0), show: showPrice },
+    { label: 'Công nợ còn lại', cell: (q: CloudQuoteEntry) => fmtVND(q.paymentSummary?.remaining ?? 0), show: showPrice },
+    { label: 'Biên lợi thực', cell: (q: CloudQuoteEntry) => (typeof q.settlementSummary?.actualProfit === 'number' ? fmtVND(q.settlementSummary.actualProfit) : '—'), show: showPrice },
+    { label: 'Trạng thái', cell: (q: CloudQuoteEntry) => fmtStatus(q.status), show: true },
+  ].filter((r) => r.show);
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mt: 2, overflowX: 'auto' }}>
+      <Typography fontWeight={800} fontSize={13.5} sx={{ mb: 1 }}>⚖️ So sánh phương án báo giá ({options.length})</Typography>
+      <Box component="table" sx={{ borderCollapse: 'collapse', width: '100%', minWidth: 360, '& td, & th': { border: '1px solid rgba(15,58,74,0.12)', p: 0.75, textAlign: 'left', fontSize: 12.5 } }}>
+        <thead>
+          <Box component="tr">
+            <Box component="th" sx={{ bgcolor: 'rgba(0,0,0,0.03)' }} />
+            {options.map((q) => (
+              <Box component="th" key={q.cloudId} sx={{ bgcolor: q.cloudId === currentId ? 'rgba(13,122,106,0.1)' : 'rgba(0,0,0,0.03)' }}>
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Typography fontSize={12.5} fontWeight={800} noWrap>{q.cloudId === primaryId ? '★ ' : ''}{q.name}</Typography>
+                  <Button size="small" sx={{ minWidth: 0, p: 0.25 }} onClick={() => onOpen(q.cloudId)}>Mở</Button>
+                </Stack>
+              </Box>
+            ))}
+          </Box>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <Box component="tr" key={r.label}>
+              <Box component="td" sx={{ fontWeight: 700, color: 'text.secondary', whiteSpace: 'nowrap' }}>{r.label}</Box>
+              {options.map((q) => <Box component="td" key={q.cloudId}>{r.cell(q)}</Box>)}
+            </Box>
+          ))}
+        </tbody>
+      </Box>
     </Paper>
   );
 }
