@@ -40,11 +40,13 @@ export function exportItineraryExecutionPDF(
   const setF = (s = 'normal') => pdf.setFont(FONT, s);
   const PW = 210, PH = 297, M = 13;
   const CW = PW - 2 * M;
-  const TOP = 14, BOT = 15;
+  const TOP = 14, TOPC = 20, BOT = 15; // TOPC: mép trên trang tiếp (chừa running header)
   let y = TOP;
-  const ensure = (h: number) => { if (y + h > PH - BOT) { pdf.addPage(); y = TOP; } };
+  const ensure = (h: number) => { if (y + h > PH - BOT) { pdf.addPage(); y = TOPC; } };
   const wrap = (t: string, w: number) => pdf.splitTextToSize(String(t ?? ''), w) as string[];
   const tw = (t: string) => pdf.getTextWidth(t);
+  // Font subset DejaVu thiếu glyph mũi tên (→/›) → thay bằng "-" (ASCII) để không mất chữ.
+  const safeArrow = (s: string) => (s ?? '').replace(/\s*[→⟶➔➜➞›»]\s*/g, ' - ');
 
   // ── Masthead (logo + mã tour + ngày lập) ──
   const logoBottom = drawLogo(pdf, M, y);
@@ -139,7 +141,7 @@ export function exportItineraryExecutionPDF(
       pdf.setFontSize(8.2);
       let mh = 6.5;
       r.forEach((c, i) => { mh = Math.max(mh, wrap(String(c ?? ''), widths[i] - 4).length * 4.2 + 2.8); });
-      if (y + mh > PH - BOT) { pdf.addPage(); y = TOP; drawHead(); }
+      if (y + mh > PH - BOT) { pdf.addPage(); y = TOPC; drawHead(); }
       const isVip = vipCol >= 0 && r[vipCol];
       pdf.setFillColor(...(isVip ? [253, 248, 235] as RGB : ri % 2 ? ZEBRA : WHITE));
       pdf.rect(M, y, CW, mh, 'F');
@@ -155,6 +157,30 @@ export function exportItineraryExecutionPDF(
       y += mh;
     });
   };
+
+  // ── Tóm tắt hành trình (mục lục ngày) ──
+  if (m.dayVMs.length > 1) {
+    subLabel('Tóm tắt hành trình');
+    m.dayVMs.forEach((d) => {
+      ensure(4.9);
+      setF('bold'); pdf.setFontSize(8.3); pdf.setTextColor(...TEAL);
+      pdf.text(`Ngày ${dayLabel(d.dayNum, it.dayStart)}`, M + 2, y + 3.3);
+      const dt = [d.date && fmtDayDate(d.date), safeArrow(d.title)].filter(Boolean).join('   ·   ');
+      setF('normal'); pdf.setTextColor(...INK);
+      (wrap(dt, CW - 26)[0] ? [wrap(dt, CW - 26)[0]] : []).forEach((l) => pdf.text(l, M + 24, y + 3.3));
+      y += 4.9;
+    });
+    y += 4;
+  }
+
+  // ── Chuyến bay ──
+  if (m.flights.length) {
+    sectionHead('Chuyến bay', TEAL);
+    const w = [CW * 0.2, CW * 0.16, CW * 0.32, CW * 0.32];
+    table(['Nhóm / Chặng', 'Số hiệu', 'Khởi hành', 'Hạ cánh'],
+      m.flights.map((f) => [[f.group, f.leg].filter(Boolean).join(' · ') || '—', f.flightNo || '—', f.dep || '—', f.arr || '—']), w);
+    y += 4;
+  }
 
   // ── SOS card (2 cột) ──
   const sosItems = ([
@@ -193,21 +219,21 @@ export function exportItineraryExecutionPDF(
   const railX = M + 24, xTime = railX - 2.5, xText = railX + 5, textW = CW - (xText - M) - 2;
 
   const dayHeader = (d: typeof m.dayVMs[number]) => {
-    ensure(12 + 14); // dành chỗ tối thiểu để không mồ côi tiêu đề ngày
-    const h = 11;
+    ensure(14 + 24); // giữ tiêu đề ngày + mốc đầu cùng trang (chống mồ côi)
+    const h = 14;
     pdf.setFillColor(...NAVY); pdf.roundedRect(M, y, CW, h, 2, 2, 'F');
     const bw = 17;
-    pdf.setFillColor(...TEAL); pdf.roundedRect(M + 2.5, y + 2, bw, h - 4, 1.6, 1.6, 'F');
+    pdf.setFillColor(...TEAL); pdf.roundedRect(M + 2.5, y + 2.5, bw, h - 5, 1.6, 1.6, 'F');
     setF('bold'); pdf.setFontSize(5.6); pdf.setTextColor(...WHITE);
-    pdf.text('NGÀY', M + 2.5 + bw / 2, y + 4.3, { align: 'center' });
+    pdf.text('NGÀY', M + 2.5 + bw / 2, y + 5.4, { align: 'center' });
     setF('bold'); pdf.setFontSize(10.5);
-    pdf.text(String(dayLabel(d.dayNum, it.dayStart)), M + 2.5 + bw / 2, y + 9.2, { align: 'center' });
+    pdf.text(String(dayLabel(d.dayNum, it.dayStart)), M + 2.5 + bw / 2, y + 10.8, { align: 'center' });
     const tx = M + 2.5 + bw + 5;
     setF('bold'); pdf.setFontSize(10.5); pdf.setTextColor(...WHITE);
-    pdf.text(wrap(d.title || 'Lịch trình', CW - (tx - M) - 4)[0] || '', tx, y + 5);
+    pdf.text(wrap(safeArrow(d.title) || 'Lịch trình', CW - (tx - M) - 4)[0] || '', tx, y + 6);
     const wd = weekdayVN(d.date);
     const dateStr = [d.date && fmtDayDate(d.date), wd].filter(Boolean).join('  ·  ');
-    if (dateStr) { setF('normal'); pdf.setFontSize(8); pdf.setTextColor(206, 230, 224); pdf.text(dateStr, tx, y + 9); }
+    if (dateStr) { setF('normal'); pdf.setFontSize(8); pdf.setTextColor(206, 230, 224); pdf.text(dateStr, tx, y + 11.2); }
     y += h + 3.5;
   };
 
@@ -258,7 +284,7 @@ export function exportItineraryExecutionPDF(
         if (a.time) { setF('bold'); pdf.setFontSize(8.4); pdf.setTextColor(...TEAL); pdf.text(a.time, xTime, top + 3.5, { align: 'right' }); }
         setF('normal'); pdf.setFontSize(8.9); pdf.setTextColor(...INK);
         ls.forEach((l, i) => pdf.text(l, xText, top + 3.5 + i * 4.8));
-        let yy = top + 3.5 + Math.max(1, ls.length) * 4.8;
+        const yy = top + 3.5 + Math.max(1, ls.length) * 4.8;
         if (ops.length) {
           const oH = ops.length * 4.2 + 1.6;
           pdf.setFillColor(248, 250, 249); pdf.roundedRect(xText, yy - 1, textW, oH, 1.2, 1.2, 'F');
@@ -318,7 +344,7 @@ export function exportItineraryExecutionPDF(
       y += 3;
     }
 
-    if (d.hotelName || d.hotelContact) { y += 1; para('🏨 Khách sạn:', [d.hotelName, d.hotelContact].filter(Boolean).join('   ·   '), 30); }
+    if (d.hotelName || d.hotelContact) { y += 1; para('Khách sạn:', [d.hotelName, d.hotelContact].filter(Boolean).join('   ·   '), 26); }
     if (d.venues.length) { y += 1.5; subLabel('Điểm tham quan'); contactLines(d.venues); }
     if (d.notes) { y += 1; para('Lưu ý:', d.notes); }
     if (d.checklist.length) {
@@ -335,6 +361,16 @@ export function exportItineraryExecutionPDF(
     }
     y += 4;
   });
+
+  // ── Khách sạn lưu trú (tổng quan theo đêm) ──
+  const hotelNights = m.dayVMs.filter((d) => d.hotelName || d.hotelContact);
+  if (hotelNights.length) {
+    sectionHead('Khách sạn lưu trú');
+    const w = [CW * 0.16, CW * 0.2, CW * 0.36, CW * 0.28];
+    table(['Đêm', 'Ngày', 'Khách sạn', 'Liên hệ'],
+      hotelNights.map((d) => [`Đêm ${dayLabel(d.dayNum, it.dayStart)}`, d.date ? fmtDayDate(d.date) : '—', d.hotelName || '—', d.hotelContact || '—']), w);
+    y += 4;
+  }
 
   // ── Khách ──
   if (m.guests.length) {
@@ -395,6 +431,12 @@ export function exportItineraryExecutionPDF(
   for (let p = 1; p <= pages; p++) {
     pdf.setPage(p);
     pdf.setFillColor(...TEAL); pdf.rect(0, 0, PW, 2.4, 'F');
+    if (p > 1) { // running header trang tiếp: mã tour trái + tên tour phải
+      setF('bold'); pdf.setFontSize(8); pdf.setTextColor(...NAVY); pdf.text(m.code || '', M, 12);
+      setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
+      pdf.text(wrap(safeArrow(m.title), CW * 0.72)[0] || '', PW - M, 12, { align: 'right' });
+      pdf.setDrawColor(...LINE); pdf.setLineWidth(0.2); pdf.line(M, 15.5, PW - M, 15.5);
+    }
     const fy = PH - 8;
     pdf.setDrawColor(...LINE); pdf.setLineWidth(0.2); pdf.line(M, fy - 3.5, PW - M, fy - 3.5);
     setF('normal'); pdf.setFontSize(7); pdf.setTextColor(...MUTE);

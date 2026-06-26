@@ -3,9 +3,18 @@
  * (`Itinerary`) + Thực đơn đã link (`Menu`) + contact Nhà hàng (`Restaurant`)
  * + khối vận hành (`Itinerary.exec`). Dùng chung cho cả PDF và Word.
  */
+import { flightDepStr, flightArrStr } from '@/components/itinerary/flightFields';
 import type {
   ExecChecklistItem, ExecContact, ExecGuest, Itinerary, Menu, Restaurant,
 } from '@/types';
+
+export interface ExecFlightVM {
+  group: string;
+  leg: string;
+  flightNo: string;
+  dep: string;   // "TSN 05:40"
+  arr: string;   // "PEK 11:35" (+offset nếu qua đêm)
+}
 
 export interface ExecMealVM {
   mealType: string;
@@ -46,6 +55,7 @@ export interface ExecModel {
   includes: string[];
   excludes: string[];
   generalNotes?: string;
+  flights: ExecFlightVM[];
   dayVMs: ExecDayVM[];
 }
 
@@ -113,6 +123,15 @@ export function buildExecModel(
     includes: it.includes ?? [],
     excludes: it.excludes ?? [],
     generalNotes: e.generalNotes,
+    flights: (it.flights ?? [])
+      .map((f) => ({
+        group: f.group?.trim() ?? '',
+        leg: f.leg ?? '',
+        flightNo: f.flightNo ?? '',
+        dep: flightDepStr(f),
+        arr: flightArrStr(f),
+      }))
+      .filter((f) => f.flightNo || f.dep || f.arr),
     dayVMs,
   };
 }

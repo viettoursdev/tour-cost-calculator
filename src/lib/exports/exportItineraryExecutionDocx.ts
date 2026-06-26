@@ -4,8 +4,8 @@
  * thẻ SOS, thẻ ngày có badge số, bảng khách/NCC, 2 cột bao gồm, chân trang đánh số.
  */
 import {
-  AlignmentType, BorderStyle, Document, Footer, ImageRun, Packer, PageNumber,
-  Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, VerticalAlign, WidthType,
+  AlignmentType, BorderStyle, Document, Footer, Header, ImageRun, Packer, PageNumber,
+  Paragraph, ShadingType, Table, TableCell, TableRow, TabStopType, TextRun, VerticalAlign, WidthType,
   type ITableCellOptions,
 } from 'docx';
 import { saveAs } from 'file-saver';
@@ -33,6 +33,8 @@ const CW = 10306;
 type RunOpts = { size?: number; bold?: boolean; italics?: boolean; color?: string };
 const tr = (t: string | number | null | undefined, o: RunOpts = {}) =>
   new TextRun({ text: t == null ? '' : String(t), font: FONT, size: o.size ?? 19, bold: !!o.bold, italics: !!o.italics, color: o.color });
+
+const safeArrow = (s: string) => (s ?? '').replace(/\s*[→⟶➔➜➞›»]\s*/g, ' - ');
 
 const heading = (t: string, color = NAVY) =>
   new Paragraph({
@@ -125,6 +127,15 @@ export async function exportItineraryExecutionDocx(
     kids.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
   }
 
+  // ── Tóm tắt hành trình (mục lục ngày) ──
+  if (m.dayVMs.length > 1) {
+    kids.push(new Paragraph({ spacing: { before: 80, after: 80 }, border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: LIGHT, space: 2 } }, children: [tr('TÓM TẮT HÀNH TRÌNH', { bold: true, color: TEAL, size: 18 })] }));
+    m.dayVMs.forEach((d) => {
+      const dt = [d.date && fmtDayDate(d.date), safeArrow(d.title)].filter(Boolean).join('   ·   ');
+      kids.push(new Paragraph({ spacing: { after: 30 }, children: [tr(`Ngày ${dayLabel(d.dayNum, it.dayStart)}    `, { bold: true, color: TEAL }), tr(dt, { color: INK })] }));
+    });
+  }
+
   // ── SOS (thẻ tô đỏ, 2 cột) ──
   const sos = ([['Hotline 24/7', m.sos.hotline], ['Điều hành trực', m.sos.operator], ['Bảo hiểm', m.sos.insurance], ['ĐSQ / Lãnh sự', m.sos.embassy], ['Cấp cứu / Y tế', m.sos.medical]] as [string, string][]).filter(([, v]) => v);
   if (sos.length) {
@@ -159,6 +170,14 @@ export async function exportItineraryExecutionDocx(
     if (m.drivers.length) { kids.push(line([tr('Tài xế & xe', { bold: true, color: NAVY })])); kids.push(...contactParas(m.drivers)); }
   }
 
+  // ── Chuyến bay ──
+  if (m.flights.length) {
+    kids.push(heading('Chuyến bay', TEAL));
+    kids.push(simpleTable(['Nhóm / Chặng', 'Số hiệu', 'Khởi hành', 'Hạ cánh'],
+      m.flights.map((f) => [[f.group, f.leg].filter(Boolean).join(' · ') || '—', f.flightNo || '—', f.dep || '—', f.arr || '—']),
+      [22, 16, 31, 31]));
+  }
+
   // ── Thẻ ngày (badge số + tiêu đề + ngày) ──
   const dayBar = (d: typeof m.dayVMs[number]) => {
     const wd = weekdayVN(d.date);
@@ -176,7 +195,7 @@ export async function exportItineraryExecutionDocx(
         new TableCell({
           width: { size: CW - 1150, type: WidthType.DXA }, shading: { type: ShadingType.SOLID, color: NAVY, fill: NAVY }, verticalAlign: VerticalAlign.CENTER, margins: { top: 70, bottom: 70, left: 200, right: 140 },
           children: [
-            new Paragraph({ spacing: { after: dateStr ? 20 : 0 }, children: [tr((d.title || 'Lịch trình').toUpperCase(), { bold: true, color: 'FFFFFF', size: 22 })] }),
+            new Paragraph({ spacing: { after: dateStr ? 20 : 0 }, children: [tr(safeArrow(d.title || 'Lịch trình').toUpperCase(), { bold: true, color: 'FFFFFF', size: 22 })] }),
             ...(dateStr ? [new Paragraph({ spacing: { after: 0 }, children: [tr(dateStr, { color: 'CFE6E0', size: 16 })] })] : []),
           ],
         }),
@@ -223,6 +242,15 @@ export async function exportItineraryExecutionDocx(
       d.checklist.forEach((c) => { if (c.text) kids.push(line([tr(`${c.done ? '☑' : '☐'} `, { color: c.done ? TEAL : MUTE }), tr(c.text)], 120)); });
     }
   });
+
+  // ── Khách sạn lưu trú ──
+  const hotelNights = m.dayVMs.filter((d) => d.hotelName || d.hotelContact);
+  if (hotelNights.length) {
+    kids.push(heading('Khách sạn lưu trú'));
+    kids.push(simpleTable(['Đêm', 'Ngày', 'Khách sạn', 'Liên hệ'],
+      hotelNights.map((d) => [`Đêm ${dayLabel(d.dayNum, it.dayStart)}`, d.date ? fmtDayDate(d.date) : '—', d.hotelName || '—', d.hotelContact || '—']),
+      [14, 20, 38, 28]));
+  }
 
   // ── Khách ──
   if (m.guests.length) {
@@ -279,11 +307,22 @@ export async function exportItineraryExecutionDocx(
     })],
   });
 
+  // Running header trang tiếp (trang 1 dùng letterhead nên để trống nhờ titlePage).
+  const runHeader = new Header({
+    children: [new Paragraph({
+      spacing: { after: 40 }, tabStops: [{ type: TabStopType.RIGHT, position: CW }],
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: LIGHT, space: 4 } },
+      children: [tr(m.code || '', { bold: true, color: NAVY, size: 15 }), new TextRun({ text: '\t', font: FONT }), tr(safeArrow(m.title), { color: MUTE, size: 15 })],
+    })],
+  });
+  const firstHeader = new Header({ children: [new Paragraph({ children: [] })] });
+
   const doc = new Document({
     styles: { default: { document: { run: { font: FONT, size: 19 } } } },
     sections: [{
-      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 800, right: 800, bottom: 800, left: 800 } } },
-      footers: { default: footer },
+      properties: { titlePage: true, page: { size: { width: 11906, height: 16838 }, margin: { top: 800, right: 800, bottom: 800, left: 800 } } },
+      headers: { default: runHeader, first: firstHeader },
+      footers: { default: footer, first: footer },
       children: kids,
     }],
   });
