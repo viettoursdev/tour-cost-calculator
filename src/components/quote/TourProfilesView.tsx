@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, Dialog, DialogActions,
   DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
@@ -31,6 +31,11 @@ import SendIcon from '@mui/icons-material/Send';
 import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import { uploadFileToWorker } from '@/lib/aiWorker';
+import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -61,7 +66,7 @@ import { DealCockpit } from './DealCockpit';
 import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
 import { LEGACY } from '@/theme';
-import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, DeleteRequest, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
+import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, DeleteRequest, FileAttachment, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
   st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
@@ -391,6 +396,7 @@ export function TourProfilesView() {
         })()}
         <DealCockpit />
         {p && <DirectLinkPanel profile={p} />}
+        {p && <DocumentHub profile={p} canEdit={canEdit} />}
         {p && (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mt: 2 }}>
             <ProfileDiscussion profile={p} users={users} currentUser={currentUser} />
@@ -1127,6 +1133,67 @@ function MilestonePanel({ milestones }: { milestones: Milestone[] }) {
           );
         })}
       </Box>
+    </Paper>
+  );
+}
+
+/** Trung tâm tài liệu cấp hồ sơ — upload R2 + xem trước + gỡ (gate canShare). */
+function DocumentHub({ profile, canEdit }: { profile: TourProfile; canEdit: boolean }) {
+  const me = useAuthStore((s) => s.currentUser);
+  const addDocuments = useTourProfileStore((s) => s.addDocuments);
+  const removeDocument = useTourProfileStore((s) => s.removeDocument);
+  const [uploading, setUploading] = useState(false);
+  const docs = profile.documents ?? [];
+
+  const onPick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const at = new Date().toISOString();
+      const uploaded: FileAttachment[] = (await Promise.all(files.map((f) => uploadFileToWorker(f))))
+        .map((u) => ({ ...u, uploadedBy: me?.name ?? '', uploadedAt: at }));
+      await addDocuments(profile.id, uploaded);
+    } catch (err) {
+      window.alert('❌ Tải file lỗi: ' + (err as Error).message);
+    } finally { setUploading(false); }
+  };
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }}>
+        <FolderOpenOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <Typography fontWeight={800} fontSize={13.5}>Tài liệu hồ sơ ({docs.length})</Typography>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        Gom HĐ scan / vé / voucher / ảnh đoàn… theo tour. File lưu trên R2 qua AI Worker.
+      </Typography>
+      <Stack spacing={0.5} sx={{ mb: 1 }}>
+        {docs.length === 0 && <Typography variant="body2" color="text.secondary">Chưa có tài liệu nào.</Typography>}
+        {docs.map((d) => (
+          <Stack key={d.key} direction="row" alignItems="center" spacing={1}
+            sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 1, py: 0.5 }}>
+            <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+            <Box component="button" type="button" onClick={() => openFilePreview({ key: d.key, name: d.name })}
+              sx={{ flex: 1, minWidth: 0, textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', p: 0, fontFamily: 'inherit', fontSize: 13, color: '#0d7a6a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {d.name}
+              {d.uploadedBy ? <Typography component="span" variant="caption" sx={{ ml: 0.5, color: 'text.disabled' }}>· {d.uploadedBy}</Typography> : null}
+            </Box>
+            {canEdit && (
+              <IconButton size="small" color="error" onClick={() => void removeDocument(profile.id, d.key)}>
+                <DeleteOutlineIcon fontSize="small" />
+              </IconButton>
+            )}
+          </Stack>
+        ))}
+      </Stack>
+      {canEdit && (
+        <Button component="label" size="small" startIcon={<AttachFileIcon />} disabled={uploading} sx={{ color: '#0d7a6a' }}>
+          {uploading ? 'Đang tải lên…' : 'Đính kèm tài liệu (PDF/Word/ảnh…)'}
+          <input type="file" hidden multiple onChange={(e) => void onPick(e)} />
+        </Button>
+      )}
     </Paper>
   );
 }

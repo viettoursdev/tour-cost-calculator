@@ -1,4 +1,4 @@
-import type { Collaborator } from './quote';
+import type { Collaborator, FileAttachment } from './quote';
 
 /** Phân loại hồ sơ tour → tiền tố mã code. */
 export type TourKind = 'domestic' | 'intl';
@@ -67,6 +67,8 @@ export type TourProfile = {
   collaborators?: Collaborator[]; // đồng sở hữu — SỬA được
   followers?: Collaborator[];     // theo dõi — chỉ XEM + nhận thông báo
   eventStaff?: Collaborator[];    // Nhân sự event — XEM + nhận thông báo (vai trò riêng)
+  /** Tài liệu cấp hồ sơ (HĐ scan, vé, voucher, ảnh…) — tham chiếu file R2. */
+  documents?: FileAttachment[];
   /** Yêu cầu duyệt xoá đang chờ (người dưới Trưởng Phòng gửi). */
   deleteRequest?: DeleteRequest | null;
   createdAt: string;

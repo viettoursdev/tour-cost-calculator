@@ -11,7 +11,7 @@ import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { generateTourCode, visibleTourProfiles, nextPrimaryAfterDelete, tourCategoryOf } from '@/lib/tourProfile';
 import { logAudit } from '@/lib/audit';
-import type { Collaborator, DeleteRequest, TourCategory, TourKind, TourProfile } from '@/types';
+import type { Collaborator, DeleteRequest, FileAttachment, TourCategory, TourKind, TourProfile } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 const newId = (): string => 'tp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -55,6 +55,10 @@ type State = {
   addFollower: (id: string, c: Collaborator) => Promise<void>;
   addEventStaff: (id: string, c: Collaborator) => Promise<void>;
   removeEventStaff: (id: string, u: string) => Promise<void>;
+  /** Thêm tài liệu (file R2 đã upload) vào hồ sơ. */
+  addDocuments: (id: string, docs: FileAttachment[]) => Promise<void>;
+  /** Gỡ tài liệu khỏi hồ sơ theo key R2. */
+  removeDocument: (id: string, key: string) => Promise<void>;
   /** Người dưới Trưởng Phòng gửi yêu cầu duyệt xoá (lưu trên hồ sơ). */
   requestDelete: (id: string, req: DeleteRequest) => Promise<void>;
   /** Người duyệt CHẤP THUẬN → xoá hẳn hồ sơ. */
@@ -214,6 +218,21 @@ export const useTourProfileStore = create<State>()(
       if (!(p.eventStaff ?? []).some((x) => x.u === u)) return;
       await get().save({ ...p, eventStaff: (p.eventStaff ?? []).filter((x) => x.u !== u) });
       logAudit('update', 'Hồ sơ tour', p.code, 'Gỡ nhân sự event');
+    },
+
+    addDocuments: async (id, docs) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p || docs.length === 0) return;
+      await get().save({ ...p, documents: [...(p.documents ?? []), ...docs] });
+      logAudit('update', 'Hồ sơ tour', p.code, `Thêm ${docs.length} tài liệu`);
+    },
+
+    removeDocument: async (id, key) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p) return;
+      if (!(p.documents ?? []).some((d) => d.key === key)) return;
+      await get().save({ ...p, documents: (p.documents ?? []).filter((d) => d.key !== key) });
+      logAudit('update', 'Hồ sơ tour', p.code, 'Gỡ tài liệu');
     },
 
     requestDelete: async (id, req) => {
