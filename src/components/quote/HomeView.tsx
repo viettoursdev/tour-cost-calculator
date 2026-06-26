@@ -4,8 +4,6 @@ import {
   ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import SnoozeIcon from '@mui/icons-material/Snooze';
 import DoneIcon from '@mui/icons-material/Done';
@@ -42,126 +40,13 @@ import { weekAgenda, weeklyQuoteCounts } from './homeAgenda';
 import {
   normalizePresets, activeLayout, setActiveLayout, switchPreset, addPreset, type PresetState,
 } from './homePresets';
-import type { CloudQuoteEntry, Department, LeaveType, Todo } from '@/types';
+import { Section, Kpi, Sparkline, Row, QuickBtn } from './homeWidgets';
+import { SECTION_LABELS, FULL_SPAN, LEAVE_TYPE_LABEL, PRI_ICON, PRI_COLOR, countdown } from './homeConst';
+import type { CloudQuoteEntry, Department, Todo } from '@/types';
 
 const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa', 'ketoan'];
 
-/** Nhãn từng thẻ trang chủ (hiển thị trong hộp thoại tùy chỉnh). */
-const SECTION_LABELS: Record<string, string> = {
-  digest: '🌅 Bản tin sáng',
-  kpi: '📊 Chỉ số nhanh',
-  targets: '🎯 Mục tiêu tháng',
-  priority: '🔥 Ưu tiên hôm nay',
-  week: '🗓️ Lịch tuần',
-  recent: '🕘 Vừa xem gần đây',
-  notifs: '🔔 Thông báo',
-  todo: '📋 Việc cần làm',
-  process: '🗂️ Quy trình phòng ban',
-  myRuns: '▶️ Quy trình đang chạy của tôi',
-  deadlines: '⏳ Deadline công việc (2 tuần)',
-  soon: '🛫 Tour sắp khởi hành (7 ngày)',
-  myOverdue: '⏱ Việc quá hạn của tôi',
-  nccDue: '🏦 Đến hạn trả NCC (2 tuần)',
-  owing: '💰 Đã khởi hành còn nợ NCC',
-  docs: '🛂 Giấy tờ khách sắp hết hạn',
-  leaves: '🌴 Nghỉ phép chờ duyệt',
-  followups: '📅 Hẹn liên hệ khách hôm nay',
-};
-/** Thẻ chiếm trọn chiều ngang (phần còn lại xếp lưới 2 cột). */
-const FULL_SPAN = new Set(['digest', 'kpi', 'targets', 'priority', 'week', 'todo', 'process', 'myRuns', 'deadlines']);
-
-const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
-  annual: 'Nghỉ phép năm', unpaid: 'Nghỉ không lương', sick: 'Nghỉ ốm', other: 'Nghỉ khác',
-};
-
-const PRI_ICON: Record<PriKind, string> = { overdue: '⏱', deadline: '⏳', ncc: '🏦', doc: '🛂', owing: '💰' };
-const PRI_COLOR: Record<PriSeverity, string> = { overdue: '#dc3250', urgent: '#f5a623', soon: '#2563eb' };
-
 type Scope = 'me' | 'dept' | 'all';
-
-function Section({ icon, title, count, color, onAll, collapsed, onToggleCollapse, children }: {
-  icon: string; title: string; count: number; color: string; onAll?: () => void;
-  collapsed?: boolean; onToggleCollapse?: () => void; children: React.ReactNode;
-}) {
-  return (
-    <Paper variant="outlined" sx={{ p: 1.75, borderTop: `3px solid ${color}` }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: collapsed ? 0 : 1 }}>
-        <Typography fontWeight={800} fontSize={14}>{icon} {title}</Typography>
-        <Chip size="small" label={count} sx={{ height: 20, fontWeight: 800, bgcolor: color + '22', color }} />
-        <Box sx={{ flex: 1 }} />
-        {onAll && count > 0 && !collapsed && <Button size="small" onClick={onAll} sx={{ color }}>Xem tất cả →</Button>}
-        {onToggleCollapse && (
-          <Tooltip title={collapsed ? 'Mở rộng' : 'Thu gọn'}>
-            <IconButton size="small" onClick={onToggleCollapse} sx={{ color }}>
-              {collapsed ? <KeyboardArrowDownIcon fontSize="small" /> : <KeyboardArrowUpIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        )}
-      </Stack>
-      {!collapsed && (count === 0
-        ? <Typography variant="caption" color="text.disabled">Không có mục nào 🎉</Typography>
-        : children)}
-    </Paper>
-  );
-}
-
-/** Ô chỉ số nhanh trong dải KPI. */
-const Kpi = ({ label, value, sub, color, onClick }: { label: string; value: string; sub?: string; color: string; onClick: () => void }) => (
-  <Paper variant="outlined" onClick={onClick}
-    sx={{ p: 1.25, cursor: 'pointer', borderTop: `3px solid ${color}`, '&:hover': { boxShadow: 1 } }}>
-    <Typography fontWeight={900} fontSize={20} sx={{ color, lineHeight: 1.1 }} noWrap>{value}</Typography>
-    <Typography fontSize={11.5} fontWeight={700} noWrap>{label}</Typography>
-    {sub && <Typography variant="caption" color="text.secondary" noWrap>{sub}</Typography>}
-  </Paper>
-);
-
-/** Sparkline nhỏ (SVG) cho dãy số — báo giá theo tuần. */
-function Sparkline({ values, w = 150, h = 28 }: { values: number[]; w?: number; h?: number }) {
-  if (values.length < 2) return <Box sx={{ flex: 1 }} />;
-  const max = Math.max(1, ...values);
-  const stepX = w / (values.length - 1);
-  const pts = values.map((v, i) => `${(i * stepX).toFixed(1)},${(h - (v / max) * (h - 4) - 2).toFixed(1)}`).join(' ');
-  const lastY = h - (values[values.length - 1] / max) * (h - 4) - 2;
-  return (
-    <Box sx={{ flex: 1, minWidth: 0 }}>
-      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-        <polyline points={pts} fill="none" stroke="#0d7a6a" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={w} cy={lastY} r={2.5} fill="#0d7a6a" />
-      </svg>
-    </Box>
-  );
-}
-
-/** Đếm ngược tới mốc `target` (ms). Trả về nhãn "còn 2 ngày 5 giờ" / "QUÁ HẠN …". */
-function countdown(target: number, now: number): { text: string; overdue: boolean; urgent: boolean } {
-  const diff = target - now;
-  const overdue = diff < 0;
-  const abs = Math.abs(diff);
-  const days = Math.floor(abs / 86400000);
-  const hours = Math.floor((abs % 86400000) / 3600000);
-  const mins = Math.floor((abs % 3600000) / 60000);
-  const core = days > 0 ? `${days} ngày ${hours} giờ` : hours > 0 ? `${hours} giờ ${mins} phút` : `${mins} phút`;
-  return { text: overdue ? `QUÁ HẠN ${core}` : `còn ${core}`, overdue, urgent: !overdue && diff <= 86400000 };
-}
-
-const Row = ({ onClick, primary, secondary, right }: { onClick: () => void; primary: string; secondary?: string; right?: React.ReactNode }) => (
-  <Paper variant="outlined" sx={{ p: 1, cursor: 'pointer', '&:hover': { boxShadow: 1 } }} onClick={onClick}>
-    <Stack direction="row" alignItems="center" spacing={1}>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography fontSize={13} fontWeight={600} noWrap>{primary}</Typography>
-        {secondary && <Typography variant="caption" color="text.secondary" noWrap>{secondary}</Typography>}
-      </Box>
-      {right}
-    </Stack>
-  </Paper>
-);
-
-/** Nút hành động nhanh trên 1 dòng (chặn nổi bọt để không kích hoạt mở view). */
-const QuickBtn = ({ title, icon, color, onClick }: { title: string; icon: React.ReactNode; color?: string; onClick: () => void }) => (
-  <Tooltip title={title}>
-    <IconButton size="small" sx={{ color }} onClick={(e) => { e.stopPropagation(); onClick(); }}>{icon}</IconButton>
-  </Tooltip>
-);
 
 export function HomeView() {
   const me = useAuthStore((s) => s.currentUser);
