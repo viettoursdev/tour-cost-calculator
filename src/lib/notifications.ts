@@ -41,11 +41,15 @@ import { useTodoStore } from '@/stores/todoStore';
 import { useProcessStore } from '@/stores/processStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useContractStore } from '@/stores/contractStore';
+import { useTrainingStore } from '@/stores/trainingStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK, canReceivePush } from '@/auth/ROLES';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from '@/components/quote/dealStage';
 import { daysUntil } from '@/lib/dateUtils';
-import type { User } from '@/types';
+import { TRAINING_SEED } from '@/lib/trainingSeed';
+import { isPhasePassed } from '@/lib/training';
+import { TRAINING_PHASES, QUIZ_PASS_PCT } from '@/types';
+import type { User, TrainingPhase } from '@/types';
 
 /** Số ngày quá hạn để tự báo lên quản lý (Trưởng Phòng trở lên). */
 const WF_ESCALATE_AFTER = 3;
@@ -225,6 +229,80 @@ export async function checkProcessDeadlines(user: User): Promise<void> {
     try { localStorage.setItem(PROC_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkProcessDeadlines failed:', (e as Error).message);
+  }
+}
+
+const TRAIN_DDL_KEY = 'vte_training_notified';
+/** Mốc kết thúc dự kiến của mỗi giai đoạn 30-60-90 (số ngày từ startDate). */
+const TRAINING_PHASE_DEADLINE: Record<TrainingPhase, number> = { gd0: 7, gd1: 30, gd2: 60, gd3: 90 };
+
+/**
+ * Nhắc đào tạo: (a) HỌC VIÊN — giai đoạn hiện tại sắp/đã quá mốc 30-60-90 mà chưa
+ * đậu gate; (b) MENTOR — module yêu cầu ký mà học viên đã làm xong phần của mình
+ * nhưng chưa được ký. Mỗi (enrollment, mốc) nhắc 1 lần (dedup localStorage).
+ */
+export async function checkTrainingDeadlines(user: User): Promise<void> {
+  try {
+    const { programs, enrollments } = useTrainingStore.getState();
+    const byId = (id?: string) => programs.find((p) => p.id === id) ?? TRAINING_SEED.find((p) => p.id === id);
+    let seen: string[] = [];
+    try { seen = JSON.parse(localStorage.getItem(TRAIN_DDL_KEY) ?? '[]') as string[]; } catch { /* ignore */ }
+    const set = new Set(seen);
+
+    for (const e of enrollments) {
+      if (e.status !== 'active') continue;
+      const program = byId(e.programId);
+      if (!program) continue;
+
+      // (a) Học viên: nhắc giai đoạn hiện tại nếu sắp/đã quá mốc.
+      if (e.learnerUsername === user.u && e.startDate) {
+        const current = TRAINING_PHASES.find((ph) => !isPhasePassed(program, e, ph.id));
+        if (current) {
+          const start = new Date(e.startDate);
+          const deadline = new Date(start);
+          deadline.setDate(deadline.getDate() + TRAINING_PHASE_DEADLINE[current.id]);
+          const d = daysUntil(deadline.toISOString());
+          if (d != null && d <= 7) {
+            const key = `dl:${e.id}:${current.id}`;
+            if (!set.has(key)) {
+              set.add(key);
+              const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
+              await sbSendNotification(user.u, {
+                type: 'task',
+                title: d < 0 ? '🔴 Giai đoạn đào tạo quá hạn' : '⏰ Giai đoạn đào tạo sắp đến hạn',
+                message: `"${program.name}" — ${current.label}: ${when}. Hoàn tất các module để qua gate.`,
+                createdBy: 'Hệ thống',
+              });
+            }
+          }
+        }
+      }
+
+      // (b) Mentor: module chờ ký (học viên đã làm xong phần của mình).
+      if (e.mentorUsername === user.u) {
+        for (const m of program.modules) {
+          if (!m.requiresMentorSignoff) continue;
+          const p = e.progress[m.id];
+          if (!p || p.signoffBy) continue;
+          const quizOk = !m.quiz?.length || (p.quizScore ?? 0) >= QUIZ_PASS_PCT;
+          const practiceOk = !m.practice?.length || !!p.practiceDone;
+          const learnerActed = p.status === 'done' || p.practiceDone || p.quizScore != null;
+          if (!(quizOk && practiceOk && learnerActed)) continue;
+          const key = `sign:${e.id}:${m.id}`;
+          if (set.has(key)) continue;
+          set.add(key);
+          await sbSendNotification(user.u, {
+            type: 'task',
+            title: '✍️ Học viên chờ bạn ký xác nhận',
+            message: `${e.learnerName || e.learnerUsername} — "${program.name}" · ${m.code} ${m.title}: cần mentor ký.`,
+            createdBy: 'Hệ thống',
+          });
+        }
+      }
+    }
+    try { localStorage.setItem(TRAIN_DDL_KEY, JSON.stringify([...set].slice(-500))); } catch { /* ignore */ }
+  } catch (e) {
+    console.warn('checkTrainingDeadlines failed:', (e as Error).message);
   }
 }
 

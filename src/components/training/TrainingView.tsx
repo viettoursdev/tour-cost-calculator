@@ -13,6 +13,7 @@ import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { useTrainingStore, newTrainingId } from '@/stores/trainingStore';
 import { useHrStore } from '@/stores/hrStore';
@@ -213,6 +214,19 @@ function programOf(e: TrainingEnrollment, saved: TrainingProgram[]): TrainingPro
   return saved.find((p) => p.id === e.programId) ?? TRAINING_SEED.find((p) => p.id === e.programId);
 }
 
+/** Tải giấy chứng nhận PDF (brand Viettours) cho 1 enrollment đã cấp. */
+async function downloadCert(e: TrainingEnrollment, program: TrainingProgram | undefined): Promise<void> {
+  const m = await import('@/lib/exports/exportTrainingCertPDF');
+  m.exportTrainingCertPDF({
+    learnerName: e.learnerName || e.learnerUsername,
+    programName: program?.name ?? '',
+    certTitle: program?.certTitle,
+    certCode: e.certCode,
+    certifiedAt: e.certifiedAt,
+    reviewerName: e.updatedBy,
+  });
+}
+
 function MyTrack() {
   const me = useAuthStore((s) => s.currentUser);
   const saved = useTrainingStore((s) => s.programs);
@@ -368,14 +382,17 @@ function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff, c
 
       {enrollment.status === 'certified' ? (
         <Paper variant="outlined" sx={{ p: 2, mt: 1, borderColor: 'success.main', bgcolor: 'success.50' }}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
+          <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
             <VerifiedOutlinedIcon color="success" />
-            <Box sx={{ flex: 1 }}>
+            <Box sx={{ flex: 1, minWidth: 180 }}>
               <Typography fontWeight={800} fontSize={14}>Đã cấp chứng nhận{program.certTitle ? `: ${program.certTitle}` : ''}</Typography>
               <Typography variant="caption" color="text.secondary">
                 Mã {enrollment.certCode}{enrollment.certifiedAt ? ` · ${enrollment.certifiedAt.slice(0, 10)}` : ''}
               </Typography>
             </Box>
+            <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={() => void downloadCert(enrollment, program)}>
+              Tải chứng nhận
+            </Button>
           </Stack>
         </Paper>
       ) : isCertEligible(program, enrollment) && (
@@ -724,6 +741,9 @@ function CertList() {
               <Typography variant="caption" color="text.secondary" sx={{ width: 90, textAlign: 'right' }}>
                 {e.certifiedAt ? e.certifiedAt.slice(0, 10) : ''}
               </Typography>
+              <Tooltip title="Tải giấy chứng nhận PDF">
+                <IconButton size="small" onClick={() => void downloadCert(e, program)}><DownloadOutlinedIcon fontSize="small" /></IconButton>
+              </Tooltip>
             </Stack>
           </Paper>
         );

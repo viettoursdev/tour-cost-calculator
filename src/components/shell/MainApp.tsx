@@ -33,7 +33,7 @@ import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useTrainingStore } from '@/stores/trainingStore';
-import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers } from '@/lib/notifications';
+import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers, checkTrainingDeadlines } from '@/lib/notifications';
 import { checkHrExpiry } from '@/lib/hrNotifications';
 import { checkLowStock } from '@/lib/inventoryNotifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
@@ -131,6 +131,7 @@ export function MainApp() {
     setTimeout(() => { void checkHrExpiry(currentUser); }, 8800);
     setTimeout(() => { void checkLowStock(currentUser); }, 9400);
     setTimeout(() => { void checkTourProfileFollowers(currentUser); }, 9200);
+    setTimeout(() => { void checkTrainingDeadlines(currentUser); }, 9600);
     // Nhắc lại lặp lại: kiểm tra ngay + mỗi 5 phút khi app mở (gồm cả nhắc việc To-Do).
     const remindOnce = () => {
       checkNotifReminders(useNotificationStore.getState().notifications, currentUser.u);
