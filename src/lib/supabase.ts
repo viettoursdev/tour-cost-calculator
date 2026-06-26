@@ -1745,6 +1745,13 @@ export async function sbDeleteTrainingEnrollment(
   if (error) throw new Error('sbDeleteTrainingEnrollment: ' + error.message);
 }
 
+/** Sinh mã chứng nhận ATOMIC ở DB (advisory lock theo năm → VTC.YY.NNNN). */
+export async function sbNextCertCode(client: SupabaseClient = sb): Promise<string> {
+  const { data, error } = await client.rpc('next_cert_code');
+  if (error) throw new Error('sbNextCertCode: ' + error.message);
+  return data as string;
+}
+
 // ── visa_projects ─────────────────────────────────────────────────────────────
 
 async function assembleVisaProjects(client: SupabaseClient): Promise<VisaProjectDoc[]> {

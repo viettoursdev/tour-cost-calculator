@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   scoreQuiz, isModuleComplete, isPhasePassed, programProgressPct,
-  isCertEligible, currentPhase,
+  isCertEligible, currentPhase, averageQuizScore, buildCertEvaluation,
 } from './training';
 import type {
   TrainingProgram, TrainingModule, TrainingEnrollment, QuizQuestion, ModuleProgress,
@@ -88,5 +88,33 @@ describe('phase gates & cert', () => {
     });
     expect(isCertEligible(p, full)).toBe(true);
     expect(currentPhase(p, full)).toBe('gd3');
+  });
+});
+
+describe('averageQuizScore & buildCertEvaluation', () => {
+  const p = program([
+    mod('a', 'gd1', { quiz: [q('x', 0)] }),
+    mod('b', 'gd1', { quiz: [q('y', 0)] }),
+    mod('c', 'gd2'),
+  ]);
+
+  it('averages only modules with a recorded quiz score', () => {
+    expect(averageQuizScore(p, enroll({}))).toBeUndefined();
+    expect(averageQuizScore(p, enroll({
+      a: { status: 'done', quizScore: 100 }, b: { status: 'done', quizScore: 80 },
+    }))).toBe(90);
+  });
+
+  it('builds a finalized HR evaluation tied to an employee', () => {
+    const e = enroll({ a: { status: 'done', quizScore: 100 }, b: { status: 'done', quizScore: 80 } });
+    const ev = buildCertEvaluation(p, e, {
+      employeeId: 'emp1', evalId: 'ev1', reviewerName: 'Sếp', nowISO: '2026-06-26T10:00:00.000Z',
+    });
+    expect(ev.employeeId).toBe('emp1');
+    expect(ev.status).toBe('finalized');
+    expect(ev.period).toBe('2026');
+    expect(ev.reviewDate).toBe('2026-06-26');
+    expect(ev.overallScore).toBeGreaterThanOrEqual(4);
+    expect(ev.promotion).toContain('chứng nhận');
   });
 });

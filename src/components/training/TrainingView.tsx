@@ -12,19 +12,23 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
 import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { useTrainingStore, newTrainingId } from '@/stores/trainingStore';
+import { useHrStore } from '@/stores/hrStore';
+import { useHrEvalStore } from '@/stores/hrEvalStore';
 import { toast } from '@/stores/toastStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { DEPT_LABEL } from '@/auth/departments';
+import { sbNextCertCode } from '@/lib/supabase';
 import { TRAINING_PHASES, QUIZ_PASS_PCT } from '@/types';
 import type {
-  TrainingProgram, TrainingModule, TrainingEnrollment, ModuleProgress, TrainingPhase, GateState,
+  TrainingProgram, TrainingModule, TrainingEnrollment, ModuleProgress, TrainingPhase, GateState, HrEmployee,
 } from '@/types';
 import { TRAINING_SEED } from '@/lib/trainingSeed';
 import {
   scoreQuiz, isModuleComplete, isPhasePassed, programProgressPct, isCertEligible, currentPhase,
-  modulesOfPhase,
+  modulesOfPhase, buildCertEvaluation,
 } from '@/lib/training';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -39,7 +43,7 @@ function recomputeGates(program: TrainingProgram, e: TrainingEnrollment): Partia
 export function TrainingView() {
   const me = useAuthStore((s) => s.currentUser);
   const enrollments = useTrainingStore((s) => s.enrollments);
-  const [tab, setTab] = useState<'mine' | 'library' | 'roster'>('mine');
+  const [tab, setTab] = useState<'mine' | 'library' | 'roster' | 'certs'>('mine');
   const canManage = hasPerm(me, 'manageTraining');
   const isMentor = enrollments.some((e) => e.mentorUsername === me?.u);
   const showRoster = canManage || isMentor;
@@ -58,11 +62,13 @@ export function TrainingView() {
         <Tab value="mine" label="Lộ trình của tôi" />
         <Tab value="library" label="Thư viện chương trình" />
         {showRoster && <Tab value="roster" label="Học viên" />}
+        {canManage && <Tab value="certs" label="Chứng nhận" />}
       </Tabs>
 
       {tab === 'mine' && <MyTrack />}
       {tab === 'library' && <Library canManage={canManage} />}
       {tab === 'roster' && showRoster && <Roster canManage={canManage} />}
+      {tab === 'certs' && canManage && <CertList />}
     </Box>
   );
 }
@@ -218,7 +224,7 @@ function MyTrack() {
   const openProgram = open ? programOf(open, saved) : undefined;
 
   if (open && openProgram) {
-    return <EnrollmentDetail enrollment={open} program={openProgram} onBack={() => setOpenId(null)} canLearn canSignoff={false} />;
+    return <EnrollmentDetail enrollment={open} program={openProgram} onBack={() => setOpenId(null)} canLearn canSignoff={false} canCertify={false} />;
   }
 
   if (!mine.length) {
@@ -258,13 +264,14 @@ function MyTrack() {
   );
 }
 
-function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff }: {
+function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff, canCertify }: {
   enrollment: TrainingEnrollment; program: TrainingProgram; onBack: () => void;
-  canLearn: boolean; canSignoff: boolean;
+  canLearn: boolean; canSignoff: boolean; canCertify: boolean;
 }) {
   const me = useAuthStore((s) => s.currentUser);
   const saveEnrollment = useTrainingStore((s) => s.saveEnrollment);
   const [quizFor, setQuizFor] = useState<TrainingModule | null>(null);
+  const [certifying, setCertifying] = useState(false);
 
   const persist = async (next: TrainingEnrollment) => {
     next.gates = recomputeGates(program, next);
@@ -296,6 +303,31 @@ function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff }:
       ? { signoffBy: undefined, signoffAt: undefined }
       : { signoffBy: me?.name ?? me?.u ?? 'mentor', signoffAt: new Date().toISOString(), status: 'done' });
     toast(signed ? 'Đã bỏ xác nhận' : 'Đã ký xác nhận module ✓', signed ? 'info' : 'success');
+  };
+
+  const certify = async () => {
+    if (!isCertEligible(program, enrollment) || enrollment.status === 'certified') return;
+    setCertifying(true);
+    try {
+      const now = new Date().toISOString();
+      const certCode = await sbNextCertCode();
+      const next: TrainingEnrollment = { ...enrollment, status: 'certified', certifiedAt: now, certCode };
+      next.gates = recomputeGates(program, next);
+      await saveEnrollment(next, me?.name ?? '');
+      // Nối HR: nếu học viên có hồ sơ nhân sự → ghi 1 kỳ đánh giá ĐÃ CHỐT.
+      if (enrollment.employeeId) {
+        const ev = buildCertEvaluation(program, next, {
+          employeeId: enrollment.employeeId, evalId: newTrainingId('ev'),
+          reviewerName: me?.name ?? '', nowISO: now,
+        });
+        await useHrEvalStore.getState().save(ev);
+      }
+      toast(`Đã cấp chứng nhận: ${certCode}${enrollment.employeeId ? ' · đã ghi hồ sơ HR' : ''}`, 'success');
+    } catch (e) {
+      toast('Lỗi cấp chứng nhận: ' + (e as Error).message, 'error');
+    } finally {
+      setCertifying(false);
+    }
   };
 
   const pct = programProgressPct(program, enrollment);
@@ -334,14 +366,32 @@ function EnrollmentDetail({ enrollment, program, onBack, canLearn, canSignoff }:
         );
       })}
 
-      {isCertEligible(program, enrollment) && (
+      {enrollment.status === 'certified' ? (
         <Paper variant="outlined" sx={{ p: 2, mt: 1, borderColor: 'success.main', bgcolor: 'success.50' }}>
-          <Stack direction="row" alignItems="center" spacing={1}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
             <VerifiedOutlinedIcon color="success" />
-            <Box>
-              <Typography fontWeight={800} fontSize={14}>Đủ điều kiện chứng nhận{program.certTitle ? `: ${program.certTitle}` : ''}</Typography>
-              <Typography variant="caption" color="text.secondary">Tất cả giai đoạn đã đậu gate. Quản lý sẽ cấp chứng nhận (Đợt 3).</Typography>
+            <Box sx={{ flex: 1 }}>
+              <Typography fontWeight={800} fontSize={14}>Đã cấp chứng nhận{program.certTitle ? `: ${program.certTitle}` : ''}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Mã {enrollment.certCode}{enrollment.certifiedAt ? ` · ${enrollment.certifiedAt.slice(0, 10)}` : ''}
+              </Typography>
             </Box>
+          </Stack>
+        </Paper>
+      ) : isCertEligible(program, enrollment) && (
+        <Paper variant="outlined" sx={{ p: 2, mt: 1, borderColor: 'success.main', bgcolor: 'success.50' }}>
+          <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+            <VerifiedOutlinedIcon color="success" />
+            <Box sx={{ flex: 1, minWidth: 180 }}>
+              <Typography fontWeight={800} fontSize={14}>Đủ điều kiện chứng nhận{program.certTitle ? `: ${program.certTitle}` : ''}</Typography>
+              <Typography variant="caption" color="text.secondary">Tất cả giai đoạn đã đậu gate.</Typography>
+            </Box>
+            {canCertify && (
+              <Button variant="contained" color="success" startIcon={<VerifiedOutlinedIcon />}
+                disabled={certifying} onClick={() => void certify()}>
+                {certifying ? 'Đang cấp…' : 'Cấp chứng nhận'}
+              </Button>
+            )}
           </Stack>
         </Paper>
       )}
@@ -475,6 +525,7 @@ function Roster({ canManage }: { canManage: boolean }) {
   const enrollments = useTrainingStore((s) => s.enrollments);
   const saveEnrollment = useTrainingStore((s) => s.saveEnrollment);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [enrollOpen, setEnrollOpen] = useState(false);
 
   // Mentor (không phải quản lý) chỉ thấy học viên mình kèm.
   const visible = enrollments.filter((e) => canManage || e.mentorUsername === me?.u);
@@ -483,7 +534,7 @@ function Roster({ canManage }: { canManage: boolean }) {
 
   if (open && openProgram) {
     const canSign = canManage || open.mentorUsername === me?.u;
-    return <EnrollmentDetail enrollment={open} program={openProgram} onBack={() => setOpenId(null)} canLearn={false} canSignoff={canSign} />;
+    return <EnrollmentDetail enrollment={open} program={openProgram} onBack={() => setOpenId(null)} canLearn={false} canSignoff={canSign} canCertify={canManage} />;
   }
 
   const setMentor = async (e: TrainingEnrollment, mentorUsername: string) => {
@@ -491,17 +542,22 @@ function Roster({ canManage }: { canManage: boolean }) {
     toast('Đã gán mentor', 'success');
   };
 
-  if (!visible.length) {
-    return (
-      <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-        <Typography color="text.secondary">Chưa có học viên nào đang đào tạo.</Typography>
-      </Paper>
-    );
-  }
-
   return (
-    <Stack spacing={1}>
-      {visible.map((e) => {
+    <Box>
+      {canManage && (
+        <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+          <Button size="small" variant="outlined" startIcon={<AddCircleOutlineIcon />} onClick={() => setEnrollOpen(true)}>
+            Ghi danh học viên
+          </Button>
+        </Stack>
+      )}
+      {!visible.length ? (
+        <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="text.secondary">Chưa có học viên nào đang đào tạo.</Typography>
+        </Paper>
+      ) : (
+        <Stack spacing={1}>
+          {visible.map((e) => {
         const program = programOf(e, saved);
         if (!program) return null;
         const pct = programProgressPct(program, e);
@@ -531,6 +587,143 @@ function Roster({ canManage }: { canManage: boolean }) {
                   </Select>
                 </FormControl>
               )}
+            </Stack>
+          </Paper>
+        );
+          })}
+        </Stack>
+      )}
+
+      {enrollOpen && <EnrollDialog onClose={() => setEnrollOpen(false)} />}
+    </Box>
+  );
+}
+
+/** Quản lý ghi danh một nhân viên (hồ sơ HR) vào một chương trình. Khớp hồ sơ HR
+ *  → user đăng nhập qua email để học viên tự thấy lộ trình; gắn employeeId để khi
+ *  cấp chứng nhận ghi được vào hồ sơ đánh giá HR. */
+function EnrollDialog({ onClose }: { onClose: () => void }) {
+  const me = useAuthStore((s) => s.currentUser);
+  const users = useAuthStore((s) => s.users);
+  const employees = useHrStore((s) => s.employees);
+  const saved = useTrainingStore((s) => s.programs);
+  const enrollments = useTrainingStore((s) => s.enrollments);
+  const saveEnrollment = useTrainingStore((s) => s.saveEnrollment);
+  const [programId, setProgramId] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const programs = [...saved, ...TRAINING_SEED];
+  const activeEmps = employees.filter((e) => e.status !== 'resigned');
+
+  const resolveUsername = (emp: HrEmployee): { u: string; name: string } => {
+    const email = (emp.profileEmail || emp.email || '').toLowerCase();
+    const u = email ? users.find((x) => (x.email || '').toLowerCase() === email) : undefined;
+    return u ? { u: u.u, name: u.name } : { u: email || emp.id, name: emp.fullName };
+  };
+
+  const submit = async () => {
+    const program = programs.find((p) => p.id === programId);
+    const emp = activeEmps.find((e) => e.id === employeeId);
+    if (!program || !emp || !me) return;
+    const dup = enrollments.some((e) => e.employeeId === emp.id && e.programId === program.id);
+    if (dup) { toast('Nhân viên này đã ghi danh chương trình đó', 'warning'); return; }
+    setBusy(true);
+    try {
+      const learner = resolveUsername(emp);
+      const e: TrainingEnrollment = {
+        id: newTrainingId('te'),
+        programId: program.id,
+        employeeId: emp.id,
+        learnerUsername: learner.u,
+        learnerName: learner.name,
+        department: (emp.department || program.department) as TrainingEnrollment['department'],
+        status: 'active',
+        startDate: todayISO(),
+        progress: {},
+        gates: {},
+        createdByUsername: me.u,
+        createdByName: me.name,
+        createdAt: new Date().toISOString(),
+      };
+      await saveEnrollment(e, me.name);
+      toast(`Đã ghi danh ${emp.fullName} vào "${program.name}"`, 'success');
+      onClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Ghi danh học viên</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ mt: 0.5 }}>
+          <FormControl size="small" fullWidth>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>Nhân viên</Typography>
+            <Select displayEmpty value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+              <MenuItem value=""><em>— Chọn nhân viên —</em></MenuItem>
+              {activeEmps.map((e) => (
+                <MenuItem key={e.id} value={e.id}>{e.fullName}{e.department ? ` · ${DEPT_LABEL[e.department]}` : ''}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" fullWidth>
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>Chương trình</Typography>
+            <Select displayEmpty value={programId} onChange={(e) => setProgramId(e.target.value)}>
+              <MenuItem value=""><em>— Chọn chương trình —</em></MenuItem>
+              {programs.map((p) => <MenuItem key={p.id} value={p.id}>{p.icon} {p.name}</MenuItem>)}
+            </Select>
+          </FormControl>
+          {!activeEmps.length && (
+            <Typography variant="caption" color="text.disabled">Chưa có hồ sơ nhân sự nào (mục Nhân sự).</Typography>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Huỷ</Button>
+        <Button variant="contained" disabled={busy || !programId || !employeeId} onClick={() => void submit()}>Ghi danh</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ── Chứng nhận (danh sách đã cấp) ───────────────────────────────────────────
+
+function CertList() {
+  const saved = useTrainingStore((s) => s.programs);
+  const enrollments = useTrainingStore((s) => s.enrollments);
+  const certified = enrollments
+    .filter((e) => e.status === 'certified')
+    .sort((a, b) => (b.certifiedAt ?? '').localeCompare(a.certifiedAt ?? ''));
+
+  if (!certified.length) {
+    return (
+      <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
+        <Typography color="text.secondary">Chưa cấp chứng nhận nào.</Typography>
+        <Typography variant="caption" color="text.disabled">Học viên đủ điều kiện sẽ được cấp ở tab <b>Học viên</b>.</Typography>
+      </Paper>
+    );
+  }
+
+  return (
+    <Stack spacing={1}>
+      {certified.map((e) => {
+        const program = programOf(e, saved);
+        return (
+          <Paper key={e.id} variant="outlined" sx={{ p: 1.5 }}>
+            <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+              <VerifiedOutlinedIcon color="success" />
+              <Box sx={{ flex: 1, minWidth: 180 }}>
+                <Typography fontSize={14} fontWeight={800} noWrap>{e.learnerName || e.learnerUsername}</Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {program ? `${program.icon} ${program.certTitle ?? program.name}` : 'Chương trình đã xoá'}
+                </Typography>
+              </Box>
+              <Chip size="small" color="success" variant="outlined" label={e.certCode ?? '—'} sx={{ height: 22, fontWeight: 800 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ width: 90, textAlign: 'right' }}>
+                {e.certifiedAt ? e.certifiedAt.slice(0, 10) : ''}
+              </Typography>
             </Stack>
           </Paper>
         );
