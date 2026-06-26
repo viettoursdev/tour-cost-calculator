@@ -11,7 +11,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # false: deploy xếp hàng tuần tự — commit cuối LUÔN được publish.
+  # (true từng làm rớt deploy của commit mới nhất khi push dồn dập.)
+  cancel-in-progress: false
 
 # Force GitHub-Actions JavaScript actions (checkout, setup-node, etc.) to run
 # on Node.js 24 instead of the deprecated Node 20. Default flips on
