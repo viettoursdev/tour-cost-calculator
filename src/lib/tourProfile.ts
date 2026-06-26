@@ -206,3 +206,82 @@ export function tourProfileTimeline(
     .filter((e) => e.entity === TOUR_AUDIT_ENTITY && (e.name === profile.code || (!!profile.name && e.name === profile.name)))
     .sort((a, b) => (b.at || '').localeCompare(a.at || ''));
 }
+
+// ════════════════════════════════════════════════════════════════════════
+//  Cổng đóng hồ sơ (B1) + Mốc thời gian & đếm ngược (B2) — hàm THUẦN.
+// ════════════════════════════════════════════════════════════════════════
+
+export type ClosingItem = { key: string; label: string; done: boolean };
+
+/**
+ * Checklist ĐÓNG (lưu trữ) hồ sơ — chỉ áp cho deal ĐÃ THẮNG/đang chạy (mới có gì
+ * để đối soát). Hàm THUẦN. Trả [] với deal chưa thắng / đã thua → lưu trữ tự do.
+ *  - Đã có hợp đồng · Đã quyết toán · Hết công nợ NCC · Quy trình không còn việc tới hạn.
+ */
+export function tourProfileClosingChecklist(args: {
+  primary?: Pick<CloudQuoteEntry, 'settlementSummary' | 'paymentSummary' | 'workflowDue'>;
+  stage: string;
+  contractCount: number;
+}): ClosingItem[] {
+  const { primary, stage, contractCount } = args;
+  if (!primary || !WON_STAGES.has(stage)) return [];
+  return [
+    { key: 'contract', label: 'Đã có hợp đồng', done: contractCount > 0 },
+    { key: 'settlement', label: 'Đã quyết toán', done: !!primary.settlementSummary },
+    { key: 'ncc_paid', label: 'Hết công nợ NCC', done: (primary.paymentSummary?.remaining ?? 0) <= 0 },
+    { key: 'workflow', label: 'Quy trình không còn việc tới hạn', done: (primary.workflowDue?.length ?? 0) === 0 },
+  ];
+}
+
+/** Còn mục nào CHƯA xong trong checklist đóng hồ sơ không (rỗng = sẵn sàng đóng). */
+export function closingPending(items: ClosingItem[]): ClosingItem[] {
+  return items.filter((i) => !i.done);
+}
+
+export type MilestoneLevel = 'overdue' | 'soon' | 'upcoming' | 'done';
+export type Milestone = { key: string; label: string; date: string; daysTo: number; level: MilestoneLevel };
+
+const milestoneLevel = (date: number, now: number, done: boolean): MilestoneLevel => {
+  if (done) return 'done';
+  const d = days(date, now);
+  if (d < 0) return 'overdue';
+  if (d <= 3) return 'soon';
+  return 'upcoming';
+};
+
+/**
+ * Mốc thời gian của hồ sơ (suy từ báo giá chính) — đếm ngược + mức độ gấp.
+ * HÀM THUẦN. Mới-tới-trước (sắp xếp theo ngày tăng dần), bỏ mốc không có ngày.
+ *  - Khởi hành · Hạn báo giá (chưa chốt) · Bước quy trình gần nhất · Trả NCC gần nhất · Quyết toán.
+ */
+export function tourProfileMilestones(args: {
+  primary?: Pick<CloudQuoteEntry, 'departDate' | 'deadline' | 'workflowDue' | 'nccDue' | 'settlementSummary'>;
+  stage: string;
+  now?: Date;
+}): Milestone[] {
+  const { primary, stage } = args;
+  if (!primary) return [];
+  const now = (args.now ?? new Date()).getTime();
+  const out: Milestone[] = [];
+  const push = (key: string, label: string, dateISO?: string, done = false) => {
+    if (!dateISO) return;
+    const t = new Date(dateISO).getTime();
+    if (Number.isNaN(t)) return;
+    out.push({ key, label, date: dateISO, daysTo: days(t, now), level: milestoneLevel(t, now, done) });
+  };
+  const won = WON_STAGES.has(stage);
+
+  push('depart', 'Khởi hành', primary.departDate, primary.departDate ? new Date(primary.departDate).getTime() < now : false);
+  if (!won) push('quote_deadline', 'Hạn báo giá', primary.deadline);
+  // Bước quy trình tới hạn gần nhất.
+  const wf = [...(primary.workflowDue ?? [])].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  if (wf) push('workflow', `Bước: ${wf.label}`, wf.dueDate);
+  // Đợt trả NCC gần nhất.
+  const ncc = [...(primary.nccDue ?? [])].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  if (ncc) push('ncc', `Trả NCC${ncc.supplier ? ' · ' + ncc.supplier : ''}`, ncc.dueDate);
+  // Quyết toán: nếu đã có settlement → done (mốc theo ngày khởi hành); nếu chưa & đã đi → overdue.
+  if (primary.departDate && (won || stage === 'operating' || stage === 'acceptance')) {
+    push('settlement', 'Quyết toán', primary.departDate, !!primary.settlementSummary);
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}

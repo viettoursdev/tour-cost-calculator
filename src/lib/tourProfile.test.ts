@@ -3,6 +3,7 @@ import {
   generateTourCode, tourPrefix, tourDatePart, canViewTourProfile, visibleTourProfiles, nextPrimaryAfterDelete,
   categoryPrefix, categoryKind, tourCategoryOf, deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
+  tourProfileClosingChecklist, closingPending, tourProfileMilestones,
 } from './tourProfile';
 import type { AuditEntry, Department, Role, TourCategory, TourProfile, User } from '@/types';
 
@@ -148,6 +149,60 @@ describe('tourProfileRisks — thẻ "cần chú ý"', () => {
   });
   it('topRiskLevel: rỗng → null', () => {
     expect(topRiskLevel([])).toBeNull();
+  });
+});
+
+describe('tourProfileClosingChecklist — cổng đóng hồ sơ', () => {
+  it('deal chưa thắng / thua → không cần checklist (rỗng)', () => {
+    expect(tourProfileClosingChecklist({ primary: {}, stage: 'quoted', contractCount: 0 })).toEqual([]);
+    expect(tourProfileClosingChecklist({ primary: {}, stage: 'lost', contractCount: 0 })).toEqual([]);
+  });
+  it('deal đã thắng → 4 mục, đánh dấu done đúng', () => {
+    const items = tourProfileClosingChecklist({
+      primary: { settlementSummary: { budgetCost: 1, actualCost: 1, actualProfit: 0, actualMarginPct: 0, plannedMarginPct: 0 }, paymentSummary: { payable: 5, paid: 5, remaining: 0 }, workflowDue: [] },
+      stage: 'acceptance', contractCount: 1,
+    });
+    expect(items.map((i) => i.key)).toEqual(['contract', 'settlement', 'ncc_paid', 'workflow']);
+    expect(items.every((i) => i.done)).toBe(true);
+    expect(closingPending(items)).toEqual([]);
+  });
+  it('còn thiếu → closingPending liệt kê đúng mục chưa xong', () => {
+    const items = tourProfileClosingChecklist({
+      primary: { paymentSummary: { payable: 5, paid: 2, remaining: 3 }, workflowDue: [{ label: 'X', dueDate: '2026-06-30' }] },
+      stage: 'won', contractCount: 0,
+    });
+    expect(closingPending(items).map((i) => i.key).sort()).toEqual(['contract', 'ncc_paid', 'settlement', 'workflow']);
+  });
+});
+
+describe('tourProfileMilestones — mốc thời gian & đếm ngược', () => {
+  const NOW = new Date('2026-06-26T00:00:00Z');
+  const iso = (d: number) => new Date(NOW.getTime() + d * 86_400_000).toISOString();
+
+  it('không có báo giá chính → rỗng', () => {
+    expect(tourProfileMilestones({ stage: 'won', now: NOW })).toEqual([]);
+  });
+  it('khởi hành tương lai → upcoming với daysTo đúng; sắp xếp theo ngày', () => {
+    const ms = tourProfileMilestones({
+      primary: { departDate: iso(10), nccDue: [{ label: 'A', amount: 1, dueDate: iso(2) }] },
+      stage: 'won', now: NOW,
+    });
+    expect(ms[0].key).toBe('ncc');          // ngày sớm hơn đứng trước
+    expect(ms.find((m) => m.key === 'depart')?.daysTo).toBe(10);
+    expect(ms.find((m) => m.key === 'depart')?.level).toBe('upcoming');
+  });
+  it('mốc ≤3 ngày → soon; quá hạn → overdue', () => {
+    const ms = tourProfileMilestones({ primary: { departDate: iso(2) }, stage: 'won', now: NOW });
+    expect(ms.find((m) => m.key === 'depart')?.level).toBe('soon');
+    const ms2 = tourProfileMilestones({ primary: { deadline: iso(-1) }, stage: 'quoted', now: NOW });
+    expect(ms2.find((m) => m.key === 'quote_deadline')?.level).toBe('overdue');
+  });
+  it('đã quyết toán → mốc quyết toán = done', () => {
+    const ms = tourProfileMilestones({
+      primary: { departDate: iso(-5), settlementSummary: { budgetCost: 1, actualCost: 1, actualProfit: 0, actualMarginPct: 0, plannedMarginPct: 0 } },
+      stage: 'acceptance', now: NOW,
+    });
+    expect(ms.find((m) => m.key === 'settlement')?.level).toBe('done');
   });
 });
 

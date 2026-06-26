@@ -28,6 +28,9 @@ import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined
 import HistoryIcon from '@mui/icons-material/History';
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import SendIcon from '@mui/icons-material/Send';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import { useAuthStore } from '@/stores/authStore';
 import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
@@ -49,7 +52,8 @@ import {
   TOUR_CATEGORIES, categoryMeta, tourCategoryOf, categoryKind,
   deleteNeedsApproval, canApproveDelete,
   tourProfileRisks, topRiskLevel, tourProfileTimeline,
-  type TourRisk, type TourRiskLevel,
+  tourProfileClosingChecklist, closingPending, tourProfileMilestones,
+  type TourRisk, type TourRiskLevel, type ClosingItem, type Milestone, type MilestoneLevel,
 } from '@/lib/tourProfile';
 import { fmtVND } from './calc';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
@@ -64,6 +68,19 @@ const STAGE_META = (st: DealStage) =>
 
 /** Màu cho mức cảnh báo "cần chú ý". */
 const RISK_COLOR: Record<TourRiskLevel, string> = { urgent: '#dc2626', warn: '#d97706' };
+
+/** Màu cho mức độ gấp của mốc thời gian. */
+const MILESTONE_COLOR: Record<MilestoneLevel, string> = {
+  overdue: '#dc2626', soon: '#d97706', upcoming: '#2563eb', done: '#16a34a',
+};
+
+/** Nhãn đếm ngược cho 1 mốc (theo daysTo). */
+const countdownLabel = (m: Milestone): string => {
+  if (m.level === 'done') return 'Hoàn tất';
+  if (m.daysTo < 0) return `Quá ${-m.daysTo} ngày`;
+  if (m.daysTo === 0) return 'Hôm nay';
+  return `Còn ${m.daysTo} ngày`;
+};
 
 /** Nhãn + màu cho hành động trong dòng thời gian (audit log). */
 const ACTION_META: Record<AuditAction, { label: string; color: string }> = {
@@ -132,6 +149,7 @@ export function TourProfilesView() {
   const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
   const [deleteState, setDeleteState] = useState<TourProfile | null>(null);
   const [requestDeleteState, setRequestDeleteState] = useState<TourProfile | null>(null);
+  const [closeState, setCloseState] = useState<{ profile: TourProfile; items: ClosingItem[] } | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(currentUser?.u));
 
@@ -308,6 +326,15 @@ export function TourProfilesView() {
     if (await openQuote(pq.cloudId, true)) setDetailId(p.id);
   };
 
+  // Cổng đóng hồ sơ thông minh: khi lưu trữ deal đã thắng mà checklist còn thiếu → hỏi lại.
+  const handleArchive = (p: TourProfile, on: boolean) => {
+    if (!on) { void archive(p.id, false); return; } // mở lại → trực tiếp
+    const mt = metaOf(p.id);
+    const items = tourProfileClosingChecklist({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract });
+    if (closingPending(items).length === 0) { void archive(p.id, true); return; } // đủ điều kiện → đóng luôn
+    setCloseState({ profile: p, items });
+  };
+
   // Deep-link từ Global Search / Trợ lý: mở đúng hồ sơ khi vào tab.
   const consumeFocus = useTourProfileStore((s) => s.consumeFocus);
   useEffect(() => {
@@ -354,7 +381,13 @@ export function TourProfilesView() {
         {p && (() => {
           const mt = metaOf(p.id);
           const risks = tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract });
-          return risks.length > 0 ? <RiskPanel risks={risks} /> : null;
+          const milestones = tourProfileMilestones({ primary: mt.primary, stage: mt.stage });
+          return (
+            <>
+              {risks.length > 0 && <RiskPanel risks={risks} />}
+              <MilestonePanel milestones={milestones} />
+            </>
+          );
         })()}
         <DealCockpit />
         {p && <DirectLinkPanel profile={p} />}
@@ -447,7 +480,7 @@ export function TourProfilesView() {
                 onOpenProfile={() => void openProfile(p)}
                 onOpenQuote={(cid) => void openQuote(cid, false)}
                 onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
-                onArchive={(on) => void archive(p.id, on)}
+                onArchive={(on) => handleArchive(p, on)}
                 onDelete={() => (deleteNeedsApproval(currentUser) ? setRequestDeleteState(p) : setDeleteState(p))}
                 onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
                 onApproveDelete={() => void approveDelete(p.id)}
@@ -517,7 +550,56 @@ export function TourProfilesView() {
           setRequestDeleteState(null);
         }}
       />
+
+      <ClosingChecklistDialog
+        state={closeState}
+        onClose={() => setCloseState(null)}
+        onArchiveAnyway={async () => {
+          if (closeState) await archive(closeState.profile.id, true);
+          setCloseState(null);
+        }}
+      />
     </Box>
+  );
+}
+
+/** Cổng đóng hồ sơ: liệt kê checklist (✓/○), cho phép lưu trữ dù còn thiếu. */
+function ClosingChecklistDialog({ state, onClose, onArchiveAnyway }: {
+  state: { profile: TourProfile; items: ClosingItem[] } | null;
+  onClose: () => void; onArchiveAnyway: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (state) setBusy(false); }, [state]);
+  const pending = state ? closingPending(state.items) : [];
+  const submit = async () => { setBusy(true); try { await onArchiveAnyway(); } finally { setBusy(false); } };
+  return (
+    <Dialog open={!!state} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Lưu trữ (đóng) hồ sơ?</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" sx={{ mb: 1.5 }}>
+          Hồ sơ <strong>{state?.profile.code}</strong> còn <strong>{pending.length}</strong> mục chưa hoàn tất.
+          Bạn vẫn có thể lưu trữ, nhưng nên hoàn tất trước khi đóng.
+        </Typography>
+        <Stack spacing={0.75}>
+          {(state?.items ?? []).map((it) => (
+            <Stack key={it.key} direction="row" spacing={1} alignItems="center">
+              {it.done
+                ? <CheckCircleOutlineIcon sx={{ fontSize: 18, color: '#16a34a' }} />
+                : <RadioButtonUncheckedIcon sx={{ fontSize: 18, color: '#d97706' }} />}
+              <Typography fontSize={13.5} sx={{ color: it.done ? 'text.secondary' : 'text.primary', fontWeight: it.done ? 400 : 600 }}>
+                {it.label}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Để sau</Button>
+        <Button variant="contained" color="warning" disabled={busy} onClick={() => void submit()}>
+          {busy ? 'Đang lưu trữ…' : 'Lưu trữ dù còn thiếu'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -1020,6 +1102,31 @@ function RiskPanel({ risks }: { risks: TourRisk[] }) {
             sx={{ height: 22, bgcolor: `${RISK_COLOR[r.level]}14`, color: RISK_COLOR[r.level], fontWeight: 700 }} />
         ))}
       </Stack>
+    </Paper>
+  );
+}
+
+/** Mốc thời gian & đếm ngược của hồ sơ (suy từ báo giá chính). */
+function MilestonePanel({ milestones }: { milestones: Milestone[] }) {
+  if (milestones.length === 0) return null;
+  return (
+    <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1 }}>
+        <FlagOutlinedIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <Typography fontWeight={800} fontSize={13.5}>Mốc thời gian</Typography>
+      </Stack>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(3,1fr)', md: 'repeat(5,1fr)' }, gap: 1 }}>
+        {milestones.map((m) => {
+          const color = MILESTONE_COLOR[m.level];
+          return (
+            <Box key={m.key} sx={{ p: 0.75, borderRadius: 1.5, border: `1px solid ${color}33`, bgcolor: `${color}0d` }}>
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', lineHeight: 1.2 }}>{m.label}</Typography>
+              <Typography fontSize={13} fontWeight={800} sx={{ color, lineHeight: 1.2 }}>{countdownLabel(m)}</Typography>
+              <Typography variant="caption" color="text.secondary">{new Date(m.date).toLocaleDateString('vi-VN')}</Typography>
+            </Box>
+          );
+        })}
+      </Box>
     </Paper>
   );
 }
