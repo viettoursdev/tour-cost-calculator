@@ -44,6 +44,18 @@ const REQUEST_LABEL: Record<QuoteRequestKind, string> = {
 };
 
 /**
+ * Suy số ngày/đêm từ tên hồ sơ/tour nếu có (vd "Đà Lạt 3N2Đ", "4 ngày 3 đêm").
+ * Hồ sơ tour không lưu ngày/đêm riêng nên tận dụng quy ước đặt tên.
+ */
+function parseDaysNights(s?: string): { days: number; nights: number } | null {
+  if (!s) return null;
+  let m = s.match(/(\d+)\s*N\s*(\d+)\s*[ĐD]/i);          // "3N2Đ" / "3N2D"
+  if (!m) m = s.match(/(\d+)\s*ngày\s*(\d+)\s*đêm/i);    // "3 ngày 2 đêm"
+  if (!m) return null;
+  return { days: Math.max(1, Number(m[1])), nights: Math.max(0, Number(m[2])) };
+}
+
+/**
  * Bảng nhập thông tin báo giá khi bấm "Tạo báo giá mới" (chỉ báo giá nội địa/nước
  * ngoài). Thu thập loại báo giá, yêu cầu, tên tour, khách hàng, số ngày/đêm, ngày
  * khởi hành dự kiến, deadline (hệ thống nhắc trước 1 ngày & 6 giờ) và cộng tác viên.
@@ -111,6 +123,27 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
     setDays(d);
     // Gợi ý số đêm = ngày - 1 (vẫn sửa tay được sau đó).
     setNights(Math.max(0, d - 1));
+  };
+
+  // Chọn hồ sơ tour có sẵn → tự điền thông tin báo giá từ hồ sơ (vẫn sửa tay được).
+  const applyProfile = (p: TourProfile | null) => {
+    setExistingProfile(p);
+    if (!p) return;
+    // Đồng bộ loại báo giá theo hồ sơ.
+    setTemplate(p.kind === 'intl' ? 'intl' : 'domestic');
+    if (p.name) setName(p.name);
+    if (p.dest) setDest(p.dest);
+    if (typeof p.pax === 'number' && p.pax > 0) setPax(p.pax);
+    if (p.startDate) setStartDate(p.startDate);
+    // Khách hàng: ưu tiên khớp theo id, fallback theo tên.
+    const cust = (p.customerId && customers.find((c) => c.id === p.customerId))
+      || (p.customerName && customers.find((c) => c.name.trim().toLowerCase() === p.customerName!.trim().toLowerCase()))
+      || null;
+    if (cust) { setCustomer(cust); setCustomerInput(cust.name); }
+    else if (p.customerName) { setCustomer(null); setCustomerInput(p.customerName); }
+    // Số ngày/đêm: hồ sơ không lưu riêng → suy từ tên nếu có.
+    const dn = parseDaysNights(p.name);
+    if (dn) { setDays(dn.days); setNights(dn.nights); }
   };
 
   const submit = async () => {
@@ -193,6 +226,39 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
       </DialogTitle>
       <DialogContent>
         <Stack spacing={2.25} sx={{ mt: 0.5 }}>
+          {/* Gắn vào hồ sơ tour có sẵn — LÊN ĐẦU: chọn hồ sơ sẽ tự điền thông tin báo giá bên dưới */}
+          <Autocomplete
+            options={profileOptions} value={existingProfile}
+            onChange={(_, v) => applyProfile(v)}
+            getOptionLabel={(p) => `${p.code} — ${p.name || '(chưa đặt tên)'}`}
+            isOptionEqualToValue={(a, b) => a.id === b.id}
+            groupBy={(p) => (p.kind === 'intl' ? 'Nước ngoài' : 'Nội địa')}
+            renderOption={(props, p) => (
+              <li {...props} key={p.id}>
+                <Box>
+                  <Typography variant="body2" fontWeight={700}>{p.code}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {p.name || '(chưa đặt tên)'}{p.customerName ? ` · ${p.customerName}` : ''}
+                  </Typography>
+                </Box>
+              </li>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params} label="Gắn vào hồ sơ tour có sẵn (tuỳ chọn)"
+                placeholder="Để trống = tự tạo hồ sơ tour mới"
+                helperText={existingProfile
+                  ? `Đã lấy thông tin từ hồ sơ ${existingProfile.code} điền vào bên dưới — vẫn sửa tay được.`
+                  : 'Chọn hồ sơ có sẵn để tự điền tên/điểm đến/khách/ngày/số khách. Để trống = tự mở hồ sơ tour mới.'}
+                InputProps={{ ...params.InputProps, startAdornment: (
+                  <><InputAdornment position="start"><RouteOutlinedIcon fontSize="small" /></InputAdornment>{params.InputProps.startAdornment}</>
+                ) }}
+              />
+            )}
+          />
+
+          <Divider flexItem />
+
           {/* Cách tạo báo giá: app / upload Excel / upload Excel + AI */}
           <Box>
             <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
@@ -344,37 +410,6 @@ export function NewQuoteDialog({ open, initialTemplate, onClose, onConfirm }: Pr
           />
 
           <Divider flexItem />
-
-          {/* Gắn vào hồ sơ tour có sẵn (trống = tự tạo hồ sơ mới khi lưu) */}
-          <Autocomplete
-            options={profileOptions} value={existingProfile}
-            onChange={(_, v) => setExistingProfile(v)}
-            getOptionLabel={(p) => `${p.code} — ${p.name || '(chưa đặt tên)'}`}
-            isOptionEqualToValue={(a, b) => a.id === b.id}
-            groupBy={(p) => (p.kind === 'intl' ? 'Nước ngoài' : 'Nội địa')}
-            renderOption={(props, p) => (
-              <li {...props} key={p.id}>
-                <Box>
-                  <Typography variant="body2" fontWeight={700}>{p.code}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {p.name || '(chưa đặt tên)'}{p.customerName ? ` · ${p.customerName}` : ''}
-                  </Typography>
-                </Box>
-              </li>
-            )}
-            renderInput={(params) => (
-              <TextField
-                {...params} label="Gắn vào hồ sơ tour có sẵn (tuỳ chọn)"
-                placeholder="Để trống = tự tạo hồ sơ tour mới"
-                helperText={existingProfile
-                  ? `Báo giá sẽ là một phương án trong hồ sơ ${existingProfile.code}.`
-                  : 'Mặc định: hệ thống tự mở hồ sơ tour mới (mã NĐ/NN) cho báo giá này.'}
-                InputProps={{ ...params.InputProps, startAdornment: (
-                  <><InputAdornment position="start"><RouteOutlinedIcon fontSize="small" /></InputAdornment>{params.InputProps.startAdornment}</>
-                ) }}
-              />
-            )}
-          />
 
           {/* Thêm nhân sự collab */}
           <Autocomplete
