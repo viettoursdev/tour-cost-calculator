@@ -11,6 +11,8 @@ const SYSTEM = [
   'CHỈ trả về JSON hợp lệ, tiếng Việt, KHÔNG kèm chữ nào khác, theo schema:',
   '{"days":[{"title":"tiêu đề/tuyến ngày","activities":[{"time":"08:00","text":"hoạt động"}]}]}',
   'Mỗi ngày 3-5 hoạt động trải đều sáng/chiều/tối. Tạo ĐÚNG số ngày được yêu cầu.',
+  'Mỗi "text" viết theo văn phong tour Việt Nam: BẮT ĐẦU bằng động từ/hành động RỒI MỚI tới địa điểm.',
+  'ĐÚNG: "Tham quan Vịnh Hạ Long", "Khởi hành đi Bà Nà". SAI (ngược): "Vịnh Hạ Long – tham quan".',
 ].join('\n');
 
 function extractJSON(text: string): unknown {

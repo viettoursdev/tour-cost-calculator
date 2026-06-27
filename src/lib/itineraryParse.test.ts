@@ -49,6 +49,23 @@ describe('buildItineraryFromParsed', () => {
     expect(itinerary.schedule[1].segments[0].activities.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('prefers the action-first "activity" phrase for the line text', () => {
+    const { itinerary, pois } = buildItineraryFromParsed({
+      days: [{
+        activities: [
+          { time: '08:00', activity: 'Tham quan Bà Nà Hills', place: 'Bà Nà Hills', commentary: 'Có Cầu Vàng.' },
+          { activity: 'Khởi hành đi Hội An', place: '', commentary: '' },
+        ],
+      }],
+    });
+    const acts = itinerary.schedule[0].segments[0].activities;
+    // câu hoạt động dẫn trước, thuyết minh ghép sau
+    expect(acts[0].text).toBe('Tham quan Bà Nà Hills – Có Cầu Vàng.');
+    expect(acts[1].text).toBe('Khởi hành đi Hội An');
+    // thư viện POI vẫn dùng tên địa điểm sạch làm khoá
+    expect(pois).toEqual([{ place: 'Bà Nà Hills', commentary: 'Có Cầu Vàng.' }]);
+  });
+
   it('collects POIs (place + commentary) for the library', () => {
     const { pois } = buildItineraryFromParsed(parsed);
     expect(pois).toEqual([{ place: 'Bà Nà Hills', commentary: 'Khu du lịch nổi tiếng với Cầu Vàng.' }]);

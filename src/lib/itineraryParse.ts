@@ -8,7 +8,7 @@ import {
 } from '@/components/itinerary/constants';
 import type { Itinerary } from '@/types';
 
-export interface ParsedActivity { time?: string; place?: string; commentary?: string }
+export interface ParsedActivity { time?: string; activity?: string; place?: string; commentary?: string }
 export interface ParsedDay {
   title?: string;
   meals?: { B?: boolean; L?: boolean; D?: boolean };
@@ -27,7 +27,7 @@ export interface ParsedItinerary {
 }
 
 const buildPrompt = (text: string): string =>
-  `Bạn là trợ lý điều hành tour. Đọc nội dung CHƯƠNG TRÌNH TOUR dưới đây và trích xuất thành JSON theo ĐÚNG schema. CHỈ trả về JSON hợp lệ, KHÔNG giải thích, KHÔNG markdown.
+  `Bạn là trợ lý điều hành tour người Việt. Đọc nội dung CHƯƠNG TRÌNH TOUR dưới đây và trích xuất thành JSON theo ĐÚNG schema. CHỈ trả về JSON hợp lệ, KHÔNG giải thích, KHÔNG markdown.
 
 Schema:
 {
@@ -40,17 +40,26 @@ Schema:
       "title": string,        // tiêu đề ngày
       "meals": { "B": boolean, "L": boolean, "D": boolean },  // bữa sáng/trưa/tối có bao gồm
       "mealNote": string,
-      "activities": [ { "time": string, "place": string, "commentary": string } ]
+      "activities": [ { "time": string, "activity": string, "place": string, "commentary": string } ]
     }
   ],
   "includes": [string],       // giá bao gồm
   "excludes": [string]        // không bao gồm
 }
 
-Quy tắc:
+Quy tắc CHUNG:
 - Giữ nguyên tiếng Việt. "time" để trống nếu không rõ giờ.
-- "place" = tên địa điểm/hoạt động tham quan; "commentary" = thông tin thuyết minh/mô tả của điểm đó (rỗng nếu không có).
 - Mảng rỗng nếu không có chuyến bay / giá gồm / không gồm.
+
+Quy tắc QUAN TRỌNG về cách viết "activity" (văn phong chương trình tour Việt Nam):
+- "activity" = CÂU HOẠT ĐỘNG viết hoàn chỉnh, BẮT ĐẦU bằng ĐỘNG TỪ/HÀNH ĐỘNG, RỒI MỚI tới ĐỊA ĐIỂM. TUYỆT ĐỐI không viết địa điểm trước hành động sau.
+  ✅ ĐÚNG (hành động → địa điểm): "Tham quan Vịnh Hạ Long", "Khởi hành đi Bà Nà Hills", "Ăn trưa tại nhà hàng địa phương", "Tự do dạo chơi phố cổ Hội An", "Làm thủ tục nhận phòng khách sạn", "Tiễn đoàn ra sân bay".
+  ❌ SAI (ngược, địa điểm trước): "Vịnh Hạ Long – tham quan", "Bà Nà Hills, khởi hành đi", "Phố cổ Hội An tự do dạo chơi".
+- Động từ thường dùng: Đón đoàn, Khởi hành, Di chuyển, Tham quan, Ăn sáng/trưa/tối, Thưởng thức, Tự do, Mua sắm, Nhận/Trả phòng, Nghỉ ngơi, Tiễn đoàn, Đáp/Lên chuyến bay.
+- Nếu văn bản gốc chỉ nêu tên địa điểm mà không có động từ, hãy TỰ thêm động từ phù hợp (thường là "Tham quan ...") để câu đọc tự nhiên, action-first.
+- Nếu văn bản gốc đã viết ngược (địa điểm trước), hãy ĐẢO LẠI cho đúng văn phong action-first.
+- "place" = CHỈ tên riêng của địa điểm chính trong hoạt động đó (vd "Vịnh Hạ Long", "Chùa Linh Ứng") để lưu thư viện; rỗng nếu hoạt động không gắn địa điểm cụ thể (vd ăn uống, nghỉ ngơi).
+- "commentary" = thông tin thuyết minh/mô tả thêm về địa điểm (rỗng nếu không có); ĐỪNG nhét lại tên động từ/hành động vào đây.
 
 Nội dung:
 """
@@ -90,10 +99,13 @@ export function buildItineraryFromParsed(p: ParsedItinerary): {
     day.meals = { B: !!d.meals?.B, L: !!d.meals?.L, D: !!d.meals?.D };
     day.mealNote = (d.mealNote ?? '').trim();
     const acts = (d.activities ?? []).map((a) => {
+      const activity = (a.activity ?? '').trim();
       const place = (a.place ?? '').trim();
       const commentary = (a.commentary ?? '').trim();
       if (place && commentary) pois.push({ place, commentary });
-      const text = place && commentary ? `${place} – ${commentary}` : (place || commentary);
+      // Dòng hoạt động ưu tiên câu "activity" (đã viết action-first); fallback tên địa điểm.
+      const head = activity || place;
+      const text = head && commentary ? `${head} – ${commentary}` : (head || commentary);
       return { ...newActivity(), time: (a.time ?? '').trim(), text };
     });
     const seg = newSegment('');
