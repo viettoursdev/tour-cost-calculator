@@ -59,7 +59,7 @@ type State = {
   /** SỬA TAY thông tin cơ bản (tên/khách/điểm đến/ngày/số khách/ghi chú). Khi `lock`
    *  = true (mặc định) đặt `infoLocked` → hồ sơ thành nguồn sự thật, không bị
    *  `syncFromPrimary` ghi đè và được ưu tiên hiển thị. Bỏ `lock` để cho tự đồng bộ lại. */
-  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string }, lock?: boolean) => Promise<void>;
+  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string; plannedContractValue?: number | null; plannedSettlementValue?: number | null }, lock?: boolean) => Promise<void>;
   /** Đồng bộ NGƯỢC thông tin hiển thị (tên/khách/ngày/pax) từ báo giá chính vào hồ sơ
    *  để báo cáo trực tiếp trên DB cũng đúng. Bỏ qua nếu không có gì đổi. */
   syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
@@ -214,6 +214,8 @@ export const useTourProfileStore = create<State>()(
         priority: info.priority !== undefined ? (info.priority || undefined) : p.priority,
         leadSource: info.leadSource !== undefined ? (info.leadSource.trim() || undefined) : p.leadSource,
         note: info.note !== undefined ? (info.note.trim() || undefined) : p.note,
+        plannedContractValue: info.plannedContractValue !== undefined ? (info.plannedContractValue || undefined) : p.plannedContractValue,
+        plannedSettlementValue: info.plannedSettlementValue !== undefined ? (info.plannedSettlementValue || undefined) : p.plannedSettlementValue,
         infoLocked: lock,
       };
       await get().save(next);

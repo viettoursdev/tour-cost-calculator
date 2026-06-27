@@ -84,6 +84,18 @@ export type TourProfile = {
   /** Nguồn khách (Giới thiệu / Khách cũ / Marketing / Inbound…) — attribution Sales–Marketing. */
   leadSource?: string;
   /**
+   * Giá trị hợp đồng TẠM TÍNH (nhập tay). Chỉ dùng để HIỂN THỊ khi chưa có giá trị
+   * thật từ quy trình (báo giá gắn vai trò `contract` / hợp đồng liên kết). Khi quy
+   * trình đã sinh giá trị thật thì giá trị thật được ưu tiên, bỏ qua số tạm tính này.
+   */
+  plannedContractValue?: number;
+  /**
+   * Giá trị nghiệm thu/thanh lý TẠM TÍNH (nhập tay). Chỉ dùng để HIỂN THỊ khi chưa
+   * quyết toán thật (báo giá gắn vai trò `settlement` / quyết toán liên kết). Có dữ
+   * liệu quyết toán thật thì giá trị thật được ưu tiên.
+   */
+  plannedSettlementValue?: number;
+  /**
    * KHOÁ thông tin cơ bản: khi người dùng SỬA TAY (tên/khách/ngày/số khách/điểm đến)
    * thì đặt `true` → hồ sơ trở thành nguồn sự thật, KHÔNG bị `syncFromPrimary` ghi đè
    * và được ƯU TIÊN hiển thị hơn báo giá chính. Bỏ tích để cho tự đồng bộ trở lại.

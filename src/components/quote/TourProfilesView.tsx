@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import {
   Autocomplete, Avatar, AvatarGroup, Badge, Box, Button, Checkbox, Chip, Collapse, createFilterOptions, Dialog, DialogActions,
-  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Menu, MenuItem, Paper, Stack, Switch,
+  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, InputAdornment, Menu, MenuItem, Paper, Stack, Switch,
   Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
-import { AskLibraryDialog } from '@/components/knowledge/AskLibraryDialog';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -138,11 +136,20 @@ type ProfileLinks = { contract: number; visa: number; menu: number; itinerary: n
 /** Tuỳ chọn xuất Excel: khoảng ngày khởi hành + phân loại hồ sơ. */
 type ExportFilters = { from: string; to: string; categories: TourCategory[] };
 
-/** 3 mốc giá trị tour — tự suy từ dữ liệu liên kết (không nhập tay). */
+/** Một mốc trong thang giá trị tour. */
+type ValueStep = 'current' | 'contract' | 'settlement';
+
+/**
+ * 3 mốc giá trị tour. `current` luôn suy từ báo giá chính; `contract`/`settlement`
+ * ưu tiên suy theo QUY TRÌNH (báo giá gắn vai trò / hợp đồng / quyết toán), chỉ
+ * fallback về số TẠM TÍNH nhập tay trên hồ sơ khi quy trình chưa có. `estimated`
+ * đánh dấu mốc nào đang dùng số tạm tính để giao diện ghi rõ.
+ */
 type ProfileValues = {
   current?: number;     // báo giá chính (totalCost)
-  contract?: number;    // hợp đồng liên kết (contractPax × pricePerPax)
-  settlement?: number;  // nghiệm thu — doanh thu thực (actualCost + actualProfit)
+  contract?: number;    // hợp đồng liên kết (contractPax × pricePerPax) hoặc tạm tính
+  settlement?: number;  // nghiệm thu — doanh thu thực (actualCost + actualProfit) hoặc tạm tính
+  estimated?: { contract?: boolean; settlement?: boolean };
 };
 
 /**
@@ -360,7 +367,6 @@ export function TourProfilesView() {
   const [showAttention, setShowAttention] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [askLibOpen, setAskLibOpen] = useState(false);
   const [fltCustomer, setFltCustomer] = useState<string>('');
   const [fltCategory, setFltCategory] = useState<TourCategory | ''>('');
   const [fltCountry, setFltCountry] = useState<string>('');
@@ -445,15 +451,25 @@ export function TourProfilesView() {
         ? dealStage({ status: primary.status, contract: contractFlags(contractByQuote.get(primary.cloudId)), departureISO: primary.departDate })
         : 'request';
       // 3 mốc giá trị — ưu tiên báo giá người dùng GẮN vai trò khi lưu (valueRole),
-      // fallback về cách suy gián tiếp (hợp đồng liên kết / quyết toán) cho dữ liệu cũ.
+      // fallback về cách suy gián tiếp (hợp đồng liên kết / quyết toán) cho dữ liệu cũ,
+      // cuối cùng mới dùng số TẠM TÍNH nhập tay trên hồ sơ (giá trị thật theo quy trình
+      // luôn được ưu tiên — số tạm tính chỉ lấp chỗ trống khi chưa có dữ liệu thật).
       const taggedContract = list.find((q) => q.valueRole === 'contract');
       const taggedSettlement = list.find((q) => q.valueRole === 'settlement');
       const ct = (primary ? contractByQuote.get(primary.cloudId) : undefined) ?? firstContractByProfile.get(p.id);
       const st = primary?.settlementSummary;
+      const realContract = taggedContract?.totalCost ?? (ct ? (ct.contractPax || 0) * (ct.pricePerPax || 0) : undefined);
+      const realSettlement = taggedSettlement?.totalCost ?? (st ? st.actualCost + st.actualProfit : undefined);
+      const contract = realContract ?? p.plannedContractValue;
+      const settlement = realSettlement ?? p.plannedSettlementValue;
       v.values = {
         current: primary?.totalCost,
-        contract: taggedContract?.totalCost ?? (ct ? (ct.contractPax || 0) * (ct.pricePerPax || 0) : undefined),
-        settlement: taggedSettlement?.totalCost ?? (st ? st.actualCost + st.actualProfit : undefined),
+        contract,
+        settlement,
+        estimated: {
+          contract: realContract === undefined && typeof p.plannedContractValue === 'number',
+          settlement: realSettlement === undefined && typeof p.plannedSettlementValue === 'number',
+        },
       };
       // Quốc gia: visa → nước của dự án visa; còn lại → điểm đến (intl chủ yếu).
       v.country = countryByProfile.get(p.id) ?? (primary?.dest ?? p.dest ?? undefined);
@@ -894,22 +910,17 @@ export function TourProfilesView() {
           {p && <Chip size="small" label={p.code} sx={{ fontWeight: 800, bgcolor: 'rgba(13,122,106,0.12)', color: '#0d7a6a' }} />}
           {p && (
             <Tooltip title="Nhân bản thành báo giá + hồ sơ tour mới (tour mẫu lặp lại)">
-              <Button size="small" startIcon={<ContentCopyIcon sx={{ fontSize: 16 }} />} onClick={cloneCurrent}>Nhân bản</Button>
+              <IconButton size="small" onClick={cloneCurrent}><ContentCopyIcon sx={{ fontSize: 18 }} /></IconButton>
             </Tooltip>
           )}
           {p && (
             <Tooltip title="Xuất hồ sơ ra PDF 1 trang (gửi/in nội bộ)">
-              <Button size="small" startIcon={<FileDownloadOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => exportProfilePDF(p)}>Xuất PDF</Button>
+              <IconButton size="small" onClick={() => exportProfilePDF(p)}><FileDownloadOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>
             </Tooltip>
           )}
           {p && canEdit && (
             <Tooltip title="Sửa thông tin cơ bản (tên / khách / ngày / số khách)">
-              <Button size="small" startIcon={<EditOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => setEditId(p.id)}>Sửa thông tin</Button>
-            </Tooltip>
-          )}
-          {p && (
-            <Tooltip title="Hỏi Thư viện kiến thức nội bộ (theo điểm đến của hồ sơ này)">
-              <Button size="small" startIcon={<MenuBookOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => setAskLibOpen(true)}>Hỏi thư viện</Button>
+              <IconButton size="small" onClick={() => setEditId(p.id)}><EditOutlinedIcon sx={{ fontSize: 18 }} /></IconButton>
             </Tooltip>
           )}
           {opts.length > 1 && (
@@ -1007,11 +1018,6 @@ export function TourProfilesView() {
             onSave={async (info, lock) => { await setBasicInfo(p.id, info, lock); setEditId(null); }}
           />
         )}
-        <AskLibraryDialog
-          open={askLibOpen}
-          onClose={() => setAskLibOpen(false)}
-          context={p ? (p.dest || p.name || undefined) : undefined}
-        />
       </Box>
     );
   }
@@ -1722,13 +1728,34 @@ function CustomerPicker({ customer, customerName, onPick }: {
   );
 }
 
+/** Ô nhập tiền VND: nhóm hàng nghìn khi hiển thị, chỉ giữ chữ số khi lưu (chuỗi). */
+function MoneyField({ label, value, onChange, helperText, color }: {
+  label: string;
+  value: string;            // chuỗi chữ số thô ('' = chưa nhập)
+  onChange: (digits: string) => void;
+  helperText?: string;
+  color?: string;
+}) {
+  const display = value ? Number(value).toLocaleString('vi-VN') : '';
+  return (
+    <TextField
+      size="small" label={label} value={display} fullWidth inputMode="numeric"
+      onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ''))}
+      helperText={helperText}
+      InputProps={{ endAdornment: <InputAdornment position="end">₫</InputAdornment> }}
+      sx={color ? { '& .MuiInputBase-input': { color, fontWeight: 700 } } : undefined}
+    />
+  );
+}
+
 function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
   onClose: () => void;
-  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string }, lock: boolean) => Promise<void>;
+  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string; plannedContractValue: number | null; plannedSettlementValue: number | null }, lock: boolean) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
+  const showPrice = canSeePrices(useAuthStore((s) => s.currentUser));
   const b = displayBasics(profile, primary);
   // Khách hàng: ưu tiên hồ sơ KH đã gắn (customerId) → đồng bộ với hồ sơ khách hàng thật.
   const initialCustomer = profile.customerId ? customers.find((c) => c.id === profile.customerId) ?? null : null;
@@ -1743,6 +1770,8 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const [nights, setNights] = useState<string>(profile.nights ? String(profile.nights) : '');
   const [priority, setPriority] = useState<'high' | 'medium' | 'low' | ''>(profile.priority ?? '');
   const [leadSource, setLeadSource] = useState(profile.leadSource ?? '');
+  const [plannedContract, setPlannedContract] = useState<string>(profile.plannedContractValue ? String(profile.plannedContractValue) : '');
+  const [plannedSettlement, setPlannedSettlement] = useState<string>(profile.plannedSettlementValue ? String(profile.plannedSettlementValue) : '');
   const [note, setNote] = useState(profile.note ?? '');
   const [lock, setLock] = useState(profile.infoLocked ?? true);
   const [busy, setBusy] = useState(false);
@@ -1767,7 +1796,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
     const effectiveLock = lock || syncedDirty;
     try {
       await onSave(
-        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, priority, leadSource, note },
+        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, priority, leadSource, note, plannedContractValue: plannedContract ? Number(plannedContract) : null, plannedSettlementValue: plannedSettlement ? Number(plannedSettlement) : null },
         effectiveLock,
       );
     } finally { setBusy(false); }
@@ -1804,6 +1833,20 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
           <PrioritySelect value={priority} onChange={setPriority} />
           <ChipPicker label="Nguồn khách" presets={LEAD_SOURCES} value={leadSource} onChange={setLeadSource} placeholder="VD: Hội chợ, đối tác…" />
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
+          {showPrice && (
+            <Box>
+              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                Giá trị tạm tính
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                <MoneyField label="Giá trị hợp đồng" value={plannedContract} onChange={setPlannedContract} color={VALUE_STEP_COLOR.contract} />
+                <MoneyField label="Giá trị nghiệm thu" value={plannedSettlement} onChange={setPlannedSettlement} color={VALUE_STEP_COLOR.settlement} />
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                Số nhập tay chỉ để ước lượng. Khi quy trình có giá trị thật (báo giá gắn vai trò / hợp đồng / quyết toán) thì giá trị thật được ưu tiên.
+              </Typography>
+            </Box>
+          )}
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
           <FormControlLabel
             control={<Switch size="small" checked={lock} onChange={(e) => setLock(e.target.checked)} />}
@@ -2679,8 +2722,8 @@ function ProfileTable({
                 {has('countdown') && <TableCell>{cd ? <Typography component="span" fontSize={12} fontWeight={700} sx={{ color: cd.color }}>{cd.label}</Typography> : '—'}</TableCell>}
                 {has('pax') && <TableCell align="right">{b.pax || '—'}</TableCell>}
                 {has('value') && showPrice && <TableCell align="right">{typeof mt.values.current === 'number' ? fmtVND(mt.values.current) : '—'}</TableCell>}
-                {has('valueContract') && showPrice && <TableCell align="right">{typeof mt.values.contract === 'number' ? <Typography component="span" fontSize={13} fontWeight={600} sx={{ color: VALUE_STEP_COLOR.contract }}>{fmtVND(mt.values.contract)}</Typography> : '—'}</TableCell>}
-                {has('valueSettlement') && showPrice && <TableCell align="right">{typeof mt.values.settlement === 'number' ? <Typography component="span" fontSize={13} fontWeight={600} sx={{ color: VALUE_STEP_COLOR.settlement }}>{fmtVND(mt.values.settlement)}</Typography> : '—'}</TableCell>}
+                {has('valueContract') && showPrice && <TableCell align="right">{typeof mt.values.contract === 'number' ? <Tooltip title={mt.values.estimated?.contract ? 'Tạm tính (nhập tay) — chưa có hợp đồng/báo giá thật' : ''} disableHoverListener={!mt.values.estimated?.contract}><Typography component="span" fontSize={13} fontWeight={600} sx={{ color: VALUE_STEP_COLOR.contract, fontStyle: mt.values.estimated?.contract ? 'italic' : 'normal' }}>{fmtVND(mt.values.contract)}{mt.values.estimated?.contract ? ' *' : ''}</Typography></Tooltip> : '—'}</TableCell>}
+                {has('valueSettlement') && showPrice && <TableCell align="right">{typeof mt.values.settlement === 'number' ? <Tooltip title={mt.values.estimated?.settlement ? 'Tạm tính (nhập tay) — chưa quyết toán thật' : ''} disableHoverListener={!mt.values.estimated?.settlement}><Typography component="span" fontSize={13} fontWeight={600} sx={{ color: VALUE_STEP_COLOR.settlement, fontStyle: mt.values.estimated?.settlement ? 'italic' : 'normal' }}>{fmtVND(mt.values.settlement)}{mt.values.estimated?.settlement ? ' *' : ''}</Typography></Tooltip> : '—'}</TableCell>}
                 {has('progress') && <TableCell><ProfileProgress steps={progress} compact /></TableCell>}
                 <TableCell align="right">
                   <Tooltip title="Xem nhanh"><IconButton size="small" onClick={() => onQuickView(p.id)}><VisibilityIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
@@ -2741,10 +2784,10 @@ function Meta({ label, value }: { label: string; value: string }) {
 }
 
 /** Màu cho từng mốc giá trị (hiện tại → hợp đồng → nghiệm thu). */
-const VALUE_STEP_COLOR: Record<keyof ProfileValues, string> = {
+const VALUE_STEP_COLOR: Record<ValueStep, string> = {
   current: '#0d7a6a', contract: '#2563eb', settlement: '#7c3aed',
 };
-const VALUE_STEP_LABEL: Record<keyof ProfileValues, string> = {
+const VALUE_STEP_LABEL: Record<ValueStep, string> = {
   current: 'Hiện tại', contract: 'Hợp đồng', settlement: 'Nghiệm thu',
 };
 
@@ -2754,9 +2797,9 @@ const VALUE_STEP_LABEL: Record<keyof ProfileValues, string> = {
  * Chỉ hiện những mốc có số; trống hoàn toàn → không render.
  */
 function ValueLadder({ values, compact }: { values: ProfileValues; compact?: boolean }) {
-  const steps = (['current', 'contract', 'settlement'] as (keyof ProfileValues)[])
-    .map((k) => ({ k, val: values[k] }))
-    .filter((s): s is { k: keyof ProfileValues; val: number } => typeof s.val === 'number');
+  const steps = (['current', 'contract', 'settlement'] as ValueStep[])
+    .map((k) => ({ k, val: values[k], est: k !== 'current' && !!values.estimated?.[k] }))
+    .filter((s): s is { k: ValueStep; val: number; est: boolean } => typeof s.val === 'number');
   if (steps.length === 0) return null;
   return (
     <Box
@@ -2784,9 +2827,9 @@ function ValueLadder({ values, compact }: { values: ProfileValues; compact?: boo
             )}
             <Box sx={{ px: compact ? 0.9 : 1.1, py: compact ? 0.35 : 0.5, borderLeft: i > 0 ? 'none' : `3px solid ${color}` }}>
               <Typography sx={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.3, color, lineHeight: 1.1, textTransform: 'uppercase' }}>
-                {VALUE_STEP_LABEL[s.k]}
+                {VALUE_STEP_LABEL[s.k]}{s.est ? ' • tạm tính' : ''}
               </Typography>
-              <Typography sx={{ fontSize: compact ? 12 : 13, fontWeight: 800, lineHeight: 1.15 }}>{fmtVND(s.val)}</Typography>
+              <Typography sx={{ fontSize: compact ? 12 : 13, fontWeight: 800, lineHeight: 1.15, fontStyle: s.est ? 'italic' : 'normal' }}>{fmtVND(s.val)}</Typography>
             </Box>
           </Box>
         );
