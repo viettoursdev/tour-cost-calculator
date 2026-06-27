@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import {
   Alert, Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Link, MenuItem, Stack, TextField, Typography,
@@ -57,6 +57,7 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useUndoRedoShortcuts(undo, redo, !busy);
 
@@ -173,10 +174,17 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
                 </Stack>
               ))}
               <Box>
-                <Button component="label" variant="outlined" size="small" startIcon={<AttachFileIcon />} disabled={uploading}>
+                <Button
+                  variant="outlined" size="small" startIcon={<AttachFileIcon />} disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
                   {uploading ? 'Đang tải lên…' : 'Đính kèm file (PDF/ảnh/Word…)'}
-                  <input type="file" hidden multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" onChange={onPickFiles} />
                 </Button>
+                <input
+                  ref={fileInputRef} type="file" multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
+                  style={{ display: 'none' }} onChange={onPickFiles}
+                />
               </Box>
               {uploadErr && (
                 <Alert severity="error" onClose={() => setUploadErr(null)} sx={{ mt: 0.5 }}>
