@@ -21,6 +21,8 @@ import { MergeDialog } from '@/components/common/MergeDialog';
 import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
+import { nccScore, NCC_BAND_META } from './nccScore';
+import { NccSuggestDialog } from './NccSuggestDialog';
 import type { Ncc } from '@/types';
 import { filterRank, normalizeVN } from '@/lib/search';
 import { toast } from '@/stores/toastStore';
@@ -97,6 +99,7 @@ export function NCCView() {
   // Khi lưu mà phát hiện trùng tên: hỏi 3 lựa chọn (gộp / tạo mới / huỷ).
   const [dupPrompt, setDupPrompt] = useState<{ form: Ncc; dup: Ncc } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const importMany = useNccStore((s) => s.importMany);
   // Chuyển sang Khách hàng: cần quyền quản lý Khách hàng để thêm vào danh sách đích.
   const custSave = useCustomerStore((s) => s.save);
@@ -228,6 +231,7 @@ export function NCCView() {
             >
               {selMode ? 'Thoát gộp' : 'Gộp trùng'}
             </Button>
+            <Button variant="outlined" onClick={() => setSuggestOpen(true)}>🎯 Gợi ý NCC</Button>
             <Button variant="outlined" onClick={() => setImportOpen(true)}>📥 Nhập danh sách</Button>
             <Button variant="contained" onClick={() => setModal({ ncc: null })}>➕ Thêm NCC</Button>
           </Stack>
@@ -427,6 +431,13 @@ export function NCCView() {
         })))}
       />
 
+      <NccSuggestDialog
+        open={suggestOpen}
+        suppliers={visible}
+        onClose={() => setSuggestOpen(false)}
+        onOpenNcc={(n) => { setSuggestOpen(false); setModal({ ncc: n }); }}
+      />
+
       {/* Trùng tên khi lưu → 3 lựa chọn: gộp / tạo mới / huỷ */}
       <Dialog open={!!dupPrompt} onClose={() => setDupPrompt(null)} maxWidth="sm" fullWidth>
         <DialogTitle>Nhà cung cấp trùng tên</DialogTitle>
@@ -513,6 +524,7 @@ function NccCard({
   canShare: boolean;
   onClick: () => void;
 }) {
+  const sc = nccScore(s);
   return (
     <Box
       onClick={selectable ? onToggleSelect : onClick}
@@ -540,6 +552,10 @@ function NccCard({
             <Chip size="small" label={s.status === 'paused' ? 'Ngừng' : 'Hạn chế'}
               sx={{ height: 18, fontWeight: 700, bgcolor: s.status === 'paused' ? 'rgba(100,116,139,0.18)' : 'rgba(220,50,80,0.15)', color: s.status === 'paused' ? '#475569' : '#dc3250' }} />
           )}
+          <Tooltip title={`Điểm NCC ${sc.score}/100${sc.avgStars !== undefined ? ` · ${sc.avgStars.toFixed(1)}★ (${sc.ratingCount} lượt)` : ' · chưa có đánh giá'}`}>
+            <Chip size="small" label={`${NCC_BAND_META[sc.band].label} ${sc.score}`}
+              sx={{ height: 18, fontWeight: 700, bgcolor: `${NCC_BAND_META[sc.band].color}1a`, color: NCC_BAND_META[sc.band].color }} />
+          </Tooltip>
           {(s.files ?? []).length > 0 && <Chip size="small" variant="outlined" label={`📎 ${(s.files ?? []).length}`} sx={{ height: 18 }} />}
           {!!s.collaborators?.length && <Chip size="small" variant="outlined" label={`👥 Chia sẻ ${s.collaborators.length}`} sx={{ height: 18, color: 'primary.main' }} />}
         </Stack>
