@@ -134,8 +134,20 @@ export type NewQuoteMeta = {
   locked?: boolean;
 };
 
-/** Một hạng giá tạm tính của chuyến bay (đa tiền tệ). */
-export type FlightFare = { id: string; label: string; amount: number; cur: string };
+/** Một hạng giá tạm tính của chuyến bay (đa tiền tệ).
+ *  `amount` = Fare (giá vé cơ bản, GIỮ tên cũ để tương thích). `tax` = thuế/phí.
+ *  Total = amount + tax (suy ra, không lưu). Các trường SL chỗ phục vụ quản lý
+ *  block giữ chỗ: đặt cọc / khách đã xác nhận / được phép giảm. */
+export type FlightFare = {
+  id: string;
+  label: string;
+  amount: number;          // Fare (giá vé cơ bản)
+  tax?: number;            // Thuế & phí
+  cur: string;
+  seatsDeposit?: number;   // SL chỗ đã đặt cọc
+  seatsConfirmed?: number; // SL chỗ khách xác nhận
+  seatsReducible?: number; // SL chỗ được phép giảm
+};
 
 /** Một CHẶNG bay (một lượt cất–hạ cánh) trong một booking. */
 export type FlightSegment = {

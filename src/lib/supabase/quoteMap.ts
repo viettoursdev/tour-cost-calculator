@@ -28,7 +28,9 @@ const flightRows = (flights: QuoteFlight[] | undefined) =>
       dep_day_offset: s.depDayOffset ?? null, arr_day_offset: s.arrDayOffset ?? null, sort_order: j,
     })),
     fares: (f.fares ?? []).map((fa, j) => ({
-      legacy_fare_id: fa.id, label: fa.label, amount: fa.amount, cur: fa.cur, sort_order: j,
+      legacy_fare_id: fa.id, label: fa.label, amount: fa.amount, tax: fa.tax ?? null, cur: fa.cur,
+      seats_deposit: fa.seatsDeposit ?? null, seats_confirmed: fa.seatsConfirmed ?? null,
+      seats_reducible: fa.seatsReducible ?? null, sort_order: j,
     })),
   }));
 
@@ -136,6 +138,10 @@ export function assembleFlights(
           label: str(fa.label),
           amount: num(fa.amount),
           cur: str(fa.cur),
+          ...(fa.tax != null ? { tax: num(fa.tax) } : {}),
+          ...(fa.seats_deposit != null ? { seatsDeposit: num(fa.seats_deposit) } : {}),
+          ...(fa.seats_confirmed != null ? { seatsConfirmed: num(fa.seats_confirmed) } : {}),
+          ...(fa.seats_reducible != null ? { seatsReducible: num(fa.seats_reducible) } : {}),
         })),
       };
     });

@@ -60,6 +60,9 @@ const uid = (p: string) => p + Date.now().toString(36) + (seq++).toString(36) + 
 export const newFare = (over: Partial<FlightFare> = {}): FlightFare =>
   ({ id: uid('ff'), label: 'Phổ thông', amount: 0, cur: 'VND', ...over });
 
+/** Tổng giá 1 hạng = Fare + Thuế/phí. */
+export const fareTotal = (fr: FlightFare): number => (fr.amount || 0) + (fr.tax || 0);
+
 /** Một chặng trống — suy hãng/thành phố khi hiển thị, không cần lưu sẵn. */
 export const newSegment = (over: Partial<FlightSegment> = {}): FlightSegment =>
   ({ date: '', flightNo: '', depAirport: '', arrAirport: '', depTime: '', arrTime: '', ...over });

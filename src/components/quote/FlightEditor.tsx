@@ -7,7 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import { MENU_CUR } from '@/components/menu/constants';
-import { deriveAirline, deriveAirport, newFare, newSegment } from './flightConstants';
+import { deriveAirline, deriveAirport, fareTotal, newFare, newSegment } from './flightConstants';
 import type { FlightFare, FlightSegment, QuoteFlight } from '@/types';
 
 type Props = { flight: QuoteFlight; onClose: () => void; onSave: (f: QuoteFlight) => void };
@@ -84,16 +84,27 @@ export function FlightEditor({ flight, onClose, onSave }: Props) {
           <Button size="small" startIcon={<AddIcon />} onClick={addSeg} sx={{ alignSelf: 'flex-start', color: '#0d7a6a' }}>Thêm chặng</Button>
 
           <Box>
-            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Hạng giá tạm tính (đa tiền tệ)</Typography>
-            <Stack spacing={1} sx={{ mt: 0.75 }}>
+            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Hạng giá tạm tính (Fare + Thuế) &amp; block giữ chỗ</Typography>
+            <Stack spacing={1.25} sx={{ mt: 0.75 }}>
               {f.fares.map((fr) => (
-                <Box key={fr.id} sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 0.9fr 32px', gap: 1, alignItems: 'center' }}>
-                  <TextField size="small" placeholder="Hạng (vd Phổ thông)" value={fr.label} onChange={(e) => updFare(fr.id, { label: e.target.value })} />
-                  <TextField size="small" type="number" placeholder="Giá tạm tính" value={fr.amount || ''} onChange={(e) => updFare(fr.id, { amount: +e.target.value })} slotProps={{ htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
-                  <TextField select size="small" value={fr.cur} onChange={(e) => updFare(fr.id, { cur: e.target.value })}>
-                    {MENU_CUR.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                  </TextField>
-                  <IconButton size="small" color="error" onClick={() => setF((prev) => ({ ...prev, fares: prev.fares.filter((x) => x.id !== fr.id) }))}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                <Box key={fr.id} sx={{ p: 1.25, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <TextField size="small" placeholder="Hạng (vd Phổ thông)" value={fr.label} onChange={(e) => updFare(fr.id, { label: e.target.value })} sx={{ flex: 1 }} />
+                    <TextField select size="small" value={fr.cur} onChange={(e) => updFare(fr.id, { cur: e.target.value })} sx={{ width: 96 }}>
+                      {MENU_CUR.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                    </TextField>
+                    <IconButton size="small" color="error" onClick={() => setF((prev) => ({ ...prev, fares: prev.fares.filter((x) => x.id !== fr.id) }))} aria-label="Xoá hạng giá"><DeleteOutlineIcon fontSize="small" /></IconButton>
+                  </Stack>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1 }}>
+                    <TextField size="small" type="number" label="Fare" value={fr.amount || ''} onChange={(e) => updFare(fr.id, { amount: +e.target.value })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="Thuế &amp; phí (Tax)" value={fr.tax ?? ''} onChange={(e) => updFare(fr.id, { tax: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" label="Total = Fare + Tax" value={Math.round(fareTotal(fr)).toLocaleString('vi-VN')} disabled slotProps={{ inputLabel: { shrink: true }, htmlInput: { style: { textAlign: 'right', fontWeight: 700 } } }} />
+                  </Box>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, mt: 1 }}>
+                    <TextField size="small" type="number" label="SL chỗ đặt cọc" value={fr.seatsDeposit ?? ''} onChange={(e) => updFare(fr.id, { seatsDeposit: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="SL khách xác nhận" value={fr.seatsConfirmed ?? ''} onChange={(e) => updFare(fr.id, { seatsConfirmed: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="SL được phép giảm" value={fr.seatsReducible ?? ''} onChange={(e) => updFare(fr.id, { seatsReducible: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                  </Box>
                 </Box>
               ))}
             </Stack>
@@ -105,7 +116,7 @@ export function FlightEditor({ flight, onClose, onSave }: Props) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">Huỷ</Button>
-        <Button onClick={() => onSave({ ...f, segments: segs, fares: f.fares.filter((x) => x.label.trim() || x.amount > 0) })} variant="contained" sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
+        <Button onClick={() => onSave({ ...f, segments: segs, fares: f.fares.filter((x) => x.label.trim() || x.amount > 0 || (x.tax ?? 0) > 0 || (x.seatsDeposit ?? 0) > 0 || (x.seatsConfirmed ?? 0) > 0 || (x.seatsReducible ?? 0) > 0) })} variant="contained" sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
       </DialogActions>
     </Dialog>
   );

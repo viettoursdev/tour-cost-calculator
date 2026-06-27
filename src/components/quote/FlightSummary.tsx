@@ -1,10 +1,10 @@
 import { Box, Chip, Stack, Typography } from '@mui/material';
-import { deriveAirline, deriveAirport, migrateFlight } from './flightConstants';
-import type { FlightSegment, QuoteFlight, LegacyQuoteFlight } from '@/types';
+import { deriveAirline, deriveAirport, fareTotal, migrateFlight } from './flightConstants';
+import type { FlightFare, FlightSegment, QuoteFlight, LegacyQuoteFlight } from '@/types';
 
 const airName = (no: string, override?: string) => override || deriveAirline(no).name;
 const off = (n?: number) => ((n ?? 0) > 0 ? `+${n}` : '');
-const fmtFare = (amount: number, cur: string) => `${Math.round(amount || 0).toLocaleString('vi-VN')} ${cur}`;
+const fmtFare = (fr: FlightFare) => `${Math.round(fareTotal(fr)).toLocaleString('vi-VN')} ${fr.cur}`;
 
 /** Tuyến rút gọn của booking: HAN→DOH→EDI… */
 const routeOf = (segs: FlightSegment[]) =>
@@ -27,7 +27,7 @@ export function FlightSummary({ flights }: { flights: (QuoteFlight | LegacyQuote
             <Typography fontWeight={800} fontSize={13}>{routeOf(f.segments)}</Typography>
             {(f.fares ?? []).map((fr) => (
               <Chip key={fr.id} size="small" variant="outlined" sx={{ height: 19 }}
-                label={`${fr.label ? fr.label + ': ' : ''}${fmtFare(fr.amount, fr.cur)}`} />
+                label={`${fr.label ? fr.label + ': ' : ''}${fmtFare(fr)}`} />
             ))}
           </Stack>
           {f.segments.map((s, j) => (

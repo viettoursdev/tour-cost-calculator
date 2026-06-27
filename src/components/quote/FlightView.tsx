@@ -11,7 +11,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { parseFlights } from '@/lib/flightParse';
-import { deriveAirline, deriveAirport, migrateFlight, newFlight } from './flightConstants';
+import { deriveAirline, deriveAirport, fareTotal, migrateFlight, newFlight } from './flightConstants';
 import { FlightEditor } from './FlightEditor';
 import type { FlightFare, FlightSegment, QuoteFlight } from '@/types';
 
@@ -25,8 +25,16 @@ const fileToB64 = (file: File): Promise<string> => new Promise((resolve, reject)
 const NO_FLIGHTS: QuoteFlight[] = [];
 const airName = (no: string, override?: string) => override || deriveAirline(no).name;
 const airCode = (no: string) => deriveAirline(no).code;
-const fmtFare = (fr: FlightFare) => `${Math.round(fr.amount || 0).toLocaleString('vi-VN')} ${fr.cur}`;
+const fmtFare = (fr: FlightFare) => `${Math.round(fareTotal(fr)).toLocaleString('vi-VN')} ${fr.cur}`;
 const off = (n?: number) => ((n ?? 0) > 0 ? `+${n}` : '');
+/** Tóm tắt block giữ chỗ của 1 hạng giá (cọc / xác nhận / được giảm). */
+const seatsBlurb = (fr: FlightFare): string => {
+  const parts: string[] = [];
+  if (fr.seatsConfirmed != null) parts.push(`✔ ${fr.seatsConfirmed} xác nhận`);
+  if (fr.seatsDeposit != null) parts.push(`💰 ${fr.seatsDeposit} cọc`);
+  if (fr.seatsReducible != null) parts.push(`▼ ${fr.seatsReducible} được giảm`);
+  return parts.join(' · ');
+};
 
 /** Tuyến rút gọn của booking: HAN→DOH→EDI…→HAN. */
 const routeOf = (segs: FlightSegment[]) => {
@@ -99,7 +107,7 @@ export function FlightView() {
     const first = segs[0]; const last = segs[segs.length - 1];
     addItem('flight', {
       name: `${first?.flightNo ?? ''} ${routeOf(segs)}${segs.length > 1 ? ` (${segs.length} chặng)` : ''}${first?.date ? ` ${first.date}` : ''}`.trim(),
-      cur: fare?.cur ?? 'VND', price: fare?.amount ?? 0, qtyMode: 'per_pax', unit: '/người',
+      cur: fare?.cur ?? 'VND', price: fare ? fareTotal(fare) : 0, qtyMode: 'per_pax', unit: '/người',
       note: [airlinesOf(segs).join(', '), first ? `Đi ${first.date} ${first.depTime}` : '', last ? `Đến ${last.arrAirport} ${last.arrTime}` : ''].filter(Boolean).join(' · '),
     });
     if (window.confirm(`✅ Đã thêm "${first?.flightNo ?? 'chuyến bay'}" vào bảng báo giá (Vé máy bay). Mở tab Bảng báo giá?`)) setView('cost');
@@ -166,6 +174,11 @@ export function FlightView() {
                     <Stack spacing={0.5}>
                       {segs.map((s, i) => <SegRow key={i} idx={i} s={s} />)}
                     </Stack>
+                    {(f.fares ?? []).filter((fr) => seatsBlurb(fr)).map((fr) => (
+                      <Typography key={fr.id} variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                        🎫 {fr.label || 'Hạng'} — {seatsBlurb(fr)}
+                      </Typography>
+                    ))}
                     {f.note && <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>📝 {f.note}</Typography>}
                   </Box>
                   <Stack direction="row" spacing={0.5}>
