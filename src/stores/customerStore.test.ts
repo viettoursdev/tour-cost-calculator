@@ -74,12 +74,21 @@ describe('customerStore', () => {
     expect(sb.sbPushCustomers).not.toHaveBeenCalled();
   });
 
-  it('delete removes by id and pushes the trimmed list', async () => {
+  it('delete removes by dbId and deletes the row directly', async () => {
     useCustomerStore.setState({
-      customers: [customer({ id: 'c1' }), customer({ id: 'c2' })],
+      customers: [customer({ id: 'c1', dbId: 'u1' }), customer({ id: 'c2', dbId: 'u2' })],
     }, false);
-    await useCustomerStore.getState().delete('c1');
-    expect(useCustomerStore.getState().customers).toEqual([customer({ id: 'c2' })]);
-    expect(sb.sbPushCustomers).toHaveBeenCalledTimes(1);
+    await useCustomerStore.getState().delete(customer({ id: 'c1', dbId: 'u1' }));
+    expect(useCustomerStore.getState().customers).toEqual([customer({ id: 'c2', dbId: 'u2' })]);
+    expect(sb.sbDeleteCustomers).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbDeleteCustomers).mock.calls[0][0]).toEqual([customer({ id: 'c1', dbId: 'u1' })]);
+  });
+
+  it('delete still works for legacy rows whose legacy_id (id) is empty', async () => {
+    const orphan = customer({ id: '', dbId: 'u-null' });
+    useCustomerStore.setState({ customers: [orphan, customer({ id: 'c2', dbId: 'u2' })] }, false);
+    await useCustomerStore.getState().delete(orphan);
+    expect(useCustomerStore.getState().customers).toEqual([customer({ id: 'c2', dbId: 'u2' })]);
+    expect(vi.mocked(sb.sbDeleteCustomers).mock.calls[0][0]).toEqual([orphan]);
   });
 });

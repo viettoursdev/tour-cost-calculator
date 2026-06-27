@@ -511,7 +511,7 @@ const rowToCustomer = (
   contacts: Customer['contacts'],
   interactions: Customer['interactions'],
 ): Customer => ({
-  id: r.legacy_id as string, name: r.name as string, type: r.type as Customer['type'],
+  id: r.legacy_id as string, dbId: r.id as string, name: r.name as string, type: r.type as Customer['type'],
   address: (r.address as string) ?? undefined, taxCode: (r.tax_code as string) ?? undefined,
   contacts, note: (r.note as string) ?? '',
   source: (r.source as string) ?? undefined,
@@ -602,6 +602,30 @@ export function sbPushCustomers(
     const del = await client.from('customers').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushCustomers delete all: ' + del.error.message);
   }
+  });
+}
+
+/**
+ * Xoá hẳn các khách hàng được chỉ định — bằng UUID khoá chính (`dbId`) khi có,
+ * nếu không thì theo `legacy_id`. Tin cậy hơn nhánh delete-diff theo `legacy_id`
+ * trong `sbPushCustomers` (bỏ qua mọi dòng có `legacy_id` null → không xoá được
+ * dữ liệu cũ). Con (`customer_contacts`/`customer_interactions`) tự xoá theo cascade.
+ */
+export function sbDeleteCustomers(
+  targets: { dbId?: string; id?: string }[],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  return serializeWrites('customers', async () => {
+    const dbIds = targets.map((t) => t.dbId).filter(Boolean) as string[];
+    const legacyIds = targets.filter((t) => !t.dbId).map((t) => t.id).filter(Boolean) as string[];
+    if (dbIds.length) {
+      const del = await client.from('customers').delete().in('id', dbIds);
+      if (del.error) throw new Error('sbDeleteCustomers by id: ' + del.error.message);
+    }
+    if (legacyIds.length) {
+      const del = await client.from('customers').delete().in('legacy_id', legacyIds);
+      if (del.error) throw new Error('sbDeleteCustomers by legacy_id: ' + del.error.message);
+    }
   });
 }
 

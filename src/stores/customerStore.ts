@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeCustomers, sbPushCustomers } from '@/lib/supabase';
+import { sbSubscribeCustomers, sbPushCustomers, sbDeleteCustomers } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { Customer, CustomerContact, CustomerInteraction, CustomerInteractionType } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -12,7 +12,7 @@ type CustomerState = {
   init: () => Unsubscribe;
   save: (form: Customer) => Promise<void>;
   importMany: (rows: Customer[]) => Promise<number>;
-  delete: (id: string) => Promise<void>;
+  delete: (customer: Customer) => Promise<void>;
   /** Ghi 1 lần chăm sóc khách (CRM timeline). */
   addInteraction: (customerId: string, type: CustomerInteractionType, text: string) => Promise<void>;
   /** Xoá 1 dòng chăm sóc. */
@@ -101,13 +101,16 @@ export const useCustomerStore = create<CustomerState>()(
       return toAdd.length;
     },
 
-    delete: async (id) => {
+    delete: async (customer) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      const next = get().customers.filter((c) => c.id !== id);
+      // Xoá theo `dbId` (UUID) khi có — chắc chắn ngay cả khi `legacy_id` null,
+      // và phân biệt được dòng trùng id rỗng. Không còn rebuild cả danh sách.
+      const next = get().customers.filter((c) =>
+        customer.dbId ? c.dbId !== customer.dbId : c !== customer);
       set({ customers: next, syncing: true });
       try {
-        await sbPushCustomers(next, { name: u.name, role: u.role });
+        await sbDeleteCustomers([customer]);
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
       } finally {
@@ -200,7 +203,12 @@ export const useCustomerStore = create<CustomerState>()(
         .filter((c) => !removeIds.has(c.id))
         .map((c) => (c.id === primary.id ? merged : c));
       set({ customers: next, syncing: true });
-      try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
+      try {
+        await sbPushCustomers(next, { name: u.name, role: u.role });
+        // Đảm bảo xoá hẳn các bản đã gộp (kể cả dòng `legacy_id` null mà
+        // delete-diff theo legacy_id của sbPushCustomers bỏ sót).
+        await sbDeleteCustomers(rest);
+      }
       catch (e) { window.alert('❌ Lỗi gộp: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },

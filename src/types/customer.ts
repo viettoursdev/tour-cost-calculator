@@ -51,6 +51,9 @@ export type CustomerInteraction = {
 
 export type Customer = {
   id: string;
+  /** UUID khoá chính trong DB (r.id). Dùng để xoá CHẮC CHẮN ngay cả khi `legacy_id`
+   *  (=`id`) bị null ở dữ liệu cũ — chỉ điền khi đã round-trip từ Supabase. */
+  dbId?: string;
   name: string;
   type: 'company' | 'individual';
   address?: string;   // địa chỉ

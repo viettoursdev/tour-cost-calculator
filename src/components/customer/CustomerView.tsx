@@ -114,7 +114,7 @@ export function CustomerView() {
 
   // Xoá ngay + toast Hoàn tác (thay hộp thoại xác nhận).
   const handleDeleteNow = (c: Customer) => {
-    void del(c.id);
+    void del(c);
     toast(`Đã xoá khách "${c.name}".`, 'info', { label: 'Hoàn tác', onClick: () => void save(c) });
   };
 
@@ -122,7 +122,7 @@ export function CustomerView() {
     if (!convertTarget) return;
     const moved = convertTarget.name;
     await nccSave(customerToNcc(convertTarget));
-    await del(convertTarget.id);
+    await del(convertTarget);
     setConvertTarget(null);
     toast(`✅ Đã chuyển "${moved}" sang danh sách Nhà cung cấp.`);
   };

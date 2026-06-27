@@ -51,6 +51,7 @@ export const sbGetDMCQuoteProject = vi.fn(async () => null);
 // ── Customers ──
 export const sbSubscribeCustomers = vi.fn(() => () => {});
 export const sbPushCustomers = vi.fn(async () => {});
+export const sbDeleteCustomers = vi.fn(async () => {});
 
 // ── NCC ──
 export const sbSubscribeNcc = vi.fn(() => () => {});
