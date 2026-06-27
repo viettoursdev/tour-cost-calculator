@@ -33,8 +33,6 @@ export type NewTourProfileInput = {
   priority?: 'high' | 'medium' | 'low';
   leadSource?: string;
   note?: string;
-  /** Khoá đồng bộ ngay khi tạo (giữ thông tin nhập tay, không bị báo giá chính ghi đè sau này). */
-  infoLocked?: boolean;
   primaryQuoteId?: string;
   collaborators?: Collaborator[];
 };
@@ -53,15 +51,17 @@ type State = {
   visibleProfiles: () => TourProfile[];
   /** Tạo hồ sơ mới — sinh mã atomic ở DB (fallback client nếu RPC lỗi). */
   create: (input: NewTourProfileInput) => Promise<TourProfile | null>;
-  save: (p: TourProfile) => Promise<void>;
+  /** Lưu hồ sơ (optimistic). Trả `true` nếu ghi DB thành công, `false` nếu thất bại
+   *  (RLS từ chối / mạng…) — khi thất bại đã tự revert state + đặt `error`. */
+  save: (p: TourProfile) => Promise<boolean>;
   remove: (id: string) => Promise<void>;
   setPrimaryQuote: (id: string, quoteId: string) => Promise<void>;
-  /** SỬA TAY thông tin cơ bản (tên/khách/điểm đến/ngày/số khách/ghi chú). Khi `lock`
-   *  = true (mặc định) đặt `infoLocked` → hồ sơ thành nguồn sự thật, không bị
-   *  `syncFromPrimary` ghi đè và được ưu tiên hiển thị. Bỏ `lock` để cho tự đồng bộ lại. */
-  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string; plannedContractValue?: number | null; plannedSettlementValue?: number | null }, lock?: boolean) => Promise<void>;
-  /** Đồng bộ NGƯỢC thông tin hiển thị (tên/khách/ngày/pax) từ báo giá chính vào hồ sơ
-   *  để báo cáo trực tiếp trên DB cũng đúng. Bỏ qua nếu không có gì đổi. */
+  /** SỬA TAY thông tin cơ bản (tên/khách/điểm đến/ngày/số khách/ghi chú) trên hồ sơ.
+   *  Giá trị nhập tay hiển thị ngay; nhưng khi LƯU báo giá chính, `syncFromPrimary`
+   *  sẽ ghi đè lại các trường tên/khách/ngày/pax theo báo giá. */
+  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string; plannedContractValue?: number | null; plannedSettlementValue?: number | null }) => Promise<void>;
+  /** Đồng bộ thông tin (tên/khách/ngày/pax) từ báo giá chính xuống hồ sơ khi lưu cloud
+   *  — GHI ĐÈ giá trị trên hồ sơ (chỉ giữ giá trị cũ khi báo giá để trống). */
   syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
   addCollaborator: (id: string, c: Collaborator) => Promise<void>;
   addFollower: (id: string, c: Collaborator) => Promise<void>;
@@ -143,7 +143,6 @@ export const useTourProfileStore = create<State>()(
         priority: input.priority,
         leadSource: input.leadSource,
         note: input.note,
-        infoLocked: input.infoLocked,
         primaryQuoteId: input.primaryQuoteId,
         status: 'open',
         collaborators: input.collaborators ?? [],
@@ -172,11 +171,13 @@ export const useTourProfileStore = create<State>()(
         updatedBy: u ? `${u.name} (${u.role})` : p.updatedBy,
       };
       const prev = get().profiles;
-      set({ profiles: prev.map((x) => (x.id === p.id ? next : x)) });
+      set({ profiles: prev.map((x) => (x.id === p.id ? next : x)), error: null });
       try {
         await sbUpsertTourProfile(next);
+        return true;
       } catch (e) {
         set({ profiles: prev, error: (e as Error).message });
+        return false;
       }
     },
 
@@ -197,7 +198,7 @@ export const useTourProfileStore = create<State>()(
       logAudit('update', 'Hồ sơ tour', p.code, 'Đổi báo giá chính');
     },
 
-    setBasicInfo: async (id, info, lock = true) => {
+    setBasicInfo: async (id, info) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
       const next: TourProfile = {
@@ -216,17 +217,19 @@ export const useTourProfileStore = create<State>()(
         note: info.note !== undefined ? (info.note.trim() || undefined) : p.note,
         plannedContractValue: info.plannedContractValue !== undefined ? (info.plannedContractValue || undefined) : p.plannedContractValue,
         plannedSettlementValue: info.plannedSettlementValue !== undefined ? (info.plannedSettlementValue || undefined) : p.plannedSettlementValue,
-        infoLocked: lock,
       };
-      await get().save(next);
-      logAudit('update', 'Hồ sơ tour', p.code, lock ? 'Sửa thông tin cơ bản (khoá đồng bộ)' : 'Sửa thông tin cơ bản (tự đồng bộ)');
+      const ok = await get().save(next);
+      // Ghi DB thất bại (thường do RLS từ chối khi không có quyền sửa) → báo lỗi cho
+      // người gọi để hiện thông báo, KHÔNG ghi audit "đã sửa" khi thực ra chưa lưu.
+      if (!ok) throw new Error(get().error || 'Không lưu được thông tin hồ sơ.');
+      logAudit('update', 'Hồ sơ tour', p.code, 'Sửa thông tin cơ bản');
     },
 
     syncFromPrimary: async (id, info) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
-      // Hồ sơ đã KHOÁ (người dùng sửa tay) → KHÔNG ghi đè từ báo giá chính.
-      if (p.infoLocked) return;
+      // Báo giá chính là nguồn → GHI ĐÈ thông tin cơ bản xuống hồ sơ khi báo giá có
+      // giá trị (chỉ giữ giá trị cũ của hồ sơ khi báo giá để trống → không xoá nhầm).
       const next: TourProfile = {
         ...p,
         name: info.name?.trim() || p.name,

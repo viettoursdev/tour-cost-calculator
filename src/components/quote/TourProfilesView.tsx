@@ -153,17 +153,15 @@ type ProfileValues = {
 };
 
 /**
- * Thông tin cơ bản HIỂN THỊ (khách/ngày/số khách/điểm đến). Khi hồ sơ đã KHOÁ
- * (`infoLocked` — người dùng sửa tay) thì ưu tiên giá trị trên HỒ SƠ; ngược lại
- * ưu tiên BÁO GIÁ CHÍNH (đồng bộ) rồi mới fallback hồ sơ. Dùng `||` để coi
- * 0 / '' là "chưa đặt" → fallback hợp lý.
+ * Thông tin cơ bản HIỂN THỊ (khách/ngày/số khách/điểm đến). HỒ SƠ là nguồn sự
+ * thật: luôn ưu tiên giá trị trên hồ sơ, chỉ fallback BÁO GIÁ CHÍNH khi hồ sơ
+ * còn trống. Dùng `||` để coi 0 / '' là "chưa đặt" → fallback hợp lý.
  */
 function displayBasics(p: TourProfile, primary?: CloudQuoteEntry): {
   custName?: string; departDate?: string | null; pax?: number; dest?: string;
 } {
-  const lock = !!p.infoLocked;
   const pick = <T,>(prof: T | undefined | null, prim: T | undefined | null): T | undefined =>
-    (lock ? (prof || prim) : (prim || prof)) || undefined;
+    (prof || prim) || undefined;
   return {
     custName: pick(p.customerName, primary?.customerName),
     departDate: pick(p.startDate ?? undefined, primary?.departDate),
@@ -484,7 +482,7 @@ export function TourProfilesView() {
     let list = visible().slice();
     if (!showArchived) list = list.filter((p) => p.status !== 'archived');
     // ── Bộ lọc đa chiều: khách / loại / quốc gia / giai đoạn ──
-    if (fltCustomer) list = list.filter((p) => (metaOf(p.id).primary?.customerName ?? p.customerName) === fltCustomer);
+    if (fltCustomer) list = list.filter((p) => displayBasics(p, metaOf(p.id).primary).custName === fltCustomer);
     if (fltCategory) list = list.filter((p) => tourCategoryOf(p) === fltCategory);
     if (fltCountry) list = list.filter((p) => (metaOf(p.id).country ?? '') === fltCountry);
     if (fltStage.length > 0) list = list.filter((p) => fltStage.includes(metaOf(p.id).stage));
@@ -530,7 +528,7 @@ export function TourProfilesView() {
     const tags = new Set<string>();
     const leadSources = new Set<string>();
     for (const p of all) {
-      const cn = metaOf(p.id).primary?.customerName ?? p.customerName;
+      const cn = displayBasics(p, metaOf(p.id).primary).custName;
       if (cn) customers.add(cn);
       const co = metaOf(p.id).country;
       if (co) countries.add(co);
@@ -585,7 +583,7 @@ export function TourProfilesView() {
       const mt = metaOf(p.id);
       let key: string, label: string;
       if (groupBy === 'customer') {
-        label = mt.primary?.customerName ?? p.customerName ?? '(Không có khách)'; key = label;
+        label = displayBasics(p, mt.primary).custName ?? '(Không có khách)'; key = label;
       } else if (groupBy === 'month') {
         const dd = displayBasics(p, mt.primary).departDate;
         if (dd) { const d = new Date(dd); key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; label = `Tháng ${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; }
@@ -984,11 +982,11 @@ export function TourProfilesView() {
             <DirectLinkPanel profile={p} />
             <DocumentHub profile={p} canEdit={canEdit} />
             {(() => {
-              const custName = metaOf(p.id).primary?.customerName ?? p.customerName ?? '';
+              const custName = displayBasics(p, metaOf(p.id).primary).custName ?? '';
               if (!custName) return null;
               const portRows: ProfilePortfolioRow[] = visible().map((x) => {
                 const m = metaOf(x.id);
-                return { id: x.id, code: x.code, name: x.name, customerName: m.primary?.customerName ?? x.customerName, stage: m.stage, value: m.values.current, profit: m.primary?.settlementSummary?.actualProfit };
+                return { id: x.id, code: x.code, name: x.name, customerName: displayBasics(x, m.primary).custName, stage: m.stage, value: m.values.current, profit: m.primary?.settlementSummary?.actualProfit };
               });
               return (
                 <CustomerPortfolioPanel
@@ -1015,7 +1013,10 @@ export function TourProfilesView() {
             profile={p}
             primary={metaOf(p.id).primary}
             onClose={() => setEditId(null)}
-            onSave={async (info, lock) => { await setBasicInfo(p.id, info, lock); setEditId(null); }}
+            onSave={async (info) => {
+              try { await setBasicInfo(p.id, info); setEditId(null); }
+              catch (e) { window.alert('❌ Không lưu được thay đổi: ' + (e as Error).message + '\n\nCó thể bạn không có quyền sửa hồ sơ này — chỉ người tạo, cộng tác viên, Trưởng/Phó Phòng cùng phòng hoặc Ban Giám Đốc/CEO mới sửa được. Hãy nhờ họ thêm bạn làm cộng tác.'); }
+            }}
           />
         )}
       </Box>
@@ -1290,8 +1291,6 @@ export function TourProfilesView() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreate={async (info) => {
-          // Nhập tay thông tin cơ bản → khoá đồng bộ để giữ giá trị khi sau này gắn báo giá chính.
-          const hasBasics = !!(info.customerName || info.dest || info.departRegion || info.startDate || info.pax || info.days || info.nights);
           const created = await createProfile({
             kind: categoryKind(info.category), category: info.category, name: info.name,
             customerId: info.customerId ?? undefined, customerName: info.customerName || undefined,
@@ -1299,7 +1298,7 @@ export function TourProfilesView() {
             startDate: info.startDate, pax: info.pax,
             days: info.days || undefined, nights: info.nights || undefined,
             priority: info.priority || undefined, leadSource: info.leadSource || undefined,
-            note: info.note || undefined, infoLocked: hasBasics || undefined,
+            note: info.note || undefined,
           });
           setCreateOpen(false);
           if (created) setExpanded((prev) => new Set(prev).add(created.id));
@@ -1373,7 +1372,10 @@ export function TourProfilesView() {
             profile={ep}
             primary={metaOf(ep.id).primary}
             onClose={() => setEditId(null)}
-            onSave={async (info, lock) => { await setBasicInfo(ep.id, info, lock); setEditId(null); }}
+            onSave={async (info) => {
+              try { await setBasicInfo(ep.id, info); setEditId(null); }
+              catch (e) { window.alert('❌ Không lưu được thay đổi: ' + (e as Error).message + '\n\nCó thể bạn không có quyền sửa hồ sơ này — chỉ người tạo, cộng tác viên, Trưởng/Phó Phòng cùng phòng hoặc Ban Giám Đốc/CEO mới sửa được. Hãy nhờ họ thêm bạn làm cộng tác.'); }
+            }}
           />
         );
       })()}
@@ -1752,7 +1754,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
   onClose: () => void;
-  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string; plannedContractValue: number | null; plannedSettlementValue: number | null }, lock: boolean) => Promise<void>;
+  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string; plannedContractValue: number | null; plannedSettlementValue: number | null }) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
   const showPrice = canSeePrices(useAuthStore((s) => s.currentUser));
@@ -1773,7 +1775,6 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const [plannedContract, setPlannedContract] = useState<string>(profile.plannedContractValue ? String(profile.plannedContractValue) : '');
   const [plannedSettlement, setPlannedSettlement] = useState<string>(profile.plannedSettlementValue ? String(profile.plannedSettlementValue) : '');
   const [note, setNote] = useState(profile.note ?? '');
-  const [lock, setLock] = useState(profile.infoLocked ?? true);
   const [busy, setBusy] = useState(false);
   const hasPrimary = !!primary;
   // Cảnh báo lệch số ngày giữa hồ sơ (đang nhập) và báo giá chính.
@@ -1781,23 +1782,11 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const dayMismatch = hasPrimary && primary?.days && localDays && localDays !== primary.days
     ? { profileDays: localDays, quoteDays: primary.days } : null;
 
-  // Giá trị ĐỒNG BỘ ban đầu (theo báo giá chính). Nếu người dùng sửa tay bất kỳ
-  // trường nào trong số này thì PHẢI tự khoá, nếu không displayBasics sẽ lấy lại
-  // giá trị báo giá chính đè lên → "sửa xong không đổi".
-  const syncedDirty =
-    customerName.trim() !== (b.custName ?? '') ||
-    dest.trim() !== (b.dest ?? '') ||
-    startDate !== (b.departDate ? b.departDate.slice(0, 10) : '') ||
-    pax !== (b.pax ? String(b.pax) : '');
-
   const submit = async () => {
     setBusy(true);
-    // Sửa tay trường đồng bộ → tự khoá để giá trị sửa tay được giữ & hiển thị.
-    const effectiveLock = lock || syncedDirty;
     try {
       await onSave(
         { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, priority, leadSource, note, plannedContractValue: plannedContract ? Number(plannedContract) : null, plannedSettlementValue: plannedSettlement ? Number(plannedSettlement) : null },
-        effectiveLock,
       );
     } finally { setBusy(false); }
   };
@@ -1848,18 +1837,9 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
             </Box>
           )}
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
-          <FormControlLabel
-            control={<Switch size="small" checked={lock} onChange={(e) => setLock(e.target.checked)} />}
-            label={<Typography variant="caption">Khoá thông tin — ưu tiên giá trị này, không tự đồng bộ lại từ báo giá chính</Typography>}
-          />
-          {hasPrimary && !lock && syncedDirty && (
-            <Typography variant="caption" sx={{ color: 'warning.main' }}>
-              Bạn đã sửa tay thông tin khách / ngày / số khách → hồ sơ sẽ TỰ KHOÁ để giữ giá trị này (không bị báo giá chính ghi đè).
-            </Typography>
-          )}
-          {hasPrimary && !lock && !syncedDirty && (
+          {hasPrimary && (
             <Typography variant="caption" color="text.secondary">
-              Khi KHÔNG khoá, thông tin khách / ngày / số khách sẽ tiếp tục đồng bộ theo báo giá chính mỗi lần lưu báo giá.
+              Thông tin trên hồ sơ được ưu tiên hiển thị. Ô để trống sẽ tự lấy theo báo giá chính.
             </Typography>
           )}
         </Stack>
@@ -1898,7 +1878,6 @@ function QuickViewDialog({ profile, meta, quoteCount, showPrice, onClose, onOpen
           <Chip size="small" label={`${cm.icon} ${cm.short}`} sx={{ height: 20, bgcolor: `${cm.color}1a`, color: cm.color, fontWeight: 700 }} />
           <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
           {timing && <Chip size="small" label={timing.label} sx={{ height: 20, bgcolor: `${timing.color}1a`, color: timing.color, fontWeight: 700 }} />}
-          {profile.infoLocked && <Tooltip title="Thông tin cơ bản đã khoá (sửa tay)"><LockOutlinedIcon sx={{ fontSize: 15, color: '#6b7280' }} /></Tooltip>}
         </Stack>
         <Typography fontWeight={800} fontSize={15} sx={{ mt: 0.75 }}>{profile.name || '(chưa đặt tên)'}</Typography>
       </DialogTitle>
@@ -2416,11 +2395,6 @@ function ProfileRow({
             {archived && (
               <Chip size="small" label="Lưu trữ" icon={<ArchiveOutlinedIcon sx={{ fontSize: 13 }} />}
                 sx={{ height: 20, bgcolor: 'rgba(100,116,139,0.14)', color: '#475569', fontWeight: 700, '& .MuiChip-icon': { color: '#475569' } }} />
-            )}
-            {profile.infoLocked && (
-              <Tooltip title="Thông tin cơ bản đã khoá (sửa tay) — không tự đồng bộ từ báo giá">
-                <LockOutlinedIcon sx={{ fontSize: 14, color: '#6b7280' }} />
-              </Tooltip>
             )}
             <RiskChip risks={risks} />
             {countdown && (

@@ -62,10 +62,11 @@ export function DealCockpit() {
     () => (cid ? contracts.find((c) => c.linkedQuoteId === cid) : undefined),
     [contracts, cid],
   );
-  // Khách hàng: ưu tiên customerId trên báo giá, fallback hồ sơ tour đã gắn KH.
+  // Khách hàng: HỒ SƠ là nguồn sự thật → ưu tiên khách gắn trên hồ sơ tour, chỉ
+  // fallback báo giá khi hồ sơ chưa gắn (để khách vừa sửa hiện đúng, không bị che).
   const profile = useTourProfileStore((s) => (tpId ? s.profiles.find((p) => p.id === tpId) : undefined));
   const customer = useMemo(() => {
-    const id = draft.customerId || profile?.customerId;
+    const id = profile?.customerId || draft.customerId;
     return id ? customers.find((c) => c.id === id) : undefined;
   }, [customers, draft.customerId, profile?.customerId]);
   // Liên kết theo HỒ SƠ (đọc kép: ưu tiên tourProfileId, fallback linkedQuoteId của báo giá).
@@ -313,7 +314,7 @@ export function DealCockpit() {
             </>
           ) : (
             <Typography variant="body2" color="text.secondary">
-              {draft.customerName || profile?.customerName || 'Chưa gắn khách hàng'}
+              {profile?.customerName || draft.customerName || 'Chưa gắn khách hàng'}
             </Typography>
           )}
         </CockpitCard>

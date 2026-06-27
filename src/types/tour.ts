@@ -95,12 +95,6 @@ export type TourProfile = {
    * liệu quyết toán thật thì giá trị thật được ưu tiên.
    */
   plannedSettlementValue?: number;
-  /**
-   * KHOÁ thông tin cơ bản: khi người dùng SỬA TAY (tên/khách/ngày/số khách/điểm đến)
-   * thì đặt `true` → hồ sơ trở thành nguồn sự thật, KHÔNG bị `syncFromPrimary` ghi đè
-   * và được ƯU TIÊN hiển thị hơn báo giá chính. Bỏ tích để cho tự đồng bộ trở lại.
-   */
-  infoLocked?: boolean;
   /** cloudId của BÁO GIÁ CHÍNH → Cockpit suy giai đoạn/tổng từ đây. */
   primaryQuoteId?: string;
   status: TourProfileStatus;
