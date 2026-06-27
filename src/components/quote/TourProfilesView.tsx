@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import {
-  Autocomplete, Avatar, AvatarGroup, Box, Button, Checkbox, Chip, Collapse, createFilterOptions, Dialog, DialogActions,
-  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
+  Autocomplete, Avatar, AvatarGroup, Badge, Box, Button, Checkbox, Chip, Collapse, createFilterOptions, Dialog, DialogActions,
+  DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Menu, MenuItem, Paper, Stack, Switch,
   Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -50,6 +50,7 @@ import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
 import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -107,6 +108,31 @@ const countdownLabel = (m: Milestone): string => {
   if (m.daysTo < 0) return `Quá ${-m.daysTo} ngày`;
   if (m.daysTo === 0) return 'Hôm nay';
   return `Còn ${m.daysTo} ngày`;
+};
+
+/** Đếm ngược ngày khởi hành — nhãn + màu theo độ gấp (null nếu không có ngày). */
+function departureCountdown(departDate?: string | null): { label: string; color: string } | null {
+  if (!departDate) return null;
+  const d = new Date(departDate);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+    - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86_400_000);
+  if (days < 0) return { label: `Đã đi ${-days} ngày`, color: '#94a3b8' };
+  if (days === 0) return { label: 'Khởi hành hôm nay', color: '#dc2626' };
+  if (days <= 7) return { label: `Còn ${days} ngày`, color: '#dc2626' };
+  if (days <= 30) return { label: `Còn ${days} ngày`, color: '#d97706' };
+  return { label: `Còn ${days} ngày`, color: '#2563eb' };
+}
+
+/** Gợi ý "hành động kế tiếp" theo giai đoạn deal (null = không còn việc bắt buộc). */
+const NEXT_ACTION: Partial<Record<DealStage, { label: string; color: string }>> = {
+  request: { label: 'Gửi báo giá cho khách', color: '#2563eb' },
+  quoting: { label: 'Chốt deal / theo khách', color: '#7c3aed' },
+  won: { label: 'Soạn & ký hợp đồng', color: '#0d7a6a' },
+  contract: { label: 'Phân công vận hành', color: '#d97706' },
+  operating: { label: 'Cập nhật quyết toán', color: '#16a34a' },
+  acceptance: { label: 'Đối soát & đóng hồ sơ', color: '#334155' },
 };
 
 /** Nhãn + màu cho hành động trong dòng thời gian (audit log). */
@@ -187,6 +213,29 @@ const SORT_LABEL: Record<SortKey, string> = {
   created: 'Mới tạo', depart: 'Ngày khởi hành', value: 'Giá trị', stage: 'Giai đoạn', name: 'Tên / mã',
 };
 
+/** Khoá nhóm danh sách. */
+type GroupKey = 'none' | 'customer' | 'month' | 'stage';
+const GROUP_LABEL: Record<GroupKey, string> = {
+  none: 'Không nhóm', customer: 'Theo khách', month: 'Theo tháng KH', stage: 'Theo giai đoạn',
+};
+
+/** Cột tuỳ biến được trong chế độ Bảng (code/tên/thao tác luôn hiện). */
+type TableColKey = 'category' | 'stage' | 'customer' | 'depart' | 'countdown' | 'pax' | 'value' | 'progress';
+const TABLE_COL_LABEL: Record<TableColKey, string> = {
+  category: 'Loại', stage: 'Giai đoạn', customer: 'Khách', depart: 'Khởi hành',
+  countdown: 'Đếm ngược', pax: 'Số khách', value: 'Giá trị', progress: 'Hoàn thiện',
+};
+const ALL_TABLE_COLS: TableColKey[] = ['category', 'stage', 'customer', 'depart', 'countdown', 'pax', 'value', 'progress'];
+const tableColsKey = (u: string) => `vte_tourprofile_cols_${u}`;
+const loadTableCols = (u?: string): Set<TableColKey> => {
+  if (!u) return new Set(ALL_TABLE_COLS);
+  try {
+    const raw = localStorage.getItem(tableColsKey(u));
+    if (!raw) return new Set(ALL_TABLE_COLS);
+    return new Set(JSON.parse(raw) as TableColKey[]);
+  } catch { return new Set(ALL_TABLE_COLS); }
+};
+
 /** Một bộ lọc đã lưu (preset). */
 type SavedView = {
   name: string;
@@ -241,6 +290,7 @@ export function TourProfilesView() {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [showDash, setShowDash] = useState(false);
+  const [showAttention, setShowAttention] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [fltCustomer, setFltCustomer] = useState<string>('');
@@ -255,6 +305,10 @@ export function TourProfilesView() {
   const [pinned, setPinned] = useState<Set<string>>(() => loadPins(currentUser?.u));
   const [sortBy, setSortBy] = useState<SortKey>('created');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [groupBy, setGroupBy] = useState<GroupKey>('none');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [tableCols, setTableCols] = useState<Set<TableColKey>>(() => loadTableCols(currentUser?.u));
+  const [colMenuAnchor, setColMenuAnchor] = useState<HTMLElement | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadViews(currentUser?.u));
   const [createOpen, setCreateOpen] = useState(false);
@@ -416,6 +470,52 @@ export function TourProfilesView() {
     const margin = marginSummary(rows.map((p) => metaOf(p.id).primary?.settlementSummary));
     return { total: rows.length, open, archived, won, lost, byStage, value, remaining, profit, profitN, margin, winRate: decided ? Math.round((won / decided) * 100) : null };
   }, [rows, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── "Cần chú ý": gom cảnh báo (mốc quá hạn / công nợ / giấy tờ…) từ tourProfileRisks ──
+  const attentionItems = useMemo(() => {
+    const items: { profile: TourProfile; risk: TourRisk }[] = [];
+    for (const p of rows) {
+      if (p.status === 'archived') continue;
+      const mt = metaOf(p.id);
+      for (const risk of tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract })) {
+        items.push({ profile: p, risk });
+      }
+    }
+    const rank: Record<TourRiskLevel, number> = { urgent: 0, warn: 1 };
+    items.sort((a, b) => rank[a.risk.level] - rank[b.risk.level]);
+    return items;
+  }, [rows, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Nhóm danh sách (chế độ thẻ): theo khách / tháng khởi hành / giai đoạn ──
+  const groupedRows = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const groups = new Map<string, { key: string; label: string; items: TourProfile[]; total: number }>();
+    for (const p of rows) {
+      const mt = metaOf(p.id);
+      let key: string, label: string;
+      if (groupBy === 'customer') {
+        label = mt.primary?.customerName ?? p.customerName ?? '(Không có khách)'; key = label;
+      } else if (groupBy === 'month') {
+        const dd = displayBasics(p, mt.primary).departDate;
+        if (dd) { const d = new Date(dd); key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; label = `Tháng ${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; }
+        else { key = 'zzz-none'; label = '(Chưa có ngày khởi hành)'; }
+      } else { // stage
+        key = mt.stage; label = STAGE_META(mt.stage).short;
+      }
+      const g = groups.get(key) ?? { key, label, items: [], total: 0 };
+      g.items.push(p);
+      g.total += mt.values.current ?? 0;
+      groups.set(key, g);
+    }
+    return [...groups.values()].sort((a, b) => (groupBy === 'month' ? a.key.localeCompare(b.key) : b.items.length - a.items.length));
+  }, [rows, groupBy, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleGroupCollapse = (key: string) => setCollapsedGroups((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const toggleTableCol = (c: TableColKey) => setTableCols((prev) => {
+    const n = new Set(prev); if (n.has(c)) n.delete(c); else n.add(c);
+    if (currentUser) { try { localStorage.setItem(tableColsKey(currentUser.u), JSON.stringify([...n])); } catch { /* ignore */ } }
+    return n;
+  });
 
   // Yêu cầu xuất của TÔI (nếu đang chờ/được duyệt) + các yêu cầu đang chờ duyệt.
   const myExportReq = useMemo(
@@ -656,6 +756,42 @@ export function TourProfilesView() {
     setCloseState({ profile: p, items });
   };
 
+  // Render 1 thẻ hồ sơ — tách ra để dùng chung cho danh sách phẳng & danh sách theo nhóm.
+  const renderProfileRow = (p: TourProfile) => {
+    const mt = metaOf(p.id);
+    return (
+      <ProfileRow
+        key={p.id}
+        profile={p}
+        stage={mt.stage}
+        primary={mt.primary}
+        guideCount={mt.guide}
+        quotes={quotesByProfile.get(p.id) ?? []}
+        links={mt.links}
+        values={mt.values}
+        risks={tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract })}
+        expanded={expanded.has(p.id)}
+        compact={density === 'compact'}
+        pinned={pinned.has(p.id)}
+        showPrice={showPrice}
+        currentUser={currentUser}
+        users={users}
+        onToggle={() => toggle(p.id)}
+        onTogglePin={() => togglePin(p.id)}
+        onEdit={() => setEditId(p.id)}
+        onQuickView={() => setQuickId(p.id)}
+        onOpenProfile={() => void openProfile(p)}
+        onOpenQuote={(cid) => void openQuote(cid, false)}
+        onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
+        onArchive={(on) => handleArchive(p, on)}
+        onDelete={() => (deleteNeedsApproval(currentUser) ? setRequestDeleteState(p) : setDeleteState(p))}
+        onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
+        onApproveDelete={() => void approveDelete(p.id)}
+        onRejectDelete={() => void rejectDelete(p.id)}
+      />
+    );
+  };
+
   // Deep-link từ Global Search / Trợ lý: mở đúng hồ sơ khi vào tab.
   const consumeFocus = useTourProfileStore((s) => s.consumeFocus);
   useEffect(() => {
@@ -794,7 +930,11 @@ export function TourProfilesView() {
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1200, mx: 'auto' }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5}
+        sx={{ mb: 2, position: 'sticky', top: 0, zIndex: 3, py: 1, bgcolor: 'background.default',
+          borderBottom: '1px solid', borderColor: 'divider',
+          // kéo rộng ra mép vùng cuộn để nền che hết khi dính
+          mx: { xs: -1.5, sm: -3 }, px: { xs: 1.5, sm: 3 } }}>
         <Box>
           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
             <Typography fontWeight={900} fontSize={16}>🧭 Hồ sơ tour</Typography>
@@ -829,11 +969,22 @@ export function TourProfilesView() {
               <SwapVertIcon sx={{ transform: sortDir === 'asc' ? 'scaleY(-1)' : 'none' }} />
             </IconButton>
           </Tooltip>
+          {layout === 'card' && (
+            <TextField select size="small" value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)}
+              SelectProps={{ native: true }} sx={{ minWidth: 130 }} aria-label="Nhóm">
+              {(Object.keys(GROUP_LABEL) as GroupKey[]).map((k) => <option key={k} value={k}>{GROUP_LABEL[k]}</option>)}
+            </TextField>
+          )}
           <Tooltip title={layout === 'table' ? 'Xem dạng thẻ' : 'Xem dạng bảng'}>
             <IconButton size="small" color={layout === 'table' ? 'primary' : 'default'} onClick={toggleLayout}>
               {layout === 'table' ? <ViewAgendaOutlinedIcon /> : <TableRowsIcon />}
             </IconButton>
           </Tooltip>
+          {layout === 'table' && (
+            <Tooltip title="Tuỳ biến cột">
+              <IconButton size="small" onClick={(e) => setColMenuAnchor(e.currentTarget)}><ViewColumnIcon /></IconButton>
+            </Tooltip>
+          )}
           {layout === 'card' && (
             <Tooltip title={density === 'compact' ? 'Xem đầy đủ' : 'Xem rút gọn'}>
               <IconButton size="small" color={density === 'compact' ? 'primary' : 'default'} onClick={toggleDensity}>
@@ -843,6 +994,16 @@ export function TourProfilesView() {
           )}
           <Tooltip title="Lịch khởi hành">
             <IconButton size="small" color={showCalendar ? 'primary' : 'default'} onClick={() => setShowCalendar((v) => !v)}><CalendarMonthIcon /></IconButton>
+          </Tooltip>
+          <Tooltip title={attentionItems.length > 0 ? `Cần chú ý (${attentionItems.length})` : 'Không có cảnh báo'}>
+            <span>
+              <IconButton size="small" color={showAttention ? 'primary' : attentionItems.length > 0 ? 'warning' : 'default'}
+                onClick={() => setShowAttention((v) => !v)} disabled={attentionItems.length === 0}>
+                <Badge badgeContent={attentionItems.length} color="error" max={99}>
+                  <ReportProblemOutlinedIcon />
+                </Badge>
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title="Tổng quan điều hành">
             <IconButton size="small" color={showDash ? 'primary' : 'default'} onClick={() => setShowDash((v) => !v)}><BarChartIcon /></IconButton>
@@ -926,6 +1087,10 @@ export function TourProfilesView() {
         />
       </Collapse>
 
+      <Collapse in={showAttention && attentionItems.length > 0} unmountOnExit>
+        <AttentionPanel items={attentionItems} metaOf={metaOf} onOpen={(p) => void openProfile(p)} />
+      </Collapse>
+
       {showDash && <DashboardPanel summary={summary} showPrice={showPrice} />}
 
       {showCalendar ? (
@@ -969,7 +1134,7 @@ export function TourProfilesView() {
           )}
           <ProfileTable
             rows={rows} metaOf={metaOf} quotesByProfile={quotesByProfile} showPrice={showPrice}
-            pinned={pinned} selected={selected}
+            cols={tableCols} pinned={pinned} selected={selected}
             onToggleSelect={toggleSelect}
             onToggleAll={(on) => setSelected(on ? new Set(rows.map((p) => p.id)) : new Set())}
             onTogglePin={togglePin}
@@ -977,44 +1142,40 @@ export function TourProfilesView() {
             onOpenProfile={(p) => void openProfile(p)}
           />
         </>
-      ) : (
-        <Stack spacing={1.25}>
-          {rows.map((p) => {
-            const mt = metaOf(p.id);
+      ) : groupedRows ? (
+        <Stack spacing={1.5}>
+          {groupedRows.map((g) => {
+            const collapsed = collapsedGroups.has(g.key);
             return (
-              <ProfileRow
-                key={p.id}
-                profile={p}
-                stage={mt.stage}
-                primary={mt.primary}
-                guideCount={mt.guide}
-                quotes={quotesByProfile.get(p.id) ?? []}
-                links={mt.links}
-                values={mt.values}
-                risks={tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract })}
-                expanded={expanded.has(p.id)}
-                compact={density === 'compact'}
-                pinned={pinned.has(p.id)}
-                showPrice={showPrice}
-                currentUser={currentUser}
-                users={users}
-                onToggle={() => toggle(p.id)}
-                onTogglePin={() => togglePin(p.id)}
-                onEdit={() => setEditId(p.id)}
-                onQuickView={() => setQuickId(p.id)}
-                onOpenProfile={() => void openProfile(p)}
-                onOpenQuote={(cid) => void openQuote(cid, false)}
-                onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
-                onArchive={(on) => handleArchive(p, on)}
-                onDelete={() => (deleteNeedsApproval(currentUser) ? setRequestDeleteState(p) : setDeleteState(p))}
-                onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
-                onApproveDelete={() => void approveDelete(p.id)}
-                onRejectDelete={() => void rejectDelete(p.id)}
-              />
+              <Box key={g.key}>
+                <Stack direction="row" spacing={1} alignItems="center"
+                  onClick={() => toggleGroupCollapse(g.key)}
+                  sx={{ cursor: 'pointer', px: 1, py: 0.75, borderRadius: 1.5, bgcolor: 'rgba(13,122,106,0.07)', mb: collapsed ? 0 : 1 }}>
+                  <IconButton size="small" sx={{ p: 0 }}>{collapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}</IconButton>
+                  <Typography fontWeight={800} fontSize={13.5} sx={{ flex: 1, minWidth: 0 }} noWrap>{g.label}</Typography>
+                  <Chip size="small" label={`${g.items.length} hồ sơ`} sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(13,122,106,0.12)', color: '#0d7a6a' }} />
+                  {showPrice && g.total > 0 && <Chip size="small" label={fmtVND(g.total)} sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(37,99,235,0.1)', color: '#2563eb' }} />}
+                </Stack>
+                <Collapse in={!collapsed} unmountOnExit>
+                  <Stack spacing={1.25}>{g.items.map(renderProfileRow)}</Stack>
+                </Collapse>
+              </Box>
             );
           })}
         </Stack>
+      ) : (
+        <Stack spacing={1.25}>{rows.map(renderProfileRow)}</Stack>
       )}
+
+      <Menu anchorEl={colMenuAnchor} open={!!colMenuAnchor} onClose={() => setColMenuAnchor(null)}>
+        <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ px: 2, py: 0.5, display: 'block' }}>Hiện cột</Typography>
+        {ALL_TABLE_COLS.map((c) => (
+          <MenuItem key={c} dense onClick={() => toggleTableCol(c)}>
+            <Checkbox size="small" checked={tableCols.has(c)} sx={{ p: 0.5, mr: 1 }} />
+            {TABLE_COL_LABEL[c]}
+          </MenuItem>
+        ))}
+      </Menu>
 
       <ExportOptionsDialog
         open={exportOpen}
@@ -1791,6 +1952,42 @@ type Summary = {
 const pct1 = (n: number) => `${n.toFixed(1)}%`;
 
 /** Bảng tổng quan điều hành theo các hồ sơ đang hiển thị. */
+/** Bảng "Cần chú ý" — digest cảnh báo toàn danh sách, bấm nhảy tới hồ sơ. */
+function AttentionPanel({ items, metaOf, onOpen }: {
+  items: { profile: TourProfile; risk: TourRisk }[];
+  metaOf: (id: string) => ProfileMeta;
+  onOpen: (p: TourProfile) => void;
+}) {
+  const urgent = items.filter((i) => i.risk.level === 'urgent').length;
+  return (
+    <Paper variant="outlined" sx={{ p: 1.25, mb: 1.5, borderColor: 'rgba(217,119,6,0.4)', bgcolor: 'rgba(217,119,6,0.05)' }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+        <ReportProblemOutlinedIcon sx={{ fontSize: 18, color: '#d97706' }} />
+        <Typography variant="subtitle2" fontWeight={800}>Cần chú ý ({items.length})</Typography>
+        {urgent > 0 && <Chip size="small" label={`${urgent} khẩn`} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(220,38,38,0.12)', color: '#dc2626' }} />}
+      </Stack>
+      <Stack spacing={0.5} sx={{ maxHeight: 280, overflowY: 'auto' }}>
+        {items.map(({ profile, risk }) => {
+          const cm = categoryMeta(tourCategoryOf(profile));
+          const b = displayBasics(profile, metaOf(profile.id).primary);
+          const c = RISK_COLOR[risk.level];
+          return (
+            <Stack key={profile.id + risk.key} direction="row" spacing={1} alignItems="center"
+              sx={{ p: 0.75, borderRadius: 1.5, bgcolor: '#fff', border: '1px solid rgba(15,58,74,0.08)' }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c, flexShrink: 0 }} />
+              <Chip size="small" label={profile.code} sx={{ height: 19, fontWeight: 700, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
+              <Typography fontSize={13} fontWeight={600} noWrap sx={{ maxWidth: { xs: 110, sm: 200 } }}>{profile.name || cm.short}</Typography>
+              <Typography variant="caption" sx={{ flex: 1, minWidth: 0, color: c, fontWeight: 700 }} noWrap>⚠ {risk.label}</Typography>
+              {b.custName && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: { xs: 'none', md: 'block' } }}>{b.custName}</Typography>}
+              <Button size="small" onClick={() => onOpen(profile)} sx={{ minWidth: 0, flexShrink: 0 }}>Mở</Button>
+            </Stack>
+          );
+        })}
+      </Stack>
+    </Paper>
+  );
+}
+
 function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: boolean }) {
   const cards: { label: string; value: string; color?: string }[] = [
     { label: 'Tổng hồ sơ', value: String(summary.total) },
@@ -1860,6 +2057,8 @@ function ProfileRow({
     settled: !!primary?.settlementSummary,
     nccPaid: !!pay && pay.remaining <= 0,
   });
+  const countdown = archived ? null : departureCountdown(departDate);
+  const nextAct = archived ? undefined : NEXT_ACTION[stage];
 
   return (
     <Paper
@@ -1896,6 +2095,10 @@ function ProfileRow({
               </Tooltip>
             )}
             <RiskChip risks={risks} />
+            {countdown && (
+              <Chip size="small" label={countdown.label} icon={<FlightTakeoffIcon sx={{ fontSize: 13 }} />}
+                sx={{ height: 20, fontWeight: 700, bgcolor: `${countdown.color}1a`, color: countdown.color, '& .MuiChip-icon': { color: countdown.color } }} />
+            )}
             {(profile.tags ?? []).map((t) => (
               <Chip key={t} size="small" label={`# ${t}`} variant="outlined" sx={{ height: 20, borderColor: '#7c3aed', color: '#7c3aed' }} />
             ))}
@@ -1919,6 +2122,13 @@ function ProfileRow({
             </Box>
             <ProfileProgress steps={progressSteps} compact={compact} />
           </Stack>
+          {nextAct && !compact && (
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.6 }}>
+              <FlagOutlinedIcon sx={{ fontSize: 14, color: nextAct.color }} />
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>Việc kế tiếp:</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: nextAct.color }}>{nextAct.label}</Typography>
+            </Stack>
+          )}
           {!compact && (
             <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} alignItems="center" flexWrap="wrap" useFlexGap>
               <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
@@ -2060,15 +2270,43 @@ function ProfileRow({
 /** Hình dạng meta gom theo hồ sơ (dùng cho bảng). */
 type ProfileMeta = { primary?: CloudQuoteEntry; stage: DealStage; links: ProfileLinks; guide: number; values: ProfileValues; country?: string };
 
+/** Quick-peek: tooltip xem nhanh thông tin hồ sơ khi rê chuột (không cần mở). */
+function PeekTooltip({ profile, mt, showPrice, children }: {
+  profile: TourProfile; mt: ProfileMeta; showPrice: boolean; children: ReactElement;
+}) {
+  const b = displayBasics(profile, mt.primary);
+  const row = (k: string, v: string) => (
+    <Stack direction="row" justifyContent="space-between" spacing={2}>
+      <Typography variant="caption" sx={{ opacity: 0.7 }}>{k}</Typography>
+      <Typography variant="caption" fontWeight={700}>{v}</Typography>
+    </Stack>
+  );
+  return (
+    <Tooltip arrow placement="right" title={
+      <Box sx={{ minWidth: 180 }}>
+        <Typography variant="caption" fontWeight={800} sx={{ display: 'block', mb: 0.5 }}>{profile.name || profile.code}</Typography>
+        {row('Khách', b.custName || '—')}
+        {row('Khởi hành', b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—')}
+        {row('Số khách', b.pax ? String(b.pax) : '—')}
+        {row('Giai đoạn', STAGE_META(mt.stage).short)}
+        {showPrice && typeof mt.values.current === 'number' && row('Giá trị', fmtVND(mt.values.current))}
+      </Box>
+    }>
+      {children}
+    </Tooltip>
+  );
+}
+
 /** Chế độ BẢNG — dày đặc, chọn nhiều, sắp xếp ở thanh công cụ. */
 function ProfileTable({
-  rows, metaOf, quotesByProfile, showPrice, pinned, selected,
+  rows, metaOf, quotesByProfile, showPrice, cols, pinned, selected,
   onToggleSelect, onToggleAll, onTogglePin, onQuickView, onOpenProfile,
 }: {
   rows: TourProfile[];
   metaOf: (id: string) => ProfileMeta;
   quotesByProfile: Map<string, CloudQuoteEntry[]>;
   showPrice: boolean;
+  cols: Set<TableColKey>;
   pinned: Set<string>;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -2079,6 +2317,7 @@ function ProfileTable({
 }) {
   const allSel = rows.length > 0 && rows.every((p) => selected.has(p.id));
   const someSel = selected.size > 0 && !allSel;
+  const has = (c: TableColKey) => cols.has(c);
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
       <Table size="small" sx={{ '& td, & th': { whiteSpace: 'nowrap' } }}>
@@ -2090,13 +2329,14 @@ function ProfileTable({
             <TableCell padding="checkbox" />
             <TableCell>Mã</TableCell>
             <TableCell>Tên tour</TableCell>
-            <TableCell>Loại</TableCell>
-            <TableCell>Giai đoạn</TableCell>
-            <TableCell>Khách</TableCell>
-            <TableCell>Khởi hành</TableCell>
-            <TableCell align="right">Khách</TableCell>
-            {showPrice && <TableCell align="right">Giá trị hiện tại</TableCell>}
-            <TableCell sx={{ minWidth: 130 }}>Hoàn thiện</TableCell>
+            {has('category') && <TableCell>Loại</TableCell>}
+            {has('stage') && <TableCell>Giai đoạn</TableCell>}
+            {has('customer') && <TableCell>Khách</TableCell>}
+            {has('depart') && <TableCell>Khởi hành</TableCell>}
+            {has('countdown') && <TableCell>Đếm ngược</TableCell>}
+            {has('pax') && <TableCell align="right">Số khách</TableCell>}
+            {has('value') && showPrice && <TableCell align="right">Giá trị hiện tại</TableCell>}
+            {has('progress') && <TableCell sx={{ minWidth: 130 }}>Hoàn thiện</TableCell>}
             <TableCell align="right" />
           </TableRow>
         </TableHead>
@@ -2107,6 +2347,7 @@ function ProfileTable({
             const cm = categoryMeta(tourCategoryOf(p));
             const b = displayBasics(p, mt.primary);
             const pay = mt.primary?.paymentSummary;
+            const cd = p.status === 'archived' ? null : departureCountdown(b.departDate);
             const progress = profileProgressSteps({
               hasQuote: (quotesByProfile.get(p.id) ?? []).length > 0,
               contractCount: mt.links.contract, guideCount: mt.guide,
@@ -2125,15 +2366,18 @@ function ProfileTable({
                 </TableCell>
                 <TableCell><Chip size="small" label={p.code} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} /></TableCell>
                 <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <Typography fontSize={13} fontWeight={600} noWrap>{p.name || '(chưa đặt tên)'}</Typography>
+                  <PeekTooltip profile={p} mt={mt} showPrice={showPrice}>
+                    <Typography fontSize={13} fontWeight={600} noWrap sx={{ cursor: 'help' }}>{p.name || '(chưa đặt tên)'}</Typography>
+                  </PeekTooltip>
                 </TableCell>
-                <TableCell><Tooltip title={cm.label}><span>{cm.icon} {cm.short}</span></Tooltip></TableCell>
-                <TableCell><Chip size="small" label={sm.short} sx={{ height: 20, fontWeight: 700, bgcolor: `${sm.color}1a`, color: sm.color }} /></TableCell>
-                <TableCell sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.custName || '—'}</TableCell>
-                <TableCell>{b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—'}</TableCell>
-                <TableCell align="right">{b.pax || '—'}</TableCell>
-                {showPrice && <TableCell align="right">{typeof mt.values.current === 'number' ? fmtVND(mt.values.current) : '—'}</TableCell>}
-                <TableCell><ProfileProgress steps={progress} compact /></TableCell>
+                {has('category') && <TableCell><Tooltip title={cm.label}><span>{cm.icon} {cm.short}</span></Tooltip></TableCell>}
+                {has('stage') && <TableCell><Chip size="small" label={sm.short} sx={{ height: 20, fontWeight: 700, bgcolor: `${sm.color}1a`, color: sm.color }} /></TableCell>}
+                {has('customer') && <TableCell sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.custName || '—'}</TableCell>}
+                {has('depart') && <TableCell>{b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—'}</TableCell>}
+                {has('countdown') && <TableCell>{cd ? <Typography component="span" fontSize={12} fontWeight={700} sx={{ color: cd.color }}>{cd.label}</Typography> : '—'}</TableCell>}
+                {has('pax') && <TableCell align="right">{b.pax || '—'}</TableCell>}
+                {has('value') && showPrice && <TableCell align="right">{typeof mt.values.current === 'number' ? fmtVND(mt.values.current) : '—'}</TableCell>}
+                {has('progress') && <TableCell><ProfileProgress steps={progress} compact /></TableCell>}
                 <TableCell align="right">
                   <Tooltip title="Xem nhanh"><IconButton size="small" onClick={() => onQuickView(p.id)}><VisibilityIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
                   <Tooltip title="Mở hồ sơ"><IconButton size="small" onClick={() => onOpenProfile(p)}><OpenInNewIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
