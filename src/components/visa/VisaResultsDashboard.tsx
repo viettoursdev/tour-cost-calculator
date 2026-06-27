@@ -12,6 +12,7 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { APPLICANT_RESULT_META } from './constants';
 import { visibleVisaProjects } from './visaAccess';
 import { VisaAdvancedStats } from './VisaAdvancedStats';
+import { VisaRiskPanel } from './VisaRiskPanel';
 import { matchesGuestQuery } from './applicantMatch';
 import { normalizeVN } from '@/lib/search';
 import type { VisaApplicant, VisaProjectDoc } from '@/types';
@@ -152,6 +153,9 @@ export function VisaResultsDashboard({ onOpenProject }: Props) {
 
   return (
     <Box sx={{ p: 3, maxWidth: 1150, mx: 'auto' }}>
+      {/* #E — Radar rủi ro visa (dự báo từ lịch sử) */}
+      <VisaRiskPanel onOpenProject={onOpenProject} />
+
       {/* Bộ lọc */}
       <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }}>
         <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap alignItems="center">

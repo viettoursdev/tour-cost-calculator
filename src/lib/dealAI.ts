@@ -1,5 +1,6 @@
 import { callAIWorker, markExtract, type ContentBlock } from '@/lib/aiWorker';
 import type { WinFactor } from '@/components/quote/winScore';
+import type { RiskFactor } from '@/components/visa/visaRisk';
 
 /** Lớp AI TÙY CHỌN cho #3/#5 — chỉ DIỄN GIẢI kết quả heuristic (không thay thế).
  *  Người dùng tự bấm nút mới gọi; lõi điểm/giá vẫn chạy offline. */
@@ -45,5 +46,24 @@ export async function explainPricing(input: {
       + `Số mẫu so sánh: ${input.sampleN}\nĐánh giá heuristic: ${input.verdict}`,
   }];
   const res = await callAIWorker('/chat', { system: markExtract(PRICE_SYSTEM), messages: [{ role: 'user', content }] });
+  return textOf(res.content);
+}
+
+const VISA_SYSTEM =
+  'Bạn là chuyên viên visa. Dựa trên các YẾU TỐ rủi ro trượt visa của một khách, '
+  + 'giải thích NGẮN GỌN bằng tiếng Việt (≤4 câu) vì sao rủi ro như vậy và gợi ý 1–2 '
+  + 'việc cần làm ngay để tăng khả năng đậu. KHÔNG bịa thêm số liệu.';
+
+export async function explainVisaRisk(input: {
+  name: string; country: string; score: number; band: string; factors: RiskFactor[];
+}): Promise<string> {
+  const content: ContentBlock[] = [{
+    type: 'text',
+    text:
+      `Khách: ${input.name}\nNước xin visa: ${input.country}\n`
+      + `Điểm rủi ro: ${input.score}/100 (${input.band})\nYếu tố:\n`
+      + input.factors.map((f) => `- ${f.label}: ${f.impact > 0 ? '+' : ''}${f.impact}`).join('\n'),
+  }];
+  const res = await callAIWorker('/chat', { system: markExtract(VISA_SYSTEM), messages: [{ role: 'user', content }] });
   return textOf(res.content);
 }
