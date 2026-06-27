@@ -4,6 +4,7 @@
  */
 import { filterRank, normalizeVN } from '@/lib/search';
 import { callAIWorker } from '@/lib/aiWorker';
+import { searchKnowledge } from '@/lib/knowledge';
 import { computeTotals, fmtVND } from '@/components/quote/calc';
 import { sbGetQuoteProject, sbGetDMCQuoteProject } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -35,6 +36,19 @@ export const CATEGORY_ENUM = [
 ];
 
 export const ASSISTANT_TOOLS: ToolDef[] = [
+  {
+    name: 'search_knowledge',
+    description:
+      'Tra cứu THƯ VIỆN kiến thức nội bộ Viettours (kinh nghiệm trip, SOP, xử lý sự cố, mẹo điểm đến, lưu ý visa, kiến thức nghiệp vụ…). Trả về các đoạn liên quan kèm TÊN NGUỒN. Dùng cho câu hỏi mang tính NGHIỆP VỤ/kinh nghiệm/"làm thế nào" (khác search_records tra bản ghi cụ thể). Khi trả lời PHẢI trích nguồn theo dạng (theo: «tên nguồn»); nếu không có kết quả thì nói thư viện chưa có, đừng bịa.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Câu hỏi/từ khoá nghiệp vụ' },
+        limit: { type: 'number', description: 'Số đoạn tối đa (mặc định 6)' },
+      },
+      required: ['query'],
+    },
+  },
   {
     name: 'search_records',
     description:
@@ -564,10 +578,27 @@ async function toolPaymentDues(input: Record<string, unknown>): Promise<unknown>
 export const PROPOSAL_TOOLS = new Set(['propose_itinerary', 'propose_quote', 'propose_supplier']);
 
 /** Thực thi một tool, trả chuỗi JSON cho tool_result. */
+async function toolSearchKnowledge(input: Record<string, unknown>): Promise<unknown> {
+  const query = str(input, 'query');
+  if (!query) return { error: 'Thiếu query' };
+  const limit = typeof input.limit === 'number' ? Math.min(Math.max(input.limit, 1), 10) : 6;
+  const hits = await searchKnowledge(query, limit);
+  if (!hits.length) return { count: 0, results: [], note: 'Thư viện chưa có nội dung phù hợp.' };
+  return {
+    count: hits.length,
+    results: hits.map((h) => ({
+      source: h.title,
+      content: h.content.slice(0, 800),
+      similarity: Math.round(h.similarity * 100) / 100,
+    })),
+  };
+}
+
 export async function runAssistantTool(name: string, input: Record<string, unknown>): Promise<string> {
   try {
     let result: unknown;
     switch (name) {
+      case 'search_knowledge': result = await toolSearchKnowledge(input); break;
       case 'search_records': result = await toolSearch(input); break;
       case 'get_quote': result = await toolGetQuote(input); break;
       case 'customer_tours': result = await toolCustomerTours(input); break;

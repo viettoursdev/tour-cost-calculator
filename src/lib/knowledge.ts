@@ -250,7 +250,11 @@ export async function findSimilarSources(text: string, threshold = 0.82, k = 5):
   const sample = text.trim().slice(0, 1500);
   if (!sample) return [];
   const [vec] = await embedTexts([sample], 'query');
-  const { data, error } = await sb.rpc('kb_search', { query_embedding: vec, match_count: k });
+  const { data, error } = await sb.rpc('kb_search', {
+    query_embedding: vec,
+    query_text: sample,
+    match_count: k,
+  });
   if (error) return [];
   const hits = (data ?? []) as KbSearchHit[];
   const seen = new Set<string>();
@@ -266,7 +270,11 @@ export async function findSimilarSources(text: string, threshold = 0.82, k = 5):
 /** Truy hồi top-K khối gần câu hỏi nhất (ngữ nghĩa). RLS lọc theo quyền người gọi. */
 export async function searchKnowledge(question: string, k = 6): Promise<KbSearchHit[]> {
   const [vec] = await embedTexts([question], 'query');
-  const { data, error } = await sb.rpc('kb_search', { query_embedding: vec, match_count: k });
+  const { data, error } = await sb.rpc('kb_search', {
+    query_embedding: vec,
+    query_text: question,
+    match_count: k,
+  });
   if (error) throw new Error(error.message);
   return (data ?? []) as KbSearchHit[];
 }
