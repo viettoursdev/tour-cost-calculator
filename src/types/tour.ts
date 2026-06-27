@@ -70,10 +70,15 @@ export type TourProfile = {
   customerId?: string;
   customerName?: string;
   dest?: string;
+  /** Khu vực khởi hành: 'SGN' | 'HAN' | 'DAD' hoặc chuỗi tự nhập (khi chọn "Khác"). */
+  departRegion?: string;
   /** Ngày khởi hành (yyyy-mm-dd) — đồng bộ từ báo giá chính. */
   startDate?: string | null;
   /** Số lượng khách — đồng bộ từ báo giá chính. */
   pax?: number;
+  /** Độ dài chương trình: số ngày / số đêm. */
+  days?: number;
+  nights?: number;
   /**
    * KHOÁ thông tin cơ bản: khi người dùng SỬA TAY (tên/khách/ngày/số khách/điểm đến)
    * thì đặt `true` → hồ sơ trở thành nguồn sự thật, KHÔNG bị `syncFromPrimary` ghi đè

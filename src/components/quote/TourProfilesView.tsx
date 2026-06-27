@@ -179,9 +179,20 @@ function displayBasics(p: TourProfile, primary?: CloudQuoteEntry): {
   };
 }
 
+/** Nhãn thời lượng "X ngày Y đêm" (bỏ vế trống; rỗng nếu chưa nhập). */
+function durationLabel(p: TourProfile): string {
+  const parts: string[] = [];
+  if (p.days) parts.push(`${p.days} ngày`);
+  if (p.nights) parts.push(`${p.nights} đêm`);
+  return parts.join(' ');
+}
+
 /** Sentinel id cho tùy chọn "Tạo hồ sơ khách" trong Autocomplete khách hàng. */
 const CREATE_CUSTOMER_ID = '__create_customer__';
 const custFilter = createFilterOptions<Customer>();
+
+/** Khu vực khởi hành thường gặp; ngoài 3 mã này thì coi là "Khác" (tự nhập). */
+const DEPART_PRESETS = ['SGN', 'HAN', 'DAD'] as const;
 
 const prefsKey = (u: string) => `vte_tourprofile_prefs_${u}`;
 const loadExpanded = (u?: string): Set<string> => {
@@ -1205,11 +1216,13 @@ export function TourProfilesView() {
         onClose={() => setCreateOpen(false)}
         onCreate={async (info) => {
           // Nhập tay thông tin cơ bản → khoá đồng bộ để giữ giá trị khi sau này gắn báo giá chính.
-          const hasBasics = !!(info.customerName || info.dest || info.startDate || info.pax);
+          const hasBasics = !!(info.customerName || info.dest || info.departRegion || info.startDate || info.pax || info.days || info.nights);
           const created = await createProfile({
             kind: categoryKind(info.category), category: info.category, name: info.name,
             customerId: info.customerId ?? undefined, customerName: info.customerName || undefined,
-            dest: info.dest || undefined, startDate: info.startDate, pax: info.pax,
+            dest: info.dest || undefined, departRegion: info.departRegion || undefined,
+            startDate: info.startDate, pax: info.pax,
+            days: info.days || undefined, nights: info.nights || undefined,
             note: info.note || undefined, infoLocked: hasBasics || undefined,
           });
           setCreateOpen(false);
@@ -1509,6 +1522,40 @@ function ExportApprovalBanner({ isApprover, pending, myRequest, onApprove, onRej
 
 /** Sửa THÔNG TIN CƠ BẢN của hồ sơ (tên/khách/điểm đến/ngày/số khách/ghi chú). */
 /**
+ * Chọn khu vực khởi hành (SGN / HAN / DAD / Khác) dùng chung cho 2 dialog.
+ * Giá trị lưu là mã preset hoặc chuỗi tự nhập khi chọn "Khác".
+ */
+function DepartRegionPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isPreset = (DEPART_PRESETS as readonly string[]).includes(value);
+  const [otherActive, setOtherActive] = useState(value.trim() !== '' && !isPreset);
+  const selected = isPreset ? value : otherActive ? 'Khác' : '';
+  const activeSx = { bgcolor: 'rgba(13,122,106,0.13)', color: '#0d7a6a', fontWeight: 800, borderColor: '#0d7a6a' };
+  return (
+    <Box>
+      <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Khu vực khởi hành</Typography>
+      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+        {DEPART_PRESETS.map((r) => (
+          <Chip key={r} clickable size="small" label={r}
+            variant={selected === r ? 'filled' : 'outlined'}
+            onClick={() => { setOtherActive(false); onChange(r); }}
+            sx={selected === r ? activeSx : {}}
+          />
+        ))}
+        <Chip clickable size="small" label="Khác"
+          variant={selected === 'Khác' ? 'filled' : 'outlined'}
+          onClick={() => { setOtherActive(true); onChange(''); }}
+          sx={selected === 'Khác' ? activeSx : {}}
+        />
+      </Stack>
+      {otherActive && (
+        <TextField size="small" label="Nhập khu vực khởi hành" value={isPreset ? '' : value}
+          onChange={(e) => onChange(e.target.value)} placeholder="VD: Cần Thơ, Phú Quốc…" fullWidth sx={{ mt: 1 }} />
+      )}
+    </Box>
+  );
+}
+
+/**
  * Ô chọn khách hàng dùng chung (Sửa thông tin cơ bản + Tạo hồ sơ): chọn hồ sơ khách
  * đã có hoặc gõ tên mới → đề xuất tạo nhanh hồ sơ khách rồi gắn luôn.
  */
@@ -1586,7 +1633,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
   onClose: () => void;
-  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; startDate: string | null; pax: number; note: string }, lock: boolean) => Promise<void>;
+  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; note: string }, lock: boolean) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
   const b = displayBasics(profile, primary);
@@ -1596,8 +1643,11 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const [customer, setCustomer] = useState<Customer | null>(initialCustomer);
   const [customerName, setCustomerName] = useState(b.custName ?? '');
   const [dest, setDest] = useState(b.dest ?? '');
+  const [departRegion, setDepartRegion] = useState(profile.departRegion ?? '');
   const [startDate, setStartDate] = useState<string>(b.departDate ? b.departDate.slice(0, 10) : '');
   const [pax, setPax] = useState<string>(b.pax ? String(b.pax) : '');
+  const [days, setDays] = useState<string>(profile.days ? String(profile.days) : '');
+  const [nights, setNights] = useState<string>(profile.nights ? String(profile.nights) : '');
   const [note, setNote] = useState(profile.note ?? '');
   const [lock, setLock] = useState(profile.infoLocked ?? true);
   const [busy, setBusy] = useState(false);
@@ -1618,7 +1668,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
     const effectiveLock = lock || syncedDirty;
     try {
       await onSave(
-        { name, customerId: customer?.id ?? null, customerName, dest, startDate: startDate || null, pax: Number(pax) || 0, note },
+        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, note },
         effectiveLock,
       );
     } finally { setBusy(false); }
@@ -1641,6 +1691,11 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             <TextField size="small" label="Số lượng khách" type="number" value={pax} onChange={(e) => setPax(e.target.value)} inputProps={{ min: 0 }} fullWidth />
+          </Stack>
+          <DepartRegionPicker value={departRegion} onChange={setDepartRegion} />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <TextField size="small" label="Số ngày" type="number" value={days} onChange={(e) => setDays(e.target.value)} inputProps={{ min: 0 }} fullWidth />
+            <TextField size="small" label="Số đêm" type="number" value={nights} onChange={(e) => setNights(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
@@ -1698,6 +1753,8 @@ function QuickViewDialog({ profile, meta, quoteCount, showPrice, onClose, onOpen
           <Meta label="Khởi hành" value={b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—'} />
           <Meta label="Số khách" value={b.pax ? String(b.pax) : '—'} />
           <Meta label="Điểm đến" value={b.dest || '—'} />
+          {profile.departRegion && <Meta label="Khu vực khởi hành" value={profile.departRegion} />}
+          {durationLabel(profile) && <Meta label="Thời lượng" value={durationLabel(profile)} />}
           <Meta label="Số báo giá" value={String(quoteCount)} />
           {meta.links.contract > 0 && <Meta label="Hợp đồng" value={String(meta.links.contract)} />}
           {meta.links.visa > 0 && <Meta label="Visa" value={String(meta.links.visa)} />}
@@ -1845,21 +1902,24 @@ function MoveQuoteDialog({ state, options, onClose, onMove }: {
 
 function CreateEmptyDialog({ open, onClose, onCreate }: {
   open: boolean; onClose: () => void;
-  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; startDate: string | null; pax: number; note: string }) => Promise<void>;
+  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; note: string }) => Promise<void>;
 }) {
   const [category, setCategory] = useState<TourCategory>('incentive_domestic');
   const [name, setName] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [dest, setDest] = useState('');
+  const [departRegion, setDepartRegion] = useState('');
   const [startDate, setStartDate] = useState('');
   const [pax, setPax] = useState('');
+  const [days, setDays] = useState('');
+  const [nights, setNights] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
       setCategory('incentive_domestic'); setName(''); setCustomer(null); setCustomerName('');
-      setDest(''); setStartDate(''); setPax(''); setNote(''); setBusy(false);
+      setDest(''); setDepartRegion(''); setStartDate(''); setPax(''); setDays(''); setNights(''); setNote(''); setBusy(false);
     }
   }, [open]);
   const submit = async () => {
@@ -1867,7 +1927,8 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
     try {
       await onCreate({
         category, name: name.trim(), customerId: customer?.id ?? null, customerName: customerName.trim(),
-        dest: dest.trim(), startDate: startDate || null, pax: Number(pax) || 0, note: note.trim(),
+        dest: dest.trim(), departRegion: departRegion.trim(), startDate: startDate || null,
+        pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, note: note.trim(),
       });
     } finally { setBusy(false); }
   };
@@ -1902,6 +1963,11 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             <TextField size="small" label="Số lượng khách" type="number" value={pax} onChange={(e) => setPax(e.target.value)} inputProps={{ min: 0 }} fullWidth />
+          </Stack>
+          <DepartRegionPicker value={departRegion} onChange={setDepartRegion} />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <TextField size="small" label="Số ngày" type="number" value={days} onChange={(e) => setDays(e.target.value)} inputProps={{ min: 0 }} fullWidth />
+            <TextField size="small" label="Số đêm" type="number" value={nights} onChange={(e) => setNights(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
@@ -2178,6 +2244,8 @@ function ProfileRow({
             <Meta label="Khách" value={custName || '—'} />
             <Meta label="Khởi hành" value={departDate ? new Date(departDate).toLocaleDateString('vi-VN') : '—'} />
             {pax ? <Meta label="Số khách" value={String(pax)} /> : null}
+            {profile.departRegion ? <Meta label="Khu vực" value={profile.departRegion} /> : null}
+            {!compact && durationLabel(profile) ? <Meta label="Thời lượng" value={durationLabel(profile)} /> : null}
             <Meta label="Báo giá" value={String(quotes.length)} />
             {!compact && links.contract > 0 && <Meta label="Hợp đồng" value={String(links.contract)} />}
             {!compact && links.visa > 0 && <Meta label="Visa" value={String(links.visa)} />}
@@ -2359,6 +2427,8 @@ function PeekTooltip({ profile, mt, showPrice, children }: {
         {row('Khách', b.custName || '—')}
         {row('Khởi hành', b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—')}
         {row('Số khách', b.pax ? String(b.pax) : '—')}
+        {profile.departRegion ? row('Khu vực', profile.departRegion) : null}
+        {durationLabel(profile) ? row('Thời lượng', durationLabel(profile)) : null}
         {row('Giai đoạn', STAGE_META(mt.stage).short)}
         {showPrice && typeof mt.values.current === 'number' && row('Giá trị', fmtVND(mt.values.current))}
       </Box>
