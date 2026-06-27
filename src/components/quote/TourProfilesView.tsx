@@ -679,9 +679,15 @@ export function TourProfilesView() {
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1200, mx: 'auto' }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
         <Box>
-          <Typography fontWeight={900} fontSize={16}>🧭 Hồ sơ tour</Typography>
+          <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+            <Typography fontWeight={900} fontSize={16}>🧭 Hồ sơ tour</Typography>
+            <Chip size="small" label={`${summary.total} hồ sơ`} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(13,122,106,0.12)', color: '#0d7a6a' }} />
+            {summary.open > 0 && <Chip size="small" label={`${summary.open} đang mở`} sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(37,99,235,0.1)', color: '#2563eb' }} />}
+            {summary.won > 0 && <Chip size="small" label={`${summary.won} đã chốt`} sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(22,163,74,0.12)', color: '#16a34a' }} />}
+            {summary.archived > 0 && <Chip size="small" label={`${summary.archived} lưu trữ`} sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(100,116,139,0.14)', color: '#475569' }} />}
+          </Stack>
           <Typography variant="caption" color="text.secondary">
-            {rows.length} hồ sơ · trung tâm liên kết báo giá / khách / hợp đồng / vận hành / visa…
+            Trung tâm liên kết báo giá / khách / hợp đồng / vận hành / visa…
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -741,6 +747,22 @@ export function TourProfilesView() {
         onDismiss={(id) => void removeExport(id)}
       />
 
+      {!showFilters && activeFilters > 0 && (
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Đang lọc:</Typography>
+          {fltCustomer && <Chip size="small" label={`Khách: ${fltCustomer}`} onDelete={() => setFltCustomer('')} sx={{ height: 22 }} />}
+          {fltCategory && <Chip size="small" label={categoryMeta(fltCategory).short} onDelete={() => setFltCategory('')} sx={{ height: 22 }} />}
+          {fltCountry && <Chip size="small" label={fltCountry} onDelete={() => setFltCountry('')} sx={{ height: 22 }} />}
+          {fltStage.map((s) => {
+            const sm = STAGE_META(s);
+            return <Chip key={s} size="small" label={sm.short} onDelete={() => setFltStage(fltStage.filter((x) => x !== s))}
+              sx={{ height: 22, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />;
+          })}
+          {fltTag && <Chip size="small" label={`# ${fltTag}`} onDelete={() => setFltTag('')} sx={{ height: 22 }} />}
+          <Button size="small" onClick={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); }}>Xoá tất cả</Button>
+        </Stack>
+      )}
+
       <Collapse in={showFilters} unmountOnExit>
         <FilterPanel
           customers={filterOptions.customers}
@@ -764,12 +786,29 @@ export function TourProfilesView() {
           onOpen={(id) => { const tp = profiles.find((x) => x.id === id); if (tp) void openProfile(tp); }}
         />
       ) : rows.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-          <Typography color="text.secondary">
-            Chưa có hồ sơ tour nào. Bấm <strong>＋ Tạo báo giá và tour mới</strong> để mở hồ sơ đầu tiên,
-            hoặc <strong>Hồ sơ trống</strong> để mở một tour chưa có báo giá.
-          </Typography>
-        </Paper>
+        (activeFilters > 0 || search.trim()) ? (
+          <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
+            <FilterListIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+            <Typography fontWeight={700} sx={{ mb: 0.5 }}>Không có hồ sơ khớp điều kiện</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              Thử nới bộ lọc hoặc xoá từ khoá tìm kiếm.
+            </Typography>
+            <Button size="small" variant="outlined" onClick={() => { setSearch(''); setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); }}>
+              Xoá bộ lọc &amp; tìm kiếm
+            </Button>
+          </Paper>
+        ) : (
+          <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderStyle: 'dashed' }}>
+            <FolderOpenOutlinedIcon sx={{ fontSize: 44, color: '#0d7a6a', opacity: 0.7, mb: 1 }} />
+            <Typography fontWeight={800} sx={{ mb: 0.5 }}>Chưa có hồ sơ tour nào</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 460, mx: 'auto', mb: 1.5 }}>
+              Bấm <strong>＋ Tạo báo giá và tour mới</strong> để mở hồ sơ đầu tiên, hoặc <strong>Hồ sơ trống</strong> để mở một tour chưa có báo giá.
+            </Typography>
+            <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)} sx={{ background: LEGACY.headerGradient }}>
+              Hồ sơ trống
+            </Button>
+          </Paper>
+        )
       ) : (
         <Stack spacing={1.25}>
           {rows.map((p) => {
@@ -962,27 +1001,36 @@ function ExportOptionsDialog({ open, onClose, filterRows, isApprover, myRequest,
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Xuất Excel hồ sơ tour
-        <Typography variant="caption" display="block" color="text.secondary">
-          Chọn điều kiện xuất — chỉ <strong>Ban Giám Đốc trở lên</strong> được tải trực tiếp.
-        </Typography>
+      <DialogTitle sx={{ pb: 1 }}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <FileDownloadOutlinedIcon sx={{ color: '#0d7a6a' }} />
+          <Box sx={{ flex: 1 }}>Xuất Excel hồ sơ tour</Box>
+          <Chip size="small"
+            icon={<LockOutlinedIcon sx={{ fontSize: 14 }} />}
+            label={isApprover ? 'BGĐ — tải thẳng' : 'Cần BGĐ duyệt'}
+            sx={{ height: 22, fontWeight: 700,
+              bgcolor: isApprover ? 'rgba(22,163,74,0.12)' : 'rgba(217,119,6,0.12)',
+              color: isApprover ? '#16a34a' : '#d97706',
+              '& .MuiChip-icon': { color: 'inherit' } }} />
+        </Stack>
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Box>
-            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-              Ngày khởi hành (tuỳ chọn)
-            </Typography>
+            <Stack direction="row" spacing={0.6} alignItems="center" sx={{ mb: 0.75 }}>
+              <CalendarMonthIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
+              <Typography variant="caption" fontWeight={800} color="text.secondary">Ngày khởi hành (tuỳ chọn)</Typography>
+            </Stack>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
               <TextField size="small" label="Từ ngày" type="date" value={from} onChange={(e) => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
               <TextField size="small" label="Đến ngày" type="date" value={to} onChange={(e) => setTo(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             </Stack>
           </Box>
           <Box>
-            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-              Phân loại (trống = tất cả)
-            </Typography>
+            <Stack direction="row" spacing={0.6} alignItems="center" sx={{ mb: 0.75 }}>
+              <FilterListIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
+              <Typography variant="caption" fontWeight={800} color="text.secondary">Phân loại (trống = tất cả)</Typography>
+            </Stack>
             <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
               {TOUR_CATEGORIES.map((c) => {
                 const on = categories.includes(c.key);
@@ -996,15 +1044,25 @@ function ExportOptionsDialog({ open, onClose, filterRows, isApprover, myRequest,
               })}
             </Stack>
           </Box>
-          <Box sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'rgba(13,122,106,0.06)', border: '1px solid rgba(13,122,106,0.18)' }}>
-            <Typography variant="body2">
-              Sẽ xuất <strong>{count}</strong> hồ sơ — <Typography component="span" variant="caption" color="text.secondary">{summary}</Typography>
-            </Typography>
-          </Box>
+          <Stack direction="row" spacing={1.5} alignItems="center"
+            sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'rgba(13,122,106,0.06)', border: '1px solid rgba(13,122,106,0.18)' }}>
+            <Box sx={{ textAlign: 'center', minWidth: 56 }}>
+              <Typography fontSize={22} fontWeight={900} sx={{ color: '#0d7a6a', lineHeight: 1 }}>{count}</Typography>
+              <Typography variant="caption" color="text.secondary">hồ sơ</Typography>
+            </Box>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="body2" fontWeight={700} sx={{ mb: 0.25 }}>Sẽ xuất ra Excel</Typography>
+              <Typography variant="caption" color="text.secondary">{summary}</Typography>
+            </Box>
+          </Stack>
           {!isApprover && !approved && !pending && (
-            <Typography variant="caption" color="text.secondary">
-              Bạn chưa đủ quyền tải trực tiếp — gửi yêu cầu để Ban Giám Đốc duyệt.
-            </Typography>
+            <Stack direction="row" spacing={1} alignItems="center"
+              sx={{ p: 1, borderRadius: 1.5, bgcolor: 'rgba(217,119,6,0.07)', border: '1px solid rgba(217,119,6,0.22)' }}>
+              <LockOutlinedIcon sx={{ fontSize: 17, color: '#d97706' }} />
+              <Typography variant="caption" sx={{ color: '#92600c' }}>
+                Bạn chưa đủ quyền tải trực tiếp — gửi yêu cầu để <strong>Ban Giám Đốc</strong> duyệt.
+              </Typography>
+            </Stack>
           )}
         </Stack>
       </DialogContent>
@@ -1627,7 +1685,17 @@ function ProfileRow({
   const archived = profile.status === 'archived';
 
   return (
-    <Paper variant="outlined" sx={{ p: compact ? 1 : 1.5, borderLeft: `4px solid ${sm.color}`, opacity: archived ? 0.6 : 1 }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: compact ? 1 : 1.5,
+        borderLeft: `4px solid ${sm.color}`,
+        opacity: archived ? 0.72 : 1,
+        bgcolor: archived ? 'rgba(0,0,0,0.015)' : 'background.paper',
+        transition: 'box-shadow .18s ease, border-color .18s ease, transform .18s ease',
+        '&:hover': { boxShadow: '0 3px 14px rgba(15,58,74,0.10)', borderLeftColor: sm.color, transform: 'translateY(-1px)' },
+      }}
+    >
       <Stack direction="row" alignItems="flex-start" spacing={1.25}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
@@ -1638,8 +1706,13 @@ function ProfileRow({
             <Tooltip title={cm.label}>
               <Chip size="small" label={`${cm.icon} ${cm.short}`} sx={{ height: 20, bgcolor: `${cm.color}1a`, color: cm.color, fontWeight: 700 }} />
             </Tooltip>
-            <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
-            {archived && <Chip size="small" label="Lưu trữ" variant="outlined" sx={{ height: 20 }} />}
+            <Chip size="small" label={sm.short}
+              icon={<Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: sm.color, ml: 0.75 }} />}
+              sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700, '& .MuiChip-icon': { ml: 0.6 } }} />
+            {archived && (
+              <Chip size="small" label="Lưu trữ" icon={<ArchiveOutlinedIcon sx={{ fontSize: 13 }} />}
+                sx={{ height: 20, bgcolor: 'rgba(100,116,139,0.14)', color: '#475569', fontWeight: 700, '& .MuiChip-icon': { color: '#475569' } }} />
+            )}
             {profile.infoLocked && (
               <Tooltip title="Thông tin cơ bản đã khoá (sửa tay) — không tự đồng bộ từ báo giá">
                 <LockOutlinedIcon sx={{ fontSize: 14, color: '#6b7280' }} />
