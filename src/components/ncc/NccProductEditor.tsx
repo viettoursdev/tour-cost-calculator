@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from 'react';
 import {
-  Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
+  Alert, Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
   Link, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -55,6 +55,7 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
   const setFiles = (fn: (prev: FileAttachment[]) => FileAttachment[]) => setForm((p) => ({ ...p, files: fn(p.files) }));
 
   const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useUndoRedoShortcuts(undo, redo, !busy);
@@ -66,6 +67,7 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
     e.target.value = '';
     if (!picked?.length) return;
     setUploading(true);
+    setUploadErr(null);
     try {
       const uploaded: FileAttachment[] = [];
       for (const f of Array.from(picked)) {
@@ -74,7 +76,7 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
       }
       setFiles((prev) => [...prev, ...uploaded]);
     } catch (err) {
-      window.alert('❌ Tải file thất bại: ' + (err as Error).message);
+      setUploadErr((err as Error).message || 'Lỗi không xác định');
     } finally {
       setUploading(false);
     }
@@ -176,6 +178,11 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
                   <input type="file" hidden multiple accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" onChange={onPickFiles} />
                 </Button>
               </Box>
+              {uploadErr && (
+                <Alert severity="error" onClose={() => setUploadErr(null)} sx={{ mt: 0.5 }}>
+                  Tải file thất bại: {uploadErr}
+                </Alert>
+              )}
             </Stack>
           </Box>
 
