@@ -10,6 +10,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import { QuoteView } from '@/components/quote/QuoteView';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { AssistantPanel } from '@/components/assistant/AssistantPanel';
@@ -96,6 +97,14 @@ export function AppShell() {
   // Logo Viettours trên header = nút về màn "Bạn muốn tạo gì hôm nay?" (hiện trên MỌI màn hình).
   const goHome = () => useQuoteStore.getState().openSelector();
 
+  // Mở Thư viện kiến thức nội bộ từ header. Cần có draft để QuoteView render view 'library' —
+  // chưa có thì tạo nháp nội địa (dữ liệu thư viện độc lập), giống gotoManage ở màn chọn hồ sơ.
+  const goLibrary = () => {
+    const st = useQuoteStore.getState();
+    if (st.draft.template === null) st.newDraft('domestic');
+    st.setView('library');
+  };
+
   // Phím tắt ⌘K / Ctrl+K mở tìm kiếm toàn cục.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -155,6 +164,9 @@ export function AppShell() {
 
               <Tooltip title="Tìm kiếm (Ctrl/⌘ + K)">
                 <IconButton sx={headBtnSx} onClick={() => setSearchOpen(true)}><SearchIcon fontSize="small" /></IconButton>
+              </Tooltip>
+              <Tooltip title="Thư viện kiến thức nội bộ">
+                <IconButton sx={headBtnSx} onClick={goLibrary}><MenuBookOutlinedIcon fontSize="small" /></IconButton>
               </Tooltip>
               <Tooltip title="Trợ lý ảo">
                 <IconButton sx={headBtnSx} onClick={() => setAssistantOpen(true)}>

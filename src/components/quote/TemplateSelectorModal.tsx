@@ -10,6 +10,7 @@ import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -99,7 +100,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const canTraining = hasPerm(currentUser, 'viewTraining');
   // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC / Nhân sự / Kho / Đào tạo). Cần
   // có draft để render — chưa có thì tạo nháp báo giá nội địa (dữ liệu này độc lập).
-  const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory' | 'training') => {
+  const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory' | 'training' | 'library') => {
     if (!hasDraft) newDraft('domestic');
     setView(v);
     onClose?.();
@@ -312,6 +313,16 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
               onClick={() => gotoManage('training')}
             />
           )}
+
+          {/* Thẻ Thư viện kiến thức (view, không phải template) — đẩy lên lưới chính. */}
+          <ManageCard
+            grad="linear-gradient(135deg, #4338ca, #6366f1)"
+            accent="#4338ca"
+            icon={<MenuBookOutlinedIcon />}
+            title="Thư viện"
+            desc="Kho kiến thức nội bộ — hỏi đáp AI có trích dẫn"
+            onClick={() => gotoManage('library')}
+          />
         </Box>
 
         {(canCust || canNcc) && (
