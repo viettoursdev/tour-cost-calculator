@@ -79,6 +79,10 @@ export type TourProfile = {
   /** Độ dài chương trình: số ngày / số đêm. */
   days?: number;
   nights?: number;
+  /** Mức ưu tiên xử lý hồ sơ — để sắp xếp pipeline & đánh dấu đoàn gấp. */
+  priority?: 'high' | 'medium' | 'low';
+  /** Nguồn khách (Giới thiệu / Khách cũ / Marketing / Inbound…) — attribution Sales–Marketing. */
+  leadSource?: string;
   /**
    * KHOÁ thông tin cơ bản: khi người dùng SỬA TAY (tên/khách/ngày/số khách/điểm đến)
    * thì đặt `true` → hồ sơ trở thành nguồn sự thật, KHÔNG bị `syncFromPrimary` ghi đè

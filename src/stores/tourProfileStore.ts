@@ -30,6 +30,8 @@ export type NewTourProfileInput = {
   pax?: number;
   days?: number;
   nights?: number;
+  priority?: 'high' | 'medium' | 'low';
+  leadSource?: string;
   note?: string;
   /** Khoá đồng bộ ngay khi tạo (giữ thông tin nhập tay, không bị báo giá chính ghi đè sau này). */
   infoLocked?: boolean;
@@ -57,7 +59,7 @@ type State = {
   /** SỬA TAY thông tin cơ bản (tên/khách/điểm đến/ngày/số khách/ghi chú). Khi `lock`
    *  = true (mặc định) đặt `infoLocked` → hồ sơ thành nguồn sự thật, không bị
    *  `syncFromPrimary` ghi đè và được ưu tiên hiển thị. Bỏ `lock` để cho tự đồng bộ lại. */
-  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; note?: string }, lock?: boolean) => Promise<void>;
+  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string }, lock?: boolean) => Promise<void>;
   /** Đồng bộ NGƯỢC thông tin hiển thị (tên/khách/ngày/pax) từ báo giá chính vào hồ sơ
    *  để báo cáo trực tiếp trên DB cũng đúng. Bỏ qua nếu không có gì đổi. */
   syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
@@ -138,6 +140,8 @@ export const useTourProfileStore = create<State>()(
         pax: input.pax ?? 0,
         days: input.days,
         nights: input.nights,
+        priority: input.priority,
+        leadSource: input.leadSource,
         note: input.note,
         infoLocked: input.infoLocked,
         primaryQuoteId: input.primaryQuoteId,
@@ -207,6 +211,8 @@ export const useTourProfileStore = create<State>()(
         pax: info.pax !== undefined ? info.pax : p.pax,
         days: info.days !== undefined ? (info.days || undefined) : p.days,
         nights: info.nights !== undefined ? (info.nights || undefined) : p.nights,
+        priority: info.priority !== undefined ? (info.priority || undefined) : p.priority,
+        leadSource: info.leadSource !== undefined ? (info.leadSource.trim() || undefined) : p.leadSource,
         note: info.note !== undefined ? (info.note.trim() || undefined) : p.note,
         infoLocked: lock,
       };

@@ -113,20 +113,6 @@ const countdownLabel = (m: Milestone): string => {
 };
 
 /** Đếm ngược ngày khởi hành — nhãn + màu theo độ gấp (null nếu không có ngày). */
-function departureCountdown(departDate?: string | null): { label: string; color: string } | null {
-  if (!departDate) return null;
-  const d = new Date(departDate);
-  if (isNaN(d.getTime())) return null;
-  const today = new Date();
-  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-    - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86_400_000);
-  if (days < 0) return { label: `Đã đi ${-days} ngày`, color: '#94a3b8' };
-  if (days === 0) return { label: 'Khởi hành hôm nay', color: '#dc2626' };
-  if (days <= 7) return { label: `Còn ${days} ngày`, color: '#dc2626' };
-  if (days <= 30) return { label: `Còn ${days} ngày`, color: '#d97706' };
-  return { label: `Còn ${days} ngày`, color: '#2563eb' };
-}
-
 /** Gợi ý "hành động kế tiếp" theo giai đoạn deal (null = không còn việc bắt buộc). */
 const NEXT_ACTION: Partial<Record<DealStage, { label: string; color: string }>> = {
   request: { label: 'Gửi báo giá cho khách', color: '#2563eb' },
@@ -187,6 +173,71 @@ function durationLabel(p: TourProfile): string {
   return parts.join(' ');
 }
 
+/** Số ngày của tour: ưu tiên `days`, suy từ `nights + 1` nếu thiếu (null = chưa rõ). */
+function durationDays(p: TourProfile): number | null {
+  if (p.days) return p.days;
+  if (p.nights) return p.nights + 1;
+  return null;
+}
+
+/** Ngày kết thúc (= khởi hành + (số ngày − 1)) — null nếu thiếu ngày KH hoặc thời lượng. */
+function tourEndDate(departDate: string | null | undefined, p: TourProfile): Date | null {
+  const nDays = durationDays(p);
+  if (!departDate || !nDays) return null;
+  const d = new Date(departDate);
+  if (isNaN(d.getTime())) return null;
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  end.setDate(end.getDate() + (nDays - 1));
+  return end;
+}
+
+const dayStart = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+
+/**
+ * Trạng thái thời gian của tour: đếm ngược khởi hành → "đang diễn ra" (trong khoảng
+ * khởi hành…kết thúc) → "đã về". Khi không suy được ngày kết thúc thì fallback như
+ * departureCountdown cũ ("Đã đi N ngày").
+ */
+function tourTiming(departDate: string | null | undefined, p: TourProfile): { label: string; color: string; running?: boolean } | null {
+  if (!departDate) return null;
+  const d = new Date(departDate);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  const toGo = Math.round((dayStart(d) - dayStart(today)) / 86_400_000);
+  if (toGo > 30) return { label: `Còn ${toGo} ngày`, color: '#2563eb' };
+  if (toGo > 7) return { label: `Còn ${toGo} ngày`, color: '#d97706' };
+  if (toGo > 0) return { label: `Còn ${toGo} ngày`, color: '#dc2626' };
+  if (toGo === 0) return { label: 'Khởi hành hôm nay', color: '#dc2626', running: true };
+  // Đã khởi hành — xác định còn đang chạy hay đã về dựa trên ngày kết thúc.
+  const end = tourEndDate(departDate, p);
+  if (end) {
+    if (dayStart(today) <= dayStart(end)) return { label: 'Đang diễn ra', color: '#16a34a', running: true };
+    const back = Math.round((dayStart(today) - dayStart(end)) / 86_400_000);
+    return { label: back === 0 ? 'Vừa về' : `Đã về ${back} ngày`, color: '#94a3b8' };
+  }
+  return { label: `Đã đi ${-toGo} ngày`, color: '#94a3b8' };
+}
+
+/** Cảnh báo lệch thời lượng giữa hồ sơ và báo giá chính (cả 2 đều có số ngày & khác nhau). */
+function durationMismatch(p: TourProfile, primary?: CloudQuoteEntry): { profileDays: number; quoteDays: number } | null {
+  const pd = durationDays(p);
+  const qd = primary?.days;
+  if (!pd || !qd || pd === qd) return null;
+  return { profileDays: pd, quoteDays: qd };
+}
+
+/** Mức ưu tiên xử lý hồ sơ — nhãn/màu/biểu tượng. */
+const PRIORITY_META: Record<'high' | 'medium' | 'low', { label: string; color: string; icon: string }> = {
+  high: { label: 'Cao', color: '#dc2626', icon: '🔥' },
+  medium: { label: 'Vừa', color: '#d97706', icon: '◆' },
+  low: { label: 'Thấp', color: '#64748b', icon: '○' },
+};
+/** Hạng ưu tiên để sắp xếp (cao → đầu); không đặt = thấp nhất. */
+const priorityRank = (pr?: 'high' | 'medium' | 'low'): number => (pr === 'high' ? 3 : pr === 'medium' ? 2 : pr === 'low' ? 1 : 0);
+
+/** Nguồn khách thường gặp; ngoài danh sách thì "Khác" (tự nhập). */
+const LEAD_SOURCES = ['Giới thiệu', 'Khách cũ', 'Marketing', 'Inbound'] as const;
+
 /** Sentinel id cho tùy chọn "Tạo hồ sơ khách" trong Autocomplete khách hàng. */
 const CREATE_CUSTOMER_ID = '__create_customer__';
 const custFilter = createFilterOptions<Customer>();
@@ -221,9 +272,9 @@ const loadPins = (u?: string): Set<string> => {
 };
 
 /** Khoá sắp xếp danh sách hồ sơ. */
-type SortKey = 'created' | 'depart' | 'value' | 'stage' | 'name';
+type SortKey = 'created' | 'depart' | 'value' | 'stage' | 'name' | 'priority';
 const SORT_LABEL: Record<SortKey, string> = {
-  created: 'Mới tạo', depart: 'Ngày khởi hành', value: 'Giá trị', stage: 'Giai đoạn', name: 'Tên / mã',
+  created: 'Mới tạo', depart: 'Ngày khởi hành', value: 'Giá trị', stage: 'Giai đoạn', name: 'Tên / mã', priority: 'Mức ưu tiên',
 };
 
 /** Khoá nhóm danh sách. */
@@ -429,6 +480,7 @@ export function TourProfilesView() {
         let r = 0;
         switch (sortBy) {
           case 'name': r = (a.name || a.code || '').localeCompare(b.name || b.code || '', 'vi'); break;
+          case 'priority': r = priorityRank(a.priority) - priorityRank(b.priority); break;
           case 'stage': r = stageRank(metaOf(a.id).stage) - stageRank(metaOf(b.id).stage); break;
           case 'value': r = (metaOf(a.id).values.current ?? -1) - (metaOf(b.id).values.current ?? -1); break;
           case 'depart': {
@@ -1223,6 +1275,7 @@ export function TourProfilesView() {
             dest: info.dest || undefined, departRegion: info.departRegion || undefined,
             startDate: info.startDate, pax: info.pax,
             days: info.days || undefined, nights: info.nights || undefined,
+            priority: info.priority || undefined, leadSource: info.leadSource || undefined,
             note: info.note || undefined, infoLocked: hasBasics || undefined,
           });
           setCreateOpen(false);
@@ -1520,21 +1573,22 @@ function ExportApprovalBanner({ isApprover, pending, myRequest, onApprove, onRej
   );
 }
 
-/** Sửa THÔNG TIN CƠ BẢN của hồ sơ (tên/khách/điểm đến/ngày/số khách/ghi chú). */
 /**
- * Chọn khu vực khởi hành (SGN / HAN / DAD / Khác) dùng chung cho 2 dialog.
- * Giá trị lưu là mã preset hoặc chuỗi tự nhập khi chọn "Khác".
+ * Ô chọn dạng chip có sẵn + "Khác" (tự nhập) dùng chung — khu vực khởi hành, nguồn khách…
+ * Giá trị lưu là preset đã chọn hoặc chuỗi tự nhập khi chọn "Khác".
  */
-function DepartRegionPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const isPreset = (DEPART_PRESETS as readonly string[]).includes(value);
+function ChipPicker({ label, presets, value, onChange, placeholder }: {
+  label: string; presets: readonly string[]; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const isPreset = presets.includes(value);
   const [otherActive, setOtherActive] = useState(value.trim() !== '' && !isPreset);
   const selected = isPreset ? value : otherActive ? 'Khác' : '';
   const activeSx = { bgcolor: 'rgba(13,122,106,0.13)', color: '#0d7a6a', fontWeight: 800, borderColor: '#0d7a6a' };
   return (
     <Box>
-      <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Khu vực khởi hành</Typography>
+      <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>{label}</Typography>
       <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-        {DEPART_PRESETS.map((r) => (
+        {presets.map((r) => (
           <Chip key={r} clickable size="small" label={r}
             variant={selected === r ? 'filled' : 'outlined'}
             onClick={() => { setOtherActive(false); onChange(r); }}
@@ -1548,9 +1602,31 @@ function DepartRegionPicker({ value, onChange }: { value: string; onChange: (v: 
         />
       </Stack>
       {otherActive && (
-        <TextField size="small" label="Nhập khu vực khởi hành" value={isPreset ? '' : value}
-          onChange={(e) => onChange(e.target.value)} placeholder="VD: Cần Thơ, Phú Quốc…" fullWidth sx={{ mt: 1 }} />
+        <TextField size="small" label={`Nhập ${label.toLowerCase()}`} value={isPreset ? '' : value}
+          onChange={(e) => onChange(e.target.value)} placeholder={placeholder} fullWidth sx={{ mt: 1 }} />
       )}
+    </Box>
+  );
+}
+
+/** Chọn mức ưu tiên (Cao / Vừa / Thấp) — bấm lại chip đang chọn để bỏ. */
+function PrioritySelect({ value, onChange }: { value: 'high' | 'medium' | 'low' | ''; onChange: (v: 'high' | 'medium' | 'low' | '') => void }) {
+  return (
+    <Box>
+      <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Mức ưu tiên</Typography>
+      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+        {(Object.keys(PRIORITY_META) as Array<'high' | 'medium' | 'low'>).map((k) => {
+          const pm = PRIORITY_META[k];
+          const on = value === k;
+          return (
+            <Chip key={k} clickable size="small" label={`${pm.icon} ${pm.label}`}
+              variant={on ? 'filled' : 'outlined'}
+              onClick={() => onChange(on ? '' : k)}
+              sx={on ? { bgcolor: `${pm.color}22`, color: pm.color, fontWeight: 800, borderColor: pm.color } : {}}
+            />
+          );
+        })}
+      </Stack>
     </Box>
   );
 }
@@ -1633,7 +1709,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
   onClose: () => void;
-  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; note: string }, lock: boolean) => Promise<void>;
+  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string }, lock: boolean) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
   const b = displayBasics(profile, primary);
@@ -1648,10 +1724,16 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const [pax, setPax] = useState<string>(b.pax ? String(b.pax) : '');
   const [days, setDays] = useState<string>(profile.days ? String(profile.days) : '');
   const [nights, setNights] = useState<string>(profile.nights ? String(profile.nights) : '');
+  const [priority, setPriority] = useState<'high' | 'medium' | 'low' | ''>(profile.priority ?? '');
+  const [leadSource, setLeadSource] = useState(profile.leadSource ?? '');
   const [note, setNote] = useState(profile.note ?? '');
   const [lock, setLock] = useState(profile.infoLocked ?? true);
   const [busy, setBusy] = useState(false);
   const hasPrimary = !!primary;
+  // Cảnh báo lệch số ngày giữa hồ sơ (đang nhập) và báo giá chính.
+  const localDays = Number(days) || (Number(nights) ? Number(nights) + 1 : 0);
+  const dayMismatch = hasPrimary && primary?.days && localDays && localDays !== primary.days
+    ? { profileDays: localDays, quoteDays: primary.days } : null;
 
   // Giá trị ĐỒNG BỘ ban đầu (theo báo giá chính). Nếu người dùng sửa tay bất kỳ
   // trường nào trong số này thì PHẢI tự khoá, nếu không displayBasics sẽ lấy lại
@@ -1668,7 +1750,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
     const effectiveLock = lock || syncedDirty;
     try {
       await onSave(
-        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, note },
+        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, priority, leadSource, note },
         effectiveLock,
       );
     } finally { setBusy(false); }
@@ -1692,11 +1774,18 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
             <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             <TextField size="small" label="Số lượng khách" type="number" value={pax} onChange={(e) => setPax(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
-          <DepartRegionPicker value={departRegion} onChange={setDepartRegion} />
+          <ChipPicker label="Khu vực khởi hành" presets={DEPART_PRESETS} value={departRegion} onChange={setDepartRegion} placeholder="VD: Cần Thơ, Phú Quốc…" />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField size="small" label="Số ngày" type="number" value={days} onChange={(e) => setDays(e.target.value)} inputProps={{ min: 0 }} fullWidth />
             <TextField size="small" label="Số đêm" type="number" value={nights} onChange={(e) => setNights(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
+          {dayMismatch && (
+            <Typography variant="caption" sx={{ color: 'warning.main' }}>
+              ⚠️ Lệch thời lượng: hồ sơ {dayMismatch.profileDays} ngày ≠ báo giá chính {dayMismatch.quoteDays} ngày — kiểm tra lại.
+            </Typography>
+          )}
+          <PrioritySelect value={priority} onChange={setPriority} />
+          <ChipPicker label="Nguồn khách" presets={LEAD_SOURCES} value={leadSource} onChange={setLeadSource} placeholder="VD: Hội chợ, đối tác…" />
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
           <FormControlLabel
@@ -1736,13 +1825,19 @@ function QuickViewDialog({ profile, meta, quoteCount, showPrice, onClose, onOpen
   const b = displayBasics(profile, meta.primary);
   const cm = categoryMeta(tourCategoryOf(profile));
   const sm = STAGE_META(meta.stage);
+  const timing = profile.status === 'archived' ? null : tourTiming(b.departDate, profile);
+  const endDate = tourEndDate(b.departDate, profile);
+  const pm = profile.priority ? PRIORITY_META[profile.priority] : null;
+  const durMismatch = durationMismatch(profile, meta.primary);
   return (
     <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ pb: 0.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <Chip size="small" label={profile.code} sx={{ fontWeight: 800, bgcolor: 'rgba(13,122,106,0.12)', color: '#0d7a6a' }} />
+          {pm && <Chip size="small" label={`${pm.icon} ${pm.label}`} sx={{ height: 20, bgcolor: `${pm.color}1a`, color: pm.color, fontWeight: 800 }} />}
           <Chip size="small" label={`${cm.icon} ${cm.short}`} sx={{ height: 20, bgcolor: `${cm.color}1a`, color: cm.color, fontWeight: 700 }} />
           <Chip size="small" label={sm.short} sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />
+          {timing && <Chip size="small" label={timing.label} sx={{ height: 20, bgcolor: `${timing.color}1a`, color: timing.color, fontWeight: 700 }} />}
           {profile.infoLocked && <Tooltip title="Thông tin cơ bản đã khoá (sửa tay)"><LockOutlinedIcon sx={{ fontSize: 15, color: '#6b7280' }} /></Tooltip>}
         </Stack>
         <Typography fontWeight={800} fontSize={15} sx={{ mt: 0.75 }}>{profile.name || '(chưa đặt tên)'}</Typography>
@@ -1751,10 +1846,12 @@ function QuickViewDialog({ profile, meta, quoteCount, showPrice, onClose, onOpen
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
           <Meta label="Khách hàng" value={b.custName || '—'} />
           <Meta label="Khởi hành" value={b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—'} />
+          {endDate && <Meta label="Ngày về (dự kiến)" value={endDate.toLocaleDateString('vi-VN')} />}
           <Meta label="Số khách" value={b.pax ? String(b.pax) : '—'} />
           <Meta label="Điểm đến" value={b.dest || '—'} />
           {profile.departRegion && <Meta label="Khu vực khởi hành" value={profile.departRegion} />}
           {durationLabel(profile) && <Meta label="Thời lượng" value={durationLabel(profile)} />}
+          {profile.leadSource && <Meta label="Nguồn khách" value={profile.leadSource} />}
           <Meta label="Số báo giá" value={String(quoteCount)} />
           {meta.links.contract > 0 && <Meta label="Hợp đồng" value={String(meta.links.contract)} />}
           {meta.links.visa > 0 && <Meta label="Visa" value={String(meta.links.visa)} />}
@@ -1763,6 +1860,11 @@ function QuickViewDialog({ profile, meta, quoteCount, showPrice, onClose, onOpen
           {meta.guide > 0 && <Meta label="Lịch HDV" value={String(meta.guide)} />}
           <Meta label="Người tạo" value={profile.createdBy || '—'} />
         </Box>
+        {durMismatch && (
+          <Typography variant="caption" sx={{ color: 'warning.main', display: 'block', mt: 1 }}>
+            ⚠️ Lệch thời lượng: hồ sơ {durMismatch.profileDays} ngày ≠ báo giá chính {durMismatch.quoteDays} ngày.
+          </Typography>
+        )}
         {showPrice && (
           <Box sx={{ mt: 1.25 }}>
             <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Giá trị tour</Typography>
@@ -1902,7 +2004,7 @@ function MoveQuoteDialog({ state, options, onClose, onMove }: {
 
 function CreateEmptyDialog({ open, onClose, onCreate }: {
   open: boolean; onClose: () => void;
-  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; note: string }) => Promise<void>;
+  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string }) => Promise<void>;
 }) {
   const [category, setCategory] = useState<TourCategory>('incentive_domestic');
   const [name, setName] = useState('');
@@ -1914,12 +2016,15 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
   const [pax, setPax] = useState('');
   const [days, setDays] = useState('');
   const [nights, setNights] = useState('');
+  const [priority, setPriority] = useState<'high' | 'medium' | 'low' | ''>('');
+  const [leadSource, setLeadSource] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
       setCategory('incentive_domestic'); setName(''); setCustomer(null); setCustomerName('');
-      setDest(''); setDepartRegion(''); setStartDate(''); setPax(''); setDays(''); setNights(''); setNote(''); setBusy(false);
+      setDest(''); setDepartRegion(''); setStartDate(''); setPax(''); setDays(''); setNights('');
+      setPriority(''); setLeadSource(''); setNote(''); setBusy(false);
     }
   }, [open]);
   const submit = async () => {
@@ -1928,7 +2033,8 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
       await onCreate({
         category, name: name.trim(), customerId: customer?.id ?? null, customerName: customerName.trim(),
         dest: dest.trim(), departRegion: departRegion.trim(), startDate: startDate || null,
-        pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, note: note.trim(),
+        pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0,
+        priority, leadSource: leadSource.trim(), note: note.trim(),
       });
     } finally { setBusy(false); }
   };
@@ -1964,11 +2070,13 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
             <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
             <TextField size="small" label="Số lượng khách" type="number" value={pax} onChange={(e) => setPax(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
-          <DepartRegionPicker value={departRegion} onChange={setDepartRegion} />
+          <ChipPicker label="Khu vực khởi hành" presets={DEPART_PRESETS} value={departRegion} onChange={setDepartRegion} placeholder="VD: Cần Thơ, Phú Quốc…" />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField size="small" label="Số ngày" type="number" value={days} onChange={(e) => setDays(e.target.value)} inputProps={{ min: 0 }} fullWidth />
             <TextField size="small" label="Số đêm" type="number" value={nights} onChange={(e) => setNights(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
+          <PrioritySelect value={priority} onChange={setPriority} />
+          <ChipPicker label="Nguồn khách" presets={LEAD_SOURCES} value={leadSource} onChange={setLeadSource} placeholder="VD: Hội chợ, đối tác…" />
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
         </Stack>
@@ -2194,7 +2302,9 @@ function ProfileRow({
     settled: !!primary?.settlementSummary,
     nccPaid: !!pay && pay.remaining <= 0,
   });
-  const countdown = archived ? null : departureCountdown(departDate);
+  const countdown = archived ? null : tourTiming(departDate, profile);
+  const durMismatch = durationMismatch(profile, primary);
+  const pm = profile.priority ? PRIORITY_META[profile.priority] : null;
   const nextAct = archived ? undefined : NEXT_ACTION[stage];
 
   return (
@@ -2216,6 +2326,11 @@ function ProfileRow({
             <Typography fontWeight={800} fontSize={14.5} noWrap sx={{ maxWidth: { xs: 180, sm: 360 } }}>
               {profile.name || '(chưa đặt tên)'}
             </Typography>
+            {pm && (
+              <Tooltip title={`Ưu tiên ${pm.label}`}>
+                <Chip size="small" label={`${pm.icon} ${pm.label}`} sx={{ height: 20, bgcolor: `${pm.color}1a`, color: pm.color, fontWeight: 800 }} />
+              </Tooltip>
+            )}
             <Tooltip title={cm.label}>
               <Chip size="small" label={`${cm.icon} ${cm.short}`} sx={{ height: 20, bgcolor: `${cm.color}1a`, color: cm.color, fontWeight: 700 }} />
             </Tooltip>
@@ -2235,6 +2350,12 @@ function ProfileRow({
             {countdown && (
               <Chip size="small" label={countdown.label} icon={<FlightTakeoffIcon sx={{ fontSize: 13 }} />}
                 sx={{ height: 20, fontWeight: 700, bgcolor: `${countdown.color}1a`, color: countdown.color, '& .MuiChip-icon': { color: countdown.color } }} />
+            )}
+            {durMismatch && (
+              <Tooltip title={`Hồ sơ ${durMismatch.profileDays} ngày ≠ báo giá chính ${durMismatch.quoteDays} ngày — kiểm tra lại`}>
+                <Chip size="small" label="Lệch thời lượng" icon={<ReportProblemOutlinedIcon sx={{ fontSize: 13 }} />}
+                  sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(217,119,6,0.12)', color: '#d97706', '& .MuiChip-icon': { color: '#d97706' } }} />
+              </Tooltip>
             )}
             {(profile.tags ?? []).map((t) => (
               <Chip key={t} size="small" label={`# ${t}`} variant="outlined" sx={{ height: 20, borderColor: '#7c3aed', color: '#7c3aed' }} />
@@ -2278,6 +2399,9 @@ function ProfileRow({
                 </Typography>
               </Stack>
               <PeopleStrip collaborators={profile.collaborators} followers={profile.followers} eventStaff={profile.eventStaff} />
+              {profile.leadSource && (
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>Nguồn: <strong>{profile.leadSource}</strong></Typography>
+              )}
             </Stack>
           )}
         </Box>
@@ -2424,11 +2548,13 @@ function PeekTooltip({ profile, mt, showPrice, children }: {
     <Tooltip arrow placement="right" title={
       <Box sx={{ minWidth: 180 }}>
         <Typography variant="caption" fontWeight={800} sx={{ display: 'block', mb: 0.5 }}>{profile.name || profile.code}</Typography>
+        {profile.priority ? row('Ưu tiên', `${PRIORITY_META[profile.priority].icon} ${PRIORITY_META[profile.priority].label}`) : null}
         {row('Khách', b.custName || '—')}
         {row('Khởi hành', b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—')}
         {row('Số khách', b.pax ? String(b.pax) : '—')}
         {profile.departRegion ? row('Khu vực', profile.departRegion) : null}
         {durationLabel(profile) ? row('Thời lượng', durationLabel(profile)) : null}
+        {profile.leadSource ? row('Nguồn', profile.leadSource) : null}
         {row('Giai đoạn', STAGE_META(mt.stage).short)}
         {showPrice && typeof mt.values.current === 'number' && row('Giá trị', fmtVND(mt.values.current))}
       </Box>
@@ -2488,7 +2614,7 @@ function ProfileTable({
             const cm = categoryMeta(tourCategoryOf(p));
             const b = displayBasics(p, mt.primary);
             const pay = mt.primary?.paymentSummary;
-            const cd = p.status === 'archived' ? null : departureCountdown(b.departDate);
+            const cd = p.status === 'archived' ? null : tourTiming(b.departDate, p);
             const progress = profileProgressSteps({
               hasQuote: (quotesByProfile.get(p.id) ?? []).length > 0,
               contractCount: mt.links.contract, guideCount: mt.guide,
