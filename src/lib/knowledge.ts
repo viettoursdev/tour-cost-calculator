@@ -381,3 +381,75 @@ export async function getSourceChunks(sourceId: string): Promise<KbChunkRow[]> {
   if (error) throw new Error(error.message);
   return (data ?? []) as KbChunkRow[];
 }
+
+// ── Đợt 4: phản hồi đáp án · quản lý nguồn · độ tươi ──
+
+export type FeedbackKind = 'up' | 'down' | 'missing';
+
+export interface FeedbackInput {
+  question: string;
+  answer: string;
+  sourceIds: string[];
+  kind: FeedbackKind;
+  note?: string;
+  createdBy?: string | null;
+}
+
+/** Ghi phản hồi đáp án (👍/👎/báo thiếu). Lỗi không chặn UX. */
+export async function logFeedback(p: FeedbackInput): Promise<void> {
+  try {
+    await sb.from('kb_feedback').insert({
+      question: p.question,
+      answer: p.answer,
+      source_ids: p.sourceIds,
+      kind: p.kind,
+      note: p.note ?? null,
+      created_by: p.createdBy ?? null,
+    });
+  } catch {
+    /* im lặng */
+  }
+}
+
+export interface SourceMetaPatch {
+  title?: string;
+  category?: string | null;
+  tags?: string[];
+  department?: string | null;
+}
+
+/** Cập nhật metadata nguồn (tiêu đề/chủ đề/thẻ/phạm vi) — KHÔNG đụng embedding. */
+export async function updateSourceMeta(id: string, patch: SourceMetaPatch): Promise<void> {
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.category !== undefined) row.category = patch.category;
+  if (patch.tags !== undefined) row.tags = patch.tags;
+  if (patch.department !== undefined) row.department = patch.department;
+  const { error } = await sb.from('kb_sources').update(row).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/** Tạo lại embedding cho mọi khối của một nguồn (vd khi đổi model/chiều vector). */
+export async function reEmbedSource(id: string, onProgress: (msg: string) => void = () => {}): Promise<void> {
+  onProgress('Đang tải nội dung…');
+  const chunks = await getSourceChunks(id);
+  if (!chunks.length) throw new Error('Nguồn không có nội dung để tạo lại embedding.');
+  onProgress('Đang tạo embedding…');
+  const vecs = await embedInBatches(chunks.map((c) => c.content));
+  for (let i = 0; i < chunks.length; i += 1) {
+    const { error } = await sb.from('kb_chunks').update({ embedding: vecs[i] }).eq('id', chunks[i].id);
+    if (error) throw new Error(error.message);
+  }
+  await sb.from('kb_sources').update({ updated_at: new Date().toISOString() }).eq('id', id);
+}
+
+export const STALE_MONTHS = 12;
+
+/** Nguồn "cũ" nếu lần cập nhật gần nhất quá `months` tháng — để cảnh báo độ tươi. */
+export function isStale(iso: string, months = STALE_MONTHS): boolean {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  return d < cutoff;
+}

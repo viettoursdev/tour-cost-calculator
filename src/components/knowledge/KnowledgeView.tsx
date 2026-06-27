@@ -33,7 +33,11 @@ import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import HistoryIcon from '@mui/icons-material/History';
+import ThumbUpOutlinedIcon from '@mui/icons-material/ThumbUpOutlined';
+import ThumbDownOutlinedIcon from '@mui/icons-material/ThumbDownOutlined';
+import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
 import { useAuthStore } from '@/stores/authStore';
+import { useTodoStore } from '@/stores/todoStore';
 import { extractFile } from '@/lib/docExtract';
 import { fetchLink, uploadFileToWorker } from '@/lib/aiWorker';
 import {
@@ -41,14 +45,17 @@ import {
   deleteSource,
   findSimilarSources,
   ingestText,
+  isStale,
   KB_CATEGORIES,
   listSources,
+  logFeedback,
   logQuestion,
   recentQuestions,
   relatedQuestions,
   suggestMeta,
   topQuestions,
   type AskResult,
+  type FeedbackKind,
   type KbKind,
   type KbSource,
   type SimilarSource,
@@ -69,6 +76,16 @@ function kindIcon(kind: KbKind) {
   return <ChatBubbleOutlineIcon fontSize="small" />;
 }
 
+/** Chip cảnh báo nguồn cũ (quá ngưỡng độ tươi). */
+function StaleChip({ iso }: { iso: string }) {
+  if (!isStale(iso)) return null;
+  return (
+    <Tooltip title="Nội dung lâu chưa cập nhật — nên rà soát">
+      <Chip size="small" color="warning" variant="outlined" label="Cũ" sx={{ height: 18, fontSize: 11 }} />
+    </Tooltip>
+  );
+}
+
 export function KnowledgeView() {
   const user = useAuthStore((s) => s.currentUser);
 
@@ -80,6 +97,7 @@ export function KnowledgeView() {
   const [askError, setAskError] = useState('');
   const [related, setRelated] = useState<string[]>([]);
   const [detail, setDetail] = useState<KbSource | null>(null);
+  const [feedbackGiven, setFeedbackGiven] = useState<FeedbackKind | null>(null);
 
   // Gợi ý câu hỏi (Đợt 3)
   const [faqs, setFaqs] = useState<string[]>([]);
@@ -135,6 +153,7 @@ export function KnowledgeView() {
       setResult(null);
       setAskError('');
       setRelated([]);
+      setFeedbackGiven(null);
       try {
         const res = await askKnowledge(q, (delta) => setAnswer((a) => a + delta));
         setResult(res);
@@ -151,8 +170,43 @@ export function KnowledgeView() {
     [asking, user],
   );
 
+  const giveFeedback = async (kind: FeedbackKind) => {
+    if (!result || feedbackGiven) return;
+    let note: string | undefined;
+    if (kind !== 'up') {
+      const ans = window.prompt(
+        kind === 'missing' ? 'Thư viện còn thiếu gì? (mô tả ngắn)' : 'Đáp án sai/thiếu chỗ nào?',
+      );
+      if (ans === null) return; // huỷ
+      note = ans.trim() || undefined;
+    }
+    setFeedbackGiven(kind);
+    void logFeedback({
+      question,
+      answer,
+      sourceIds: result.sources.map((s) => s.id),
+      kind,
+      note,
+      createdBy: user?.u,
+    });
+    if (kind !== 'up') {
+      void useTodoStore.getState().add({
+        title: `Bổ sung kiến thức: ${question.slice(0, 80)}`,
+        note: [
+          kind === 'missing' ? 'Thư viện chưa có thông tin cho câu hỏi này.' : 'Đáp án bị đánh giá chưa đạt.',
+          note ? `Ghi chú: ${note}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        priority: 'normal',
+        tags: ['thư viện'],
+      });
+    }
+  };
+
   // ── Nạp kiến thức (staged: phân tích → lưu) ──
   const [mode, setMode] = useState<Mode>('text');
+  const [scope, setScope] = useState<'dept' | 'all'>('dept');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -266,7 +320,7 @@ export function KnowledgeView() {
         createdBy: user?.u ?? '',
         kind: staged.kind,
         rawRef,
-        department: user?.department ?? null,
+        department: scope === 'all' ? null : (user?.department ?? null),
         category: category || null,
         tags,
       });
@@ -423,19 +477,46 @@ export function KnowledgeView() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
                   Nguồn ({result.sources.length}) — bấm để xem
                 </Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
                   {result.sources.map((s) => (
-                    <Chip
-                      key={s.id}
-                      size="small"
-                      icon={kindIcon(s.kind)}
-                      label={fmtMonth(s.updatedAt) ? `${s.title} · ${fmtMonth(s.updatedAt)}` : s.title}
-                      variant="outlined"
-                      onClick={() => openDetailById(s.id, s.title, s.kind)}
-                    />
+                    <Stack key={s.id} direction="row" spacing={0.5} alignItems="center">
+                      <Chip
+                        size="small"
+                        icon={kindIcon(s.kind)}
+                        label={fmtMonth(s.updatedAt) ? `${s.title} · ${fmtMonth(s.updatedAt)}` : s.title}
+                        variant="outlined"
+                        onClick={() => openDetailById(s.id, s.title, s.kind)}
+                      />
+                      <StaleChip iso={s.updatedAt} />
+                    </Stack>
                   ))}
                 </Stack>
               </Box>
+            )}
+
+            {result && !asking && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+                {feedbackGiven ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Cảm ơn phản hồi của bạn.
+                  </Typography>
+                ) : (
+                  <>
+                    <Typography variant="caption" color="text.secondary">
+                      Đáp án hữu ích?
+                    </Typography>
+                    <Button size="small" startIcon={<ThumbUpOutlinedIcon />} onClick={() => void giveFeedback('up')}>
+                      Có
+                    </Button>
+                    <Button size="small" startIcon={<ThumbDownOutlinedIcon />} onClick={() => void giveFeedback('down')}>
+                      Không
+                    </Button>
+                    <Button size="small" startIcon={<FlagOutlinedIcon />} onClick={() => void giveFeedback('missing')}>
+                      Báo thiếu
+                    </Button>
+                  </>
+                )}
+              </Stack>
             )}
 
             {related.length > 0 && (
@@ -584,8 +665,21 @@ export function KnowledgeView() {
                     addTag(tagInput);
                   }
                 }}
-                sx={{ minWidth: 180 }}
+                sx={{ minWidth: 160 }}
               />
+              <TextField
+                select
+                size="small"
+                label="Phạm vi"
+                value={scope}
+                onChange={(e) => setScope(e.target.value as 'dept' | 'all')}
+                sx={{ minWidth: 170 }}
+              >
+                <MenuItem value="dept" disabled={!user?.department}>
+                  {user?.department ? `Phòng ${user.department}` : 'Phòng (chưa có)'}
+                </MenuItem>
+                <MenuItem value="all">Cả công ty</MenuItem>
+              </TextField>
             </Stack>
 
             {tags.length > 0 && (
@@ -716,6 +810,7 @@ export function KnowledgeView() {
                     {(s.tags ?? []).slice(0, 4).map((t) => (
                       <Chip key={t} size="small" variant="outlined" label={t} sx={{ height: 18, fontSize: 11 }} />
                     ))}
+                    <StaleChip iso={s.updated_at} />
                   </Stack>
                 </Box>
                 <Tooltip title="Xoá nguồn">
@@ -729,7 +824,7 @@ export function KnowledgeView() {
         )}
       </Paper>
 
-      <SourceDetailDialog source={detail} onClose={() => setDetail(null)} />
+      <SourceDetailDialog source={detail} onClose={() => setDetail(null)} onChanged={() => void refreshSources()} />
     </Box>
   );
 }

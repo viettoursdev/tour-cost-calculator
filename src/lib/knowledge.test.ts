@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { chunkText } from './knowledge';
+import { chunkText, isStale } from './knowledge';
+
+describe('isStale', () => {
+  it('mới cập nhật → không cũ', () => {
+    expect(isStale(new Date().toISOString())).toBe(false);
+  });
+  it('quá ngưỡng tháng → cũ', () => {
+    const old = new Date();
+    old.setMonth(old.getMonth() - 18);
+    expect(isStale(old.toISOString())).toBe(true);
+    expect(isStale(old.toISOString(), 24)).toBe(false);
+  });
+  it('ngày không hợp lệ → không cũ', () => {
+    expect(isStale('không-phải-ngày')).toBe(false);
+  });
+});
 
 describe('chunkText', () => {
   it('trả mảng rỗng cho nội dung rỗng/khoảng trắng', () => {
