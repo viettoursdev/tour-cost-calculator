@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Box, Button, Paper, Slider, Stack, TextField, Typography } from '@mui/material';
 import { catTotal, computeTotals, fmtVND } from './calc';
+import { PricingAssistPanel } from './PricingAssistPanel';
 import { getCATS } from './constants';
 import { QuoteTermsEditor } from './QuoteTermsEditor';
 import { QuotePricingOptionsEditor } from './QuotePricingOptionsEditor';
@@ -66,6 +67,14 @@ export function SummaryView() {
           {info.startDate ? ` · khởi hành ${new Date(info.startDate).toLocaleDateString('vi-VN')}` : ''}
         </Typography>
       </Box>
+
+      {/* #5 — Gợi ý giá theo dải biên báo giá thắng tương đương */}
+      <PricingAssistPanel
+        template={template}
+        dest={info.dest}
+        pax={pax}
+        currentMarginPct={totals.grandTotal > 0 ? (totalProfit / totals.grandTotal) * 100 : undefined}
+      />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
         {/* ── Left: cost by category ── */}
