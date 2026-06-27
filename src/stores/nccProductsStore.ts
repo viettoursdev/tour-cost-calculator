@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeNccProducts, sbPushNccProducts } from '@/lib/supabase';
+import { sbSubscribeNccProducts, sbUpsertNccProduct, sbDeleteNccProduct } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { NccProduct } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -34,28 +34,46 @@ export const useNccProductsStore = create<State>()(
 
     save: async (product) => {
       const u = useAuthStore.getState().currentUser;
-      if (!u) return;
-      const { products } = get();
+      if (!u) {
+        window.alert('⚠️ Chưa đăng nhập (hoặc phiên đã hết hạn) — không thể lưu. Vui lòng đăng nhập lại rồi lưu lại.');
+        throw new Error('Chưa đăng nhập');
+      }
+      const prev = get().products; // để rollback nếu đồng bộ thất bại
       const now = new Date().toISOString();
-      const isNew = !products.find((p) => p.id === product.id);
+      const isNew = !prev.find((p) => p.id === product.id);
       const stamped: NccProduct = isNew
         ? { ...product, id: product.id || newNccProductId(), createdAt: now, createdBy: u.name }
         : { ...product, updatedAt: now, updatedBy: u.name };
-      const next = isNew ? [stamped, ...products] : products.map((p) => (p.id === product.id ? stamped : p));
+      const next = isNew ? [stamped, ...prev] : prev.map((p) => (p.id === product.id ? stamped : p));
       set({ products: next, syncing: true });
-      try { await sbPushNccProducts(next, { name: u.name, role: u.role }); }
-      catch (e) { window.alert('❌ Lỗi đồng bộ sản phẩm NCC: ' + (e as Error).message); }
-      finally { set({ syncing: false }); }
+      try {
+        // Chỉ upsert ĐÚNG sản phẩm vừa sửa — KHÔNG xoá/đụng sản phẩm khác.
+        await sbUpsertNccProduct(stamped, { name: u.name, role: u.role });
+      } catch (e) {
+        set({ products: prev }); // rollback: không để UI báo "đã lưu" giả
+        window.alert('❌ Lỗi đồng bộ sản phẩm NCC (CHƯA lưu được): ' + (e as Error).message);
+        throw e;
+      } finally {
+        set({ syncing: false });
+      }
     },
 
     remove: async (id) => {
       const u = useAuthStore.getState().currentUser;
-      if (!u) return;
-      const next = get().products.filter((p) => p.id !== id);
-      set({ products: next, syncing: true });
-      try { await sbPushNccProducts(next, { name: u.name, role: u.role }); }
-      catch (e) { window.alert('❌ Lỗi xoá sản phẩm NCC: ' + (e as Error).message); }
-      finally { set({ syncing: false }); }
+      if (!u) {
+        window.alert('⚠️ Chưa đăng nhập (hoặc phiên đã hết hạn) — không thể xoá. Vui lòng đăng nhập lại.');
+        return;
+      }
+      const prev = get().products;
+      set({ products: prev.filter((p) => p.id !== id), syncing: true });
+      try {
+        await sbDeleteNccProduct(id);
+      } catch (e) {
+        set({ products: prev }); // rollback — không để mục đã xoá biến mất trên UI nếu DB chưa xoá
+        window.alert('❌ Lỗi xoá sản phẩm NCC (CHƯA xoá được): ' + (e as Error).message);
+      } finally {
+        set({ syncing: false });
+      }
     },
   })),
 );

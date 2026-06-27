@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getViettoursClient, truncate } from './_setup';
-import { sbPushNccProducts, sbSubscribeNccProducts } from '../../src/lib/supabase';
+import { sbPushNccProducts, sbUpsertNccProduct, sbDeleteNccProduct, sbSubscribeNccProducts } from '../../src/lib/supabase';
 import type { NccProduct } from '../../src/types';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
@@ -107,5 +107,44 @@ describe('ncc_products gateway', () => {
     const list = await once<NccProduct[]>((cb) => sbSubscribeNccProducts(cb, c));
     expect(list.length).toBe(1);
     expect(list[0].name).toBe('A v2');
+  });
+
+  // An toàn dữ liệu: thêm/sửa MỘT sản phẩm KHÔNG được xoá các sản phẩm khác.
+  it('sbUpsertNccProduct upserts one product without wiping siblings', async () => {
+    const c = await getViettoursClient();
+    const base: NccProduct = {
+      id: 'p', nccId: null, nccName: 'X', category: 'transport', name: 'X',
+      prices: [], files: [], createdAt: '2026-01-01T00:00:00.000Z', createdBy: 'tester',
+    };
+    await sbPushNccProducts([
+      { ...base, id: 'keep-1', name: 'Giữ 1' },
+      { ...base, id: 'keep-2', name: 'Giữ 2' },
+    ], { name: 'QA', role: 'Operations' }, c);
+
+    await sbUpsertNccProduct({ ...base, id: 'new-3', name: 'Mới 3' }, { name: 'QA', role: 'Operations' }, c);
+
+    const list = await once<NccProduct[]>((cb) => sbSubscribeNccProducts(cb, c));
+    expect(list.map((p) => p.id).sort()).toEqual(['keep-1', 'keep-2', 'new-3']);
+  });
+
+  it('sbDeleteNccProduct removes only the target product (and its attachments)', async () => {
+    const c = await getViettoursClient();
+    const base: NccProduct = {
+      id: 'p', nccId: null, nccName: 'X', category: 'transport', name: 'X',
+      prices: [], files: [], createdAt: '2026-01-01T00:00:00.000Z', createdBy: 'tester',
+    };
+    await sbPushNccProducts([
+      { ...base, id: 'del-me', name: 'Xoá', files: [{ key: 'r2-del', name: 'f.pdf', uploadedBy: 'QA', uploadedAt: '2026-05-01T00:00:00.000Z' }] },
+      { ...base, id: 'survive', name: 'Còn lại' },
+    ], { name: 'QA', role: 'Operations' }, c);
+
+    await sbDeleteNccProduct('del-me', c);
+
+    const list = await once<NccProduct[]>((cb) => sbSubscribeNccProducts(cb, c));
+    expect(list.map((p) => p.id)).toEqual(['survive']);
+    const { count } = await c.from('attachments')
+      .select('*', { count: 'exact', head: true })
+      .eq('parent_type', 'ncc_product').eq('parent_id', 'del-me');
+    expect(count).toBe(0);
   });
 });

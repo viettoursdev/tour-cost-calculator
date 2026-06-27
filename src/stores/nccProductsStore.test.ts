@@ -37,7 +37,10 @@ describe('nccProductsStore', () => {
     expect(list[0].name).toBe('Xe 16 chỗ');
     expect(list[0].createdBy).toBe('Khang');
     expect(list[0].id.length).toBeGreaterThan(0);
-    expect(sb.sbPushNccProducts).toHaveBeenCalledTimes(1);
+    // Lưu an toàn: chỉ upsert ĐÚNG sản phẩm vừa thêm, KHÔNG đẩy cả danh sách (tránh wipe).
+    expect(sb.sbUpsertNccProduct).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbUpsertNccProduct).mock.calls[0][0]).toMatchObject({ name: 'Xe 16 chỗ' });
+    expect(sb.sbPushNccProducts).not.toHaveBeenCalled();
   });
 
   it('save updates an existing product in place', async () => {
@@ -49,13 +52,25 @@ describe('nccProductsStore', () => {
     expect(list[0].updatedBy).toBe('Khang');
   });
 
-  it('remove deletes by id and pushes', async () => {
+  it('save rolls back optimistic state when sync fails', async () => {
+    vi.mocked(sb.sbUpsertNccProduct).mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
+    useNccProductsStore.setState({ products: [prod()] }, false);
+    await expect(useNccProductsStore.getState().save(prod({ id: '', name: 'Mới' }))).rejects.toThrow('boom');
+    // Rollback: danh sách trở lại như cũ, không giữ lại bản "lưu" giả.
+    const list = useNccProductsStore.getState().products;
+    expect(list).toHaveLength(1);
+    expect(list[0].name).toBe('Phòng đôi');
+  });
+
+  it('remove deletes only that product (no full-list push)', async () => {
     useNccProductsStore.setState({ products: [prod(), prod({ id: 'np2', name: 'B' })] }, false);
     await useNccProductsStore.getState().remove('np1');
     const list = useNccProductsStore.getState().products;
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe('np2');
-    expect(sb.sbPushNccProducts).toHaveBeenCalledTimes(1);
+    expect(sb.sbDeleteNccProduct).toHaveBeenCalledWith('np1');
+    expect(sb.sbPushNccProducts).not.toHaveBeenCalled();
   });
 });
 

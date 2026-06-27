@@ -117,6 +117,8 @@ export const sbUnpublishQuote = vi.fn(async () => {});
 export const sbSetQuoteShare = vi.fn(async () => {});
 export const sbSubscribeNccProducts = vi.fn(() => () => {});
 export const sbPushNccProducts = vi.fn(async () => {});
+export const sbUpsertNccProduct = vi.fn(async () => {});
+export const sbDeleteNccProduct = vi.fn(async () => {});
 
 // ── FX rates ──
 export const sbSubscribeFxRates = vi.fn(() => () => {});

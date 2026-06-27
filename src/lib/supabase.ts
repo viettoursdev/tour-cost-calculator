@@ -698,6 +698,92 @@ export function sbSubscribeNccProducts(
   }, cb);
 }
 
+/** Resolve app legacy_id(s) on suppliers → supplier uuid for the FK. */
+async function resolveSupplierIds(
+  client: SupabaseClient, nccLegacyIds: string[], ctx: string,
+): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(nccLegacyIds.filter(Boolean)));
+  if (!ids.length) return new Map();
+  const { data: sups, error } = await client
+    .from('suppliers').select('id, legacy_id').in('legacy_id', ids);
+  if (error) throw new Error(`${ctx} resolve suppliers: ` + error.message);
+  return new Map((sups ?? []).map((s) => [s.legacy_id as string, s.id as string]));
+}
+
+/** Upsert MỘT sản phẩm + bảng giá + file đính kèm (KHÔNG đụng tới sản phẩm khác). */
+async function upsertNccProductRow(
+  client: SupabaseClient,
+  prod: NccProduct,
+  supplierIdMap: Map<string, string>,
+  stamp: { updated_at: string; updated_by_name: string },
+  ctx: string,
+): Promise<void> {
+  const { data: up, error: upErr } = await client
+    .from('ncc_products')
+    .upsert(
+      {
+        legacy_id: prod.id,
+        supplier_id: prod.nccId ? (supplierIdMap.get(prod.nccId) ?? null) : null,
+        ncc_name: prod.nccName,
+        category: prod.category,
+        name: prod.name,
+        description: prod.description ?? null,
+        note: prod.note ?? null,
+        created_by_name: prod.createdBy,
+        created_at: prod.createdAt,
+        ...stamp,
+      },
+      { onConflict: 'legacy_id' },
+    )
+    .select('id')
+    .single();
+  if (upErr) throw new Error(`${ctx} upsert: ` + upErr.message);
+  await replaceChildren(
+    client,
+    'ncc_product_prices',
+    'product_id',
+    up!.id,
+    prod.prices.map((pr, i) => ({
+      product_id: up!.id,
+      label: pr.label,
+      amount: pr.amount,
+      cur: pr.cur,
+      unit: pr.unit,
+      note: pr.note ?? null,
+      sort_order: i,
+    })),
+  );
+  await saveAttachments(client, 'ncc_product', prod.id, prod.files);
+}
+
+/**
+ * Lưu MỘT sản phẩm NCC (an toàn dữ liệu — KHÔNG xoá sản phẩm nào khác).
+ * Dùng cho thao tác thêm/sửa từng sản phẩm trong UI. Ném lỗi nếu thất bại để
+ * store rollback + báo cho người dùng (tránh "lưu âm thầm thất bại").
+ */
+export async function sbUpsertNccProduct(
+  product: NccProduct,
+  pushedBy: { name: string; role: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const stamp = {
+    updated_at: new Date().toISOString(),
+    updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
+  };
+  const supplierIdMap = await resolveSupplierIds(
+    client, product.nccId ? [product.nccId] : [], 'sbUpsertNccProduct',
+  );
+  await upsertNccProductRow(client, product, supplierIdMap, stamp, 'sbUpsertNccProduct');
+}
+
+/** Xoá MỘT sản phẩm NCC theo legacy_id + dọn file đính kèm của nó (prices cascade theo FK). */
+export async function sbDeleteNccProduct(id: string, client: SupabaseClient = sb): Promise<void> {
+  // Dọn attachments trước (không có FK cascade vì chung bảng attachments theo parent_type).
+  await saveAttachments(client, 'ncc_product', id, []);
+  const del = await client.from('ncc_products').delete().eq('legacy_id', id);
+  if (del.error) throw new Error('sbDeleteNccProduct: ' + del.error.message);
+}
+
 export async function sbPushNccProducts(
   list: NccProduct[],
   pushedBy: { name: string; role: string },
@@ -708,57 +794,12 @@ export async function sbPushNccProducts(
     updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
   };
 
-  // Resolve nccId (app legacy_id on suppliers) → supplier uuid for FK
-  const nccLegacyIds = Array.from(
-    new Set(list.map((p) => p.nccId).filter(Boolean) as string[]),
+  const supplierIdMap = await resolveSupplierIds(
+    client, list.map((p) => p.nccId).filter(Boolean) as string[], 'sbPushNccProducts',
   );
-  let supplierIdMap = new Map<string, string>();
-  if (nccLegacyIds.length) {
-    const { data: sups, error: supErr } = await client
-      .from('suppliers')
-      .select('id, legacy_id')
-      .in('legacy_id', nccLegacyIds);
-    if (supErr) throw new Error('sbPushNccProducts resolve suppliers: ' + supErr.message);
-    supplierIdMap = new Map((sups ?? []).map((s) => [s.legacy_id as string, s.id as string]));
-  }
 
   for (const prod of list) {
-    const { data: up, error: upErr } = await client
-      .from('ncc_products')
-      .upsert(
-        {
-          legacy_id: prod.id,
-          supplier_id: prod.nccId ? (supplierIdMap.get(prod.nccId) ?? null) : null,
-          ncc_name: prod.nccName,
-          category: prod.category,
-          name: prod.name,
-          description: prod.description ?? null,
-          note: prod.note ?? null,
-          created_by_name: prod.createdBy,
-          created_at: prod.createdAt,
-          ...stamp,
-        },
-        { onConflict: 'legacy_id' },
-      )
-      .select('id')
-      .single();
-    if (upErr) throw new Error('sbPushNccProducts upsert: ' + upErr.message);
-    await replaceChildren(
-      client,
-      'ncc_product_prices',
-      'product_id',
-      up!.id,
-      prod.prices.map((pr, i) => ({
-        product_id: up!.id,
-        label: pr.label,
-        amount: pr.amount,
-        cur: pr.cur,
-        unit: pr.unit,
-        note: pr.note ?? null,
-        sort_order: i,
-      })),
-    );
-    await saveAttachments(client, 'ncc_product', prod.id, prod.files);
+    await upsertNccProductRow(client, prod, supplierIdMap, stamp, 'sbPushNccProducts');
   }
 
   // Full-overwrite: delete products removed from the list using safe fetch-then-delete pattern.
