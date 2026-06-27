@@ -41,6 +41,8 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import DensitySmallIcon from '@mui/icons-material/DensitySmall';
+import DensityLargeIcon from '@mui/icons-material/DensityLarge';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -55,7 +57,7 @@ import { useItineraryStore } from '@/stores/itineraryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useGuideScheduleStore } from '@/stores/guideScheduleStore';
 import { canShareRecord } from '@/auth/recordAccess';
-import { userLabel, isApprover } from '@/auth/ROLES';
+import { userLabel, isApprover, isBoard } from '@/auth/ROLES';
 import {
   sbSendNotification, sbGetQuoteFlights, sbSubscribeAuditLog,
   sbEnsureNotifThread, sbSubscribeNotifThread, sbAddThreadComment, sbSendNotificationMany,
@@ -78,6 +80,7 @@ import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
 import type { TourProfilePdfData } from '@/lib/exports/exportTourProfilePDF';
 import { LEGACY } from '@/theme';
+import { QUOTE_VALUE_ROLE_LABEL } from '@/types';
 import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, Customer, DeleteRequest, ExportRequest, FileAttachment, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
 const STAGE_META = (st: DealStage) =>
@@ -110,6 +113,9 @@ const genCommentId = () => Date.now().toString(36) + Math.random().toString(36).
 
 /** Số lượng thực thể liên kết gom theo hồ sơ (qua các báo giá thuộc hồ sơ). */
 type ProfileLinks = { contract: number; visa: number; menu: number; itinerary: number };
+
+/** Tuỳ chọn xuất Excel: khoảng ngày khởi hành + phân loại hồ sơ. */
+type ExportFilters = { from: string; to: string; categories: TourCategory[] };
 
 /** 3 mốc giá trị tour — tự suy từ dữ liệu liên kết (không nhập tay). */
 type ProfileValues = {
@@ -149,6 +155,12 @@ const loadExpanded = (u?: string): Set<string> => {
   catch { return new Set(); }
 };
 
+const densityKey = (u: string) => `vte_tourprofile_density_${u}`;
+const loadDensity = (u?: string): 'comfortable' | 'compact' => {
+  if (!u) return 'comfortable';
+  return localStorage.getItem(densityKey(u)) === 'compact' ? 'compact' : 'comfortable';
+};
+
 /**
  * Đợt 3 — "Hồ sơ tour": DANH SÁCH các hồ sơ tour user được xem (creator/collab/
  * follow/Trưởng-Phó Phòng cùng phòng/BGĐ-CEO). Mỗi hồ sơ xem nhanh (preview ẩn/hiện)
@@ -182,7 +194,8 @@ export function TourProfilesView() {
   const removeExport = useExportRequestStore((s) => s.remove);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const showPrice = canSeePrices(currentUser);
-  const isExportApprover = !!currentUser && isApprover(currentUser.role);
+  // Cổng xuất Excel hồ sơ tour SIẾT ở mức Ban Giám Đốc trở lên (cao hơn duyệt thường).
+  const isExportApprover = !!currentUser && isBoard(currentUser.role);
 
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -192,9 +205,11 @@ export function TourProfilesView() {
   const [fltCustomer, setFltCustomer] = useState<string>('');
   const [fltCategory, setFltCategory] = useState<TourCategory | ''>('');
   const [fltCountry, setFltCountry] = useState<string>('');
-  const [fltStage, setFltStage] = useState<DealStage | ''>('');
+  const [fltStage, setFltStage] = useState<DealStage[]>([]);
   const [fltTag, setFltTag] = useState<string>('');
   const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [density, setDensity] = useState<'comfortable' | 'compact'>(() => loadDensity(currentUser?.u));
   const [createOpen, setCreateOpen] = useState(false);
   const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
   const [deleteState, setDeleteState] = useState<TourProfile | null>(null);
@@ -258,13 +273,16 @@ export function TourProfilesView() {
       v.stage = primary
         ? dealStage({ status: primary.status, contract: contractFlags(contractByQuote.get(primary.cloudId)), departureISO: primary.departDate })
         : 'request';
-      // 3 mốc giá trị.
+      // 3 mốc giá trị — ưu tiên báo giá người dùng GẮN vai trò khi lưu (valueRole),
+      // fallback về cách suy gián tiếp (hợp đồng liên kết / quyết toán) cho dữ liệu cũ.
+      const taggedContract = list.find((q) => q.valueRole === 'contract');
+      const taggedSettlement = list.find((q) => q.valueRole === 'settlement');
       const ct = (primary ? contractByQuote.get(primary.cloudId) : undefined) ?? firstContractByProfile.get(p.id);
       const st = primary?.settlementSummary;
       v.values = {
         current: primary?.totalCost,
-        contract: ct ? (ct.contractPax || 0) * (ct.pricePerPax || 0) : undefined,
-        settlement: st ? st.actualCost + st.actualProfit : undefined,
+        contract: taggedContract?.totalCost ?? (ct ? (ct.contractPax || 0) * (ct.pricePerPax || 0) : undefined),
+        settlement: taggedSettlement?.totalCost ?? (st ? st.actualCost + st.actualProfit : undefined),
       };
       // Quốc gia: visa → nước của dự án visa; còn lại → điểm đến (intl chủ yếu).
       v.country = countryByProfile.get(p.id) ?? (primary?.dest ?? p.dest ?? undefined);
@@ -282,7 +300,7 @@ export function TourProfilesView() {
     if (fltCustomer) list = list.filter((p) => (metaOf(p.id).primary?.customerName ?? p.customerName) === fltCustomer);
     if (fltCategory) list = list.filter((p) => tourCategoryOf(p) === fltCategory);
     if (fltCountry) list = list.filter((p) => (metaOf(p.id).country ?? '') === fltCountry);
-    if (fltStage) list = list.filter((p) => metaOf(p.id).stage === fltStage);
+    if (fltStage.length > 0) list = list.filter((p) => fltStage.includes(metaOf(p.id).stage));
     if (fltTag) list = list.filter((p) => (p.tags ?? []).includes(fltTag));
     list.sort((a, b) => {
       if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
@@ -307,7 +325,7 @@ export function TourProfilesView() {
     return { customers: [...customers].sort(), countries: [...countries].sort(), tags: [...tags].sort() };
   }, [visible, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage ? 1 : 0) + (fltTag ? 1 : 0);
+  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage.length > 0 ? 1 : 0) + (fltTag ? 1 : 0);
 
   // ── Tổng quan điều hành (gom theo các hồ sơ đang hiển thị) ──
   const summary = useMemo(() => {
@@ -339,11 +357,11 @@ export function TourProfilesView() {
     [exportRequests],
   );
 
-  // Sinh & tải file Excel thật (đã qua cổng duyệt nếu cần).
-  const runExport = async () => {
+  // Sinh & tải file Excel thật từ tập hồ sơ ĐÃ LỌC (qua hộp thoại tuỳ chọn xuất).
+  const runExport = async (srcRows: TourProfile[], summary: string) => {
     setExporting(true);
     try {
-      const data: TourProfileExportRow[] = rows.map((p) => {
+      const data: TourProfileExportRow[] = srcRows.map((p) => {
         const mt = metaOf(p.id);
         const pr = mt.primary;
         const v = mt.values;
@@ -367,36 +385,37 @@ export function TourProfilesView() {
           status: p.status === 'archived' ? 'Lưu trữ' : 'Đang mở',
         };
       });
-      await exportTourProfilesExcel(data);
+      await exportTourProfilesExcel(data, { filterSummary: summary, generatedBy: currentUser?.name });
     } catch (e) {
       window.alert('❌ Xuất Excel lỗi: ' + (e as Error).message);
     } finally { setExporting(false); }
   };
 
-  // Cổng duyệt xuất Excel: Trưởng Phòng+ tải thẳng; dưới quyền phải được duyệt.
-  const doExport = async () => {
-    if (rows.length === 0) return;
-    if (isExportApprover) { await runExport(); return; }
+  // Cổng duyệt xuất Excel: BAN GIÁM ĐỐC trở lên tải thẳng; dưới quyền phải được duyệt.
+  const proceedExport = async (srcRows: TourProfile[], summary: string) => {
+    if (srcRows.length === 0) { window.alert('Không có hồ sơ nào khớp điều kiện xuất.'); return; }
+    setExportOpen(false);
+    if (isExportApprover) { await runExport(srcRows, summary); return; }
     // Đã được duyệt → tải về rồi tiêu thụ (xoá) yêu cầu.
     if (myExportReq?.status === 'approved') {
-      await runExport();
+      await runExport(srcRows, summary);
       try { await removeExport(myExportReq.id); } catch { /* dọn sau cũng được */ }
       return;
     }
     if (myExportReq?.status === 'pending') {
-      window.alert('⏳ Yêu cầu xuất Excel của bạn đang chờ Trưởng Phòng duyệt.');
+      window.alert('⏳ Yêu cầu xuất Excel của bạn đang chờ Ban Giám Đốc duyệt.');
       return;
     }
     if (myExportReq?.status === 'rejected') {
       if (!window.confirm(`Yêu cầu trước đã bị từ chối${myExportReq.rejectReason ? ` (lý do: ${myExportReq.rejectReason})` : ''}.\nGửi lại yêu cầu xuất Excel?`)) return;
       try { await removeExport(myExportReq.id); } catch { /* bỏ qua */ }
     }
-    // Gửi yêu cầu mới + thông báo cho người duyệt.
+    // Gửi yêu cầu mới + thông báo cho người duyệt (Ban Giám Đốc trở lên).
     if (!currentUser) return;
     try {
-      const detail = `${rows.length} hồ sơ tour`;
+      const detail = summary || `${srcRows.length} hồ sơ tour`;
       await requestExport('tour_profiles', detail);
-      const approverUsernames = users.filter((u) => isApprover(u.role)).map((u) => u.u);
+      const approverUsernames = users.filter((u) => isBoard(u.role)).map((u) => u.u);
       if (approverUsernames.length > 0) {
         await sbSendNotificationMany(approverUsernames, {
           type: 'export_approval',
@@ -406,11 +425,21 @@ export function TourProfilesView() {
           priority: 'high',
         });
       }
-      window.alert('✅ Đã gửi yêu cầu xuất Excel. Chờ Trưởng Phòng duyệt — bạn sẽ nhận thông báo khi được duyệt.');
+      window.alert('✅ Đã gửi yêu cầu xuất Excel. Chờ Ban Giám Đốc duyệt — bạn sẽ nhận thông báo khi được duyệt.');
     } catch (e) {
       window.alert('❌ Gửi yêu cầu xuất lỗi: ' + (e as Error).message);
     }
   };
+
+  // Lọc tập hồ sơ để XUẤT theo khoảng ngày khởi hành + phân loại (trên danh sách đang hiển thị).
+  const filterExportRows = (f: ExportFilters): TourProfile[] =>
+    rows.filter((p) => {
+      const dd = displayBasics(p, metaOf(p.id).primary).departDate || '';
+      if (f.from && (!dd || dd < f.from)) return false;
+      if (f.to && (!dd || dd > f.to)) return false;
+      if (f.categories.length > 0 && !f.categories.includes(tourCategoryOf(p))) return false;
+      return true;
+    });
 
   const onApproveExport = async (id: string) => {
     try { await approveExport(id); } catch (e) { window.alert('❌ ' + (e as Error).message); }
@@ -425,6 +454,14 @@ export function TourProfilesView() {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       if (currentUser) { try { localStorage.setItem(prefsKey(currentUser.u), JSON.stringify([...next])); } catch { /* ignore */ } }
+      return next;
+    });
+  };
+
+  const toggleDensity = () => {
+    setDensity((prev) => {
+      const next = prev === 'compact' ? 'comfortable' : 'compact';
+      if (currentUser) { try { localStorage.setItem(densityKey(currentUser.u), next); } catch { /* ignore */ } }
       return next;
     });
   };
@@ -660,6 +697,11 @@ export function TourProfilesView() {
               <FilterListIcon />
             </IconButton>
           </Tooltip>
+          <Tooltip title={density === 'compact' ? 'Xem đầy đủ' : 'Xem rút gọn'}>
+            <IconButton size="small" color={density === 'compact' ? 'primary' : 'default'} onClick={toggleDensity}>
+              {density === 'compact' ? <DensityLargeIcon /> : <DensitySmallIcon />}
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Lịch khởi hành">
             <IconButton size="small" color={showCalendar ? 'primary' : 'default'} onClick={() => setShowCalendar((v) => !v)}><CalendarMonthIcon /></IconButton>
           </Tooltip>
@@ -669,15 +711,15 @@ export function TourProfilesView() {
           <Tooltip title={
             isExportApprover ? 'Xuất Excel danh sách hồ sơ'
               : myExportReq?.status === 'approved' ? 'Đã được duyệt — tải Excel'
-              : myExportReq?.status === 'pending' ? 'Đang chờ Trưởng Phòng duyệt'
-              : 'Xuất Excel (cần Trưởng Phòng duyệt)'
+              : myExportReq?.status === 'pending' ? 'Đang chờ Ban Giám Đốc duyệt'
+              : 'Xuất Excel (cần Ban Giám Đốc duyệt)'
           }>
             <span>
               <IconButton
                 size="small"
                 color={!isExportApprover && myExportReq?.status === 'approved' ? 'success' : !isExportApprover && myExportReq?.status === 'pending' ? 'warning' : 'default'}
                 disabled={exporting || rows.length === 0}
-                onClick={() => void doExport()}
+                onClick={() => setExportOpen(true)}
               >
                 {!isExportApprover && myExportReq?.status === 'pending' ? <HourglassEmptyIcon /> : <FileDownloadOutlinedIcon />}
               </IconButton>
@@ -695,7 +737,7 @@ export function TourProfilesView() {
         myRequest={isExportApprover ? undefined : myExportReq}
         onApprove={(id) => void onApproveExport(id)}
         onReject={(id) => void onRejectExport(id)}
-        onDownload={() => void doExport()}
+        onDownload={() => setExportOpen(true)}
         onDismiss={(id) => void removeExport(id)}
       />
 
@@ -709,7 +751,7 @@ export function TourProfilesView() {
           fltCountry={fltCountry} setFltCountry={setFltCountry}
           fltStage={fltStage} setFltStage={setFltStage}
           fltTag={fltTag} setFltTag={setFltTag}
-          onClear={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage(''); setFltTag(''); }}
+          onClear={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); }}
           activeFilters={activeFilters}
         />
       </Collapse>
@@ -744,6 +786,7 @@ export function TourProfilesView() {
                 values={mt.values}
                 risks={tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract })}
                 expanded={expanded.has(p.id)}
+                compact={density === 'compact'}
                 showPrice={showPrice}
                 currentUser={currentUser}
                 users={users}
@@ -763,6 +806,16 @@ export function TourProfilesView() {
           })}
         </Stack>
       )}
+
+      <ExportOptionsDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        filterRows={filterExportRows}
+        isApprover={isExportApprover}
+        myRequest={isExportApprover ? undefined : myExportReq}
+        busy={exporting}
+        onSubmit={(srcRows, summary) => void proceedExport(srcRows, summary)}
+      />
 
       <CreateEmptyDialog
         open={createOpen}
@@ -865,6 +918,111 @@ export function TourProfilesView() {
   );
 }
 
+/** dd/mm/yyyy từ chuỗi ISO yyyy-mm-dd (cho tóm tắt điều kiện xuất). */
+const fmtDMY = (iso: string): string => {
+  const [y, m, d] = iso.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : iso;
+};
+
+/**
+ * Hộp thoại TUỲ CHỌN XUẤT EXCEL chuyên nghiệp: chọn khoảng ngày khởi hành + phân loại
+ * hồ sơ; xem trước số hồ sơ khớp; nút hành động đổi theo cổng duyệt (BGĐ tải thẳng,
+ * dưới quyền gửi yêu cầu / tải khi đã duyệt).
+ */
+function ExportOptionsDialog({ open, onClose, filterRows, isApprover, myRequest, busy, onSubmit }: {
+  open: boolean;
+  onClose: () => void;
+  filterRows: (f: ExportFilters) => TourProfile[];
+  isApprover: boolean;
+  myRequest?: ExportRequest;
+  busy: boolean;
+  onSubmit: (rows: TourProfile[], summary: string) => void;
+}) {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [categories, setCategories] = useState<TourCategory[]>([]);
+  useEffect(() => { if (open) { setFrom(''); setTo(''); setCategories([]); } }, [open]);
+
+  const filtered = open ? filterRows({ from, to, categories }) : [];
+  const count = filtered.length;
+  const summary = (() => {
+    const parts: string[] = [`${count} hồ sơ`];
+    if (categories.length > 0) parts.push(categories.map((c) => categoryMeta(c).short).join(', '));
+    if (from || to) parts.push(`KH ${from ? fmtDMY(from) : '…'}–${to ? fmtDMY(to) : '…'}`);
+    return parts.join(' · ');
+  })();
+
+  // Nhãn + trạng thái nút hành động theo cổng duyệt.
+  const approved = !isApprover && myRequest?.status === 'approved';
+  const pending = !isApprover && myRequest?.status === 'pending';
+  const actionLabel = isApprover ? 'Xuất Excel' : approved ? 'Tải Excel' : pending ? 'Đang chờ duyệt' : 'Gửi yêu cầu duyệt';
+
+  const toggleCat = (c: TourCategory) =>
+    setCategories((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+
+  return (
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        Xuất Excel hồ sơ tour
+        <Typography variant="caption" display="block" color="text.secondary">
+          Chọn điều kiện xuất — chỉ <strong>Ban Giám Đốc trở lên</strong> được tải trực tiếp.
+        </Typography>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ mt: 0.5 }}>
+          <Box>
+            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              Ngày khởi hành (tuỳ chọn)
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <TextField size="small" label="Từ ngày" type="date" value={from} onChange={(e) => setFrom(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
+              <TextField size="small" label="Đến ngày" type="date" value={to} onChange={(e) => setTo(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
+            </Stack>
+          </Box>
+          <Box>
+            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              Phân loại (trống = tất cả)
+            </Typography>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              {TOUR_CATEGORIES.map((c) => {
+                const on = categories.includes(c.key);
+                return (
+                  <Chip
+                    key={c.key} label={`${c.icon} ${c.short}`} onClick={() => toggleCat(c.key)}
+                    variant={on ? 'filled' : 'outlined'}
+                    sx={{ fontWeight: 700, ...(on ? { bgcolor: `${c.color}1f`, color: c.color, borderColor: c.color } : { borderColor: 'rgba(0,0,0,0.18)' }) }}
+                  />
+                );
+              })}
+            </Stack>
+          </Box>
+          <Box sx={{ p: 1.25, borderRadius: 1.5, bgcolor: 'rgba(13,122,106,0.06)', border: '1px solid rgba(13,122,106,0.18)' }}>
+            <Typography variant="body2">
+              Sẽ xuất <strong>{count}</strong> hồ sơ — <Typography component="span" variant="caption" color="text.secondary">{summary}</Typography>
+            </Typography>
+          </Box>
+          {!isApprover && !approved && !pending && (
+            <Typography variant="caption" color="text.secondary">
+              Bạn chưa đủ quyền tải trực tiếp — gửi yêu cầu để Ban Giám Đốc duyệt.
+            </Typography>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>Huỷ</Button>
+        <Button
+          variant="contained"
+          disabled={busy || pending || count === 0}
+          onClick={() => onSubmit(filtered, summary)}
+          sx={{ background: LEGACY.headerGradient }}
+        >
+          {busy ? 'Đang xử lý…' : actionLabel}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 /** Thanh DUYỆT XUẤT EXCEL: người duyệt thấy các yêu cầu chờ; người gửi thấy trạng thái của mình. */
 function ExportApprovalBanner({ isApprover, pending, myRequest, onApprove, onReject, onDownload, onDismiss }: {
   isApprover: boolean;
@@ -905,7 +1063,7 @@ function ExportApprovalBanner({ isApprover, pending, myRequest, onApprove, onRej
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
           <CheckCircleOutlineIcon sx={{ fontSize: 18, color: '#16a34a' }} />
           <Typography variant="body2" sx={{ flex: 1, minWidth: 160 }}>
-            Yêu cầu xuất Excel đã được <strong>{myRequest.decidedByName || 'Trưởng Phòng'}</strong> duyệt. Tải về ngay.
+            Yêu cầu xuất Excel đã được <strong>{myRequest.decidedByName || 'Ban Giám Đốc'}</strong> duyệt. Tải về ngay.
           </Typography>
           <Button size="small" variant="contained" startIcon={<FileDownloadOutlinedIcon sx={{ fontSize: 16 }} />}
             onClick={onDownload} sx={{ bgcolor: '#16a34a', '&:hover': { bgcolor: '#15803d' } }}>Tải Excel</Button>
@@ -932,7 +1090,7 @@ function ExportApprovalBanner({ isApprover, pending, myRequest, onApprove, onRej
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <HourglassEmptyIcon sx={{ fontSize: 18, color: '#d97706' }} />
         <Typography variant="body2" sx={{ flex: 1, minWidth: 160 }}>
-          Đã gửi yêu cầu xuất Excel — đang chờ Trưởng Phòng duyệt.
+          Đã gửi yêu cầu xuất Excel — đang chờ Ban Giám Đốc duyệt.
         </Typography>
         <Button size="small" onClick={() => onDismiss(myRequest.id)}>Huỷ yêu cầu</Button>
       </Stack>
@@ -1119,11 +1277,14 @@ function QuickViewDialog({ profile, meta, quoteCount, showPrice, onClose, onOpen
           {meta.links.menu > 0 && <Meta label="Thực đơn" value={String(meta.links.menu)} />}
           {meta.links.itinerary > 0 && <Meta label="Chương trình" value={String(meta.links.itinerary)} />}
           {meta.guide > 0 && <Meta label="Lịch HDV" value={String(meta.guide)} />}
-          {showPrice && typeof meta.values.current === 'number' && <Meta label="Báo giá hiện tại" value={fmtVND(meta.values.current)} />}
-          {showPrice && typeof meta.values.contract === 'number' && meta.values.contract > 0 && <Meta label="Báo giá hợp đồng" value={fmtVND(meta.values.contract)} />}
-          {showPrice && typeof meta.values.settlement === 'number' && <Meta label="Báo giá nghiệm thu" value={fmtVND(meta.values.settlement)} />}
           <Meta label="Người tạo" value={profile.createdBy || '—'} />
         </Box>
+        {showPrice && (
+          <Box sx={{ mt: 1.25 }}>
+            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Giá trị tour</Typography>
+            <ValueLadder values={meta.values} />
+          </Box>
+        )}
         {profile.note && (
           <Box sx={{ mt: 1.25 }}>
             <Typography variant="caption" fontWeight={800} color="text.secondary">Ghi chú</Typography>
@@ -1304,7 +1465,7 @@ function FilterPanel({
   fltCustomer: string; setFltCustomer: (v: string) => void;
   fltCategory: TourCategory | ''; setFltCategory: (v: TourCategory | '') => void;
   fltCountry: string; setFltCountry: (v: string) => void;
-  fltStage: DealStage | ''; setFltStage: (v: DealStage | '') => void;
+  fltStage: DealStage[]; setFltStage: (v: DealStage[]) => void;
   fltTag: string; setFltTag: (v: string) => void;
   onClear: () => void; activeFilters: number;
 }) {
@@ -1324,12 +1485,22 @@ function FilterPanel({
         <Autocomplete size="small" options={countries} value={fltCountry || null}
           onChange={(_, v) => setFltCountry(v ?? '')}
           renderInput={(pr) => <TextField {...pr} label="Quốc gia / điểm đến" placeholder="Tất cả" />} />
-        <TextField select size="small" label="Giai đoạn" value={fltStage}
-          onChange={(e) => setFltStage(e.target.value as DealStage | '')}
-          SelectProps={{ native: true }} InputLabelProps={{ shrink: true }}>
-          <option value="">Tất cả</option>
-          {stageCols.map((s) => <option key={s.key} value={s.key}>{s.short}</option>)}
-        </TextField>
+        <Autocomplete
+          multiple size="small" disableCloseOnSelect
+          options={stageCols}
+          value={stageCols.filter((s) => fltStage.includes(s.key))}
+          onChange={(_, v) => setFltStage(v.map((s) => s.key))}
+          getOptionLabel={(s) => s.short}
+          isOptionEqualToValue={(a, b) => a.key === b.key}
+          renderTags={(value, getTagProps) =>
+            value.map((s, idx) => {
+              const { key, ...tagProps } = getTagProps({ index: idx });
+              return <Chip key={key} {...tagProps} size="small" label={s.short}
+                sx={{ height: 20, bgcolor: `${s.color}1a`, color: s.color, fontWeight: 700 }} />;
+            })
+          }
+          renderInput={(pr) => <TextField {...pr} label="Giai đoạn" placeholder={fltStage.length ? '' : 'Tất cả'} />}
+        />
         {tags.length > 0 && (
           <Autocomplete size="small" options={tags} value={fltTag || null}
             onChange={(_, v) => setFltTag(v ?? '')}
@@ -1434,12 +1605,12 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 }
 
 function ProfileRow({
-  profile, stage, primary, guideCount, quotes, links, values, risks, expanded, showPrice,
+  profile, stage, primary, guideCount, quotes, links, values, risks, expanded, compact, showPrice,
   currentUser, users, onToggle, onEdit, onQuickView, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
   onApproveDelete, onRejectDelete,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
-  links: ProfileLinks; values: ProfileValues; risks: TourRisk[]; expanded: boolean; showPrice: boolean;
+  links: ProfileLinks; values: ProfileValues; risks: TourRisk[]; expanded: boolean; compact: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onEdit: () => void; onQuickView: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
   onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void; onDelete: () => void;
@@ -1456,7 +1627,7 @@ function ProfileRow({
   const archived = profile.status === 'archived';
 
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, borderLeft: `4px solid ${sm.color}`, opacity: archived ? 0.6 : 1 }}>
+    <Paper variant="outlined" sx={{ p: compact ? 1 : 1.5, borderLeft: `4px solid ${sm.color}`, opacity: archived ? 0.6 : 1 }}>
       <Stack direction="row" alignItems="flex-start" spacing={1.25}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
@@ -1479,47 +1650,30 @@ function ProfileRow({
               <Chip key={t} size="small" label={`# ${t}`} variant="outlined" sx={{ height: 20, borderColor: '#7c3aed', color: '#7c3aed' }} />
             ))}
           </Stack>
-          <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
             <Meta label="Khách" value={custName || '—'} />
             <Meta label="Khởi hành" value={departDate ? new Date(departDate).toLocaleDateString('vi-VN') : '—'} />
             {pax ? <Meta label="Số khách" value={String(pax)} /> : null}
             <Meta label="Báo giá" value={String(quotes.length)} />
-            {links.contract > 0 && <Meta label="Hợp đồng" value={String(links.contract)} />}
-            {links.visa > 0 && <Meta label="Visa" value={String(links.visa)} />}
-            {links.menu > 0 && <Meta label="Thực đơn" value={String(links.menu)} />}
-            {links.itinerary > 0 && <Meta label="Chương trình" value={String(links.itinerary)} />}
-            {guideCount > 0 && <Meta label="Lịch HDV" value={String(guideCount)} />}
-            {showPrice && typeof values.current === 'number' && <Meta label="Báo giá hiện tại" value={fmtVND(values.current)} />}
-            {showPrice && typeof values.contract === 'number' && values.contract > 0 && <Meta label="Báo giá hợp đồng" value={fmtVND(values.contract)} />}
-            {showPrice && typeof values.settlement === 'number' && <Meta label="Báo giá nghiệm thu" value={fmtVND(values.settlement)} />}
+            {!compact && links.contract > 0 && <Meta label="Hợp đồng" value={String(links.contract)} />}
+            {!compact && links.visa > 0 && <Meta label="Visa" value={String(links.visa)} />}
+            {!compact && links.menu > 0 && <Meta label="Thực đơn" value={String(links.menu)} />}
+            {!compact && links.itinerary > 0 && <Meta label="Chương trình" value={String(links.itinerary)} />}
+            {!compact && guideCount > 0 && <Meta label="Lịch HDV" value={String(guideCount)} />}
+            {showPrice && <ValueLadder values={values} compact={compact} />}
           </Stack>
-          <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
-              <PersonOutlineIcon sx={{ fontSize: 14 }} />
-              <Typography variant="caption">
-                Tạo bởi <strong>{profile.createdBy || '—'}</strong>
-                {profile.createdAt ? ` · ${new Date(profile.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
-              </Typography>
+          {!compact && (
+            <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
+                <PersonOutlineIcon sx={{ fontSize: 14 }} />
+                <Typography variant="caption">
+                  Tạo bởi <strong>{profile.createdBy || '—'}</strong>
+                  {profile.createdAt ? ` · ${new Date(profile.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                </Typography>
+              </Stack>
+              <PeopleStrip collaborators={profile.collaborators} followers={profile.followers} eventStaff={profile.eventStaff} />
             </Stack>
-            {(profile.collaborators?.length ?? 0) > 0 && (
-              <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
-                <Typography variant="caption" color="text.secondary">Cộng tác:</Typography>
-                {(profile.collaborators ?? []).map((c) => (
-                  <Chip key={c.u} size="small" icon={<GroupAddIcon sx={{ fontSize: 13 }} />} label={c.name}
-                    sx={{ height: 20, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
-                ))}
-              </Stack>
-            )}
-            {(profile.eventStaff?.length ?? 0) > 0 && (
-              <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
-                <Typography variant="caption" color="text.secondary">Nhân sự event:</Typography>
-                {(profile.eventStaff ?? []).map((c) => (
-                  <Chip key={c.u} size="small" icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 13 }} />} label={c.name}
-                    sx={{ height: 20, bgcolor: 'rgba(217,119,6,0.12)', color: '#d97706' }} />
-                ))}
-              </Stack>
-            )}
-          </Stack>
+          )}
         </Box>
         <Stack direction="row" spacing={0.5} alignItems="center">
           {(profile.collaborators?.length || profile.followers?.length) ? (
@@ -1591,9 +1745,16 @@ function ProfileRow({
                   <Stack key={q.cloudId} direction="row" alignItems="center" spacing={0.5}
                     sx={{ border: '1px solid rgba(15,58,74,0.12)', borderRadius: 1.5, px: 1, py: 0.5 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography fontSize={13} fontWeight={600} noWrap>
-                        {isPrimary ? '★ ' : ''}{q.name}
-                      </Typography>
+                      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
+                        <Typography fontSize={13} fontWeight={600} noWrap>
+                          {isPrimary ? '★ ' : ''}{q.name}
+                        </Typography>
+                        {q.valueRole && q.valueRole !== 'current' && (
+                          <Chip size="small" label={QUOTE_VALUE_ROLE_LABEL[q.valueRole]}
+                            sx={{ height: 16, fontSize: 9.5, fontWeight: 800,
+                              bgcolor: `${VALUE_STEP_COLOR[q.valueRole]}1a`, color: VALUE_STEP_COLOR[q.valueRole] }} />
+                        )}
+                      </Stack>
                       <Typography variant="caption" color="text.secondary">{q.quoteCode}{showPrice ? ` · ${fmtVND(q.totalCost ?? 0)}` : ''}</Typography>
                     </Box>
                     {canShare && !isPrimary && (
@@ -1676,6 +1837,92 @@ function Meta({ label, value }: { label: string; value: string }) {
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.1 }}>{label}</Typography>
       <Typography fontSize={13} fontWeight={700} noWrap>{value}</Typography>
     </Box>
+  );
+}
+
+/** Màu cho từng mốc giá trị (hiện tại → hợp đồng → nghiệm thu). */
+const VALUE_STEP_COLOR: Record<keyof ProfileValues, string> = {
+  current: '#0d7a6a', contract: '#2563eb', settlement: '#7c3aed',
+};
+const VALUE_STEP_LABEL: Record<keyof ProfileValues, string> = {
+  current: 'Hiện tại', contract: 'Hợp đồng', settlement: 'Nghiệm thu',
+};
+
+/**
+ * "Thang giá trị" — 1 khối gọn thể hiện 3 mốc giá trị hồ sơ theo hàng
+ * (Hiện tại → Hợp đồng → Nghiệm thu) + chênh lệch (Δ) giữa các mốc kề nhau.
+ * Chỉ hiện những mốc có số; trống hoàn toàn → không render.
+ */
+function ValueLadder({ values, compact }: { values: ProfileValues; compact?: boolean }) {
+  const steps = (['current', 'contract', 'settlement'] as (keyof ProfileValues)[])
+    .map((k) => ({ k, val: values[k] }))
+    .filter((s): s is { k: keyof ProfileValues; val: number } => typeof s.val === 'number');
+  if (steps.length === 0) return null;
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex', alignItems: 'stretch', flexWrap: 'wrap', gap: 0,
+        borderRadius: 1.5, border: '1px solid rgba(15,58,74,0.12)', overflow: 'hidden',
+        bgcolor: 'rgba(13,122,106,0.02)',
+      }}
+    >
+      {steps.map((s, i) => {
+        const prev = i > 0 ? steps[i - 1].val : null;
+        const delta = prev !== null ? s.val - prev : null;
+        const color = VALUE_STEP_COLOR[s.k];
+        return (
+          <Box key={s.k} sx={{ display: 'flex', alignItems: 'center' }}>
+            {i > 0 && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', px: 0.5, color: 'text.disabled' }}>
+                <ChevronRightIcon sx={{ fontSize: 16 }} />
+                {delta !== null && delta !== 0 && (
+                  <Typography sx={{ fontSize: 9, fontWeight: 800, lineHeight: 1, color: delta >= 0 ? '#16a34a' : '#dc2626' }}>
+                    {delta >= 0 ? '+' : ''}{fmtVND(delta)}
+                  </Typography>
+                )}
+              </Box>
+            )}
+            <Box sx={{ px: compact ? 0.9 : 1.1, py: compact ? 0.35 : 0.5, borderLeft: i > 0 ? 'none' : `3px solid ${color}` }}>
+              <Typography sx={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.3, color, lineHeight: 1.1, textTransform: 'uppercase' }}>
+                {VALUE_STEP_LABEL[s.k]}
+              </Typography>
+              <Typography sx={{ fontSize: compact ? 12 : 13, fontWeight: 800, lineHeight: 1.15 }}>{fmtVND(s.val)}</Typography>
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+/** Meta 3 nhóm nhân sự (cộng tác / theo dõi / nhân sự event) — nhãn + màu + icon riêng. */
+const PEOPLE_GROUPS = [
+  { key: 'collab', label: 'Cộng tác', color: '#0d7a6a', Icon: GroupAddIcon },
+  { key: 'follow', label: 'Theo dõi', color: '#64748b', Icon: VisibilityIcon },
+  { key: 'event', label: 'Nhân sự event', color: '#d97706', Icon: ConfirmationNumberOutlinedIcon },
+] as const;
+
+/** Dải chip nhân sự gọn (dùng trong dòng hồ sơ) — 3 nhóm có nhãn + màu riêng. */
+function PeopleStrip({ collaborators, followers, eventStaff }: {
+  collaborators?: Collaborator[]; followers?: Collaborator[]; eventStaff?: Collaborator[];
+}) {
+  const data: Record<string, Collaborator[] | undefined> = { collab: collaborators, follow: followers, event: eventStaff };
+  const groups = PEOPLE_GROUPS.filter((g) => (data[g.key]?.length ?? 0) > 0);
+  if (groups.length === 0) return null;
+  return (
+    <>
+      {groups.map((g) => (
+        <Stack key={g.key} direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="caption" sx={{ color: g.color, fontWeight: 700 }}>{g.label}:</Typography>
+          {(data[g.key] ?? []).map((c) => (
+            <Chip key={c.u} size="small"
+              avatar={<Avatar sx={{ bgcolor: g.color, color: '#fff', fontSize: 10, fontWeight: 700 }}>{c.name.charAt(0)}</Avatar>}
+              label={c.name}
+              sx={{ height: 22, bgcolor: `${g.color}14`, color: g.color, fontWeight: 600 }} />
+          ))}
+        </Stack>
+      ))}
+    </>
   );
 }
 
@@ -2346,40 +2593,61 @@ function ShareControl({ profile, users, currentUser, canShare }: {
     } finally { setBusy(false); }
   };
 
+  const sectionData: Record<string, { items: Collaborator[]; onRemove?: (u: string) => void }> = {
+    collab: { items: profile.collaborators ?? [] },
+    follow: { items: profile.followers ?? [] },
+    event: { items: profile.eventStaff ?? [], onRemove: canShare ? (u) => void removeEventStaff(profile.id, u) : undefined },
+  };
+  const anyPeople = PEOPLE_GROUPS.some((g) => sectionData[g.key].items.length > 0);
+
   return (
     <Box>
-      <Typography variant="caption" fontWeight={800} color="text.secondary">Cộng tác · Theo dõi · Nhân sự event</Typography>
-      <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, mb: 0.75 }} flexWrap="wrap" useFlexGap>
-        {(profile.collaborators ?? []).map((c) => (
-          <Chip key={'c' + c.u} size="small" icon={<GroupAddIcon sx={{ fontSize: 14 }} />} label={c.name}
-            sx={{ height: 22, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
-        ))}
-        {(profile.followers ?? []).map((c) => (
-          <Chip key={'f' + c.u} size="small" icon={<VisibilityIcon sx={{ fontSize: 14 }} />} label={c.name}
-            variant="outlined" sx={{ height: 22 }} />
-        ))}
-        {(profile.eventStaff ?? []).map((c) => (
-          <Chip key={'e' + c.u} size="small" icon={<ConfirmationNumberOutlinedIcon sx={{ fontSize: 14 }} />} label={c.name}
-            onDelete={canShare ? () => void removeEventStaff(profile.id, c.u) : undefined}
-            sx={{ height: 22, bgcolor: 'rgba(217,119,6,0.12)', color: '#d97706' }} />
-        ))}
-        {!profile.collaborators?.length && !profile.followers?.length && !profile.eventStaff?.length && (
-          <Typography variant="caption" color="text.secondary">Chỉ mình bạn.</Typography>
-        )}
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }}>
+        <GroupAddIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+        <Typography variant="caption" fontWeight={800} color="text.secondary">Cộng tác · Theo dõi · Nhân sự event</Typography>
+      </Stack>
+      {!anyPeople && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>Chỉ mình bạn.</Typography>
+      )}
+      <Stack spacing={0.75} sx={{ mb: canShare ? 1 : 0 }}>
+        {PEOPLE_GROUPS.map((g) => {
+          const { items, onRemove } = sectionData[g.key];
+          if (items.length === 0) return null;
+          return (
+            <Box key={g.key}
+              sx={{ p: 0.75, borderRadius: 1.5, border: `1px solid ${g.color}33`, bgcolor: `${g.color}0a` }}>
+              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                <g.Icon sx={{ fontSize: 15, color: g.color }} />
+                <Typography variant="caption" sx={{ color: g.color, fontWeight: 800, minWidth: 88 }}>
+                  {g.label} ({items.length})
+                </Typography>
+                {items.map((c) => (
+                  <Chip key={c.u} size="small"
+                    avatar={<Avatar sx={{ bgcolor: g.color, color: '#fff', fontSize: 10, fontWeight: 700 }}>{c.name.charAt(0)}</Avatar>}
+                    label={c.name}
+                    onDelete={onRemove ? () => onRemove(c.u) : undefined}
+                    sx={{ height: 24, bgcolor: '#fff', border: `1px solid ${g.color}40`, color: g.color, fontWeight: 600 }} />
+                ))}
+              </Stack>
+            </Box>
+          );
+        })}
       </Stack>
       {canShare ? (
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
           <Autocomplete
-            size="small" sx={{ flex: 1, minWidth: 140 }} options={options} value={pick}
+            size="small" sx={{ flex: 1, minWidth: 160 }} options={options} value={pick}
             onChange={(_, v) => setPick(v)}
             getOptionLabel={(u) => userLabel(u, currentUser)}
             isOptionEqualToValue={(a, b) => a.u === b.u}
-            renderInput={(pr) => <TextField {...pr} placeholder="Chọn nhân sự…" />}
+            renderInput={(pr) => <TextField {...pr} placeholder="Chọn nhân sự để thêm…" />}
           />
-          <Button size="small" variant="outlined" disabled={!pick || busy} onClick={() => void add('collab')}>+ Collab</Button>
-          <Button size="small" disabled={!pick || busy} onClick={() => void add('follow')}>+ Follow</Button>
-          <Button size="small" disabled={!pick || busy} onClick={() => void add('event')}
-            sx={{ color: '#d97706' }}>+ Nhân sự event</Button>
+          <Button size="small" variant="outlined" disabled={!pick || busy} onClick={() => void add('collab')}
+            sx={{ color: '#0d7a6a', borderColor: '#0d7a6a55' }}>+ Cộng tác</Button>
+          <Button size="small" variant="outlined" disabled={!pick || busy} onClick={() => void add('follow')}
+            sx={{ color: '#64748b', borderColor: '#64748b55' }}>+ Theo dõi</Button>
+          <Button size="small" variant="outlined" disabled={!pick || busy} onClick={() => void add('event')}
+            sx={{ color: '#d97706', borderColor: '#d9770655' }}>+ Nhân sự event</Button>
         </Stack>
       ) : (
         <Typography variant="caption" color="text.disabled">Chỉ người tạo / Trưởng phòng / BGĐ mới thêm được cộng tác.</Typography>

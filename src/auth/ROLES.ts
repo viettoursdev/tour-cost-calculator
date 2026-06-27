@@ -19,6 +19,12 @@ export const APPROVER_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trư
 /** True if the role can approve payment / cost requests. */
 export const isApprover = (role: Role): boolean => APPROVER_ROLES.includes(role);
 
+/** Roles thuộc Ban Giám Đốc trở lên (CEO + Ban Giám Đốc) — cấp duyệt cao nhất. */
+export const BOARD_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc'];
+
+/** True nếu role thuộc Ban Giám Đốc trở lên (cổng duyệt nghiêm ngặt, vd xuất Excel hồ sơ tour). */
+export const isBoard = (role: Role): boolean => BOARD_ROLES.includes(role);
+
 /** Chỉ CEO được xem chức vụ + phòng ban của nhân sự (ẩn với mọi người khác). */
 export const canViewStaffRole = (viewer: User | null | undefined): boolean => viewer?.role === 'CEO';
 

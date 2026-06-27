@@ -41,14 +41,49 @@ const HEADERS = [
   'Công nợ còn lại (VND)', 'Biên lợi thực (VND)', 'Chủ sở hữu', 'Trạng thái',
 ];
 
-export async function exportTourProfilesExcel(rows: TourProfileExportRow[]): Promise<void> {
+/** Metadata trang bìa cho file xuất (điều kiện lọc + người xuất). */
+export type TourProfileExportMeta = {
+  filterSummary?: string; // tóm tắt điều kiện (số hồ sơ · phân loại · khoảng ngày)
+  generatedBy?: string;   // người xuất
+};
+
+/** Các cột VND (1-based) — dùng cho định dạng số + dòng tổng. */
+const VND_COLS = [14, 15, 16, 17, 18];
+const LAST_COL = HEADERS.length;
+
+export async function exportTourProfilesExcel(
+  rows: TourProfileExportRow[],
+  meta: TourProfileExportMeta = {},
+): Promise<void> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Viettours Tour Cost Calculator';
   wb.created = new Date();
 
-  const ws = wb.addWorksheet('Hồ sơ tour', { views: [{ showGridLines: false, state: 'frozen', ySplit: 1 }] });
-  ws.addRow(HEADERS);
-  const head = ws.getRow(1);
+  // Header row đặt SAU khối tiêu đề (3 dòng) → freeze dưới header.
+  const HEAD_ROW = 4;
+  const ws = wb.addWorksheet('Hồ sơ tour', { views: [{ showGridLines: false, state: 'frozen', ySplit: HEAD_ROW }] });
+
+  // ── Khối tiêu đề (merge ngang toàn bảng) ──
+  const titleLine = (text: string, opts: { size: number; color: string; bold?: boolean }) => {
+    const r = ws.addRow([text]);
+    ws.mergeCells(r.number, 1, r.number, LAST_COL);
+    const cell = r.getCell(1);
+    cell.font = { name: FONT, bold: opts.bold ?? true, size: opts.size, color: { argb: opts.color } };
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+    return r;
+  };
+  titleLine('VIETTOURS', { size: 14, color: BRAND_TEAL_ARGB }).height = 20;
+  titleLine('DANH SÁCH HỒ SƠ TOUR', { size: 12, color: NAVY }).height = 18;
+  const stampVi = new Date().toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const subParts = [
+    meta.filterSummary ? `Điều kiện: ${meta.filterSummary}` : `${rows.length} hồ sơ`,
+    `Xuất: ${stampVi}`,
+    meta.generatedBy ? `Người xuất: ${meta.generatedBy}` : '',
+  ].filter(Boolean);
+  titleLine(subParts.join('   ·   '), { size: 9.5, color: 'FF6B7280', bold: false }).height = 16;
+
+  // ── Header bảng ──
+  const head = ws.addRow(HEADERS); // = HEAD_ROW
   head.height = 22;
   head.eachCell((c) => {
     c.font = { name: FONT, bold: true, size: 11, color: { argb: WHITE } };
@@ -70,14 +105,33 @@ export async function exportTourProfilesExcel(rows: TourProfileExportRow[]): Pro
     });
   });
 
+  // ── Dòng TỔNG (cộng các cột VND + đếm hồ sơ) ──
+  const sumOf = (key: keyof TourProfileExportRow) =>
+    rows.reduce((acc, r) => acc + (typeof r[key] === 'number' ? (r[key] as number) : 0), 0);
+  const totalCells: (string | number)[] = new Array(LAST_COL).fill('');
+  totalCells[0] = `TỔNG (${rows.length} hồ sơ)`;
+  totalCells[13] = sumOf('valueCurrent');
+  totalCells[14] = sumOf('valueContract');
+  totalCells[15] = sumOf('valueSettlement');
+  totalCells[16] = sumOf('payableRemaining');
+  totalCells[17] = sumOf('actualProfit');
+  const totalRow = ws.addRow(totalCells);
+  totalRow.height = 20;
+  totalRow.eachCell((c) => {
+    c.font = { name: FONT, bold: true, size: 10.5, color: { argb: NAVY } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F4' } };
+    c.alignment = { vertical: 'middle' };
+    c.border = { top: { style: 'medium', color: { argb: BRAND_TEAL_ARGB } } };
+  });
+
   // Định dạng số tiền cho các cột VND (14..18).
-  [14, 15, 16, 17, 18].forEach((col) => { ws.getColumn(col).numFmt = '#,##0'; });
+  VND_COLS.forEach((col) => { ws.getColumn(col).numFmt = '#,##0'; });
 
   HEADERS.forEach((h, i) => {
     const maxLen = Math.max(h.length, ...data.map((r) => String(r[i] ?? '').length));
     ws.getColumn(i + 1).width = Math.min(Math.max(maxLen + 2, 10), 40);
   });
-  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: HEADERS.length } };
+  ws.autoFilter = { from: { row: HEAD_ROW, column: 1 }, to: { row: HEAD_ROW, column: LAST_COL } };
 
   const buf = await wb.xlsx.writeBuffer();
   const stamp = new Date().toISOString().slice(0, 10);
