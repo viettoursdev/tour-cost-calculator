@@ -304,6 +304,8 @@ const loadTableCols = (u?: string): Set<TableColKey> => {
 type SavedView = {
   name: string;
   search: string; customer: string; category: TourCategory | ''; country: string; stages: DealStage[]; tag: string;
+  // Optional (thêm sau) — view cũ đã lưu không có 2 trường này.
+  priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string;
 };
 const viewsKey = (u: string) => `vte_tourprofile_views_${u}`;
 const loadViews = (u?: string): SavedView[] => {
@@ -363,6 +365,8 @@ export function TourProfilesView() {
   const [fltCountry, setFltCountry] = useState<string>('');
   const [fltStage, setFltStage] = useState<DealStage[]>([]);
   const [fltTag, setFltTag] = useState<string>('');
+  const [fltPriority, setFltPriority] = useState<'high' | 'medium' | 'low' | ''>('');
+  const [fltLeadSource, setFltLeadSource] = useState<string>('');
   const [exporting, setExporting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [density, setDensity] = useState<'comfortable' | 'compact'>(() => loadDensity(currentUser?.u));
@@ -468,6 +472,8 @@ export function TourProfilesView() {
     if (fltCountry) list = list.filter((p) => (metaOf(p.id).country ?? '') === fltCountry);
     if (fltStage.length > 0) list = list.filter((p) => fltStage.includes(metaOf(p.id).stage));
     if (fltTag) list = list.filter((p) => (p.tags ?? []).includes(fltTag));
+    if (fltPriority) list = list.filter((p) => p.priority === fltPriority);
+    if (fltLeadSource) list = list.filter((p) => (p.leadSource ?? '') === fltLeadSource);
 
     // ── Sắp xếp: tìm-kiếm → theo độ khớp; ngược lại theo tiêu chí chọn ──
     if (search.trim()) {
@@ -497,7 +503,7 @@ export function TourProfilesView() {
     // Ghim lên đầu (stable — giữ thứ tự đã sắp ở trên).
     if (pinned.size > 0) list.sort((a, b) => (pinned.has(b.id) ? 1 : 0) - (pinned.has(a.id) ? 1 : 0));
     return list;
-  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, fltTag, sortBy, sortDir, pinned, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, fltTag, fltPriority, fltLeadSource, sortBy, sortDir, pinned, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tùy chọn cho bộ lọc — suy từ các hồ sơ user được xem.
   const filterOptions = useMemo(() => {
@@ -505,17 +511,19 @@ export function TourProfilesView() {
     const customers = new Set<string>();
     const countries = new Set<string>();
     const tags = new Set<string>();
+    const leadSources = new Set<string>();
     for (const p of all) {
       const cn = metaOf(p.id).primary?.customerName ?? p.customerName;
       if (cn) customers.add(cn);
       const co = metaOf(p.id).country;
       if (co) countries.add(co);
       for (const t of p.tags ?? []) tags.add(t);
+      if (p.leadSource) leadSources.add(p.leadSource);
     }
-    return { customers: [...customers].sort(), countries: [...countries].sort(), tags: [...tags].sort() };
+    return { customers: [...customers].sort(), countries: [...countries].sort(), tags: [...tags].sort(), leadSources: [...leadSources].sort() };
   }, [visible, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage.length > 0 ? 1 : 0) + (fltTag ? 1 : 0);
+  const activeFilters = (fltCustomer ? 1 : 0) + (fltCategory ? 1 : 0) + (fltCountry ? 1 : 0) + (fltStage.length > 0 ? 1 : 0) + (fltTag ? 1 : 0) + (fltPriority ? 1 : 0) + (fltLeadSource ? 1 : 0);
 
   // ── Tổng quan điều hành (gom theo các hồ sơ đang hiển thị) ──
   const summary = useMemo(() => {
@@ -724,14 +732,17 @@ export function TourProfilesView() {
   const applyView = (v: SavedView) => {
     setSearch(v.search); setFltCustomer(v.customer); setFltCategory(v.category);
     setFltCountry(v.country); setFltStage(v.stages); setFltTag(v.tag);
+    setFltPriority(v.priority ?? ''); setFltLeadSource(v.leadSource ?? '');
   };
   const saveCurrentView = () => {
     const name = window.prompt('Tên bộ lọc (vd "Tour tháng này", "Đang vận hành"):')?.trim();
     if (!name) return;
-    const v: SavedView = { name, search, customer: fltCustomer, category: fltCategory, country: fltCountry, stages: fltStage, tag: fltTag };
+    const v: SavedView = { name, search, customer: fltCustomer, category: fltCategory, country: fltCountry, stages: fltStage, tag: fltTag, priority: fltPriority, leadSource: fltLeadSource };
     persistViews([...savedViews.filter((x) => x.name !== name), v]);
   };
   const deleteView = (name: string) => persistViews(savedViews.filter((x) => x.name !== name));
+  // Xoá toàn bộ bộ lọc đa chiều (KHÔNG đụng ô tìm kiếm).
+  const clearFilters = () => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); setFltPriority(''); setFltLeadSource(''); };
 
   // ── Chọn nhiều (chế độ Bảng) ──
   const toggleSelect = (id: string) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -1144,7 +1155,9 @@ export function TourProfilesView() {
               sx={{ height: 22, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700 }} />;
           })}
           {fltTag && <Chip size="small" label={`# ${fltTag}`} onDelete={() => setFltTag('')} sx={{ height: 22 }} />}
-          <Button size="small" onClick={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); }}>Xoá tất cả</Button>
+          {fltPriority && <Chip size="small" label={`${PRIORITY_META[fltPriority].icon} Ưu tiên ${PRIORITY_META[fltPriority].label}`} onDelete={() => setFltPriority('')} sx={{ height: 22, bgcolor: `${PRIORITY_META[fltPriority].color}1a`, color: PRIORITY_META[fltPriority].color, fontWeight: 700 }} />}
+          {fltLeadSource && <Chip size="small" label={`Nguồn: ${fltLeadSource}`} onDelete={() => setFltLeadSource('')} sx={{ height: 22 }} />}
+          <Button size="small" onClick={clearFilters}>Xoá tất cả</Button>
         </Stack>
       )}
 
@@ -1153,12 +1166,15 @@ export function TourProfilesView() {
           customers={filterOptions.customers}
           countries={filterOptions.countries}
           tags={filterOptions.tags}
+          leadSources={filterOptions.leadSources}
           fltCustomer={fltCustomer} setFltCustomer={setFltCustomer}
           fltCategory={fltCategory} setFltCategory={setFltCategory}
           fltCountry={fltCountry} setFltCountry={setFltCountry}
           fltStage={fltStage} setFltStage={setFltStage}
           fltTag={fltTag} setFltTag={setFltTag}
-          onClear={() => { setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); }}
+          fltPriority={fltPriority} setFltPriority={setFltPriority}
+          fltLeadSource={fltLeadSource} setFltLeadSource={setFltLeadSource}
+          onClear={clearFilters}
           activeFilters={activeFilters}
         />
       </Collapse>
@@ -1182,7 +1198,7 @@ export function TourProfilesView() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               Thử nới bộ lọc hoặc xoá từ khoá tìm kiếm.
             </Typography>
-            <Button size="small" variant="outlined" onClick={() => { setSearch(''); setFltCustomer(''); setFltCategory(''); setFltCountry(''); setFltStage([]); setFltTag(''); }}>
+            <Button size="small" variant="outlined" onClick={() => { setSearch(''); clearFilters(); }}>
               Xoá bộ lọc &amp; tìm kiếm
             </Button>
           </Paper>
@@ -2090,17 +2106,20 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
   );
 }
 
-/** Bộ lọc đa chiều: khách hàng / loại hồ sơ / quốc gia / giai đoạn. */
+/** Bộ lọc đa chiều: khách hàng / loại hồ sơ / quốc gia / giai đoạn / ưu tiên / nguồn khách. */
 function FilterPanel({
-  customers, countries, tags, fltCustomer, setFltCustomer, fltCategory, setFltCategory,
-  fltCountry, setFltCountry, fltStage, setFltStage, fltTag, setFltTag, onClear, activeFilters,
+  customers, countries, tags, leadSources, fltCustomer, setFltCustomer, fltCategory, setFltCategory,
+  fltCountry, setFltCountry, fltStage, setFltStage, fltTag, setFltTag,
+  fltPriority, setFltPriority, fltLeadSource, setFltLeadSource, onClear, activeFilters,
 }: {
-  customers: string[]; countries: string[]; tags: string[];
+  customers: string[]; countries: string[]; tags: string[]; leadSources: string[];
   fltCustomer: string; setFltCustomer: (v: string) => void;
   fltCategory: TourCategory | ''; setFltCategory: (v: TourCategory | '') => void;
   fltCountry: string; setFltCountry: (v: string) => void;
   fltStage: DealStage[]; setFltStage: (v: DealStage[]) => void;
   fltTag: string; setFltTag: (v: string) => void;
+  fltPriority: 'high' | 'medium' | 'low' | ''; setFltPriority: (v: 'high' | 'medium' | 'low' | '') => void;
+  fltLeadSource: string; setFltLeadSource: (v: string) => void;
   onClear: () => void; activeFilters: number;
 }) {
   const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
@@ -2139,6 +2158,19 @@ function FilterPanel({
           <Autocomplete size="small" options={tags} value={fltTag || null}
             onChange={(_, v) => setFltTag(v ?? '')}
             renderInput={(pr) => <TextField {...pr} label="Nhãn" placeholder="Tất cả" />} />
+        )}
+        <TextField select size="small" label="Mức ưu tiên" value={fltPriority}
+          onChange={(e) => setFltPriority(e.target.value as 'high' | 'medium' | 'low' | '')}
+          SelectProps={{ native: true }} InputLabelProps={{ shrink: true }}>
+          <option value="">Tất cả</option>
+          {(Object.keys(PRIORITY_META) as Array<'high' | 'medium' | 'low'>).map((k) => (
+            <option key={k} value={k}>{PRIORITY_META[k].icon} {PRIORITY_META[k].label}</option>
+          ))}
+        </TextField>
+        {leadSources.length > 0 && (
+          <Autocomplete size="small" options={leadSources} value={fltLeadSource || null}
+            onChange={(_, v) => setFltLeadSource(v ?? '')}
+            renderInput={(pr) => <TextField {...pr} label="Nguồn khách" placeholder="Tất cả" />} />
         )}
       </Box>
       {activeFilters > 0 && (
