@@ -7,6 +7,8 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import { AskLibraryDialog } from '@/components/knowledge/AskLibraryDialog';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -293,6 +295,7 @@ export function TourProfilesView() {
   const [showAttention, setShowAttention] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [askLibOpen, setAskLibOpen] = useState(false);
   const [fltCustomer, setFltCustomer] = useState<string>('');
   const [fltCategory, setFltCategory] = useState<TourCategory | ''>('');
   const [fltCountry, setFltCountry] = useState<string>('');
@@ -829,6 +832,11 @@ export function TourProfilesView() {
               <Button size="small" startIcon={<EditOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => setEditId(p.id)}>Sửa thông tin</Button>
             </Tooltip>
           )}
+          {p && (
+            <Tooltip title="Hỏi Thư viện kiến thức nội bộ (theo điểm đến của hồ sơ này)">
+              <Button size="small" startIcon={<MenuBookOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => setAskLibOpen(true)}>Hỏi thư viện</Button>
+            </Tooltip>
+          )}
           {opts.length > 1 && (
             <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
               <Typography variant="caption" color="text.secondary">Phương án:</Typography>
@@ -924,6 +932,11 @@ export function TourProfilesView() {
             onSave={async (info, lock) => { await setBasicInfo(p.id, info, lock); setEditId(null); }}
           />
         )}
+        <AskLibraryDialog
+          open={askLibOpen}
+          onClose={() => setAskLibOpen(false)}
+          context={p ? (p.dest || p.name || undefined) : undefined}
+        />
       </Box>
     );
   }

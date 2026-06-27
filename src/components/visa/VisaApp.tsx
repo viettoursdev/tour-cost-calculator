@@ -3,6 +3,8 @@ import {
   Box, Button, Stack, Tab, Tabs, Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import { AskLibraryDialog } from '@/components/knowledge/AskLibraryDialog';
 import { useAuthStore } from '@/stores/authStore';
 import { useLinkNavStore } from '@/stores/linkNavStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
@@ -29,6 +31,7 @@ export function VisaApp({ onExit }: Props) {
   const [tab, setTab] = useState<Tab>('projects');
   const [editingProc, setEditingProc] = useState<VisaProcDoc | null>(null);
   const [pendingProjId, setPendingProjId] = useState<string | null>(null);
+  const [askLibOpen, setAskLibOpen] = useState(false);
   const user = useAuthStore((s) => s.currentUser);
   const canReports = canViewVisaReports(user);
   const projects = useVisaProjectStore((s) => s.projects);
@@ -72,10 +75,16 @@ export function VisaApp({ onExit }: Props) {
               Bảng giá visa &amp; hồ sơ thủ tục · đồng bộ Cloud
             </Typography>
           </Box>
-          <Button size="small" color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onExit}
-            sx={{ textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)' }}>
-            Quay lại
-          </Button>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Button size="small" color="inherit" variant="outlined" startIcon={<MenuBookOutlinedIcon />} onClick={() => setAskLibOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)' }}>
+              Hỏi thư viện
+            </Button>
+            <Button size="small" color="inherit" variant="outlined" startIcon={<ArrowBackIcon />} onClick={onExit}
+              sx={{ textTransform: 'none', fontWeight: 700, borderColor: 'rgba(255,255,255,0.55)' }}>
+              Quay lại
+            </Button>
+          </Stack>
         </Stack>
         <Tabs
           value={tab}
@@ -118,6 +127,8 @@ export function VisaApp({ onExit }: Props) {
       ) : (
         <VisaProcManager onOpenEditor={setEditingProc} />
       )}
+
+      <AskLibraryDialog open={askLibOpen} onClose={() => setAskLibOpen(false)} context="thủ tục visa" />
     </Box>
   );
 }
