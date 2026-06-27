@@ -284,12 +284,13 @@ const GROUP_LABEL: Record<GroupKey, string> = {
 };
 
 /** Cột tuỳ biến được trong chế độ Bảng (code/tên/thao tác luôn hiện). */
-type TableColKey = 'category' | 'stage' | 'customer' | 'depart' | 'countdown' | 'pax' | 'value' | 'progress';
+type TableColKey = 'category' | 'stage' | 'customer' | 'depart' | 'countdown' | 'pax' | 'value' | 'valueContract' | 'valueSettlement' | 'progress';
 const TABLE_COL_LABEL: Record<TableColKey, string> = {
   category: 'Loại', stage: 'Giai đoạn', customer: 'Khách', depart: 'Khởi hành',
-  countdown: 'Đếm ngược', pax: 'Số khách', value: 'Giá trị', progress: 'Hoàn thiện',
+  countdown: 'Đếm ngược', pax: 'Số khách', value: 'Giá trị hiện tại',
+  valueContract: 'Giá trị hợp đồng', valueSettlement: 'Giá trị nghiệm thu', progress: 'Hoàn thiện',
 };
-const ALL_TABLE_COLS: TableColKey[] = ['category', 'stage', 'customer', 'depart', 'countdown', 'pax', 'value', 'progress'];
+const ALL_TABLE_COLS: TableColKey[] = ['category', 'stage', 'customer', 'depart', 'countdown', 'pax', 'value', 'valueContract', 'valueSettlement', 'progress'];
 const tableColsKey = (u: string) => `vte_tourprofile_cols_${u}`;
 const loadTableCols = (u?: string): Set<TableColKey> => {
   if (!u) return new Set(ALL_TABLE_COLS);
@@ -2635,6 +2636,8 @@ function ProfileTable({
             {has('countdown') && <TableCell>Đếm ngược</TableCell>}
             {has('pax') && <TableCell align="right">Số khách</TableCell>}
             {has('value') && showPrice && <TableCell align="right">Giá trị hiện tại</TableCell>}
+            {has('valueContract') && showPrice && <TableCell align="right">Giá trị hợp đồng</TableCell>}
+            {has('valueSettlement') && showPrice && <TableCell align="right">Giá trị nghiệm thu</TableCell>}
             {has('progress') && <TableCell sx={{ minWidth: 130 }}>Hoàn thiện</TableCell>}
             <TableCell align="right" />
           </TableRow>
@@ -2676,6 +2679,8 @@ function ProfileTable({
                 {has('countdown') && <TableCell>{cd ? <Typography component="span" fontSize={12} fontWeight={700} sx={{ color: cd.color }}>{cd.label}</Typography> : '—'}</TableCell>}
                 {has('pax') && <TableCell align="right">{b.pax || '—'}</TableCell>}
                 {has('value') && showPrice && <TableCell align="right">{typeof mt.values.current === 'number' ? fmtVND(mt.values.current) : '—'}</TableCell>}
+                {has('valueContract') && showPrice && <TableCell align="right">{typeof mt.values.contract === 'number' ? <Typography component="span" fontSize={13} fontWeight={600} sx={{ color: VALUE_STEP_COLOR.contract }}>{fmtVND(mt.values.contract)}</Typography> : '—'}</TableCell>}
+                {has('valueSettlement') && showPrice && <TableCell align="right">{typeof mt.values.settlement === 'number' ? <Typography component="span" fontSize={13} fontWeight={600} sx={{ color: VALUE_STEP_COLOR.settlement }}>{fmtVND(mt.values.settlement)}</Typography> : '—'}</TableCell>}
                 {has('progress') && <TableCell><ProfileProgress steps={progress} compact /></TableCell>}
                 <TableCell align="right">
                   <Tooltip title="Xem nhanh"><IconButton size="small" onClick={() => onQuickView(p.id)}><VisibilityIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
