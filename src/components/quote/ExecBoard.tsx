@@ -5,6 +5,7 @@ import { useQuoteStore, type QuoteViewKey } from '@/stores/quoteStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER } from './constants';
+import { ResourceConflictsPanel } from './ResourceConflictsPanel';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 
 const OPEN: QuoteStatus[] = ['in_progress', 'sent', 'negotiating'];
@@ -118,6 +119,9 @@ export function ExecBoard() {
       <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
         Bức tranh bán hàng · vận hành · công nợ toàn hệ thống (theo dữ liệu đã lưu cloud)
       </Typography>
+
+      {/* #F — Cảnh báo nguồn lực: trùng lịch HDV + tài sản quá hạn hoàn trả */}
+      <ResourceConflictsPanel />
 
       <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mb: 2.5 }}>
         <Kpi label="Giá trị pipeline" value={fmtShort(d.pipelineValue)} sub={`${d.openCount} deal đang mở`} color="#2563eb" />
