@@ -1203,8 +1203,15 @@ export function TourProfilesView() {
       <CreateEmptyDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreate={async (category, name) => {
-          const created = await createProfile({ kind: categoryKind(category), category, name });
+        onCreate={async (info) => {
+          // Nhập tay thông tin cơ bản → khoá đồng bộ để giữ giá trị khi sau này gắn báo giá chính.
+          const hasBasics = !!(info.customerName || info.dest || info.startDate || info.pax);
+          const created = await createProfile({
+            kind: categoryKind(info.category), category: info.category, name: info.name,
+            customerId: info.customerId ?? undefined, customerName: info.customerName || undefined,
+            dest: info.dest || undefined, startDate: info.startDate, pax: info.pax,
+            note: info.note || undefined, infoLocked: hasBasics || undefined,
+          });
           setCreateOpen(false);
           if (created) setExpanded((prev) => new Set(prev).add(created.id));
         }}
@@ -1501,6 +1508,80 @@ function ExportApprovalBanner({ isApprover, pending, myRequest, onApprove, onRej
 }
 
 /** Sửa THÔNG TIN CƠ BẢN của hồ sơ (tên/khách/điểm đến/ngày/số khách/ghi chú). */
+/**
+ * Ô chọn khách hàng dùng chung (Sửa thông tin cơ bản + Tạo hồ sơ): chọn hồ sơ khách
+ * đã có hoặc gõ tên mới → đề xuất tạo nhanh hồ sơ khách rồi gắn luôn.
+ */
+function CustomerPicker({ customer, customerName, onPick }: {
+  customer: Customer | null;
+  customerName: string;
+  onPick: (customer: Customer | null, name: string) => void;
+}) {
+  const customers = useCustomerStore((s) => s.customers);
+  const saveCustomer = useCustomerStore((s) => s.save);
+
+  // Tạo nhanh hồ sơ khách mới từ tên gõ vào rồi gắn luôn (id sinh sẵn để dùng lại ngay).
+  const createAndPick = async (rawName: string) => {
+    const nm = rawName.trim();
+    if (!nm) return;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    // createdAt/createdBy do customerStore.save tự điền cho bản ghi mới.
+    const c: Customer = { id, name: nm, type: 'company', contacts: [], note: '', createdAt: '', createdBy: '' };
+    try {
+      await saveCustomer(c);
+      onPick(c, nm);
+    } catch (e) {
+      window.alert('❌ Không tạo được hồ sơ khách: ' + (e as Error).message);
+    }
+  };
+
+  return (
+    <Autocomplete<Customer, false, false, true>
+      freeSolo
+      size="small"
+      options={customers}
+      value={customer}
+      inputValue={customerName}
+      filterOptions={(opts, params) => {
+        const filtered = custFilter(opts, params);
+        const q = params.inputValue.trim();
+        // Gõ tên chưa có hồ sơ → đề xuất tạo nhanh hồ sơ khách (tránh khách "mồ côi" chỉ có chuỗi tên).
+        if (q && !opts.some((o) => o.name.trim().toLowerCase() === q.toLowerCase())) {
+          filtered.push({ id: CREATE_CUSTOMER_ID, name: q, type: 'company', contacts: [], note: '', createdAt: '', createdBy: '' });
+        }
+        return filtered;
+      }}
+      getOptionLabel={(o) => (typeof o === 'string' ? o : o.id === CREATE_CUSTOMER_ID ? `➕ Tạo hồ sơ khách "${o.name}"` : o.name)}
+      isOptionEqualToValue={(a, b2) => a.id === b2.id}
+      onChange={(_, v) => {
+        if (v && typeof v !== 'string') {
+          if (v.id === CREATE_CUSTOMER_ID) { void createAndPick(v.name); }
+          else { onPick(v, v.name); }
+        } else { onPick(null, typeof v === 'string' ? v : ''); }
+      }}
+      onInputChange={(_, v, reason) => {
+        if (reason === 'input') { onPick(null, v); }
+      }}
+      renderOption={(props, o) => (
+        <li {...props} key={o.id}>
+          {o.id === CREATE_CUSTOMER_ID ? (
+            <Typography variant="body2" sx={{ color: '#0d7a6a', fontWeight: 700 }}>➕ Tạo hồ sơ khách “{o.name}”</Typography>
+          ) : (
+            <Box>
+              <Typography variant="body2">{o.name}</Typography>
+              {o.contacts?.[0] && <Typography variant="caption" color="text.secondary">{o.contacts[0].name} · {o.contacts[0].phone}</Typography>}
+            </Box>
+          )}
+        </li>
+      )}
+      renderInput={(pr) => (
+        <TextField {...pr} label="Tên khách hàng" placeholder="Chọn hồ sơ khách hàng hoặc gõ tên…"
+          helperText={customer ? '🔗 Đã liên kết hồ sơ khách hàng' : 'Chưa liên kết — gõ tên hoặc chọn từ danh sách'} />
+      )}
+    />
+  );
+}
+
 function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
@@ -1508,7 +1589,6 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; startDate: string | null; pax: number; note: string }, lock: boolean) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
-  const saveCustomer = useCustomerStore((s) => s.save);
   const b = displayBasics(profile, primary);
   // Khách hàng: ưu tiên hồ sơ KH đã gắn (customerId) → đồng bộ với hồ sơ khách hàng thật.
   const initialCustomer = profile.customerId ? customers.find((c) => c.id === profile.customerId) ?? null : null;
@@ -1532,23 +1612,6 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
     startDate !== (b.departDate ? b.departDate.slice(0, 10) : '') ||
     pax !== (b.pax ? String(b.pax) : '');
 
-  // Tạo nhanh hồ sơ khách mới từ tên gõ vào rồi gắn luôn (id sinh sẵn để dùng lại ngay).
-  const createAndPick = async (rawName: string) => {
-    const nm = rawName.trim();
-    if (!nm) return;
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    // createdAt/createdBy do customerStore.save tự điền cho bản ghi mới.
-    const c: Customer = { id, name: nm, type: 'company', contacts: [], note: '', createdAt: '', createdBy: '' };
-    setBusy(true);
-    try {
-      await saveCustomer(c);
-      setCustomer(c);
-      setCustomerName(nm);
-    } catch (e) {
-      window.alert('❌ Không tạo được hồ sơ khách: ' + (e as Error).message);
-    } finally { setBusy(false); }
-  };
-
   const submit = async () => {
     setBusy(true);
     // Sửa tay trường đồng bộ → tự khoá để giá trị sửa tay được giữ & hiển thị.
@@ -1570,48 +1633,10 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
       <DialogContent dividers>
         <Stack spacing={1.75} sx={{ mt: 0.5 }}>
           <TextField size="small" label="Tên tour / hồ sơ" value={name} onChange={(e) => setName(e.target.value)} autoFocus fullWidth />
-          <Autocomplete<Customer, false, false, true>
-            freeSolo
-            size="small"
-            options={customers}
-            value={customer}
-            inputValue={customerName}
-            filterOptions={(opts, params) => {
-              const filtered = custFilter(opts, params);
-              const q = params.inputValue.trim();
-              // Gõ tên chưa có hồ sơ → đề xuất tạo nhanh hồ sơ khách (tránh khách "mồ côi" chỉ có chuỗi tên).
-              if (q && !opts.some((o) => o.name.trim().toLowerCase() === q.toLowerCase())) {
-                filtered.push({ id: CREATE_CUSTOMER_ID, name: q, type: 'company', contacts: [], note: '', createdAt: '', createdBy: '' });
-              }
-              return filtered;
-            }}
-            getOptionLabel={(o) => (typeof o === 'string' ? o : o.id === CREATE_CUSTOMER_ID ? `➕ Tạo hồ sơ khách "${o.name}"` : o.name)}
-            isOptionEqualToValue={(a, b2) => a.id === b2.id}
-            onChange={(_, v) => {
-              if (v && typeof v !== 'string') {
-                if (v.id === CREATE_CUSTOMER_ID) { void createAndPick(v.name); }
-                else { setCustomer(v); setCustomerName(v.name); }
-              } else { setCustomer(null); setCustomerName(typeof v === 'string' ? v : ''); }
-            }}
-            onInputChange={(_, v, reason) => {
-              if (reason === 'input') { setCustomerName(v); setCustomer(null); }
-            }}
-            renderOption={(props, o) => (
-              <li {...props} key={o.id}>
-                {o.id === CREATE_CUSTOMER_ID ? (
-                  <Typography variant="body2" sx={{ color: '#0d7a6a', fontWeight: 700 }}>➕ Tạo hồ sơ khách “{o.name}”</Typography>
-                ) : (
-                  <Box>
-                    <Typography variant="body2">{o.name}</Typography>
-                    {o.contacts?.[0] && <Typography variant="caption" color="text.secondary">{o.contacts[0].name} · {o.contacts[0].phone}</Typography>}
-                  </Box>
-                )}
-              </li>
-            )}
-            renderInput={(pr) => (
-              <TextField {...pr} label="Tên khách hàng" placeholder="Chọn hồ sơ khách hàng hoặc gõ tên…"
-                helperText={customer ? '🔗 Đã liên kết hồ sơ khách hàng' : 'Chưa liên kết — gõ tên hoặc chọn từ danh sách'} />
-            )}
+          <CustomerPicker
+            customer={customer}
+            customerName={customerName}
+            onPick={(c, nm) => { setCustomer(c); setCustomerName(nm); }}
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
@@ -1819,20 +1844,40 @@ function MoveQuoteDialog({ state, options, onClose, onMove }: {
 }
 
 function CreateEmptyDialog({ open, onClose, onCreate }: {
-  open: boolean; onClose: () => void; onCreate: (category: TourCategory, name: string) => Promise<void>;
+  open: boolean; onClose: () => void;
+  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; startDate: string | null; pax: number; note: string }) => Promise<void>;
 }) {
   const [category, setCategory] = useState<TourCategory>('incentive_domestic');
   const [name, setName] = useState('');
+  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customerName, setCustomerName] = useState('');
+  const [dest, setDest] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [pax, setPax] = useState('');
+  const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setCategory('incentive_domestic'); setName(''); setBusy(false); } }, [open]);
-  const submit = async () => { setBusy(true); try { await onCreate(category, name.trim()); } finally { setBusy(false); } };
+  useEffect(() => {
+    if (open) {
+      setCategory('incentive_domestic'); setName(''); setCustomer(null); setCustomerName('');
+      setDest(''); setStartDate(''); setPax(''); setNote(''); setBusy(false);
+    }
+  }, [open]);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await onCreate({
+        category, name: name.trim(), customerId: customer?.id ?? null, customerName: customerName.trim(),
+        dest: dest.trim(), startDate: startDate || null, pax: Number(pax) || 0, note: note.trim(),
+      });
+    } finally { setBusy(false); }
+  };
   const cm = categoryMeta(category);
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Tạo hồ sơ trống</DialogTitle>
-      <DialogContent>
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ fontWeight: 800 }}>Tạo hồ sơ mới</DialogTitle>
+      <DialogContent dividers>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          Mở một hồ sơ chưa có báo giá — gắn thực đơn / chương trình / visa / hợp đồng vào sau (DirectLinkPanel).
+          Hồ sơ chưa có báo giá — gắn thực đơn / chương trình / visa / hợp đồng vào sau (DirectLinkPanel).
           Mã sinh theo loại (prefix <strong>{cm.prefix}</strong>).
         </Typography>
         <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Loại hồ sơ</Typography>
@@ -1846,8 +1891,21 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
             />
           ))}
         </Stack>
-        <TextField fullWidth autoFocus label="Tên hồ sơ / tour" value={name}
-          onChange={(e) => setName(e.target.value)} placeholder="VD: Đà Lạt – Đoàn ABC" />
+        <Stack spacing={1.75}>
+          <TextField size="small" autoFocus label="Tên tour / hồ sơ" value={name}
+            onChange={(e) => setName(e.target.value)} placeholder="VD: Đà Lạt – Đoàn ABC" fullWidth />
+          <CustomerPicker
+            customer={customer}
+            customerName={customerName}
+            onPick={(c, nm) => { setCustomer(c); setCustomerName(nm); }}
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+            <TextField size="small" label="Ngày khởi hành" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth />
+            <TextField size="small" label="Số lượng khách" type="number" value={pax} onChange={(e) => setPax(e.target.value)} inputProps={{ min: 0 }} fullWidth />
+          </Stack>
+          <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
+          <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>Huỷ</Button>

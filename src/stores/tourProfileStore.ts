@@ -27,6 +27,9 @@ export type NewTourProfileInput = {
   dest?: string;
   startDate?: string | null;
   pax?: number;
+  note?: string;
+  /** Khoá đồng bộ ngay khi tạo (giữ thông tin nhập tay, không bị báo giá chính ghi đè sau này). */
+  infoLocked?: boolean;
   primaryQuoteId?: string;
   collaborators?: Collaborator[];
 };
@@ -129,6 +132,8 @@ export const useTourProfileStore = create<State>()(
         dest: input.dest,
         startDate: input.startDate ?? null,
         pax: input.pax ?? 0,
+        note: input.note,
+        infoLocked: input.infoLocked,
         primaryQuoteId: input.primaryQuoteId,
         status: 'open',
         collaborators: input.collaborators ?? [],
