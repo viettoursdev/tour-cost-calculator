@@ -39,6 +39,7 @@ import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined';
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
@@ -373,6 +374,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       cat('cockpit', 'top', 'Hồ sơ tour', { v: 'cockpit', icon: <RouteOutlinedIcon /> }),
       cat('cost', 'top', 'Báo giá', { v: 'cost', icon: <RequestQuoteOutlinedIcon /> }),
       cat('history', 'top', 'Lịch sử', { v: 'history', icon: <HistoryIcon /> }),
+      cat('library', 'top', 'Thư viện', { v: 'library', icon: <MenuBookOutlinedIcon /> }),
       cat('summary', 'grp:sales', 'Tổng kết', { v: 'summary' }),
       cat('payboard', 'grp:sales', 'Công nợ tổng', { v: 'payboard' }),
       cat('payment', 'grp:sales', 'Quản lý thanh toán', { v: 'payment' }),

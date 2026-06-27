@@ -124,6 +124,24 @@ Worker **tự deploy qua CI** (`.github/workflows/worker-deploy.yml`) mỗi khi 
 - Production: nút **Trigger** cạnh Cron trong dashboard, hoặc chờ 08:00. Đã có cơ chế chống
   chạy trùng (bỏ qua người đã nhận "Bản tin sáng" trong 12h gần nhất).
 
+## 📚 Thư viện Viettours (kho kiến thức RAG)
+
+Worker có 2 endpoint phục vụ tính năng **Thư viện** (kho kiến thức nội bộ, hỏi-đáp AI):
+
+- `POST /kb/embed` `{ texts: string[], input_type?: 'document'|'query' }` → `{ embeddings: number[][] }`
+  — tạo vector embedding qua **Voyage AI** (`voyage-3.5`, 1024 chiều) để nạp kho & tìm kiếm.
+- `POST /kb/ask` `{ question, chunks: [{title, content}], stream? }` → câu trả lời RAG có trích
+  dẫn nguồn (chống bịa), hỗ trợ streaming SSE. Dùng `MODEL_KB` (mặc định Sonnet).
+
+**Thiết lập:** thêm **1 secret** ở Worker → **Settings → Variables and Secrets → Add**:
+- Name `VOYAGE_API_KEY` · Type **Secret** · giá trị = API key của Voyage
+  (https://dashboard.voyageai.com → API Keys). Thiếu key → `/kb/embed` báo lỗi rõ ràng,
+  các endpoint khác không ảnh hưởng.
+
+Truy hồi (RPC `kb_search`) chạy phía client bằng JWT người dùng nên **RLS tự lọc theo quyền**
+— worker chỉ lo embedding + sinh câu trả lời, không giữ dữ liệu kho. Xem migration
+`supabase/migrations/0067_knowledge_library.sql`.
+
 ## Ghi chú
 
 - **Model:** mặc định `claude-haiku-4-5-20251001` (rẻ & nhanh nhất). Đổi hằng `MODEL` thành

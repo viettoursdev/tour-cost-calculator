@@ -90,6 +90,12 @@ export interface AIWorkerBody {
   tools?: unknown[];
   web?: boolean;
   stream?: boolean;
+  // /kb/embed
+  texts?: string[];
+  input_type?: 'document' | 'query';
+  // /kb/ask
+  question?: string;
+  chunks?: { title?: string; content?: string }[];
 }
 
 export interface AIWorkerResponse {
@@ -101,9 +107,11 @@ export interface AIWorkerResponse {
   content?: ContentBlock[];
   stop_reason?: string;
   usage?: Record<string, unknown>;
+  // /kb/embed
+  embeddings?: number[][];
 }
 
-export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate' | '/chat';
+export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate' | '/chat' | '/kb/embed' | '/kb/ask';
 
 /**
  * Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }.
@@ -266,4 +274,71 @@ export async function callAIWorker(
     throw new Error(raw);
   }
   return d;
+}
+
+// ── Thư viện Viettours (kho kiến thức RAG) ──
+
+/** Tạo embedding cho các đoạn text qua Voyage (worker `/kb/embed`). */
+export async function embedTexts(
+  texts: string[],
+  inputType: 'document' | 'query' = 'document',
+): Promise<number[][]> {
+  const d = await callAIWorker('/kb/embed', { texts, input_type: inputType });
+  if (!Array.isArray(d.embeddings)) throw new Error('Worker không trả về embeddings');
+  return d.embeddings;
+}
+
+/**
+ * Gọi `/kb/ask` ở chế độ STREAMING — trả lời câu hỏi dựa trên các khối ngữ cảnh đã
+ * truy hồi, hiện chữ dần qua `onText(delta)`. Trả về toàn văn câu trả lời.
+ * Fallback: worker cũ/lỗi trả JSON → phát text một lần.
+ */
+export async function streamKbAsk(
+  question: string,
+  chunks: { title?: string; content?: string }[],
+  onText?: (delta: string) => void,
+): Promise<string> {
+  const url = getAIWorker();
+  if (!url) throw new Error('Chưa cấu hình AI Worker URL (bấm ⚙️ AI để nhập)');
+  const r = await fetch(url.replace(/\/+$/, '') + '/kb/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({ question, chunks, stream: true }),
+  });
+
+  const ctype = r.headers.get('content-type') || '';
+  if (!r.body || !ctype.includes('text/event-stream')) {
+    const d = (await r.json().catch(() => ({}))) as AIWorkerResponse;
+    if (!r.ok || d.error) throw new Error(d.error || `Worker lỗi ${r.status}`);
+    const txt = (d.text ?? '').trim();
+    if (txt && onText) onText(txt);
+    return txt;
+  }
+
+  let answer = '';
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      let evt: Record<string, unknown>;
+      try { evt = JSON.parse(payload); } catch { continue; }
+      if (evt.type === 'content_block_delta') {
+        const d = evt.delta as Record<string, unknown>;
+        if (d?.type === 'text_delta') { answer += d.text as string; onText?.(d.text as string); }
+      } else if (evt.type === 'error') {
+        throw new Error((evt.error as { message?: string })?.message || 'Lỗi luồng AI');
+      }
+    }
+  }
+  return answer.trim();
 }

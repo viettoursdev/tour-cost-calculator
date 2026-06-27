@@ -45,6 +45,7 @@ const TodoView = lazy(() => import('@/components/todo/TodoView').then((m) => ({ 
 const TourVisaPanel = lazy(() => import('./TourVisaPanel').then((m) => ({ default: m.TourVisaPanel })));
 const InventoryView = lazy(() => import('@/components/inventory/InventoryView').then((m) => ({ default: m.InventoryView })));
 const TrainingView = lazy(() => import('@/components/training/TrainingView').then((m) => ({ default: m.TrainingView })));
+const KnowledgeView = lazy(() => import('@/components/knowledge/KnowledgeView').then((m) => ({ default: m.KnowledgeView })));
 const ItineraryApp = lazy(() => import('@/components/itinerary/ItineraryApp').then((m) => ({ default: m.ItineraryApp })));
 const MenuApp = lazy(() => import('@/components/menu/MenuApp').then((m) => ({ default: m.MenuApp })));
 const VisaApp = lazy(() => import('@/components/visa/VisaApp').then((m) => ({ default: m.VisaApp })));
@@ -155,6 +156,7 @@ export function QuoteView() {
             {view === 'tourvisa' && <TourVisaPanel />}
             {view === 'inventory' && <InventoryView />}
             {view === 'training' && <TrainingView />}
+            {view === 'library' && <KnowledgeView />}
            </Suspense>
            </ChunkErrorBoundary>
           </Box>

@@ -21,8 +21,29 @@
 const MODEL = 'claude-haiku-4-5-20251001'; // Rẻ & nhanh — dùng cho /ocr, /ai
 const MODEL_TRANSLATE = 'claude-sonnet-4-6'; // Dịch hồ sơ visa cần chính xác thuật ngữ pháp lý
 const MODEL_ASSISTANT = 'claude-sonnet-4-6'; // Trợ lý ảo: tra cứu, phân tích, tư vấn
+const MODEL_KB = 'claude-sonnet-4-6'; // Thư viện Viettours: trả lời RAG trên ngữ cảnh đã cấp
 const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+
+// Voyage AI — embedding cho Thư viện (kho kiến thức RAG). VOYAGE_API_KEY là secret
+// đặt phía Cloudflare (Settings → Variables and Secrets), KHÔNG quản ở repo này.
+const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings';
+const VOYAGE_MODEL = 'voyage-3.5'; // đa ngôn ngữ, mạnh tiếng Việt
+const VOYAGE_DIM = 1024; // khớp cột vector(1024) trong migration 0067
+
+// Prompt RAG: trả lời CHỈ dựa trên ngữ cảnh được cấp, kèm trích dẫn, chống bịa.
+const KB_SYSTEM_PROMPT = [
+  'Bạn là trợ lý Thư viện nội bộ Viettours. Trả lời câu hỏi của nhân viên CHỈ dựa trên phần',
+  'NGỮ CẢNH bên dưới (trích từ kho kiến thức nội bộ của công ty).',
+  '',
+  'QUY TẮC BẮT BUỘC:',
+  '• CHỈ dùng thông tin có trong NGỮ CẢNH. TUYỆT ĐỐI không bịa, không suy đoán ngoài ngữ cảnh,',
+  '  không dùng kiến thức chung bên ngoài.',
+  '• Nếu ngữ cảnh không đủ để trả lời, nói thẳng: "Thư viện chưa có thông tin này." rồi gợi ý',
+  '  ngắn gọn nên bổ sung nội dung gì.',
+  '• Mỗi ý/khẳng định phải ghi nguồn ngay sau đó theo dạng (theo: «tên nguồn»).',
+  '• Trả lời ngắn gọn, đi thẳng vấn đề, bằng tiếng Việt.',
+].join('\n');
 
 // Prompt dịch hồ sơ visa Việt→Anh chuẩn lãnh sự (chắt lọc từ skill visa-translation).
 const VISA_TRANSLATE_PROMPT = [
@@ -132,6 +153,32 @@ async function callClaude(env, content, maxTokens = 8000, model = MODEL) {
     .map((b) => b.text)
     .join('')
     .trim();
+}
+
+// Tạo embedding qua Voyage. inputType='document' khi nạp kho, 'query' khi tìm kiếm
+// (Voyage tối ưu khác nhau cho 2 mục đích). Trả mảng vector cùng thứ tự `texts`.
+async function callVoyage(env, texts, inputType = 'document') {
+  if (!env.VOYAGE_API_KEY) throw new Error('Worker chưa cấu hình VOYAGE_API_KEY');
+  const r = await fetch(VOYAGE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.VOYAGE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: VOYAGE_MODEL,
+      input: texts,
+      input_type: inputType,
+      output_dimension: VOYAGE_DIM,
+    }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.detail || data?.error?.message || `Voyage ${r.status}`);
+  // Sắp đúng thứ tự theo `index` rồi lấy mảng embedding.
+  return (data.data || [])
+    .slice()
+    .sort((a, b) => a.index - b.index)
+    .map((d) => d.embedding);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -585,6 +632,63 @@ export default {
           return json({ error: 'Không tính được tuyến: ' + (el?.status || d.status || 'lỗi') }, 400);
         }
         return json({ distance: el.distance?.text || null, duration: el.duration?.text || null, mode });
+      }
+
+      // ── POST /kb/embed — tạo embedding (Voyage) cho các đoạn text ──
+      // Dùng khi NẠP kho (input_type='document') và khi TÌM KIẾM (input_type='query').
+      if (path.endsWith('/kb/embed')) {
+        if (!Array.isArray(body.texts) || body.texts.length === 0) {
+          return json({ error: "Thiếu trường 'texts' (mảng chuỗi)" }, 400);
+        }
+        if (body.texts.length > 128) return json({ error: 'Tối đa 128 đoạn mỗi lần' }, 400);
+        const inputType = body.input_type === 'query' ? 'query' : 'document';
+        const embeddings = await callVoyage(env, body.texts.map(String), inputType);
+        return json({ embeddings });
+      }
+
+      // ── POST /kb/ask — trả lời RAG: câu hỏi + các khối ngữ cảnh client đã truy hồi ──
+      // Client tự gọi RPC kb_search (RLS áp quyền) rồi gửi chunks lên đây để Claude tổng hợp.
+      if (path.endsWith('/kb/ask')) {
+        if (!env.ANTHROPIC_API_KEY) return json({ error: 'Worker chưa cấu hình ANTHROPIC_API_KEY' }, 500);
+        const question = String(body.question || '').trim();
+        if (!question) return json({ error: "Thiếu trường 'question'" }, 400);
+        const chunks = Array.isArray(body.chunks) ? body.chunks : [];
+        const context = chunks.length
+          ? chunks
+              .map((c) => `[Nguồn: «${String(c.title || 'Không rõ').trim()}»]\n${String(c.content || '').trim()}`)
+              .join('\n\n')
+          : '(không có ngữ cảnh phù hợp)';
+        const userContent = `=== NGỮ CẢNH (kho kiến thức) ===\n${context}\n\n=== CÂU HỎI ===\n${question}`;
+        const payload = {
+          model: MODEL_KB,
+          max_tokens: 2048,
+          system: [{ type: 'text', text: KB_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: userContent }],
+        };
+        if (body.stream) payload.stream = true;
+        const r = await fetch(ANTHROPIC_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (body.stream) {
+          if (!r.ok || !r.body) {
+            const err = await r.json().catch(() => ({}));
+            return json({ error: err?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
+          }
+          return new Response(r.body, {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', ...CORS },
+          });
+        }
+        const data = await r.json();
+        if (!r.ok) return json({ error: data?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
+        const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+        return json({ text });
       }
 
       // Trợ lý ảo: vòng lặp tool-use chạy phía client. Trả NGUYÊN message của Claude
