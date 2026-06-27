@@ -34,7 +34,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pin: `latest` gọi GitHub API resolve release → dễ dính "rate limit
+          # exceeded" trên runner. Tag cố định tải trực tiếp, ổn định.
+          version: 2.108.0
       - name: Push migrations to production
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
