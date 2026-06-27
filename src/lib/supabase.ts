@@ -3919,6 +3919,22 @@ export async function sbGetQuoteFlights(
   if (!qRow) return [];
   const quoteId = (qRow as Record<string, unknown>).id as string;
 
+  // NGUỒN CHÍNH XÁC: bản nháp đầy đủ của phiên bản MỚI NHẤT (quote_versions.state.flights)
+  // — đúng y như tab "✈️ Chuyến bay" đang hiển thị, kể cả flight shape CŨ/phẳng chưa
+  // chuẩn hoá (FlightSummary tự gọi migrateFlight khi render). Bảng con đã shred chỉ giữ
+  // segments/fares nên làm mất các booking shape cũ → chỉ dùng làm fallback bên dưới.
+  const { data: vRow, error: vErr } = await client
+    .from('quote_versions')
+    .select('state')
+    .eq('quote_id', quoteId)
+    .order('version_no', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (vErr) throw new Error('sbGetQuoteFlights version: ' + vErr.message);
+  const state = (vRow as { state?: QuoteDraft } | null)?.state ?? null;
+  if (state && Array.isArray(state.flights)) return state.flights;
+
+  // Fallback (báo giá cũ chưa có version snapshot): ráp lại từ bảng con đã shred.
   const { data: flights, error: flErr } = await client
     .from('quote_flights').select('*').eq('quote_id', quoteId).order('sort_order');
   if (flErr) throw new Error('sbGetQuoteFlights flights: ' + flErr.message);
