@@ -403,6 +403,8 @@ export type CloudQuoteEntry = {
   status?: QuoteStatus;
   /** Vai trò giá trị trong hồ sơ tour (hiện tại/hợp đồng/nghiệm thu) — index cho 3 mốc giá trị. */
   valueRole?: QuoteValueRole;
+  /** Lợi nhuận (VND) tại thời điểm lưu = computeTotals.totalProfit — index cho biên 3 mốc & phân tích. */
+  profit?: number;
   /** Loại yêu cầu (Request tour / Thầu) — index cho lọc & thống kê. */
   request?: QuoteRequestKind;
   /** Hạn hoàn thành báo giá (ISO datetime) — để nhắc deadline toàn hệ thống. */

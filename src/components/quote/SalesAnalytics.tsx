@@ -6,6 +6,7 @@ import {
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { fmtVND } from './calc';
+import { computeValueBridge, resolveMilestones } from './valueBridge';
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 
@@ -84,7 +85,28 @@ export function SalesAnalytics() {
     }
     const lossReasons = [...lrMap.entries()].map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
 
-    return { total: list.length, byStatus, winRate, wonItems: wonItems.length, wonValue, openItems: openItems.length, openValue, bySale, byMonth, bySource, lossReasons, lostTotal: lossAll.length };
+    // #1 — Cầu nối biên 3 mốc, gom theo HỒ SƠ tour.
+    const byProfile = new Map<string, CloudQuoteEntry[]>();
+    for (const q of list) {
+      if (!q.tourProfileId) continue;
+      const arr = byProfile.get(q.tourProfileId) ?? [];
+      arr.push(q); byProfile.set(q.tourProfileId, arr);
+    }
+    let sumCur = 0, sumCtr = 0, sumStl = 0, sumProfitStl = 0, erodedCount = 0;
+    const erodedList: { code: string; erosion: number }[] = [];
+    for (const [, qs] of byProfile) {
+      const ss = qs.find((q) => q.settlementSummary)?.settlementSummary;
+      const b = computeValueBridge(resolveMilestones(qs, { settlementSummary: ss }));
+      sumCur += b.current.revenue ?? 0;
+      sumCtr += b.contract.revenue ?? 0;
+      sumStl += b.settlement.revenue ?? 0;
+      sumProfitStl += b.settlement.profit ?? 0;
+      if (b.eroded) { erodedCount++; erodedList.push({ code: qs[0].tourCode || qs[0].name, erosion: b.marginErosionPct! }); }
+    }
+    erodedList.sort((a, b) => a.erosion - b.erosion);
+    const bridge = { profiles: byProfile.size, sumCur, sumCtr, sumStl, sumProfitStl, erodedCount, erodedTop: erodedList.slice(0, 5) };
+
+    return { total: list.length, byStatus, winRate, wonItems: wonItems.length, wonValue, openItems: openItems.length, openValue, bySale, byMonth, bySource, lossReasons, lostTotal: lossAll.length, bridge };
   }, [quotes, customers, owner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const maxStatusVal = Math.max(1, ...data.byStatus.map((s) => s.value));
@@ -107,6 +129,30 @@ export function SalesAnalytics() {
         <Stat label="Doanh số đã chốt" value={fmtVND(data.wonValue)} color="#0d7a6a" />
         <Stat label="Đang theo đuổi" sub={`${data.openItems} deal`} value={fmtVND(data.openValue)} color="#2563eb" />
       </Stack>
+
+      {data.bridge.profiles > 0 && (
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+          <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+            Biên 3 mốc giá trị · {data.bridge.profiles} hồ sơ
+          </Typography>
+          <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+            <Stat label="Σ Báo giá hiện tại" value={fmtVND(data.bridge.sumCur)} color="#0d7a6a" />
+            <Stat label="Σ Ký hợp đồng" value={fmtVND(data.bridge.sumCtr)} color="#2563eb" />
+            <Stat label="Σ Nghiệm thu" value={fmtVND(data.bridge.sumStl)} color="#7c3aed" />
+            <Stat label="Σ Lợi nhuận thật" sub="đã nghiệm thu" value={fmtVND(data.bridge.sumProfitStl)} color="#27ae60" />
+            <Stat label="Hồ sơ xói mòn biên" value={String(data.bridge.erodedCount)} color={data.bridge.erodedCount ? '#d97706' : undefined} />
+          </Stack>
+          {data.bridge.erodedTop.length > 0 && (
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ mt: 1.25 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>Xói mòn nhiều nhất:</Typography>
+              {data.bridge.erodedTop.map((e) => (
+                <Chip key={e.code} size="small" label={`${e.code} (${e.erosion.toFixed(1)} điểm)`}
+                  sx={{ height: 20, bgcolor: 'rgba(217,119,6,0.12)', color: '#d97706', fontWeight: 700 }} />
+              ))}
+            </Stack>
+          )}
+        </Paper>
+      )}
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Phễu theo trạng thái</Typography>

@@ -792,7 +792,8 @@ export const useQuoteStore = create<QuoteState>()(
           const isDmc = draft.template === 'dmc';
           const _save  = isDmc ? sbSaveDMCQuote      : sbSaveQuote;
           const _saveS = isDmc ? sbSaveDMCQuoteState : sbSaveQuoteState;
-          const totalCost = computeTotals(draft).totalCost;
+          const _totals = computeTotals(draft);
+          const totalCost = _totals.totalCost;
           // Lịch sử file Excel báo giá (tương thích dữ liệu cũ chỉ có excelFile đơn).
           const excelHistory = draft.excelFiles ?? (draft.excelFile ? [draft.excelFile] : []);
           const existing = isDmc
@@ -876,6 +877,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              profit: _totals.totalProfit,
               ...(effectiveValueRole ? { valueRole: effectiveValueRole } : {}),
               ...(draft.info.dest ? { dest: draft.info.dest } : {}),
               ...(draft.request ? { request: draft.request } : {}),

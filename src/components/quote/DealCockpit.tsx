@@ -19,6 +19,7 @@ import { canSeePrices } from '@/auth/quotePerms';
 import { VISA_COUNTRIES, VISA_PROC_PRESETS, VISA_STATUS_META, visaPresetKeyForCountry } from '@/components/visa/constants';
 import { computeTotals, fmtVND } from './calc';
 import { summarizeGuests } from './guestStats';
+import { ValueBridgePanel } from './ValueBridgePanel';
 import { workflowProgress } from './workflowConstants';
 import { QUOTE_STATUS_META } from './constants';
 import { CONTRACT_STATUS } from '@/components/contract/constants';
@@ -274,6 +275,15 @@ export function DealCockpit() {
             )}
           </Stack>
         </Paper>
+      )}
+
+      {/* #1 — Cầu nối biên 3 mốc giá trị (chỉ người được xem giá) */}
+      {showPrice && (
+        <ValueBridgePanel
+          tourProfileId={tpId}
+          currentQuoteId={cid ?? undefined}
+          contractFallbackRevenue={linkedContract ? (linkedContract.contractPax || 0) * (linkedContract.pricePerPax || 0) : undefined}
+        />
       )}
 
       {/* Lưới các thẻ liên kết */}
