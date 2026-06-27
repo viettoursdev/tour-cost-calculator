@@ -12,14 +12,44 @@ const TYPE_ICON: Record<string, string> = {
 
 const SOUND_KEY = 'vte_notif_sound';
 
+/**
+ * Một AudioContext dùng chung. Tạo MỘT lần và "mở khoá" (resume) ở lần tương
+ * tác đầu tiên của người dùng — trình duyệt chỉ cho phép phát âm thanh sau một
+ * user gesture (xem chính sách autoplay). Tạo mới ctx cho mỗi tiếng ping sẽ
+ * khiến trình duyệt log cảnh báo "AudioContext was not allowed to start".
+ */
+let sharedCtx: AudioContext | null = null;
+
+function getCtx(): AudioContext | null {
+  const Ctx =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return null;
+  if (!sharedCtx) {
+    try {
+      sharedCtx = new Ctx();
+    } catch {
+      return null;
+    }
+  }
+  return sharedCtx;
+}
+
+/** Mở khoá AudioContext ngay khi người dùng tương tác lần đầu (một lần duy nhất). */
+function primeAudio(): void {
+  const ctx = getCtx();
+  if (ctx && ctx.state === 'suspended') void ctx.resume();
+  window.removeEventListener('pointerdown', primeAudio);
+  window.removeEventListener('keydown', primeAudio);
+}
+
 /** Short "ting" via WebAudio — no asset needed. Respects the mute flag. */
 function playPing(): void {
   try {
     if (localStorage.getItem(SOUND_KEY) === 'off') return;
-    const Ctx =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
+    const ctx = getCtx();
+    // Chưa có user gesture → ctx vẫn 'suspended'; bỏ qua thay vì để trình duyệt
+    // cảnh báo. Tiếng ping kế tiếp (sau khi đã tương tác) sẽ phát bình thường.
+    if (!ctx || ctx.state !== 'running') return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -31,7 +61,6 @@ function playPing(): void {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.36);
-    osc.onended = () => void ctx.close();
   } catch {
     /* ignore (autoplay blocked / no AudioContext) */
   }
@@ -48,6 +77,17 @@ export function NotificationToaster() {
   const [toast, setToast] = useState<{ id: string; title: string; type: string } | null>(null);
   const seen = useRef<Set<string>>(new Set());
   const primed = useRef(false);
+
+  // Mở khoá AudioContext ở lần tương tác đầu tiên để tiếng ping phát được
+  // mà không bị trình duyệt chặn (chính sách autoplay).
+  useEffect(() => {
+    window.addEventListener('pointerdown', primeAudio, { once: true });
+    window.addEventListener('keydown', primeAudio, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', primeAudio);
+      window.removeEventListener('keydown', primeAudio);
+    };
+  }, []);
 
   useEffect(() => {
     // First pass after sign-in records existing ids without toasting, so we
