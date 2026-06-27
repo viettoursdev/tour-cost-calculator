@@ -3449,7 +3449,6 @@ const rowToTourProfile = (r: Record<string, unknown>): TourProfile => ({
   leadSource: (r.lead_source as string) ?? undefined,
   plannedContractValue: (r.planned_contract_value as number | null) ?? undefined,
   plannedSettlementValue: (r.planned_settlement_value as number | null) ?? undefined,
-  infoLocked: (r.info_locked as boolean) ?? false,
   primaryQuoteId: (r.primary_quote_id as string) ?? undefined,
   status: (r.status as TourProfile['status']) ?? 'open',
   note: (r.note as string) ?? undefined,
@@ -3485,7 +3484,7 @@ const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
   lead_source: p.leadSource ?? null,
   planned_contract_value: p.plannedContractValue ?? null,
   planned_settlement_value: p.plannedSettlementValue ?? null,
-  info_locked: p.infoLocked ?? false,
+  info_locked: false, // cột cũ (NOT NULL) — tính năng khoá hồ sơ đã bỏ; luôn ghi false.
   primary_quote_id: p.primaryQuoteId ?? null,
   status: p.status ?? 'open',
   note: p.note ?? '',
@@ -3913,9 +3912,12 @@ export async function sbGetQuoteFlights(
   cloudId: string,
   client: SupabaseClient = sb,
 ): Promise<QuoteFlight[]> {
+  // CHỐNG LỖI: hàm này nuôi khung "Chuyến bay (báo giá chính)" ở Hồ sơ tour. Khung
+  // đó render lỗi SAU nhánh loading nên nếu ta NÉM thì panel kẹt "Đang tải…" mãi +
+  // lặp fetch. Vì vậy mọi lỗi truy vấn ở đây chỉ cảnh báo & trả [] / fallback, KHÔNG ném.
   const { data: qRow, error: qErr } = await client
     .from('quotes').select('id').eq('cloud_id', cloudId).maybeSingle();
-  if (qErr) throw new Error('sbGetQuoteFlights quotes: ' + qErr.message);
+  if (qErr) { console.warn('sbGetQuoteFlights quotes:', qErr.message); return []; }
   if (!qRow) return [];
   const quoteId = (qRow as Record<string, unknown>).id as string;
 
@@ -3930,14 +3932,14 @@ export async function sbGetQuoteFlights(
     .order('version_no', { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (vErr) throw new Error('sbGetQuoteFlights version: ' + vErr.message);
+  if (vErr) console.warn('sbGetQuoteFlights version (fallback bảng con):', vErr.message);
   const state = (vRow as { state?: QuoteDraft } | null)?.state ?? null;
   if (state && Array.isArray(state.flights)) return state.flights;
 
   // Fallback (báo giá cũ chưa có version snapshot): ráp lại từ bảng con đã shred.
   const { data: flights, error: flErr } = await client
     .from('quote_flights').select('*').eq('quote_id', quoteId).order('sort_order');
-  if (flErr) throw new Error('sbGetQuoteFlights flights: ' + flErr.message);
+  if (flErr) { console.warn('sbGetQuoteFlights flights:', flErr.message); return []; }
   const flightIds = (flights ?? []).map((f) => (f as Record<string, unknown>).id as string);
   if (flightIds.length === 0) return [];
 
@@ -3945,8 +3947,10 @@ export async function sbGetQuoteFlights(
     client.from('quote_flight_segments').select('*').in('flight_id', flightIds).order('sort_order'),
     client.from('quote_flight_fares').select('*').in('flight_id', flightIds).order('sort_order'),
   ]);
-  if (segErr) throw new Error('sbGetQuoteFlights segments: ' + segErr.message);
-  if (farErr) throw new Error('sbGetQuoteFlights fares: ' + farErr.message);
+  if (segErr || farErr) {
+    console.warn('sbGetQuoteFlights children:', (segErr ?? farErr)!.message);
+    return [];
+  }
 
   return assembleFlights(
     (flights ?? []) as Record<string, unknown>[],
