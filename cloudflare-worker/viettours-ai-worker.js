@@ -45,6 +45,24 @@ const KB_SYSTEM_PROMPT = [
   '• Trả lời ngắn gọn, đi thẳng vấn đề, bằng tiếng Việt.',
 ].join('\n');
 
+// Phân loại + gợi ý thẻ khi nạp nguồn (Đợt 2). Chủ đề lớn cố định; thẻ tự do.
+const KB_CATEGORIES = ['Điểm đến', 'Quy trình tour', 'Xử lý sự cố', 'NCC/Đối tác', 'Visa', 'Bán hàng', 'Khác'];
+const KB_SUGGEST_PROMPT = [
+  'Bạn phân loại một mẩu kiến thức nội bộ của công ty du lịch Viettours.',
+  'Chọn ĐÚNG 1 chủ đề trong danh sách: ' + KB_CATEGORIES.join(' · '),
+  'và đề xuất 2–5 thẻ (tag) tiếng Việt ngắn gọn (danh từ/cụm danh từ, không dấu câu).',
+  'CHỈ trả về JSON đúng dạng, không thêm chữ nào khác:',
+  '{"category":"<một chủ đề trong danh sách>","tags":["thẻ1","thẻ2"]}',
+].join('\n');
+
+// Gợi ý 3 câu hỏi tiếp theo sau mỗi đáp án (Đợt 3).
+const KB_RELATED_PROMPT = [
+  'Dựa trên CÂU HỎI và CÂU TRẢ LỜI (kho kiến thức nội bộ công ty du lịch Viettours) bên dưới,',
+  'đề xuất ĐÚNG 3 câu hỏi TIẾP THEO ngắn gọn mà nhân viên có thể muốn hỏi để đào sâu.',
+  'Tiếng Việt, cụ thể, KHÁC câu đã hỏi.',
+  'CHỈ trả về JSON: {"questions":["...","...","..."]} — không thêm chữ nào khác.',
+].join('\n');
+
 // Prompt dịch hồ sơ visa Việt→Anh chuẩn lãnh sự (chắt lọc từ skill visa-translation).
 const VISA_TRANSLATE_PROMPT = [
   'Bạn là biên dịch viên hồ sơ visa Việt → Anh nộp lãnh sự. Bản dịch được chấm theo 3 tiêu chí:',
@@ -179,6 +197,29 @@ async function callVoyage(env, texts, inputType = 'document') {
     .slice()
     .sort((a, b) => a.index - b.index)
     .map((d) => d.embedding);
+}
+
+// Lọc HTML → văn bản thuần + tiêu đề (cho /kb/fetch). Bỏ script/style/comment, đổi
+// thẻ khối thành xuống dòng, gỡ thẻ còn lại, giải vài entity phổ biến.
+function htmlToText(html) {
+  const tm = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = tm ? tm[1].replace(/\s+/g, ' ').trim() : '';
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<\/(p|div|h[1-6]|li|br|tr|section|article)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { title, text };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -689,6 +730,73 @@ export default {
         if (!r.ok) return json({ error: data?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
         const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
         return json({ text });
+      }
+
+      // ── POST /kb/fetch — tải 1 URL, lọc HTML → { title, text } để nạp vào kho ──
+      if (path.endsWith('/kb/fetch')) {
+        const target = String(body.url || '').trim();
+        if (!/^https?:\/\//i.test(target)) return json({ error: "'url' không hợp lệ (phải http/https)" }, 400);
+        let resp;
+        try {
+          resp = await fetch(target, { headers: { 'User-Agent': 'ViettoursKB/1.0' }, redirect: 'follow' });
+        } catch (e) {
+          return json({ error: 'Không tải được trang: ' + (e.message || e) }, 400);
+        }
+        if (!resp.ok) return json({ error: `Trang trả về ${resp.status}` }, 400);
+        const html = await resp.text();
+        const { title, text } = htmlToText(html);
+        if (!text) return json({ error: 'Trang không có nội dung văn bản đọc được' }, 400);
+        return json({ title: title || target, text });
+      }
+
+      // ── POST /kb/suggest — gợi ý chủ đề + thẻ cho một mẩu kiến thức ──
+      if (path.endsWith('/kb/suggest')) {
+        if (!env.ANTHROPIC_API_KEY) return json({ error: 'Worker chưa cấu hình ANTHROPIC_API_KEY' }, 500);
+        const text = String(body.text || '').trim();
+        if (!text) return json({ error: "Thiếu trường 'text'" }, 400);
+        const out = await callClaude(
+          env,
+          [{ type: 'text', text: KB_SUGGEST_PROMPT + '\n\n=== NỘI DUNG ===\n' + text.slice(0, 6000) }],
+          300,
+          MODEL,
+        );
+        let meta = { category: '', tags: [] };
+        try {
+          const m = out.match(/\{[\s\S]*\}/);
+          if (m) meta = JSON.parse(m[0]);
+        } catch {
+          /* JSON hỏng → để mặc định */
+        }
+        const category = KB_CATEGORIES.includes(meta.category) ? meta.category : 'Khác';
+        const tags = Array.isArray(meta.tags)
+          ? meta.tags.slice(0, 6).map((t) => String(t).trim()).filter(Boolean)
+          : [];
+        return json({ category, tags });
+      }
+
+      // ── POST /kb/related — 3 câu hỏi tiếp theo gợi ý sau một đáp án ──
+      if (path.endsWith('/kb/related')) {
+        if (!env.ANTHROPIC_API_KEY) return json({ error: 'Worker chưa cấu hình ANTHROPIC_API_KEY' }, 500);
+        const question = String(body.question || '').trim();
+        if (!question) return json({ error: "Thiếu trường 'question'" }, 400);
+        const answer = String(body.answer || '').slice(0, 4000);
+        const out = await callClaude(
+          env,
+          [{ type: 'text', text: `${KB_RELATED_PROMPT}\n\n=== CÂU HỎI ===\n${question}\n\n=== CÂU TRẢ LỜI ===\n${answer}` }],
+          300,
+          MODEL,
+        );
+        let questions = [];
+        try {
+          const m = out.match(/\{[\s\S]*\}/);
+          if (m) questions = JSON.parse(m[0]).questions;
+        } catch {
+          /* JSON hỏng → rỗng */
+        }
+        questions = Array.isArray(questions)
+          ? questions.slice(0, 3).map((q) => String(q).trim()).filter(Boolean)
+          : [];
+        return json({ questions });
       }
 
       // Trợ lý ảo: vòng lặp tool-use chạy phía client. Trả NGUYÊN message của Claude

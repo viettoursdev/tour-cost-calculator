@@ -132,6 +132,8 @@ Worker có 2 endpoint phục vụ tính năng **Thư viện** (kho kiến thức
   — tạo vector embedding qua **Voyage AI** (`voyage-3.5`, 1024 chiều) để nạp kho & tìm kiếm.
 - `POST /kb/ask` `{ question, chunks: [{title, content}], stream? }` → câu trả lời RAG có trích
   dẫn nguồn (chống bịa), hỗ trợ streaming SSE. Dùng `MODEL_KB` (mặc định Sonnet).
+- `POST /kb/fetch` `{ url }` → `{ title, text }` — tải 1 trang web, lọc HTML thành văn bản (nạp link).
+- `POST /kb/suggest` `{ text }` → `{ category, tags[] }` — gợi ý chủ đề + thẻ khi nạp (Haiku, rẻ).
 
 **Thiết lập:** thêm **1 secret** ở Worker → **Settings → Variables and Secrets → Add**:
 - Name `VOYAGE_API_KEY` · Type **Secret** · giá trị = API key của Voyage

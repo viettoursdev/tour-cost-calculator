@@ -7,6 +7,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Vite handles the worker URL via the `?url` suffix.
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { callAIWorker } from './aiWorker';
+import { fileKind } from './fileKind';
 
 // Configure the pdf.js worker once at module load.
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -96,4 +97,53 @@ export function chunkText(text: string, max: number): string[] {
   }
   if (cur.trim()) chunks.push(cur);
   return chunks.length ? chunks : [text];
+}
+
+/** Trích text từ .xlsx/.xls qua ExcelJS (mỗi sheet → tiêu đề + các dòng `a | b | c`). */
+export async function extractXlsx(file: File): Promise<string> {
+  const { default: ExcelJS } = await import('exceljs');
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const out: string[] = [];
+  wb.eachSheet((ws) => {
+    out.push(`# ${ws.name}`);
+    ws.eachRow({ includeEmpty: false }, (row) => {
+      const cells: string[] = [];
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        const v = String(cell.text ?? '').trim();
+        if (v) cells.push(v);
+      });
+      if (cells.length) out.push(cells.join(' | '));
+    });
+  });
+  return out.join('\n');
+}
+
+/**
+ * Trích text từ một File bất kỳ, tự chọn cách theo loại: ảnh→OCR, PDF→pdfjs(+OCR scan),
+ * Word(.docx)→mammoth, Excel(.xlsx)→ExcelJS, text→đọc trực tiếp. Báo tiến trình qua onProgress.
+ */
+export async function extractFile(
+  file: File,
+  onProgress: (msg: string) => void = () => {},
+): Promise<string> {
+  const kind = fileKind(file.name, file.type);
+  const e = (file.name.split('.').pop() ?? '').toLowerCase();
+  if (kind === 'image') return extractImage(file, onProgress);
+  if (kind === 'pdf') return extractPdf(file, onProgress);
+  if (kind === 'text') {
+    onProgress('Đọc văn bản...');
+    return file.text();
+  }
+  if (kind === 'office') {
+    if (e === 'docx' || e === 'doc') {
+      onProgress('Đọc Word...');
+      return extractDocx(file);
+    }
+    if (e === 'xlsx' || e === 'xls') {
+      onProgress('Đọc Excel...');
+      return extractXlsx(file);
+    }
+  }
+  throw new Error('Loại file chưa hỗ trợ (chỉ: ảnh, PDF, Word .docx, Excel .xlsx, văn bản).');
 }

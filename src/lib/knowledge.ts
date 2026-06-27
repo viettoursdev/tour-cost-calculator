@@ -9,10 +9,23 @@
  * truy hồi qua Supabase với JWT của người dùng nên RLS tự lọc theo quyền (xem 0067).
  */
 import { sb } from '@/lib/supabase';
-import { embedTexts, streamKbAsk } from '@/lib/aiWorker';
+import { embedTexts, fetchLink, streamKbAsk, uploadFileToWorker } from '@/lib/aiWorker';
+
+export { suggestMeta, relatedQuestions } from '@/lib/aiWorker';
 
 export type KbKind = 'chat' | 'file' | 'link';
 export type KbStatus = 'processing' | 'ready' | 'error';
+
+/** Chủ đề lớn để phân loại nguồn (khớp KB_CATEGORIES trong worker /kb/suggest). */
+export const KB_CATEGORIES = [
+  'Điểm đến',
+  'Quy trình tour',
+  'Xử lý sự cố',
+  'NCC/Đối tác',
+  'Visa',
+  'Bán hàng',
+  'Khác',
+] as const;
 
 export interface KbSource {
   id: string;
@@ -24,6 +37,8 @@ export interface KbSource {
   created_at: string;
   updated_at: string;
   status: KbStatus;
+  category: string | null;
+  tags: string[];
 }
 
 export interface KbSearchHit {
@@ -100,6 +115,8 @@ export interface IngestParams {
   kind?: KbKind;
   rawRef?: string | null;
   department?: string | null;
+  category?: string | null;
+  tags?: string[];
 }
 
 /**
@@ -108,13 +125,19 @@ export interface IngestParams {
  * dở dang; chunk đã chèn sẽ bị dọn khi xoá nguồn nhờ on delete cascade).
  */
 export async function ingestText(params: IngestParams): Promise<KbSource> {
-  const { title, text, createdBy, kind = 'chat', rawRef = null, department = null } = params;
+  const {
+    title, text, createdBy,
+    kind = 'chat', rawRef = null, department = null, category = null, tags = [],
+  } = params;
   const parts = chunkText(text);
   if (!parts.length) throw new Error('Nội dung rỗng — không có gì để lưu.');
 
   const { data: src, error: e1 } = await sb
     .from('kb_sources')
-    .insert({ title, kind, raw_ref: rawRef, department, created_by: createdBy, status: 'processing' })
+    .insert({
+      title, kind, raw_ref: rawRef, department, category, tags,
+      created_by: createdBy, status: 'processing',
+    })
     .select()
     .single();
   if (e1 || !src) throw new Error(e1?.message || 'Không tạo được nguồn');
@@ -141,6 +164,103 @@ export async function ingestText(params: IngestParams): Promise<KbSource> {
     await sb.from('kb_sources').update({ status: 'error' }).eq('id', (src as KbSource).id);
     throw err;
   }
+}
+
+export interface IngestFileParams {
+  file: File;
+  createdBy: string;
+  title?: string;
+  department?: string | null;
+  category?: string | null;
+  tags?: string[];
+  onProgress?: (msg: string) => void;
+}
+
+/**
+ * Nạp một FILE: trích text (ảnh→OCR, PDF/Word/Excel/text qua docExtract) → tải bản gốc
+ * lên R2 (raw_ref = key để xem lại) → ingestText kind='file'. Lưu bản gốc thất bại
+ * không chặn việc nạp text. Tiêu đề mặc định = tên file.
+ */
+export async function ingestFile(params: IngestFileParams): Promise<KbSource> {
+  const { file, createdBy, department = null, category = null, tags = [], onProgress = () => {} } = params;
+  onProgress('Đang trích nội dung…');
+  // Dynamic import: tránh kéo pdfjs/mammoth (nặng) vào mọi consumer của knowledge.ts.
+  const { extractFile } = await import('@/lib/docExtract');
+  const text = (await extractFile(file, onProgress)).trim();
+  if (!text) throw new Error('Không trích được nội dung từ file này.');
+
+  onProgress('Đang lưu bản gốc…');
+  let rawRef: string | null = null;
+  try {
+    rawRef = (await uploadFileToWorker(file)).key;
+  } catch {
+    rawRef = null;
+  }
+
+  onProgress('Đang tạo embedding & lưu kho…');
+  return ingestText({
+    title: params.title?.trim() || file.name,
+    text,
+    createdBy,
+    kind: 'file',
+    rawRef,
+    department,
+    category,
+    tags,
+  });
+}
+
+export interface IngestLinkParams {
+  url: string;
+  createdBy: string;
+  title?: string;
+  department?: string | null;
+  category?: string | null;
+  tags?: string[];
+}
+
+/** Nạp một LINK: worker tải trang + lọc HTML → ingestText kind='link', raw_ref=url. */
+export async function ingestLink(params: IngestLinkParams): Promise<KbSource> {
+  const { url, createdBy, department = null, category = null, tags = [] } = params;
+  const { title, text } = await fetchLink(url.trim());
+  if (!text.trim()) throw new Error('Trang không có nội dung đọc được.');
+  return ingestText({
+    title: params.title?.trim() || title || url,
+    text,
+    createdBy,
+    kind: 'link',
+    rawRef: url.trim(),
+    department,
+    category,
+    tags,
+  });
+}
+
+export interface SimilarSource {
+  sourceId: string;
+  title: string;
+  similarity: number;
+}
+
+/**
+ * Tìm các nguồn ĐÃ CÓ gần giống nội dung sắp nạp (cảnh báo trùng/mâu thuẫn). Lấy đoạn
+ * đầu làm đại diện, embed rồi kb_search; trả các nguồn duy nhất có similarity ≥ threshold.
+ */
+export async function findSimilarSources(text: string, threshold = 0.82, k = 5): Promise<SimilarSource[]> {
+  const sample = text.trim().slice(0, 1500);
+  if (!sample) return [];
+  const [vec] = await embedTexts([sample], 'query');
+  const { data, error } = await sb.rpc('kb_search', { query_embedding: vec, match_count: k });
+  if (error) return [];
+  const hits = (data ?? []) as KbSearchHit[];
+  const seen = new Set<string>();
+  const out: SimilarSource[] = [];
+  for (const h of hits) {
+    if (h.similarity < threshold || seen.has(h.source_id)) continue;
+    seen.add(h.source_id);
+    out.push({ sourceId: h.source_id, title: h.title, similarity: h.similarity });
+  }
+  return out;
 }
 
 /** Truy hồi top-K khối gần câu hỏi nhất (ngữ nghĩa). RLS lọc theo quyền người gọi. */
@@ -190,4 +310,74 @@ export async function askKnowledge(
     sources.push({ id: h.source_id, title: h.title, kind: h.kind, updatedAt: h.source_updated_at });
   }
   return { answer, hits, sources };
+}
+
+// ── Đợt 3: gợi ý câu hỏi (log + FAQ) + trích dẫn bấm-mở ──
+
+export interface QuestionLog {
+  question: string;
+  askedBy?: string | null;
+  department?: string | null;
+  sourceCount?: number;
+}
+
+/** Ghi log câu hỏi (để gợi ý/FAQ). Lỗi không chặn trải nghiệm hỏi đáp. */
+export async function logQuestion(p: QuestionLog): Promise<void> {
+  const q = p.question.trim();
+  if (!q) return;
+  try {
+    await sb.from('kb_questions').insert({
+      question: q,
+      asked_by: p.askedBy ?? null,
+      department: p.department ?? null,
+      source_count: p.sourceCount ?? 0,
+    });
+  } catch {
+    /* im lặng */
+  }
+}
+
+/** Câu hỏi hay gặp nhất (gộp trùng) — cho khối FAQ. */
+export async function topQuestions(k = 6): Promise<string[]> {
+  const { data, error } = await sb.rpc('kb_top_questions', { match_count: k });
+  if (error) return [];
+  return ((data ?? []) as { question: string }[]).map((r) => r.question).filter(Boolean);
+}
+
+/** Câu hỏi gần đây (đã khử trùng) — cho gợi ý gõ (type-ahead). */
+export async function recentQuestions(k = 50): Promise<string[]> {
+  const { data, error } = await sb
+    .from('kb_questions')
+    .select('question')
+    .order('created_at', { ascending: false })
+    .limit(k * 3);
+  if (error) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of (data ?? []) as { question: string }[]) {
+    const q = (r.question || '').trim();
+    const key = q.toLowerCase();
+    if (!q || seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+    if (out.length >= k) break;
+  }
+  return out;
+}
+
+export interface KbChunkRow {
+  id: string;
+  chunk_index: number;
+  content: string;
+}
+
+/** Lấy toàn bộ khối nội dung của một nguồn (cho hộp thoại xem chi tiết / trích dẫn). */
+export async function getSourceChunks(sourceId: string): Promise<KbChunkRow[]> {
+  const { data, error } = await sb
+    .from('kb_chunks')
+    .select('id, chunk_index, content')
+    .eq('source_id', sourceId)
+    .order('chunk_index', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as KbChunkRow[];
 }

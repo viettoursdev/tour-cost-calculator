@@ -96,6 +96,10 @@ export interface AIWorkerBody {
   // /kb/ask
   question?: string;
   chunks?: { title?: string; content?: string }[];
+  // /kb/fetch
+  url?: string;
+  // /kb/related
+  answer?: string;
 }
 
 export interface AIWorkerResponse {
@@ -109,9 +113,18 @@ export interface AIWorkerResponse {
   usage?: Record<string, unknown>;
   // /kb/embed
   embeddings?: number[][];
+  // /kb/fetch
+  title?: string;
+  // /kb/suggest
+  category?: string;
+  tags?: string[];
+  // /kb/related
+  questions?: string[];
 }
 
-export type AIWorkerPath = '/ai' | '/distance' | '/ocr' | '/translate' | '/chat' | '/kb/embed' | '/kb/ask';
+export type AIWorkerPath =
+  | '/ai' | '/distance' | '/ocr' | '/translate' | '/chat'
+  | '/kb/embed' | '/kb/ask' | '/kb/fetch' | '/kb/suggest' | '/kb/related';
 
 /**
  * Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }.
@@ -286,6 +299,24 @@ export async function embedTexts(
   const d = await callAIWorker('/kb/embed', { texts, input_type: inputType });
   if (!Array.isArray(d.embeddings)) throw new Error('Worker không trả về embeddings');
   return d.embeddings;
+}
+
+/** Tải 1 URL qua worker `/kb/fetch`, trả tiêu đề + văn bản đã lọc HTML. */
+export async function fetchLink(url: string): Promise<{ title: string; text: string }> {
+  const d = await callAIWorker('/kb/fetch', { url });
+  return { title: d.title ?? url, text: d.text ?? '' };
+}
+
+/** Gợi ý chủ đề + thẻ cho một mẩu kiến thức qua worker `/kb/suggest`. */
+export async function suggestMeta(text: string): Promise<{ category: string; tags: string[] }> {
+  const d = await callAIWorker('/kb/suggest', { text });
+  return { category: d.category ?? '', tags: Array.isArray(d.tags) ? d.tags : [] };
+}
+
+/** Gợi ý 3 câu hỏi tiếp theo sau một đáp án qua worker `/kb/related`. */
+export async function relatedQuestions(question: string, answer: string): Promise<string[]> {
+  const d = await callAIWorker('/kb/related', { question, answer });
+  return Array.isArray(d.questions) ? d.questions : [];
 }
 
 /**
