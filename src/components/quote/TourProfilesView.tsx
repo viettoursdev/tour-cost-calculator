@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Autocomplete, Avatar, AvatarGroup, Box, Button, Chip, Collapse, createFilterOptions, Dialog, DialogActions,
+  Autocomplete, Avatar, AvatarGroup, Box, Button, Checkbox, Chip, Collapse, createFilterOptions, Dialog, DialogActions,
   DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, Paper, Stack, Switch,
-  Tab, Tabs, TextField, Tooltip, Typography,
+  Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -43,6 +43,13 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import DensitySmallIcon from '@mui/icons-material/DensitySmall';
 import DensityLargeIcon from '@mui/icons-material/DensityLarge';
+import TableRowsIcon from '@mui/icons-material/TableRows';
+import ViewAgendaOutlinedIcon from '@mui/icons-material/ViewAgendaOutlined';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -161,6 +168,40 @@ const loadDensity = (u?: string): 'comfortable' | 'compact' => {
   return localStorage.getItem(densityKey(u)) === 'compact' ? 'compact' : 'comfortable';
 };
 
+const layoutKey = (u: string) => `vte_tourprofile_layout_${u}`;
+const loadLayout = (u?: string): 'card' | 'table' => {
+  if (!u) return 'card';
+  return localStorage.getItem(layoutKey(u)) === 'table' ? 'table' : 'card';
+};
+
+const pinsKey = (u: string) => `vte_tourprofile_pins_${u}`;
+const loadPins = (u?: string): Set<string> => {
+  if (!u) return new Set();
+  try { return new Set(JSON.parse(localStorage.getItem(pinsKey(u)) || '[]') as string[]); }
+  catch { return new Set(); }
+};
+
+/** Khoá sắp xếp danh sách hồ sơ. */
+type SortKey = 'created' | 'depart' | 'value' | 'stage' | 'name';
+const SORT_LABEL: Record<SortKey, string> = {
+  created: 'Mới tạo', depart: 'Ngày khởi hành', value: 'Giá trị', stage: 'Giai đoạn', name: 'Tên / mã',
+};
+
+/** Một bộ lọc đã lưu (preset). */
+type SavedView = {
+  name: string;
+  search: string; customer: string; category: TourCategory | ''; country: string; stages: DealStage[]; tag: string;
+};
+const viewsKey = (u: string) => `vte_tourprofile_views_${u}`;
+const loadViews = (u?: string): SavedView[] => {
+  if (!u) return [];
+  try { return JSON.parse(localStorage.getItem(viewsKey(u)) || '[]') as SavedView[]; }
+  catch { return []; }
+};
+const saveViews = (u: string, v: SavedView[]) => {
+  try { localStorage.setItem(viewsKey(u), JSON.stringify(v)); } catch { /* ignore */ }
+};
+
 /**
  * Đợt 3 — "Hồ sơ tour": DANH SÁCH các hồ sơ tour user được xem (creator/collab/
  * follow/Trưởng-Phó Phòng cùng phòng/BGĐ-CEO). Mỗi hồ sơ xem nhanh (preview ẩn/hiện)
@@ -210,6 +251,12 @@ export function TourProfilesView() {
   const [exporting, setExporting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [density, setDensity] = useState<'comfortable' | 'compact'>(() => loadDensity(currentUser?.u));
+  const [layout, setLayout] = useState<'card' | 'table'>(() => loadLayout(currentUser?.u));
+  const [pinned, setPinned] = useState<Set<string>>(() => loadPins(currentUser?.u));
+  const [sortBy, setSortBy] = useState<SortKey>('created');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadViews(currentUser?.u));
   const [createOpen, setCreateOpen] = useState(false);
   const [moveState, setMoveState] = useState<{ cloudId: string; fromProfileId: string; quoteName: string } | null>(null);
   const [deleteState, setDeleteState] = useState<TourProfile | null>(null);
@@ -302,12 +349,35 @@ export function TourProfilesView() {
     if (fltCountry) list = list.filter((p) => (metaOf(p.id).country ?? '') === fltCountry);
     if (fltStage.length > 0) list = list.filter((p) => fltStage.includes(metaOf(p.id).stage));
     if (fltTag) list = list.filter((p) => (p.tags ?? []).includes(fltTag));
-    list.sort((a, b) => {
-      if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
-      return (b.createdAt || '').localeCompare(a.createdAt || '');
-    });
-    return filterRank(list, search, (p) => [p.code, p.name, p.customerName].filter(Boolean).join(' '));
-  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, fltTag, meta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Sắp xếp: tìm-kiếm → theo độ khớp; ngược lại theo tiêu chí chọn ──
+    if (search.trim()) {
+      list = filterRank(list, search, (p) => [p.code, p.name, p.customerName].filter(Boolean).join(' '));
+    } else {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      const stageRank = (s: DealStage) => { const i = DEAL_STAGES.findIndex((x) => x.key === s); return i < 0 ? DEAL_STAGES.length : i; };
+      list.sort((a, b) => {
+        if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
+        let r = 0;
+        switch (sortBy) {
+          case 'name': r = (a.name || a.code || '').localeCompare(b.name || b.code || '', 'vi'); break;
+          case 'stage': r = stageRank(metaOf(a.id).stage) - stageRank(metaOf(b.id).stage); break;
+          case 'value': r = (metaOf(a.id).values.current ?? -1) - (metaOf(b.id).values.current ?? -1); break;
+          case 'depart': {
+            const da = displayBasics(a, metaOf(a.id).primary).departDate || '';
+            const db = displayBasics(b, metaOf(b.id).primary).departDate || '';
+            if (!da !== !db) return da ? -1 : 1; // không có ngày → luôn xuống cuối
+            r = da.localeCompare(db); break;
+          }
+          default: r = (a.createdAt || '').localeCompare(b.createdAt || ''); // 'created'
+        }
+        return r * dir;
+      });
+    }
+    // Ghim lên đầu (stable — giữ thứ tự đã sắp ở trên).
+    if (pinned.size > 0) list.sort((a, b) => (pinned.has(b.id) ? 1 : 0) - (pinned.has(a.id) ? 1 : 0));
+    return list;
+  }, [visible, profiles, search, showArchived, fltCustomer, fltCategory, fltCountry, fltStage, fltTag, sortBy, sortDir, pinned, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tùy chọn cho bộ lọc — suy từ các hồ sơ user được xem.
   const filterOptions = useMemo(() => {
@@ -464,6 +534,53 @@ export function TourProfilesView() {
       if (currentUser) { try { localStorage.setItem(densityKey(currentUser.u), next); } catch { /* ignore */ } }
       return next;
     });
+  };
+
+  const toggleLayout = () => {
+    setLayout((prev) => {
+      const next = prev === 'table' ? 'card' : 'table';
+      if (currentUser) { try { localStorage.setItem(layoutKey(currentUser.u), next); } catch { /* ignore */ } }
+      return next;
+    });
+  };
+
+  const togglePin = (id: string) => {
+    setPinned((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      if (currentUser) { try { localStorage.setItem(pinsKey(currentUser.u), JSON.stringify([...next])); } catch { /* ignore */ } }
+      return next;
+    });
+  };
+
+  // ── Bộ lọc lưu sẵn (Saved views) ──
+  const persistViews = (v: SavedView[]) => { setSavedViews(v); if (currentUser) saveViews(currentUser.u, v); };
+  const applyView = (v: SavedView) => {
+    setSearch(v.search); setFltCustomer(v.customer); setFltCategory(v.category);
+    setFltCountry(v.country); setFltStage(v.stages); setFltTag(v.tag);
+  };
+  const saveCurrentView = () => {
+    const name = window.prompt('Tên bộ lọc (vd "Tour tháng này", "Đang vận hành"):')?.trim();
+    if (!name) return;
+    const v: SavedView = { name, search, customer: fltCustomer, category: fltCategory, country: fltCountry, stages: fltStage, tag: fltTag };
+    persistViews([...savedViews.filter((x) => x.name !== name), v]);
+  };
+  const deleteView = (name: string) => persistViews(savedViews.filter((x) => x.name !== name));
+
+  // ── Chọn nhiều (chế độ Bảng) ──
+  const toggleSelect = (id: string) => setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const clearSelection = () => setSelected(new Set());
+  const bulkArchiveSelected = async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    if (!window.confirm(`Lưu trữ ${ids.length} hồ sơ đã chọn?`)) return;
+    try { await Promise.all(ids.map((id) => archive(id, true))); clearSelection(); }
+    catch (e) { window.alert('❌ ' + (e as Error).message); }
+  };
+  const bulkExportSelected = () => {
+    const src = rows.filter((p) => selected.has(p.id));
+    if (src.length === 0) return;
+    void proceedExport(src, `${src.length} hồ sơ đã chọn`);
   };
 
   const openQuote = async (cloudId: string, keepView: boolean) => {
@@ -703,11 +820,27 @@ export function TourProfilesView() {
               <FilterListIcon />
             </IconButton>
           </Tooltip>
-          <Tooltip title={density === 'compact' ? 'Xem đầy đủ' : 'Xem rút gọn'}>
-            <IconButton size="small" color={density === 'compact' ? 'primary' : 'default'} onClick={toggleDensity}>
-              {density === 'compact' ? <DensityLargeIcon /> : <DensitySmallIcon />}
+          <TextField select size="small" value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)}
+            SelectProps={{ native: true }} sx={{ minWidth: 120 }} aria-label="Sắp xếp">
+            {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => <option key={k} value={k}>{SORT_LABEL[k]}</option>)}
+          </TextField>
+          <Tooltip title={sortDir === 'desc' ? 'Giảm dần' : 'Tăng dần'}>
+            <IconButton size="small" onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}>
+              <SwapVertIcon sx={{ transform: sortDir === 'asc' ? 'scaleY(-1)' : 'none' }} />
             </IconButton>
           </Tooltip>
+          <Tooltip title={layout === 'table' ? 'Xem dạng thẻ' : 'Xem dạng bảng'}>
+            <IconButton size="small" color={layout === 'table' ? 'primary' : 'default'} onClick={toggleLayout}>
+              {layout === 'table' ? <ViewAgendaOutlinedIcon /> : <TableRowsIcon />}
+            </IconButton>
+          </Tooltip>
+          {layout === 'card' && (
+            <Tooltip title={density === 'compact' ? 'Xem đầy đủ' : 'Xem rút gọn'}>
+              <IconButton size="small" color={density === 'compact' ? 'primary' : 'default'} onClick={toggleDensity}>
+                {density === 'compact' ? <DensityLargeIcon /> : <DensitySmallIcon />}
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Lịch khởi hành">
             <IconButton size="small" color={showCalendar ? 'primary' : 'default'} onClick={() => setShowCalendar((v) => !v)}><CalendarMonthIcon /></IconButton>
           </Tooltip>
@@ -746,6 +879,21 @@ export function TourProfilesView() {
         onDownload={() => setExportOpen(true)}
         onDismiss={(id) => void removeExport(id)}
       />
+
+      {(savedViews.length > 0 || activeFilters > 0 || search.trim()) && (
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
+          <BookmarkBorderIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>Bộ lọc lưu:</Typography>
+          {savedViews.length === 0 && <Typography variant="caption" color="text.disabled">(chưa có)</Typography>}
+          {savedViews.map((v) => (
+            <Chip key={v.name} size="small" label={v.name} onClick={() => applyView(v)} onDelete={() => deleteView(v.name)}
+              sx={{ height: 22, fontWeight: 600, bgcolor: 'rgba(13,122,106,0.08)', color: '#0d7a6a', cursor: 'pointer' }} />
+          ))}
+          {(activeFilters > 0 || search.trim()) && (
+            <Button size="small" startIcon={<BookmarkAddOutlinedIcon sx={{ fontSize: 16 }} />} onClick={saveCurrentView}>Lưu bộ lọc hiện tại</Button>
+          )}
+        </Stack>
+      )}
 
       {!showFilters && activeFilters > 0 && (
         <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
@@ -809,6 +957,26 @@ export function TourProfilesView() {
             </Button>
           </Paper>
         )
+      ) : layout === 'table' ? (
+        <>
+          {selected.size > 0 && (
+            <Paper variant="outlined" sx={{ p: 1, mb: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', bgcolor: 'rgba(13,122,106,0.06)', borderColor: 'rgba(13,122,106,0.3)' }}>
+              <Typography variant="body2" fontWeight={700} sx={{ flex: 1 }}>Đã chọn {selected.size} hồ sơ</Typography>
+              {showPrice && <Button size="small" startIcon={<FileDownloadOutlinedIcon sx={{ fontSize: 16 }} />} onClick={bulkExportSelected}>Xuất Excel</Button>}
+              <Button size="small" startIcon={<ArchiveOutlinedIcon sx={{ fontSize: 16 }} />} onClick={() => void bulkArchiveSelected()}>Lưu trữ</Button>
+              <Button size="small" onClick={clearSelection}>Bỏ chọn</Button>
+            </Paper>
+          )}
+          <ProfileTable
+            rows={rows} metaOf={metaOf} quotesByProfile={quotesByProfile} showPrice={showPrice}
+            pinned={pinned} selected={selected}
+            onToggleSelect={toggleSelect}
+            onToggleAll={(on) => setSelected(on ? new Set(rows.map((p) => p.id)) : new Set())}
+            onTogglePin={togglePin}
+            onQuickView={(id) => setQuickId(id)}
+            onOpenProfile={(p) => void openProfile(p)}
+          />
+        </>
       ) : (
         <Stack spacing={1.25}>
           {rows.map((p) => {
@@ -826,10 +994,12 @@ export function TourProfilesView() {
                 risks={tourProfileRisks({ primary: mt.primary, stage: mt.stage, contractCount: mt.links.contract })}
                 expanded={expanded.has(p.id)}
                 compact={density === 'compact'}
+                pinned={pinned.has(p.id)}
                 showPrice={showPrice}
                 currentUser={currentUser}
                 users={users}
                 onToggle={() => toggle(p.id)}
+                onTogglePin={() => togglePin(p.id)}
                 onEdit={() => setEditId(p.id)}
                 onQuickView={() => setQuickId(p.id)}
                 onOpenProfile={() => void openProfile(p)}
@@ -1663,14 +1833,14 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 }
 
 function ProfileRow({
-  profile, stage, primary, guideCount, quotes, links, values, risks, expanded, compact, showPrice,
-  currentUser, users, onToggle, onEdit, onQuickView, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
+  profile, stage, primary, guideCount, quotes, links, values, risks, expanded, compact, pinned, showPrice,
+  currentUser, users, onToggle, onTogglePin, onEdit, onQuickView, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
   onApproveDelete, onRejectDelete,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
-  links: ProfileLinks; values: ProfileValues; risks: TourRisk[]; expanded: boolean; compact: boolean; showPrice: boolean;
+  links: ProfileLinks; values: ProfileValues; risks: TourRisk[]; expanded: boolean; compact: boolean; pinned: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
-  onToggle: () => void; onEdit: () => void; onQuickView: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
+  onToggle: () => void; onTogglePin: () => void; onEdit: () => void; onQuickView: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
   onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void; onDelete: () => void;
   onMoveQuote: (cloudId: string, quoteName: string) => void;
   onApproveDelete: () => void; onRejectDelete: () => void;
@@ -1683,6 +1853,13 @@ function ProfileRow({
   // KHÁCH/NGÀY/PAX: ưu tiên hồ sơ khi đã KHOÁ (sửa tay), ngược lại theo báo giá chính.
   const { custName, departDate, pax } = displayBasics(profile, primary);
   const archived = profile.status === 'archived';
+  const progressSteps = profileProgressSteps({
+    hasQuote: quotes.length > 0,
+    contractCount: links.contract,
+    guideCount,
+    settled: !!primary?.settlementSummary,
+    nccPaid: !!pay && pay.remaining <= 0,
+  });
 
   return (
     <Paper
@@ -1735,6 +1912,13 @@ function ProfileRow({
             {!compact && guideCount > 0 && <Meta label="Lịch HDV" value={String(guideCount)} />}
             {showPrice && <ValueLadder values={values} compact={compact} />}
           </Stack>
+          {/* Pipeline tiến độ giai đoạn + độ hoàn thiện hồ sơ */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={compact ? 0.75 : 1.25} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ mt: compact ? 0.5 : 0.75 }}>
+            <Box sx={{ flex: 1, minWidth: 0, maxWidth: { sm: 360 } }}>
+              <StageStepper stage={stage} compact={compact} />
+            </Box>
+            <ProfileProgress steps={progressSteps} compact={compact} />
+          </Stack>
           {!compact && (
             <Stack direction="row" spacing={1} sx={{ mt: 0.75 }} alignItems="center" flexWrap="wrap" useFlexGap>
               <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
@@ -1749,6 +1933,11 @@ function ProfileRow({
           )}
         </Box>
         <Stack direction="row" spacing={0.5} alignItems="center">
+          <Tooltip title={pinned ? 'Bỏ ghim' : 'Ghim lên đầu'}>
+            <IconButton size="small" color={pinned ? 'primary' : 'default'} onClick={onTogglePin}>
+              {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
           {(profile.collaborators?.length || profile.followers?.length) ? (
             <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: 11 } }}>
               {[...(profile.collaborators ?? []), ...(profile.followers ?? [])].map((c, i) => (
@@ -1868,6 +2057,96 @@ function ProfileRow({
   );
 }
 
+/** Hình dạng meta gom theo hồ sơ (dùng cho bảng). */
+type ProfileMeta = { primary?: CloudQuoteEntry; stage: DealStage; links: ProfileLinks; guide: number; values: ProfileValues; country?: string };
+
+/** Chế độ BẢNG — dày đặc, chọn nhiều, sắp xếp ở thanh công cụ. */
+function ProfileTable({
+  rows, metaOf, quotesByProfile, showPrice, pinned, selected,
+  onToggleSelect, onToggleAll, onTogglePin, onQuickView, onOpenProfile,
+}: {
+  rows: TourProfile[];
+  metaOf: (id: string) => ProfileMeta;
+  quotesByProfile: Map<string, CloudQuoteEntry[]>;
+  showPrice: boolean;
+  pinned: Set<string>;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onToggleAll: (on: boolean) => void;
+  onTogglePin: (id: string) => void;
+  onQuickView: (id: string) => void;
+  onOpenProfile: (p: TourProfile) => void;
+}) {
+  const allSel = rows.length > 0 && rows.every((p) => selected.has(p.id));
+  const someSel = selected.size > 0 && !allSel;
+  return (
+    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+      <Table size="small" sx={{ '& td, & th': { whiteSpace: 'nowrap' } }}>
+        <TableHead>
+          <TableRow sx={{ '& th': { fontWeight: 800, bgcolor: 'rgba(13,122,106,0.06)' } }}>
+            <TableCell padding="checkbox">
+              <Checkbox size="small" checked={allSel} indeterminate={someSel} onChange={(e) => onToggleAll(e.target.checked)} />
+            </TableCell>
+            <TableCell padding="checkbox" />
+            <TableCell>Mã</TableCell>
+            <TableCell>Tên tour</TableCell>
+            <TableCell>Loại</TableCell>
+            <TableCell>Giai đoạn</TableCell>
+            <TableCell>Khách</TableCell>
+            <TableCell>Khởi hành</TableCell>
+            <TableCell align="right">Khách</TableCell>
+            {showPrice && <TableCell align="right">Giá trị hiện tại</TableCell>}
+            <TableCell sx={{ minWidth: 130 }}>Hoàn thiện</TableCell>
+            <TableCell align="right" />
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((p) => {
+            const mt = metaOf(p.id);
+            const sm = STAGE_META(mt.stage);
+            const cm = categoryMeta(tourCategoryOf(p));
+            const b = displayBasics(p, mt.primary);
+            const pay = mt.primary?.paymentSummary;
+            const progress = profileProgressSteps({
+              hasQuote: (quotesByProfile.get(p.id) ?? []).length > 0,
+              contractCount: mt.links.contract, guideCount: mt.guide,
+              settled: !!mt.primary?.settlementSummary, nccPaid: !!pay && pay.remaining <= 0,
+            });
+            const isSel = selected.has(p.id);
+            return (
+              <TableRow key={p.id} hover selected={isSel} sx={{ opacity: p.status === 'archived' ? 0.6 : 1, cursor: 'default' }}>
+                <TableCell padding="checkbox">
+                  <Checkbox size="small" checked={isSel} onChange={() => onToggleSelect(p.id)} />
+                </TableCell>
+                <TableCell padding="checkbox">
+                  <IconButton size="small" color={pinned.has(p.id) ? 'primary' : 'default'} onClick={() => onTogglePin(p.id)}>
+                    {pinned.has(p.id) ? <PushPinIcon sx={{ fontSize: 16 }} /> : <PushPinOutlinedIcon sx={{ fontSize: 16 }} />}
+                  </IconButton>
+                </TableCell>
+                <TableCell><Chip size="small" label={p.code} sx={{ height: 20, fontWeight: 800, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} /></TableCell>
+                <TableCell sx={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <Typography fontSize={13} fontWeight={600} noWrap>{p.name || '(chưa đặt tên)'}</Typography>
+                </TableCell>
+                <TableCell><Tooltip title={cm.label}><span>{cm.icon} {cm.short}</span></Tooltip></TableCell>
+                <TableCell><Chip size="small" label={sm.short} sx={{ height: 20, fontWeight: 700, bgcolor: `${sm.color}1a`, color: sm.color }} /></TableCell>
+                <TableCell sx={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.custName || '—'}</TableCell>
+                <TableCell>{b.departDate ? new Date(b.departDate).toLocaleDateString('vi-VN') : '—'}</TableCell>
+                <TableCell align="right">{b.pax || '—'}</TableCell>
+                {showPrice && <TableCell align="right">{typeof mt.values.current === 'number' ? fmtVND(mt.values.current) : '—'}</TableCell>}
+                <TableCell><ProfileProgress steps={progress} compact /></TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Xem nhanh"><IconButton size="small" onClick={() => onQuickView(p.id)}><VisibilityIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
+                  <Tooltip title="Mở hồ sơ"><IconButton size="small" onClick={() => onOpenProfile(p)}><OpenInNewIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
+}
+
 /** Khung chuyến bay (nạp lười) của báo giá chính trong hồ sơ. */
 function FlightPanel({ primaryCloudId, expanded }: { primaryCloudId?: string; expanded: boolean }) {
   const [flights, setFlights] = useState<QuoteFlight[] | null>(null);
@@ -1969,6 +2248,92 @@ function ValueLadder({ values, compact }: { values: ProfileValues; compact?: boo
 }
 
 /** Meta 3 nhóm nhân sự (cộng tác / theo dõi / nhân sự event) — nhãn + màu + icon riêng. */
+/**
+ * Pipeline tiến độ giai đoạn — thanh segmented 7 bước (Yêu cầu→…→Đóng), tô màu
+ * tới giai đoạn hiện tại, bước hiện tại nổi (đậm + nhãn). Deal thua/huỷ → badge đỏ.
+ */
+function StageStepper({ stage, compact }: { stage: DealStage; compact?: boolean }) {
+  if (stage === 'lost') {
+    return (
+      <Chip size="small" label={DEAL_STAGE_LOST.short}
+        sx={{ height: 20, fontWeight: 800, bgcolor: `${DEAL_STAGE_LOST.color}1a`, color: DEAL_STAGE_LOST.color }} />
+    );
+  }
+  const idx = Math.max(0, DEAL_STAGES.findIndex((s) => s.key === stage));
+  const cur = DEAL_STAGES[idx];
+  return (
+    <Stack direction="row" spacing={0.4} alignItems="center" sx={{ width: '100%', minWidth: 0 }}>
+      <Stack direction="row" spacing={0.3} sx={{ flex: 1, minWidth: 0 }}>
+        {DEAL_STAGES.map((s, i) => (
+          <Tooltip key={s.key} title={s.label} arrow>
+            <Box sx={{
+              flex: 1, height: compact ? 4 : 6, borderRadius: 3,
+              bgcolor: i <= idx ? s.color : 'rgba(15,58,74,0.10)',
+              transition: 'background-color .2s ease',
+              ...(i === idx ? { boxShadow: `0 0 0 2px ${s.color}33` } : {}),
+            }} />
+          </Tooltip>
+        ))}
+      </Stack>
+      <Typography sx={{ fontSize: compact ? 10 : 11, fontWeight: 800, color: cur.color, whiteSpace: 'nowrap' }}>
+        {cur.short}
+      </Typography>
+    </Stack>
+  );
+}
+
+/** Một bước hoàn thiện hồ sơ (vận hành). */
+type ProgressStep = { label: string; done: boolean };
+
+/**
+ * Suy các bước hoàn thiện hồ sơ từ dữ liệu liên kết (hàm thuần, tính trong UI):
+ * có báo giá · có hợp đồng · có lịch HDV · đã quyết toán · hết công nợ NCC.
+ */
+function profileProgressSteps(args: {
+  hasQuote: boolean; contractCount: number; guideCount: number;
+  settled: boolean; nccPaid: boolean;
+}): ProgressStep[] {
+  return [
+    { label: 'Có báo giá', done: args.hasQuote },
+    { label: 'Có hợp đồng', done: args.contractCount > 0 },
+    { label: 'Có lịch HDV', done: args.guideCount > 0 },
+    { label: 'Đã quyết toán', done: args.settled },
+    { label: 'Hết công nợ NCC', done: args.nccPaid },
+  ];
+}
+
+/** Thanh "độ hoàn thiện hồ sơ" — % + tooltip liệt kê việc còn thiếu. */
+function ProfileProgress({ steps, compact }: { steps: ProgressStep[]; compact?: boolean }) {
+  const done = steps.filter((s) => s.done).length;
+  const pct = Math.round((done / steps.length) * 100);
+  const color = pct >= 100 ? '#16a34a' : pct >= 60 ? '#0d7a6a' : pct >= 30 ? '#d97706' : '#94a3b8';
+  const pending = steps.filter((s) => !s.done);
+  return (
+    <Tooltip arrow title={
+      <Box>
+        <Typography variant="caption" fontWeight={800}>Hoàn thiện {done}/{steps.length}</Typography>
+        {steps.map((s) => (
+          <Stack key={s.label} direction="row" spacing={0.5} alignItems="center">
+            {s.done
+              ? <CheckCircleOutlineIcon sx={{ fontSize: 13, color: '#86efac' }} />
+              : <RadioButtonUncheckedIcon sx={{ fontSize: 13, color: '#fdba74' }} />}
+            <Typography variant="caption">{s.label}</Typography>
+          </Stack>
+        ))}
+      </Box>
+    }>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: compact ? 110 : 150 }}>
+        <Box sx={{ flex: 1, height: 6, borderRadius: 3, bgcolor: 'rgba(15,58,74,0.10)', overflow: 'hidden' }}>
+          <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: color, borderRadius: 3, transition: 'width .3s ease' }} />
+        </Box>
+        <Typography sx={{ fontSize: 11, fontWeight: 800, color, whiteSpace: 'nowrap' }}>
+          {pct}%{!compact && pending.length > 0 ? ` · thiếu ${pending.length}` : ''}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+}
+
 const PEOPLE_GROUPS = [
   { key: 'collab', label: 'Cộng tác', color: '#0d7a6a', Icon: GroupAddIcon },
   { key: 'follow', label: 'Theo dõi', color: '#64748b', Icon: VisibilityIcon },
