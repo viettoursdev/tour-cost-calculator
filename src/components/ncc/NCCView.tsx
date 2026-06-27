@@ -21,7 +21,6 @@ import { MergeDialog } from '@/components/common/MergeDialog';
 import { nccToCustomer } from '@/lib/contactConvert';
 import { SORT_OPTIONS, sortList, type SortMode } from '@/lib/listSort';
 import { NCC_SECTORS, SECTOR_COLOR, NCC_CONTINENTS, NCC_COUNTRIES, NCC_ALL_COUNTRIES } from './constants';
-import { nccScore, NCC_BAND_META } from './nccScore';
 import { NccSuggestDialog } from './NccSuggestDialog';
 import type { Ncc } from '@/types';
 import { filterRank, normalizeVN } from '@/lib/search';
@@ -524,7 +523,6 @@ function NccCard({
   canShare: boolean;
   onClick: () => void;
 }) {
-  const sc = nccScore(s);
   return (
     <Box
       onClick={selectable ? onToggleSelect : onClick}
@@ -552,10 +550,6 @@ function NccCard({
             <Chip size="small" label={s.status === 'paused' ? 'Ngừng' : 'Hạn chế'}
               sx={{ height: 18, fontWeight: 700, bgcolor: s.status === 'paused' ? 'rgba(100,116,139,0.18)' : 'rgba(220,50,80,0.15)', color: s.status === 'paused' ? '#475569' : '#dc3250' }} />
           )}
-          <Tooltip title={`Điểm NCC ${sc.score}/100${sc.avgStars !== undefined ? ` · ${sc.avgStars.toFixed(1)}★ (${sc.ratingCount} lượt)` : ' · chưa có đánh giá'}`}>
-            <Chip size="small" label={`${NCC_BAND_META[sc.band].label} ${sc.score}`}
-              sx={{ height: 18, fontWeight: 700, bgcolor: `${NCC_BAND_META[sc.band].color}1a`, color: NCC_BAND_META[sc.band].color }} />
-          </Tooltip>
           {(s.files ?? []).length > 0 && <Chip size="small" variant="outlined" label={`📎 ${(s.files ?? []).length}`} sx={{ height: 18 }} />}
           {!!s.collaborators?.length && <Chip size="small" variant="outlined" label={`👥 Chia sẻ ${s.collaborators.length}`} sx={{ height: 18, color: 'primary.main' }} />}
         </Stack>
