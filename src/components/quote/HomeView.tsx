@@ -665,9 +665,9 @@ export function HomeView() {
           Tất cả thẻ đang ẩn. Bấm ⚙️ ở góc trên để hiện lại.
         </Typography>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, alignItems: 'start', gap: 1.5 }}>
           {rendered.map(({ id, el }) => (
-            <Box key={id} sx={FULL_SPAN.has(id) ? { gridColumn: { md: '1 / -1' } } : undefined}>
+            <Box key={id} sx={{ minWidth: 0, ...(FULL_SPAN.has(id) ? { gridColumn: { md: '1 / -1' } } : null) }}>
               {el}
             </Box>
           ))}

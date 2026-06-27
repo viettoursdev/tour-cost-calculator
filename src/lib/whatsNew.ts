@@ -9,6 +9,81 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-06-26c', date: '26/06/2026', title: 'Hồ sơ tour — bản nâng cấp lớn',
+    items: [
+      { icon: '🗂️', title: 'Phân loại & 3 mốc giá trị', desc: 'Hồ sơ tour chia 5 loại (tour/sự kiện/dịch vụ…) có tiền tố mã riêng; theo dõi 3 mốc giá trị: hiện tại (báo giá) · hợp đồng · nghiệm thu để nhìn chênh lệch thật.' },
+      { icon: '🔔', title: 'Cảnh báo "Cần chú ý" + thảo luận', desc: 'Thẻ "Cần chú ý" tự nổi việc cần xử lý; đánh dấu cảnh báo sẽ báo cho follower/cộng tác viên. Mỗi hồ sơ có dòng thời gian (timeline) và khung thảo luận riêng.' },
+      { icon: '📅', title: 'Lịch khởi hành & so sánh phương án', desc: 'Xem lịch khởi hành các hồ sơ theo tháng; so sánh nhiều phương án báo giá của cùng một tour cạnh nhau.' },
+      { icon: '📄', title: 'Xuất PDF, tài liệu, tour mẫu', desc: 'Xuất hồ sơ tour ra PDF 1 trang; trung tâm tài liệu cấp hồ sơ (đính kèm file); nhân bản hồ sơ làm "tour mẫu" cho chương trình lặp lại hằng năm; cổng duyệt khi biên lợi thấp.' },
+    ],
+  },
+  {
+    id: '2026-06-26b', date: '26/06/2026', title: 'Trang Hôm nay — phiên bản Pro',
+    items: [
+      { icon: '🎛️', title: 'Tùy biến thẻ & đồng bộ đa thiết bị', desc: 'Kéo-thả, ẩn/hiện và thu gọn từng thẻ trên trang Hôm nay theo ý bạn; bố cục tự đồng bộ qua các thiết bị. Có bộ lọc Của tôi / Cả phòng / Tất cả.' },
+      { icon: '📊', title: 'KPI, Ưu tiên hôm nay & thao tác nhanh', desc: 'Dải KPI tổng quan, hộp "Ưu tiên hôm nay" và các nút thao tác nhanh ngay trên thẻ; lưu được nhiều bố cục đặt tên (preset).' },
+      { icon: '📰', title: 'Bản tin sáng, lịch tuần, mục tiêu tháng', desc: 'Bản tin sáng tóm tắt việc cần để ý; lịch tuần kèm sparkline; đặt mục tiêu tháng; "vừa xem gần đây" và xuất trang Hôm nay ra PDF.' },
+    ],
+  },
+  {
+    id: '2026-06-26a', date: '26/06/2026', title: 'Đào tạo nhân viên & Link visa cho khách',
+    items: [
+      { icon: '🎓', title: 'Đào tạo nhân viên mới', desc: 'Lộ trình onboarding 30-60-90 ngày cho 4 phòng: trình soạn chương trình, dashboard báo cáo, cấp chứng nhận PDF, nhắc deadline/sign-off, tùy chọn tự ghi danh khi tạo nhân sự + AI tạo câu hỏi luyện tập.' },
+      { icon: '🔗', title: 'Link khách xem tình trạng visa', desc: 'Tạo link công khai cho khách tự xem danh sách & tình trạng xin visa của đoàn (chọn trường hiển thị). Phải được Trưởng phòng Visa hoặc BGĐ/CEO duyệt thì link mới hoạt động.' },
+      { icon: '📤', title: 'Tải danh sách khách visa ra Excel', desc: 'Xuất danh sách khách xin visa ra Excel mẫu đẹp, tự chọn & sắp xếp cột (nhớ theo máy); có cổng mật khẩu Trưởng Phòng để bảo vệ dữ liệu nhạy cảm.' },
+    ],
+  },
+  {
+    id: '2026-06-25b', date: '25/06/2026', title: 'Hồ sơ tour làm trung tâm',
+    items: [
+      { icon: '🧭', title: 'Một hồ sơ gom mọi thứ', desc: 'Mỗi tour có một Hồ sơ tour (mã tự sinh) gom mọi báo giá, hợp đồng, visa, lịch trình, thực đơn liên quan — nhìn toàn cảnh một chỗ. Tạo nhanh bằng "Tạo báo giá và tour mới".' },
+      { icon: '👥', title: 'Cộng tác viên & người theo dõi', desc: 'Thêm cộng tác viên và người theo dõi cho từng hồ sơ; có cập nhật quan trọng là họ được thông báo.' },
+      { icon: '🎮', title: 'Cockpit & Dashboard theo hồ sơ', desc: 'Màn Cockpit điều hành theo từng hồ sơ tour; Dashboard tổng hợp và xuất Excel cấp hồ sơ.' },
+    ],
+  },
+  {
+    id: '2026-06-25a', date: '25/06/2026', title: 'Quản lý kho · Visa của tour · Nav tùy biến',
+    items: [
+      { icon: '📦', title: 'Quản lý kho (Inventory)', desc: 'Quản lý vật tư theo lô FIFO và tài sản theo từng cái; cảnh báo tồn thấp, dashboard, xuất Excel; nối kho ↔ tour để đưa giá vốn kho vào quyết toán; in phiếu Nhập/Xuất PDF và báo cáo Nhập-Xuất-Tồn.' },
+      { icon: '🛂', title: 'Visa của tour (báo giá nước ngoài)', desc: 'Tab "Visa của tour": theo dõi tình trạng & timeline xin visa từng khách (tự tính ngược từ ngày khởi hành, cảnh báo trễ mốc), AI quét hộ chiếu tự điền khách, dự toán chi phí visa đoàn ↔ thực chi, xuất Excel/PDF.' },
+      { icon: '🧰', title: 'Thanh điều hướng tùy biến', desc: 'Nút tùy chỉnh (cạnh nút Đăng xuất): kéo-thả, gom/tách, ẩn/hiện các tab điều hướng theo từng người dùng.' },
+    ],
+  },
+  {
+    id: '2026-06-24b', date: '24/06/2026', title: 'Tài chính: ngoại tệ, lợi nhuận, quyết toán',
+    items: [
+      { icon: '💱', title: 'Thanh toán đa ngoại tệ', desc: 'Mỗi hạng mục chi phí nhập được theo ngoại tệ riêng (USD/EUR…) và tự quy đổi VND theo tỷ giá của báo giá.' },
+      { icon: '💰', title: 'Lợi nhuận thực', desc: 'Lợi nhuận = Tổng báo giá − Tổng phải thanh toán, có bù trừ chéo chênh lệch giữa các hạng mục.' },
+      { icon: '🧾', title: 'Quyết toán CP tạm ứng', desc: 'Tab "Quyết toán CP tạm ứng" trong "Tạm ứng - Quyết toán": quyết toán đa ngoại tệ & đa phương thức (tiền mặt/thẻ…); dư thì hoàn lại, thiếu thì ghi công nợ.' },
+      { icon: '📑', title: 'Hiệu lực báo giá & biên lợi', desc: 'Báo giá có hạn hiệu lực + đóng dấu tỷ giá áp dụng trên bản in/link khách; hiện markup & biên lợi gộp + chính sách huỷ.' },
+    ],
+  },
+  {
+    id: '2026-06-24a', date: '24/06/2026', title: 'Nhân sự hoàn thiện & Danh sách khách hợp nhất',
+    items: [
+      { icon: '👥', title: 'Nhân sự đầy đủ', desc: 'Nghỉ phép + duyệt phép & lịch khả dụng, hồ sơ nhân viên 360, xuất Excel, onboarding tự động, khung năng lực mẫu và lộ trình thăng tiến (career ladder).' },
+      { icon: '🧳', title: 'Danh sách khách hợp nhất', desc: 'Gộp danh sách khách giữa Visa và Báo giá; sắp phòng (VIP/Upgrade) và dashboard nam/nữ & số phòng.' },
+      { icon: '🪪', title: 'Cấp "Phó Phòng"', desc: 'Bổ sung cấp Phó Phòng (trên Operations, dưới Trưởng Phòng) — thấy dữ liệu phòng như Trưởng Phòng.' },
+    ],
+  },
+  {
+    id: '2026-06-23', date: '23/06/2026', title: 'Nhân sự, Quy trình phòng ban, Quy trình Visa',
+    items: [
+      { icon: '👥', title: 'Module Nhân sự (HRM/ATS)', desc: 'Hồ sơ nhân sự + org chart + giấy tờ nhắc hạn; pool HDV cộng tác viên; đánh giá/KPI/lộ trình; tuyển dụng ATS (Kanban ứng viên, "Nhận việc" tạo nhân sự).' },
+      { icon: '🗂️', title: 'Quy trình phòng ban (SOP)', desc: 'Thư viện template quy trình cho 5 phòng + chạy phiên thực tế: timeline, AI gợi ý bước, nhắc deadline.' },
+      { icon: '🛂', title: 'Quản lý quy trình visa', desc: 'Nối dự án visa vào Hồ sơ tour; bảng điều phối Kanban; mẫu thủ tục theo từng nước; nhắc hạn & cảnh báo thông minh.' },
+      { icon: '🧾', title: 'Quyết toán tour + Web Push', desc: 'Quyết toán tour đối chiếu dự toán giá vốn ↔ chi thực tế ra biên lợi thật, chốt khoá. Thêm Web Push + bản tin sáng tự động.' },
+    ],
+  },
+  {
+    id: '2026-06-22', date: '22/06/2026', title: 'Đường dây CRM, Trợ lý ảo, Việc cần làm',
+    items: [
+      { icon: '🔗', title: 'Đường dây CRM (Deal pipeline)', desc: 'Máy trạng thái hồ sơ tour; Deal Cockpit gom cả vòng đời; bàn giao 1 chạm báo giá → hợp đồng; Pipeline board 7 giai đoạn.' },
+      { icon: '🤖', title: 'Trợ lý ảo nâng cấp', desc: 'Phản hồi trôi chảy (streaming), đọc được ảnh/PDF đính kèm và phản hồi nhanh hơn nhờ bộ nhớ đệm.' },
+      { icon: '📋', title: 'Việc cần làm — không gian làm việc', desc: 'To-Do nâng cấp: bảng Kanban + dashboard, gắn nhãn, lọc/tìm; tự sinh bộ việc vận hành khi deal thắng.' },
+    ],
+  },
+  {
     id: '2026-06-21e', date: '21/06/2026', title: 'Việc cần làm (To-Do) trên Trang Hôm nay',
     items: [
       { icon: '📋', title: 'Quản lý công việc ngay ở Hôm nay', desc: 'Thẻ "Việc cần làm": thêm nhanh, đặt ưu tiên/deadline, giao cho đội nhóm, việc con (checklist), lặp lại (ngày/tuần/tháng); nhóm theo Quá hạn/Hôm nay/Sắp tới và lọc của tôi/tất cả.' },
