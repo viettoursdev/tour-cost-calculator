@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Chip, MenuItem, Paper, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Chip, MenuItem, Paper, Select, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import Sortable from 'sortablejs';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useQuoteStore } from '@/stores/quoteStore';
 import { useContractStore } from '@/stores/contractStore';
+import { useCustomerStore } from '@/stores/customerStore';
 import { sbSetQuoteStatus } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { filterRank } from '@/lib/search';
@@ -11,6 +12,8 @@ import { fmtVND } from './calc';
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
 import { LossReasonDialog } from './LossReasonDialog';
 import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
+import { scoreDeals, WIN_BAND_META, type WinScore } from './winScore';
+import { PriorityToClose, type ScoredDeal } from './PriorityToClose';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 
 type Mode = 'status' | 'stage';
@@ -23,6 +26,7 @@ export function SalesPipeline() {
   const quotes = useQuoteHistoryStore((s) => s.quotes);
   const visibleQuotes = useQuoteHistoryStore((s) => s.visibleQuotes);
   const contracts = useContractStore((s) => s.contracts);
+  const customers = useCustomerStore((s) => s.customers);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setView = useQuoteStore((s) => s.setView);
   const setStatus = useQuoteStore((s) => s.setStatus);
@@ -52,6 +56,27 @@ export function SalesPipeline() {
     }
     return m;
   }, [rows, contracts]);
+
+  // #3 — điểm khả năng chốt cho từng deal đang mở (tỷ lệ thắng theo khách + nguồn).
+  const sourceOf = useMemo(() => {
+    const byId = new Map(customers.map((c) => [c.id, c.source?.trim() || '']));
+    const byName = new Map(customers.map((c) => [c.name, c.source?.trim() || '']));
+    return (q: CloudQuoteEntry) =>
+      (q.customerId ? byId.get(q.customerId) : undefined) || byName.get(q.customerName ?? '') || undefined;
+  }, [customers]);
+
+  const scoreById = useMemo(
+    () => scoreDeals(rows, visibleQuotes(), { sourceOf, hasContract: (q) => contracts.some((c) => c.linkedQuoteId === q.cloudId) }),
+    [rows, quotes, contracts, sourceOf], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const priority: ScoredDeal[] = useMemo(
+    () => rows.filter((q) => scoreById.has(q.cloudId))
+      .map((q) => ({ entry: q, score: scoreById.get(q.cloudId)! }))
+      .sort((a, b) => b.score.score - a.score.score || (b.entry.totalCost ?? 0) - (a.entry.totalCost ?? 0))
+      .slice(0, 8),
+    [rows, scoreById],
+  );
 
   const changeMode = (m: Mode | null) => { if (m) { setMode(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* ignore */ } } };
 
@@ -138,6 +163,8 @@ export function SalesPipeline() {
         </Stack>
       </Stack>
 
+      <PriorityToClose items={priority} onOpen={(q) => void open(q)} />
+
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(4,1fr)', lg: `repeat(${isStage ? 8 : 6},1fr)` }, gap: 1.25, alignItems: 'start' }}>
         {columns.map((col) => (
           <Paper key={col.key} variant="outlined" sx={{ p: 0.75, bgcolor: 'rgba(0,0,0,0.015)', borderTop: `3px solid ${col.color}` }}>
@@ -156,7 +183,10 @@ export function SalesPipeline() {
               {col.items.map((q) => (
                 <Paper key={q.cloudId} data-id={q.cloudId} elevation={0} onClick={() => void open(q)}
                   sx={{ p: 1, cursor: isStage ? 'pointer' : 'grab', border: '1px solid rgba(15,58,74,0.14)', borderRadius: 1.5, '&:hover': { boxShadow: 2, borderColor: col.color } }}>
-                  <Typography fontSize={12.5} fontWeight={700} sx={{ lineHeight: 1.3 }}>{q.name}</Typography>
+                  <Stack direction="row" alignItems="flex-start" spacing={0.5}>
+                    <Typography fontSize={12.5} fontWeight={700} sx={{ lineHeight: 1.3, flex: 1, minWidth: 0 }}>{q.name}</Typography>
+                    <ScoreBadge s={scoreById.get(q.cloudId)} />
+                  </Stack>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{q.customerName || q.createdByName}</Typography>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 0.5 }}>
                     <Typography variant="caption" fontWeight={700} sx={{ color: '#0d7a6a' }}>{fmtVND(q.totalCost ?? 0)}</Typography>
@@ -180,5 +210,16 @@ export function SalesPipeline() {
         onConfirm={(reason) => { if (lossPending) applyMove(lossPending.cloudId, lossPending.status, reason); setLossPending(null); }}
       />
     </Box>
+  );
+}
+
+/** Badge điểm khả năng chốt trên thẻ deal (chỉ deal đang mở mới có điểm). */
+function ScoreBadge({ s }: { s?: WinScore }) {
+  if (!s) return null;
+  const bm = WIN_BAND_META[s.band];
+  return (
+    <Tooltip title={`Khả năng chốt: ${bm.label} (${s.score}/100)`}>
+      <Chip size="small" label={s.score} sx={{ height: 18, minWidth: 30, fontSize: 11, fontWeight: 800, bgcolor: `${bm.color}1a`, color: bm.color }} />
+    </Tooltip>
   );
 }
