@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Alert, Avatar, Box, Button, Chip, Dialog, DialogContent, DialogTitle,
   IconButton, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
@@ -8,6 +8,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import AddIcon from '@mui/icons-material/Add';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import { exportUsersExcel, parseUsersExcel } from '@/lib/exports/usersExcel';
 import { useAuthStore } from '@/stores/authStore';
 import { PERMISSIONS } from '@/auth/PERMISSIONS';
 import { ROLES, USER_COLORS, DEFAULT_USERS } from '@/auth/ROLES';
@@ -40,9 +43,48 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const persist = (next: User[]) => {
     void useAuthStore.getState().saveUsers(next);
+  };
+
+  const handleExport = async () => {
+    try {
+      setBusy(true);
+      await exportUsersExcel(users);
+    } catch (e) {
+      window.alert(`Xuất Excel lỗi: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleImportFile = async (file: File) => {
+    try {
+      setBusy(true);
+      const { next, added, updated, errors } = await parseUsersExcel(file, users);
+      if (added === 0 && updated === 0) {
+        window.alert(
+          errors.length
+            ? `Không có thay đổi nào được áp dụng.\n\n${errors.slice(0, 12).join('\n')}`
+            : 'File không có tài khoản mới hay thay đổi nào.',
+        );
+        return;
+      }
+      const summary =
+        `Áp dụng thay đổi từ Excel?\n\n• Thêm mới: ${added} tài khoản\n• Cập nhật: ${updated} tài khoản\n` +
+        (errors.length ? `• Bỏ qua (lỗi): ${errors.length} dòng\n\n${errors.slice(0, 8).join('\n')}${errors.length > 8 ? '\n…' : ''}\n` : '') +
+        `\n⚠️ Không tài khoản nào bị xoá.`;
+      if (!window.confirm(summary)) return;
+      persist(next);
+      window.alert(`✅ Đã cập nhật danh sách tài khoản (thêm ${added}, sửa ${updated}).`);
+    } catch (e) {
+      window.alert(`Nhập Excel lỗi: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const startAdd = () => {
@@ -126,15 +168,36 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
         </Typography>
       </DialogTitle>
       <DialogContent dividers>
-        <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1.5} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
           <Button variant="contained" color="success" startIcon={<AddIcon />} onClick={startAdd}>
             Thêm tài khoản mới
           </Button>
+          <Button variant="outlined" color="success" startIcon={<FileDownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={busy}>
+            Xuất Excel
+          </Button>
+          <Button variant="outlined" color="success" startIcon={<FileUploadOutlinedIcon />} onClick={() => fileRef.current?.click()} disabled={busy}>
+            Nhập Excel
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = ''; // cho phép chọn lại cùng file
+              if (f) void handleImportFile(f);
+            }}
+          />
           <Box sx={{ flex: 1 }} />
           <Button variant="outlined" color="inherit" startIcon={<RestartAltIcon />} onClick={resetDefaults}>
             Reset mặc định
           </Button>
         </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -1, mb: 2 }}>
+          💡 <strong>Xuất Excel</strong> để sửa hàng loạt chức vụ &amp; phòng ban, rồi <strong>Nhập Excel</strong> để áp lại
+          (đối chiếu theo Username — chỉ thêm/cập nhật, không xoá ai).
+        </Typography>
 
         {showForm && (
           <Paper variant="outlined" sx={{ p: 2.25, mb: 2, bgcolor: 'rgba(168,230,221,0.18)', borderColor: 'rgba(20,150,140,0.3)' }}>
