@@ -23,7 +23,7 @@ import { useTourProfileStore } from './tourProfileStore';
 import { useTodoStore } from './todoStore';
 import type {
   CategoryId, CloudQuoteEntry, Collaborator, ContractCancel, DmcMargin, FileAttachment, Item, OutputCurrency,
-  NewQuoteMeta, Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, Snapshot, Template, TourAdvance, User, WorkflowStep,
+  NewQuoteMeta, Passenger, QuoteDraft, QuoteFlight, QuoteInfo, QuotePayment, QuotePricingOptions, QuoteStatus, QuoteValueRole, Snapshot, Template, TourAdvance, User, WorkflowStep,
 } from '@/types';
 
 function dmcDefaults(): Pick<QuoteDraft, 'outputCurrency' | 'dmcPrices' | 'dmcMargin'> {
@@ -146,7 +146,7 @@ type QuoteState = {
   renameSnapshot: (id: number, name: string) => void;
 
   // Cloud sync (PR-3.2)
-  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[], linkedForeign?: { id: string; name: string; template: Template } | null, overwrite?: { cloudId: string; id: number } | null) => Promise<CloudQuoteEntry>;
+  saveCloud: (name: string, collaborators: Collaborator[], note?: string, customer?: { id: string; name: string }, attachments?: { key: string; name: string }[], linkedForeign?: { id: string; name: string; template: Template } | null, overwrite?: { cloudId: string; id: number } | null, valueRole?: QuoteValueRole) => Promise<CloudQuoteEntry>;
   deleteCloud: (id: number, cloudId: string) => Promise<void>;
   updateCloudCollaborators: (id: number, cloudId: string, collabs: Collaborator[]) => Promise<void>;
   loadCloud: (cloudId: string, opts?: { dmc?: boolean; keepView?: boolean }) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -782,8 +782,10 @@ export const useQuoteStore = create<QuoteState>()(
           set({ snapshots: next });
         },
 
-        saveCloud: async (name, collaborators, note, customer, attachments, linkedForeign, overwrite) => {
+        saveCloud: async (name, collaborators, note, customer, attachments, linkedForeign, overwrite, valueRole) => {
           const { draft } = get();
+          // Vai trò giá trị: ưu tiên tham số từ hộp thoại Lưu, fallback giá trị đang giữ trên draft.
+          const effectiveValueRole: QuoteValueRole | undefined = valueRole ?? draft.valueRole;
           const u = useAuthStore.getState().currentUser;
           if (!u) throw new Error('saveCloud: no current user');
           if (!draft.template) throw new Error('saveCloud: draft has no template');
@@ -874,6 +876,7 @@ export const useQuoteStore = create<QuoteState>()(
               totalCost,
               collaborators,
               status: draft.status ?? 'in_progress',
+              ...(effectiveValueRole ? { valueRole: effectiveValueRole } : {}),
               ...(draft.info.dest ? { dest: draft.info.dest } : {}),
               ...(draft.request ? { request: draft.request } : {}),
               ...(draft.deadline ? { deadline: draft.deadline } : {}),
@@ -892,7 +895,7 @@ export const useQuoteStore = create<QuoteState>()(
             { u: u.u, name: u.name, role: u.role },
           );
           await _saveS(cloudId, draft, note, { name: u.name, role: u.role });
-          set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId, tourProfileId: tourProfileId ?? s.draft.tourProfileId, tourCode: tourCode ?? s.draft.tourCode } }));
+          set((s) => ({ draft: { ...s.draft, currentQuoteId: cloudId, valueRole: effectiveValueRole ?? s.draft.valueRole, tourProfileId: tourProfileId ?? s.draft.tourProfileId, tourCode: tourCode ?? s.draft.tourCode } }));
           set({ cloudDirty: false }); // vừa lưu cloud → sạch
           logAudit(isNew ? 'create' : 'update', isDmc ? 'Breakdown DMC' : 'Báo giá', entry.name, entry.quoteCode);
 
@@ -967,11 +970,12 @@ export const useQuoteStore = create<QuoteState>()(
           const idxList = isDmc ? useQuoteHistoryStore.getState().dmcQuotes : useQuoteHistoryStore.getState().quotes;
           const idxEntry = idxList.find((q) => q.cloudId === cloudId);
           const status = idxEntry?.status ?? project.currentState.status ?? 'in_progress';
+          const valueRole = idxEntry?.valueRole ?? project.currentState.valueRole;
           // Hồ sơ tour lấy từ index entry (chuẩn — phủ cả báo giá cũ đã backfill mà
           // state lưu chưa có field). Lần lưu sau sẽ tái dùng đúng hồ sơ.
           muted(() => set((s) => ({
             draft: {
-              ...project.currentState, currentQuoteId: cloudId, rates, status,
+              ...project.currentState, currentQuoteId: cloudId, rates, status, valueRole,
               tourProfileId: idxEntry?.tourProfileId ?? project.currentState.tourProfileId,
               tourCode: idxEntry?.tourCode ?? project.currentState.tourCode,
             },

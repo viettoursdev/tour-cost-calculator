@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Alert, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent,
-  DialogTitle, Stack, TextField, Typography,
+  DialogTitle, Stack, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -13,8 +13,17 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { normalizeVN } from '@/lib/search';
 import { toast } from '@/stores/toastStore';
 import { LEGACY } from '@/theme';
-import type { CloudQuoteEntry, Collaborator, Customer, FileAttachment, User } from '@/types';
+import type { CloudQuoteEntry, Collaborator, Customer, FileAttachment, QuoteValueRole, User } from '@/types';
+import { QUOTE_VALUE_ROLE_LABEL } from '@/types';
 import { attMeta } from '@/lib/util';
+
+/** Mô tả ngắn cho từng vai trò giá trị — hiện ở tooltip dưới nút chọn. */
+const VALUE_ROLE_HINT: Record<QuoteValueRole, string> = {
+  current: 'Báo giá đang chào khách — mốc “giá trị hiện tại” của hồ sơ tour.',
+  contract: 'Giá trị đã ký hợp đồng với khách — mốc “giá trị ký hợp đồng”.',
+  settlement: 'Chi phí/giá trị quyết toán sau tour — mốc “nghiệm thu”.',
+};
+const VALUE_ROLE_ORDER: QuoteValueRole[] = ['current', 'contract', 'settlement'];
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -25,6 +34,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   const draftCustomerId = useQuoteStore((s) => s.draft.customerId);
   const draftCustomerName = useQuoteStore((s) => s.draft.customerName);
   const draftCollabs = useQuoteStore((s) => s.draft.pendingCollaborators);
+  const draftValueRole = useQuoteStore((s) => s.draft.valueRole);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
   const template = useQuoteStore((s) => s.draft.template);
   const saveCloud = useQuoteStore((s) => s.saveCloud);
@@ -56,6 +66,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   });
   const [customer, setCustomer] = useState<Customer | null>(existingCustomer);
   const [customerInput, setCustomerInput] = useState<string>(existingCustomer?.name ?? '');
+  const [valueRole, setValueRole] = useState<QuoteValueRole>(existingEntry?.valueRole ?? draftValueRole ?? 'current');
 
   // Mỗi lần mở hộp thoại: đồng bộ tên + khách hàng + cộng tác viên. Báo giá đã lưu
   // lấy theo bản ghi cloud; báo giá MỚI lấy theo metadata nhập lúc tạo (NewQuoteDialog).
@@ -73,6 +84,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
     const collabSource = existingEntry?.collaborators ?? draftCollabs ?? [];
     const set = new Set(collabSource.map((c) => c.u));
     setCollabUsers(users.filter((u) => set.has(u.u)));
+    setValueRole(existingEntry?.valueRole ?? draftValueRole ?? 'current');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const [note, setNote] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>(
@@ -179,7 +191,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
         }
       }
 
-      await saveCloud(name, collaborators, note, custArg, attachments, linked, overwrite);
+      await saveCloud(name, collaborators, note, custArg, attachments, linked, overwrite, valueRole);
       onClose();
       toast(
         overwrite
@@ -247,6 +259,32 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
               </li>
             )}
           />
+
+          {/* Vai trò giá trị trong hồ sơ tour — để hồ sơ liên kết đúng "mốc" giá trị. */}
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              Giá trị báo giá này dùng cho mốc nào của hồ sơ tour
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              fullWidth
+              value={valueRole}
+              onChange={(_, v: QuoteValueRole | null) => { if (v) setValueRole(v); }}
+              sx={{ '& .MuiToggleButton-root': { textTransform: 'none', fontWeight: 700, py: 0.5 } }}
+            >
+              {VALUE_ROLE_ORDER.map((r) => (
+                <ToggleButton key={r} value={r}>
+                  <Tooltip title={VALUE_ROLE_HINT[r]} arrow>
+                    <span>{QUOTE_VALUE_ROLE_LABEL[r]}</span>
+                  </Tooltip>
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+              {VALUE_ROLE_HINT[valueRole]}
+            </Typography>
+          </Box>
 
           {/* Collaborators */}
           <Autocomplete

@@ -99,6 +99,20 @@ export type QuoteStatus =
 /** Loại yêu cầu báo giá: khách hỏi giá (Request tour) hay dự thầu (Thầu). */
 export type QuoteRequestKind = 'request' | 'thau';
 
+/**
+ * Vai trò giá trị của báo giá trong hồ sơ tour — chọn khi LƯU báo giá để hồ sơ
+ * liên kết đúng "mốc": báo giá hiện tại / giá trị ký hợp đồng / chi phí nghiệm thu.
+ * Trống = coi như `current` (báo giá hiện tại).
+ */
+export type QuoteValueRole = 'current' | 'contract' | 'settlement';
+
+/** Nhãn tiếng Việt cho từng vai trò giá trị (dùng chung SaveModal & hồ sơ tour). */
+export const QUOTE_VALUE_ROLE_LABEL: Record<QuoteValueRole, string> = {
+  current: 'Báo giá hiện tại',
+  contract: 'Báo giá hợp đồng',
+  settlement: 'CP Nghiệm thu',
+};
+
 /** Thông tin nhập ở bảng "Tạo báo giá mới" (trước khi mở bảng giá). */
 export type NewQuoteMeta = {
   request?: QuoteRequestKind;
@@ -250,6 +264,7 @@ export type QuoteDraft = {
   tourProfileId?: string;
   tourCode?: string;       // mã hồ sơ tour (tiện hiển thị, suy từ profile)
   status?: QuoteStatus;    // Trạng thái báo giá (pipeline bán)
+  valueRole?: QuoteValueRole; // Vai trò giá trị trong hồ sơ tour (hiện tại/hợp đồng/nghiệm thu)
   lossReason?: string;     // Lý do thua (khi status = not_selected/cancelled)
   request?: QuoteRequestKind; // Loại yêu cầu (Request tour / Thầu) — nhập khi tạo
   deadline?: string;       // Hạn hoàn thành báo giá (ISO datetime) — hệ thống nhắc trước 1 ngày & 6 giờ
@@ -386,6 +401,8 @@ export type CloudQuoteEntry = {
   /** Điểm đến của tour (info.dest) — index cho lịch sử báo giá. */
   dest?: string;
   status?: QuoteStatus;
+  /** Vai trò giá trị trong hồ sơ tour (hiện tại/hợp đồng/nghiệm thu) — index cho 3 mốc giá trị. */
+  valueRole?: QuoteValueRole;
   /** Loại yêu cầu (Request tour / Thầu) — index cho lọc & thống kê. */
   request?: QuoteRequestKind;
   /** Hạn hoàn thành báo giá (ISO datetime) — để nhắc deadline toàn hệ thống. */

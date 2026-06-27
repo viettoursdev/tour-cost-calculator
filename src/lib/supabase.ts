@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, PublicVisaListDoc, PublicVisaListRecord, PublicVisaListStatus, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus, TrainingProgram, TrainingEnrollment, TrainingModule, ModuleProgress, GateState, TrainingPhase, EnrollmentStatus } from '@/types';
-import type { WorkflowStep } from '@/types/quote';
+import type { WorkflowStep, QuoteValueRole } from '@/types/quote';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
@@ -3014,6 +3014,7 @@ type SaveEntry = {
   customerId?: string;
   customerName?: string;
   status?: string;
+  valueRole?: QuoteValueRole;
   lossReason?: string;
   departDate?: string;
   workflowDue?: { label: string; dueDate: string; assignee?: string }[];
@@ -3070,6 +3071,7 @@ function rowToCloudQuoteEntry(
     pax: (r.pax as number) ?? 0,
     totalCost: (r.total_cost as number) ?? 0,
     status: (r.status as CloudQuoteEntry['status']) ?? undefined,
+    valueRole: (r.quote_value_role as CloudQuoteEntry['valueRole']) ?? undefined,
     lossReason: (r.loss_reason as string) ?? undefined,
     customerId: (r.customer_id as string) ?? undefined,
     customerName: (r.customer_name as string) ?? undefined,
@@ -3169,6 +3171,7 @@ async function saveSingleQuoteEntry(
 
   // optional fields: only write when defined
   if (entry.status !== undefined)           row.status = entry.status;
+  if (entry.valueRole !== undefined)        row.quote_value_role = entry.valueRole;
   if (entry.lossReason !== undefined)       row.loss_reason = entry.lossReason;
   if (entry.customerName !== undefined)     row.customer_name = entry.customerName;
   if (entry.departDate !== undefined)       row.depart_date = entry.departDate || null;
@@ -3200,7 +3203,7 @@ async function saveSingleQuoteEntry(
   const { data: upserted, error: upErr } = await client
     .from('quotes')
     .upsert(row, { onConflict: 'cloud_id' })
-    .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
+    .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, quote_value_role, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, tour_profile_id, tour_code, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
@@ -3251,7 +3254,7 @@ async function loadQuoteHistory(
 ): Promise<CloudQuoteEntry[]> {
   let q = client
     .from('quotes')
-    .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, loss_reason, ' +
+    .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, quote_value_role, loss_reason, ' +
             'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ncc_due, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, tour_profile_id, tour_code, share, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
