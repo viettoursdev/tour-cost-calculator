@@ -70,7 +70,7 @@ export function Row({ onClick, primary, secondary, right }: { onClick: () => voi
       <Stack direction="row" alignItems="center" spacing={1}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography fontSize={13} fontWeight={600} noWrap>{primary}</Typography>
-          {secondary && <Typography variant="caption" color="text.secondary" noWrap>{secondary}</Typography>}
+          {secondary && <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{secondary}</Typography>}
         </Box>
         {right}
       </Stack>
