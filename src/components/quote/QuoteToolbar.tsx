@@ -39,7 +39,6 @@ import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined';
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
-import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
 import EngineeringOutlinedIcon from '@mui/icons-material/EngineeringOutlined';
@@ -70,7 +69,6 @@ import { blockingIssues } from './lineValidation';
 import { InvoiceModal } from './InvoiceModal';
 import { SharePublicQuoteModal } from './SharePublicQuoteModal';
 import { TodoModal } from '@/components/todo/TodoModal';
-import { AskLibraryDialog } from '@/components/knowledge/AskLibraryDialog';
 import { HotelModal } from '@/components/rates/HotelModal';
 import { VisaModal } from '@/components/rates/VisaModal';
 import { RateCardModal } from '@/components/rates/RateCardModal';
@@ -206,7 +204,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [todoPrefill, setTodoPrefill] = useState<Partial<Todo> | null>(null);
-  const [askLibOpen, setAskLibOpen] = useState(false);
   const [contractModal, setContractModal] = useState<Contract | null>(null);
   const [linksOpen, setLinksOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
@@ -627,12 +624,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
             </IconButton>
           </Tooltip>
         )}
-        <Tooltip title="Hỏi thư viện (kiến thức nội bộ, theo điểm đến tour này)">
-          <IconButton size="small" onClick={() => setAskLibOpen(true)}
-            sx={{ border: '1px solid rgba(13,122,106,0.4)', borderRadius: 1.5, color: '#0d7a6a' }}>
-            <MenuBookOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
         {/* Export dropdown */}
         <Tooltip title="Xuất (PDF / Word / Excel…)">
           <IconButton size="small" onClick={(e) => setExportAnchor(e.currentTarget)}
@@ -830,7 +821,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       )}
       {shareOpen && <SharePublicQuoteModal open={shareOpen} onClose={() => setShareOpen(false)} />}
       {todoPrefill && <TodoModal todo={null} prefill={todoPrefill} onClose={() => setTodoPrefill(null)} />}
-      <AskLibraryDialog open={askLibOpen} onClose={() => setAskLibOpen(false)} context={info?.dest || info?.name || undefined} />
 
       {/* Rate Card management modals (opened from the Rate Card dropdown) */}
       <HotelModal
