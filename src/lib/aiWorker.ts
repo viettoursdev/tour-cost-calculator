@@ -126,21 +126,24 @@ export type AIWorkerPath =
   | '/ai' | '/distance' | '/ocr' | '/translate' | '/chat'
   | '/kb/embed' | '/kb/ask' | '/kb/fetch' | '/kb/suggest' | '/kb/related';
 
-/**
- * Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }.
- * `onProgress(pct)` (0–100) báo tiến trình tải lên (dùng XHR để có upload progress).
- */
-export async function uploadFileToWorker(
+/** Lỗi upload có cờ `retriable` = nên thử lại với worker mặc định (lỗi hạ tầng, không phải lỗi file). */
+class UploadError extends Error {
+  constructor(message: string, readonly retriable: boolean) {
+    super(message);
+    this.name = 'UploadError';
+  }
+}
+
+/** Một lần upload tới `base` cụ thể. Tách riêng để có thể fallback sang worker mặc định. */
+function uploadOnce(
+  base: string,
   file: File,
+  headers: Record<string, string>,
   onProgress?: (pct: number) => void,
 ): Promise<{ key: string; name: string }> {
-  const base = getAIWorker();
-  if (!base) throw new Error('Chưa cấu hình AI Worker URL (bấm ⚙️ AI để nhập)');
   const url =
     base.replace(/\/+$/, '') +
     `/upload?name=${encodeURIComponent(file.name)}&type=${encodeURIComponent(file.type || 'application/octet-stream')}`;
-  const headers = await authHeaders();
-
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
@@ -152,16 +155,50 @@ export async function uploadFileToWorker(
     xhr.onload = () => {
       let d: { key?: string; name?: string; error?: string } = {};
       try { d = JSON.parse(xhr.responseText || '{}'); } catch { /* ignore */ }
-      if (xhr.status < 200 || xhr.status >= 300 || d.error) { reject(new Error(d.error || 'Upload lỗi ' + xhr.status)); return; }
-      if (!d.key) { reject(new Error('Worker không trả về key')); return; }
+      if (xhr.status < 200 || xhr.status >= 300 || d.error) {
+        // 5xx / lỗi hạ tầng worker → đáng thử lại với worker mặc định; 4xx (auth/file) thì không.
+        const retriable = xhr.status === 0 || xhr.status >= 500;
+        reject(new UploadError(d.error || `Upload lỗi HTTP ${xhr.status}`, retriable));
+        return;
+      }
+      if (!d.key) { reject(new UploadError('Worker không trả về key', true)); return; }
       resolve({ key: d.key, name: d.name || file.name });
     };
-    xhr.onerror = () => reject(new Error('Lỗi mạng khi tải file (worker không phản hồi / chặn CORS — kiểm tra worker đã deploy chưa)'));
+    xhr.onerror = () => reject(new UploadError('Lỗi mạng (worker không phản hồi / chặn CORS)', true));
     // Tránh treo im lặng nếu worker không phản hồi (vd bản worker cũ chưa xử lý CORS preflight).
     xhr.timeout = 120000;
-    xhr.ontimeout = () => reject(new Error('Hết thời gian tải file — worker không phản hồi'));
+    xhr.ontimeout = () => reject(new UploadError('Hết thời gian tải file — worker không phản hồi', true));
     xhr.send(file);
   });
+}
+
+/**
+ * Upload a file to R2 via the worker `/upload`. Returns the stored { key, name }.
+ * `onProgress(pct)` (0–100) báo tiến trình tải lên (dùng XHR để có upload progress).
+ *
+ * Tự phục hồi: nếu URL worker đang cấu hình (đặt qua ⚙️ AI) bị lỗi hạ tầng (mất mạng,
+ * CORS, 5xx) mà KHÁC worker mặc định, tự thử lại với `DEFAULT_AI_WORKER` (bản production
+ * đã xác minh chạy) — tránh kẹt vì một URL worker cũ/sai còn sót trong localStorage.
+ */
+export async function uploadFileToWorker(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<{ key: string; name: string }> {
+  const base = getAIWorker();
+  if (!base) throw new Error('Chưa cấu hình AI Worker URL (bấm ⚙️ AI để nhập)');
+  const headers = await authHeaders();
+  try {
+    return await uploadOnce(base, file, headers, onProgress);
+  } catch (err) {
+    const e = err as UploadError;
+    const def = DEFAULT_AI_WORKER.replace(/\/+$/, '');
+    if (e.retriable && base.replace(/\/+$/, '') !== def) {
+      console.warn(`[upload] worker "${base}" lỗi (${e.message}) → thử lại với worker mặc định.`);
+      return await uploadOnce(DEFAULT_AI_WORKER, file, headers, onProgress);
+    }
+    // Kèm URL worker vào thông báo để dễ chẩn đoán lần sau.
+    throw new Error(`${e.message} [worker: ${base}]`);
+  }
 }
 
 /** Public URL to view/download a file stored on R2 via the worker `/file/<key>`. */
