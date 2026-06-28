@@ -199,7 +199,7 @@ function ValidityEditor() {
             <TextField
               size="small" type="date" label="Hiệu lực đến hết ngày"
               value={validUntil ?? ''} onChange={(e) => setValidUntil(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
               sx={{ width: 200 }}
             />
             <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>

@@ -560,7 +560,7 @@ export function PaymentView() {
                                 onChange={(e) => updInstallment(ci.key, idx, { dueDate: e.target.value })}
                                 size="small"
                                 variant="outlined"
-                                slotProps={{ inputLabel: { shrink: true } }}
+                                slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
                                 sx={{ '& .MuiInputBase-input': { fontSize: 12, py: 0.5 } }}
                               />
                             )}

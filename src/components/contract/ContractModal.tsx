@@ -105,7 +105,7 @@ export function ContractModal({ initial, onSave, onClose }: Props) {
                 onChange={(e) => setF('tourNights', Number(e.target.value) || 0)} sx={{ flex: 1 }} />
               <TextField size="small" label="Ngày khởi hành" type="date" value={form.tourStartDate ?? ''}
                 onChange={(e) => setF('tourStartDate', e.target.value || undefined)}
-                slotProps={{ inputLabel: { shrink: true } }} sx={{ flex: 1 }} />
+                slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} sx={{ flex: 1 }} />
               <TextField size="small" label="Điểm xuất phát" value={form.departure}
                 onChange={(e) => setF('departure', e.target.value)} sx={{ flex: 1 }} />
             </Stack>
@@ -236,7 +236,7 @@ export function ContractModal({ initial, onSave, onClose }: Props) {
                       )}
                       <TextField size="small" label="Hạn TT" type="date" value={p.dueDate}
                         onChange={(e) => updPayment(i, 'dueDate', e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
+                        slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
                         sx={{ flex: 1 }} />
                     </Stack>
                     <TextField size="small" label="Ghi chú" value={p.note}

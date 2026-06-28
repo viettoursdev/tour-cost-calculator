@@ -193,7 +193,7 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
           </Paper>
         ) : (
           <Stack direction="row" spacing={1} sx={{ mt: 0.75, mb: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
-            <TextField size="small" type="date" value={fuDate} onChange={(e) => setFuDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} label="Hẹn ngày" />
+            <TextField size="small" type="date" value={fuDate} onChange={(e) => setFuDate(e.target.value)} slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} label="Hẹn ngày" />
             <TextField size="small" value={fuNote} onChange={(e) => setFuNote(e.target.value)} placeholder="Nội dung cần làm…" sx={{ flex: 1, minWidth: 160 }} />
             <Button size="small" variant="contained" disabled={!fuDate} onClick={() => { void setFollowUp(customer.id, fuDate, fuNote); setFuDate(''); setFuNote(''); }} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Đặt lịch</Button>
           </Stack>

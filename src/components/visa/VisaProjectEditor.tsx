@@ -369,18 +369,18 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
             <TextField
               type="date" label="Thời gian triển khai" sx={{ flex: 1 }}
               value={doc.startDate ?? ''} onChange={(e) => set('startDate', e.target.value || null)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
             />
             <TextField
               type="date" label="Ngày khởi hành" sx={{ flex: 1 }}
               value={doc.departureDate ?? ''} onChange={(e) => set('departureDate', e.target.value || null)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
               helperText="Dùng để gom thống kê theo tháng/năm"
             />
             <TextField
               type="date" label="Deadline kết thúc" sx={{ flex: 1 }}
               value={doc.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
             />
           </Stack>
 
@@ -400,7 +400,7 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
                   <TextField
                     size="small" type="date" value={m.date ?? ''}
                     onChange={(e) => updMilestone(m.id, { date: e.target.value || null })}
-                    sx={{ width: 150 }} slotProps={{ inputLabel: { shrink: true } }}
+                    sx={{ width: 150 }} slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
                   />
                   <Chip size="small" label={meta.text} sx={{ minWidth: 96, bgcolor: meta.color + '22', color: meta.color, fontWeight: 700 }} />
                   <IconButton size="small" onClick={() => moveMilestone(i, -1)} disabled={i === 0}><ArrowUpwardIcon fontSize="inherit" /></IconButton>

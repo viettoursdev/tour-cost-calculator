@@ -88,9 +88,9 @@ export function RunCreateDialog({ template, onClose }: Props) {
 
           <Stack direction="row" spacing={1}>
             <TextField type="date" label="Ngày bắt đầu" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-              fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+              fullWidth slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
             <TextField type="date" label="Hạn hoàn thành" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
-              fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+              fullWidth slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
           </Stack>
         </Stack>
       </DialogContent>

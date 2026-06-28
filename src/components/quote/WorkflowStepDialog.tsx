@@ -86,11 +86,11 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               {matched.length > 0 && others.length > 0 && <ListSubheader sx={{ lineHeight: 2.2 }}>Khác</ListSubheader>}
               {others.map((u) => <MenuItem key={u.u} value={u.u}>{u.name}{canViewStaffRole(me) && <Typography component="span" variant="caption" sx={{ ml: 0.5, color: "text.disabled" }}>· {u.role}</Typography>}</MenuItem>)}
             </TextField>
-            <TextField type="date" label="Ngày bắt đầu" value={s.startDate ?? ''} onChange={(e) => set({ startDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true } }} />
-            <TextField type="date" label="Hạn hoàn thành" value={s.dueDate ?? ''} onChange={(e) => set({ dueDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true } }} />
+            <TextField type="date" label="Ngày bắt đầu" value={s.startDate ?? ''} onChange={(e) => set({ startDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
+            <TextField type="date" label="Hạn hoàn thành" value={s.dueDate ?? ''} onChange={(e) => set({ dueDate: e.target.value || null })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
             <TextField type="number" label="Hạn = N ngày trước khởi hành" value={s.dueOffset ?? ''}
               onChange={(e) => set({ dueOffset: e.target.value === '' ? undefined : +e.target.value })}
-              helperText="Dùng cho nút Tự tính hạn (âm = sau khởi hành)" slotProps={{ inputLabel: { shrink: true } }} />
+              helperText="Dùng cho nút Tự tính hạn (âm = sau khởi hành)" slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
           </Box>
           {suggested && !s.assignee && (
             <Stack direction="row" spacing={1} alignItems="center">

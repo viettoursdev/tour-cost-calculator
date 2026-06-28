@@ -29,12 +29,12 @@ function SegmentFields({
       <TextField size="small" label="Điểm đến (IATA)" value={arr} placeholder="DOH" onChange={(e) => onChange({ arrAirport: e.target.value.toUpperCase() })} helperText={deriveAirport(arr) || ' '} />
       <Box />
       <Stack direction="row" spacing={0.75}>
-        <TextField size="small" type="time" label="Giờ đi" value={depTime} fullWidth onChange={(e) => onChange({ depTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField size="small" type="number" label="+ngày" value={depOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ depDayOffset: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
+        <TextField size="small" type="time" label="Giờ đi" value={depTime} fullWidth onChange={(e) => onChange({ depTime: e.target.value })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
+        <TextField size="small" type="number" label="+ngày" value={depOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ depDayOffset: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, max: 3 } }} />
       </Stack>
       <Stack direction="row" spacing={0.75}>
-        <TextField size="small" type="time" label="Giờ đến" value={arrTime} fullWidth onChange={(e) => onChange({ arrTime: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} />
-        <TextField size="small" type="number" label="+ngày" value={arrOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ arrDayOffset: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, max: 3 } }} />
+        <TextField size="small" type="time" label="Giờ đến" value={arrTime} fullWidth onChange={(e) => onChange({ arrTime: e.target.value })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
+        <TextField size="small" type="number" label="+ngày" value={arrOff ?? 0} sx={{ width: 76 }} onChange={(e) => onChange({ arrDayOffset: Math.max(0, +e.target.value) || undefined })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, max: 3 } }} />
       </Stack>
     </Box>
   );
@@ -96,14 +96,14 @@ export function FlightEditor({ flight, onClose, onSave }: Props) {
                     <IconButton size="small" color="error" onClick={() => setF((prev) => ({ ...prev, fares: prev.fares.filter((x) => x.id !== fr.id) }))} aria-label="Xoá hạng giá"><DeleteOutlineIcon fontSize="small" /></IconButton>
                   </Stack>
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1 }}>
-                    <TextField size="small" type="number" label="Fare" value={fr.amount || ''} onChange={(e) => updFare(fr.id, { amount: +e.target.value })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
-                    <TextField size="small" type="number" label="Thuế &amp; phí (Tax)" value={fr.tax ?? ''} onChange={(e) => updFare(fr.id, { tax: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
-                    <TextField size="small" label="Total = Fare + Tax" value={Math.round(fareTotal(fr)).toLocaleString('vi-VN')} disabled slotProps={{ inputLabel: { shrink: true }, htmlInput: { style: { textAlign: 'right', fontWeight: 700 } } }} />
+                    <TextField size="small" type="number" label="Fare" value={fr.amount || ''} onChange={(e) => updFare(fr.id, { amount: +e.target.value })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="Thuế &amp; phí (Tax)" value={fr.tax ?? ''} onChange={(e) => updFare(fr.id, { tax: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" label="Total = Fare + Tax" value={Math.round(fareTotal(fr)).toLocaleString('vi-VN')} disabled slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { style: { textAlign: 'right', fontWeight: 700 } } }} />
                   </Box>
                   <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, mt: 1 }}>
-                    <TextField size="small" type="number" label="SL chỗ đặt cọc" value={fr.seatsDeposit ?? ''} onChange={(e) => updFare(fr.id, { seatsDeposit: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
-                    <TextField size="small" type="number" label="SL khách xác nhận" value={fr.seatsConfirmed ?? ''} onChange={(e) => updFare(fr.id, { seatsConfirmed: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
-                    <TextField size="small" type="number" label="SL được phép giảm" value={fr.seatsReducible ?? ''} onChange={(e) => updFare(fr.id, { seatsReducible: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="SL chỗ đặt cọc" value={fr.seatsDeposit ?? ''} onChange={(e) => updFare(fr.id, { seatsDeposit: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="SL khách xác nhận" value={fr.seatsConfirmed ?? ''} onChange={(e) => updFare(fr.id, { seatsConfirmed: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
+                    <TextField size="small" type="number" label="SL được phép giảm" value={fr.seatsReducible ?? ''} onChange={(e) => updFare(fr.id, { seatsReducible: e.target.value === '' ? undefined : Math.max(0, +e.target.value) })} slotProps={{ inputLabel: { shrink: true }, input: { notched: true }, htmlInput: { min: 0, style: { textAlign: 'right' } } }} />
                   </Box>
                 </Box>
               ))}

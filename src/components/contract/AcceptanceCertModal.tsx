@@ -38,7 +38,7 @@ export function AcceptanceCertModal({ contract, onSave, onClose }: Props) {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
             required
           />
           <TextField
