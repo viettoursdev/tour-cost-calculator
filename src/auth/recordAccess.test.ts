@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canViewRecord, visibleRecords, canShareRecord, isRecordOwner, type OwnedRecord } from './recordAccess';
+import { canViewRecord, visibleRecords, canShareRecord, isRecordOwner, visibleEmployees, canViewEmployee, type OwnedRecord } from './recordAccess';
 import type { Department, Role, User } from '@/types';
 
 const user = (u: string, role: Role, department?: Department): User =>
@@ -15,6 +15,7 @@ const USERS: User[] = [
   user('pp_noidia', 'Phó Phòng', 'dh_noidia'),
   user('pp_ngoai', 'Phó Phòng', 'dh_nuocngoai'),
   user('bgd', 'Ban Giám Đốc'),
+  user('tlgd', 'Trợ lý Giám Đốc'),
   user('sep', 'CEO'),
 ];
 const find = (u: string) => USERS.find((x) => x.u === u)!;
@@ -47,8 +48,9 @@ describe('canViewRecord — 4 tầng nguyên tắc vận hành', () => {
     expect(canViewRecord(find('pp_noidia'), r, USERS)).toBe(true);
     expect(canViewRecord(find('pp_ngoai'), r, USERS)).toBe(false);
   });
-  it('4) Ban Giám Đốc & CEO thấy tất cả', () => {
+  it('4) Ban Giám Đốc, Trợ lý Giám Đốc & CEO thấy tất cả', () => {
     expect(canViewRecord(find('bgd'), r, USERS)).toBe(true);
+    expect(canViewRecord(find('tlgd'), r, USERS)).toBe(true);
     expect(canViewRecord(find('sep'), r, USERS)).toBe(true);
   });
   it('Trưởng phòng không có department → chỉ thấy của mình', () => {
@@ -83,6 +85,30 @@ describe('visibleRecords', () => {
   });
   it('không có user → rỗng', () => {
     expect(visibleRecords(null, list, USERS)).toEqual([]);
+  });
+});
+
+describe('visibleEmployees — "job của nhân sự" theo phòng ban', () => {
+  const emps = [
+    { id: 'e1', department: 'dh_noidia' as const },
+    { id: 'e2', department: 'dh_nuocngoai' as const },
+    { id: 'e3', department: 'visa' as const },
+  ];
+  it('Trưởng/Phó Phòng nội địa chỉ thấy nhân sự nội địa', () => {
+    expect(visibleEmployees(find('tp_noidia'), emps).map((e) => e.id)).toEqual(['e1']);
+    expect(visibleEmployees(find('pp_noidia'), emps).map((e) => e.id)).toEqual(['e1']);
+  });
+  it('Trưởng phòng nước ngoài chỉ thấy nhân sự nước ngoài', () => {
+    expect(visibleEmployees(find('tp_ngoai'), emps).map((e) => e.id)).toEqual(['e2']);
+  });
+  it('cấp Ban Giám Đốc (BGĐ / Trợ lý GĐ / CEO) thấy toàn bộ nhân sự', () => {
+    expect(visibleEmployees(find('bgd'), emps)).toHaveLength(3);
+    expect(visibleEmployees(find('tlgd'), emps)).toHaveLength(3);
+    expect(visibleEmployees(find('sep'), emps)).toHaveLength(3);
+  });
+  it('canViewEmployee: nội địa không xem được hồ sơ nước ngoài', () => {
+    expect(canViewEmployee(find('tp_noidia'), emps[1])).toBe(false);
+    expect(canViewEmployee(find('tp_noidia'), emps[0])).toBe(true);
   });
 });
 

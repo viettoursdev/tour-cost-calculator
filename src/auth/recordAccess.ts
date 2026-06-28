@@ -8,6 +8,7 @@
 //  createdByU/collaborators.
 // ════════════════════════════════════════════════════════════════════════
 import type { Collaborator, Department, User } from '@/types';
+import { isBoard } from './ROLES';
 
 /** Hình dạng tối thiểu của một bản ghi có chủ sở hữu + chia sẻ. */
 export interface OwnedRecord {
@@ -28,7 +29,8 @@ export function isRecordOwner(user: User, rec: OwnedRecord): boolean {
   return rec.createdByU ? rec.createdByU === user.u : rec.createdBy === user.name;
 }
 
-const seesEverything = (user: User): boolean => user.role === 'CEO' || user.role === 'Ban Giám Đốc';
+/** Cấp Ban Giám Đốc (CEO + BGĐ + Trợ lý Giám Đốc) — phụ trách toàn bộ phòng ban, thấy tất cả. */
+const seesEverything = (user: User): boolean => isBoard(user.role);
 /** Cấp quản lý phòng (thấy dữ liệu cả phòng ban mình): Trưởng Phòng + Phó Phòng. */
 const isDeptManager = (user: User): boolean => user.role === 'Trưởng Phòng' || user.role === 'Phó Phòng';
 
@@ -58,4 +60,34 @@ export function canShareRecord(user: User | null | undefined, rec: OwnedRecord, 
   if (isRecordOwner(user, rec)) return true;
   if (isDeptManager(user) && user.department && creatorDepartment(rec, users) === user.department) return true;
   return false;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+//  Quyền xem HỒ SƠ NHÂN SỰ ("job của nhân sự") theo phòng ban:
+//    - Cấp Ban Giám Đốc (CEO/BGĐ/Trợ lý GĐ): thấy toàn bộ nhân sự.
+//    - Trưởng/Phó Phòng: chỉ thấy nhân sự CÙNG PHÒNG mình (vd nội địa chỉ thấy
+//      nhân sự nội địa, nước ngoài chỉ thấy nhân sự nước ngoài).
+//    - Còn lại: theo `viewHR` ở nơi gọi; nếu không có phòng thì không lọc thêm.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Hình dạng tối thiểu của một hồ sơ nhân sự để lọc theo phòng ban. */
+export interface DeptScopedRecord {
+  department?: Department | string;
+}
+
+/** Quyền XEM một hồ sơ nhân sự theo phòng ban của người xem. */
+export function canViewEmployee(user: User | null | undefined, emp: DeptScopedRecord): boolean {
+  if (!user) return false;
+  if (seesEverything(user)) return true;
+  // Trưởng/Phó Phòng có gán phòng → chỉ thấy nhân sự cùng phòng.
+  if (isDeptManager(user) && user.department) return emp.department === user.department;
+  // Không phải cấp quản lý phòng (hoặc chưa gán phòng) → không siết thêm ở tầng này.
+  return true;
+}
+
+/** Lọc danh sách hồ sơ nhân sự theo quyền xem phòng ban của user. */
+export function visibleEmployees<T extends DeptScopedRecord>(user: User | null | undefined, list: T[]): T[] {
+  if (!user) return [];
+  if (seesEverything(user)) return list;
+  return list.filter((e) => canViewEmployee(user, e));
 }

@@ -18,7 +18,7 @@ insert into auth.users (id, email, instance_id, aud, role)
 values (gen_random_uuid(), 'newhire@viettours.com.vn', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 select is(
   (select role from public.profiles where email = 'newhire@viettours.com.vn'),
-  'Standard', 'new user gets Standard role');
+  'NV Thử việc', 'new user gets NV Thử việc role (Standard cũ, đổi tên ở 0077)');
 
 insert into auth.users (id, email, instance_id, aud, role)
 values (gen_random_uuid(), 'developer@viettours.com.vn', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');

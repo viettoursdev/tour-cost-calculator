@@ -3,6 +3,7 @@ import type { Role, User } from '@/types';
 export const ROLES: readonly Role[] = [
   'CEO',
   'Ban Giám Đốc',
+  'Trợ lý Giám Đốc',
   'Trưởng Phòng',
   'Phó Phòng',
   'Sales',
@@ -10,19 +11,22 @@ export const ROLES: readonly Role[] = [
   'Marketing',
   'Admin',
   'Accountant',
-  'Standard',
+  'NV Thử việc',
 ];
 
 /** Roles allowed to approve payment requests (senior management). */
-export const APPROVER_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trưởng Phòng'];
+export const APPROVER_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trợ lý Giám Đốc', 'Trưởng Phòng'];
 
 /** True if the role can approve payment / cost requests. */
 export const isApprover = (role: Role): boolean => APPROVER_ROLES.includes(role);
 
-/** Roles thuộc Ban Giám Đốc trở lên (CEO + Ban Giám Đốc) — cấp duyệt cao nhất. */
-export const BOARD_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc'];
+/**
+ * Roles "cấp Ban Giám Đốc" — phụ trách TOÀN BỘ phòng ban, thấy mọi dữ liệu.
+ * Gồm CEO, Ban Giám Đốc và Trợ lý Giám Đốc (role tương tự BGĐ, dưới BGĐ trên Trưởng Phòng).
+ */
+export const BOARD_ROLES: readonly Role[] = ['CEO', 'Ban Giám Đốc', 'Trợ lý Giám Đốc'];
 
-/** True nếu role thuộc Ban Giám Đốc trở lên (cổng duyệt nghiêm ngặt, vd xuất Excel hồ sơ tour). */
+/** True nếu role thuộc cấp Ban Giám Đốc (cổng duyệt nghiêm ngặt, vd xuất Excel hồ sơ tour). */
 export const isBoard = (role: Role): boolean => BOARD_ROLES.includes(role);
 
 /** Chỉ CEO được xem chức vụ + phòng ban của nhân sự (ẩn với mọi người khác). */
@@ -34,8 +38,9 @@ export const userLabel = (u: { name: string; role: Role }, viewer: User | null |
 
 /** Seniority rank (higher = more senior). Used for "from level X upward" rules. */
 export const ROLE_RANK: Record<Role, number> = {
-  CEO: 9,
-  'Ban Giám Đốc': 8,
+  CEO: 10,
+  'Ban Giám Đốc': 9,
+  'Trợ lý Giám Đốc': 8,  // dưới Ban Giám Đốc, trên Trưởng Phòng — quyền tương tự BGĐ
   'Trưởng Phòng': 7,
   'Phó Phòng': 6,   // trên Operations, dưới Trưởng Phòng
   Operations: 5,
@@ -43,7 +48,7 @@ export const ROLE_RANK: Record<Role, number> = {
   Marketing: 3,
   Admin: 2,
   Accountant: 1,
-  Standard: 0,
+  'NV Thử việc': 0,
 };
 
 /**

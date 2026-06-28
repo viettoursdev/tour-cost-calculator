@@ -164,7 +164,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
       <DialogTitle sx={{ background: 'linear-gradient(135deg,#dc3250,#c0392b)', color: '#fff' }}>
         <Typography variant="h6" fontWeight={800}>👤 Quản lý tài khoản</Typography>
         <Typography variant="caption" sx={{ opacity: 0.85 }}>
-          Chỉ CEO / Ban Giám Đốc mới có quyền · {users.length} tài khoản đang hoạt động
+          Chỉ CEO mới có quyền · {users.length} tài khoản đang hoạt động
         </Typography>
       </DialogTitle>
       <DialogContent dividers>
@@ -364,8 +364,8 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
               <TableBody>
                 {ROLES.map((role) => (
                   <TableRow key={role}>
-                    <TableCell sx={{ fontWeight: 600, color: role === 'Standard' ? '#dc3250' : 'text.primary' }}>
-                      {role}{role === 'Standard' ? ' 🔒' : ''}
+                    <TableCell sx={{ fontWeight: 600, color: role === 'NV Thử việc' ? '#dc3250' : 'text.primary' }}>
+                      {role}{role === 'NV Thử việc' ? ' 🔒' : ''}
                     </TableCell>
                     {MATRIX_KEYS.map((k) => (
                       <TableCell key={k.key} align="center">
@@ -378,7 +378,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
             </Table>
           </TableContainer>
           <Typography variant="caption" sx={{ display: 'block', mt: 1, pt: 1, borderTop: '1px dashed rgba(20,150,140,0.2)', color: 'text.secondary', lineHeight: 1.6 }}>
-            💡 <strong>Standard</strong> là cấp thấp nhất — chỉ tạo & xem báo giá, không sửa rate card, không xuất file, không xem lịch sử.
+            💡 <strong>NV Thử việc</strong> là cấp thấp nhất — chỉ tạo & xem báo giá, không sửa rate card, không xuất file, không xem lịch sử.
           </Typography>
         </Box>
 

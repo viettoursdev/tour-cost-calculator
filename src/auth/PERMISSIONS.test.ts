@@ -15,8 +15,18 @@ describe('hasPerm', () => {
     expect(hasPerm(user('CEO'), 'manageUsers')).toBe(true);
   });
 
-  it('returns false for Trưởng Phòng manageUsers', () => {
+  it('CHỈ CEO được quản lý tài khoản — BGĐ / Trợ lý GĐ / Trưởng Phòng đều KHÔNG', () => {
+    expect(hasPerm(user('Ban Giám Đốc'), 'manageUsers')).toBe(false);
+    expect(hasPerm(user('Trợ lý Giám Đốc'), 'manageUsers')).toBe(false);
     expect(hasPerm(user('Trưởng Phòng'), 'manageUsers')).toBe(false);
+  });
+
+  it('Trợ lý Giám Đốc có quyền như Ban Giám Đốc (trừ manageUsers)', () => {
+    const keys = Object.keys(PERMISSIONS['Ban Giám Đốc']) as (keyof typeof PERMISSIONS['CEO'])[];
+    for (const k of keys) {
+      if (k === 'manageUsers') continue;
+      expect(PERMISSIONS['Trợ lý Giám Đốc'][k]).toBe(PERMISSIONS['Ban Giám Đốc'][k]);
+    }
   });
 });
 
@@ -37,10 +47,10 @@ describe('Accountant role (history-only)', () => {
   it('cannot editRateCard', () => expect(hasPerm(acc, 'editRateCard')).toBe(false));
 });
 
-describe('Standard role', () => {
-  const std = user('Standard');
+describe('NV Thử việc role (Standard cũ)', () => {
+  const std = user('NV Thử việc');
   it('has no perms', () => {
-    const perms = PERMISSIONS.Standard;
+    const perms = PERMISSIONS['NV Thử việc'];
     for (const v of Object.values(perms)) expect(v).toBe(false);
     expect(hasPerm(std, 'viewHistory')).toBe(false);
   });

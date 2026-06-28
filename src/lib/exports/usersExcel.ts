@@ -177,7 +177,7 @@ export async function parseUsersExcel(file: File, existing: readonly User[]): Pr
         email,
         ...(phone ? { phone } : {}),
         p: '',
-        role: role ?? 'Standard',
+        role: role ?? 'NV Thử việc',
         ...(department ? { department } : {}),
         name,
         color,

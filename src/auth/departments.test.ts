@@ -5,9 +5,11 @@ import type { User } from '@/types';
 const u = (over: Partial<User>): User => ({ u: 'x', role: 'Operations', name: 'X', color: '#000', ...over });
 
 describe('deptAccess', () => {
-  it('CEO / Ban Giám Đốc → manage mọi khu vực', () => {
+  it('CEO / Ban Giám Đốc / Trợ lý Giám Đốc → manage mọi khu vực', () => {
     expect(deptAccess(u({ role: 'CEO', department: 'visa' }), 'payments')).toBe('manage');
     expect(deptAccess(u({ role: 'Ban Giám Đốc' }), 'ncc')).toBe('manage');
+    // Trợ lý Giám Đốc trùm mọi phòng ban dù có gán phòng cụ thể.
+    expect(deptAccess(u({ role: 'Trợ lý Giám Đốc', department: 'visa' }), 'ncc')).toBe('manage');
   });
   it('chưa gán phòng → manage (giữ hành vi cũ)', () => {
     expect(deptAccess(u({ department: undefined }), 'contracts')).toBe('manage');

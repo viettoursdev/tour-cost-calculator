@@ -1,4 +1,4 @@
-import { ROLE_RANK } from '@/auth/ROLES';
+import { ROLE_RANK, isBoard } from '@/auth/ROLES';
 import type { User, VisaProjectDoc } from '@/types';
 
 /** Rank tối thiểu để xem TOÀN BỘ dự án visa (Trưởng Phòng trở lên: TP, BGĐ, CEO). */
@@ -37,11 +37,11 @@ export function canViewVisaReports(user: User | null): boolean {
 
 /**
  * Ai được DUYỆT link công khai cho khách xem danh sách visa: Trưởng phòng của
- * phòng Visa, cộng CEO & Ban Giám Đốc (cấp trên). KHÔNG mở cho Trưởng Phòng phòng
- * khác. (Đối chiếu server-side: hàm SQL `can_approve_visa_share`.)
+ * phòng Visa, cộng cấp Ban Giám Đốc (CEO / BGĐ / Trợ lý Giám Đốc) (cấp trên). KHÔNG
+ * mở cho Trưởng Phòng phòng khác. (Đối chiếu server-side: hàm SQL `can_approve_visa_share`.)
  */
 export function canApproveVisaShareLink(user: User | null): boolean {
   if (!user) return false;
-  if (user.role === 'CEO' || user.role === 'Ban Giám Đốc') return true;
+  if (isBoard(user.role)) return true;
   return user.role === 'Trưởng Phòng' && user.department === 'visa';
 }

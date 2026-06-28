@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ROLES, DEFAULT_USERS, USER_COLORS, canReceivePush } from './ROLES';
+import { ROLES, DEFAULT_USERS, USER_COLORS, canReceivePush, isBoard, isApprover, BOARD_ROLES } from './ROLES';
 import type { Role, User } from '@/types';
 
 const user = (role: Role): User => ({ u: 'x', email: 'x@viettours.com.vn', role, name: 'X', color: '#000000' });
@@ -9,6 +9,7 @@ describe('ROLES', () => {
     expect(ROLES).toEqual([
       'CEO',
       'Ban Giám Đốc',
+      'Trợ lý Giám Đốc',
       'Trưởng Phòng',
       'Phó Phòng',
       'Sales',
@@ -16,7 +17,7 @@ describe('ROLES', () => {
       'Marketing',
       'Admin',
       'Accountant',
-      'Standard',
+      'NV Thử việc',
     ]);
   });
 });
@@ -54,13 +55,13 @@ describe('DEFAULT_USERS', () => {
 
 describe('canReceivePush', () => {
   it('cho phép cấp ≥ Operations (phó phòng trở lên)', () => {
-    for (const r of ['Operations', 'Trưởng Phòng', 'Ban Giám Đốc', 'CEO'] as Role[]) {
+    for (const r of ['Operations', 'Trưởng Phòng', 'Trợ lý Giám Đốc', 'Ban Giám Đốc', 'CEO'] as Role[]) {
       expect(canReceivePush(user(r))).toBe(true);
     }
   });
 
   it('chặn cấp dưới Operations', () => {
-    for (const r of ['Sales', 'Marketing', 'Admin', 'Accountant', 'Standard'] as Role[]) {
+    for (const r of ['Sales', 'Marketing', 'Admin', 'Accountant', 'NV Thử việc'] as Role[]) {
       expect(canReceivePush(user(r))).toBe(false);
     }
   });
@@ -68,6 +69,16 @@ describe('canReceivePush', () => {
   it('false khi không có user', () => {
     expect(canReceivePush(null)).toBe(false);
     expect(canReceivePush(undefined)).toBe(false);
+  });
+});
+
+describe('Trợ lý Giám Đốc (role tương tự Ban Giám Đốc)', () => {
+  it('thuộc cấp Ban Giám Đốc (isBoard) — phụ trách toàn bộ phòng ban', () => {
+    expect(isBoard('Trợ lý Giám Đốc')).toBe(true);
+    expect(BOARD_ROLES).toEqual(['CEO', 'Ban Giám Đốc', 'Trợ lý Giám Đốc']);
+  });
+  it('là cấp duyệt (isApprover)', () => {
+    expect(isApprover('Trợ lý Giám Đốc')).toBe(true);
   });
 });
 

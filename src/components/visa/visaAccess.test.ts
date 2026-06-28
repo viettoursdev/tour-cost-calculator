@@ -29,7 +29,7 @@ describe('canViewVisaProject', () => {
     expect(canViewVisaProject(user('sale1', 'Sales'), proj({ mainStaff: ['sale1'] }))).toBe(true);
     expect(canViewVisaProject(user('mkt1', 'Marketing'), proj({ supportStaff: ['mkt1'] }))).toBe(true);
     expect(canViewVisaProject(user('acc1', 'Accountant'), proj({ collaborators: ['acc1'] }))).toBe(true);
-    expect(canViewVisaProject(user('std1', 'Standard'), proj({ supportStaff: ['std1'] }))).toBe(true);
+    expect(canViewVisaProject(user('std1', 'NV Thử việc'), proj({ supportStaff: ['std1'] }))).toBe(true);
   });
 
   it('unrelated user (not added, below TP) cannot view', () => {

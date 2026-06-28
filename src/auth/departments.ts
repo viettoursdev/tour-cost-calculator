@@ -1,4 +1,5 @@
 import type { Department, User } from '@/types';
+import { isBoard } from './ROLES';
 
 /** Khu vực chức năng để phân quyền theo phòng ban. */
 export type DeptArea =
@@ -46,13 +47,13 @@ export const DEPARTMENT_AREAS: Record<Department, Record<DeptArea, AccessLevel>>
 
 /**
  * Mức quyền của user ở 1 khu vực theo phòng ban. Quy ước:
- *  - CEO / Ban Giám Đốc: 'manage' tất cả (cấp cao trùm phòng ban).
+ *  - CEO / Ban Giám Đốc / Trợ lý Giám Đốc: 'manage' tất cả (cấp cao trùm phòng ban).
  *  - User CHƯA gán phòng: 'manage' tất cả (giữ nguyên hành vi cũ, không phá dữ liệu).
  *  - Còn lại: tra ma trận.
  */
 export function deptAccess(user: User | null, area: DeptArea): AccessLevel {
   if (!user) return 'none';
-  if (user.role === 'CEO' || user.role === 'Ban Giám Đốc') return 'manage';
+  if (isBoard(user.role)) return 'manage'; // CEO / Ban Giám Đốc / Trợ lý Giám Đốc — trùm mọi phòng ban
   if (!user.department) return 'manage';
   return DEPARTMENT_AREAS[user.department]?.[area] ?? 'none';
 }

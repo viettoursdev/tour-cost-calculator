@@ -1,6 +1,7 @@
 export type Role =
   | 'CEO'
   | 'Ban Giám Đốc'
+  | 'Trợ lý Giám Đốc'
   | 'Trưởng Phòng'
   | 'Phó Phòng'
   | 'Sales'
@@ -8,7 +9,7 @@ export type Role =
   | 'Marketing'
   | 'Admin'
   | 'Accountant'
-  | 'Standard';
+  | 'NV Thử việc';
 
 /** Phòng ban (trục CHỨC NĂNG, độc lập với cấp bậc `role`). */
 export type Department =

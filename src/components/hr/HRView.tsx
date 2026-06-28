@@ -11,6 +11,7 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { useHrStore } from '@/stores/hrStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
+import { visibleEmployees } from '@/auth/recordAccess';
 import { DEPARTMENTS, DEPT_LABEL } from '@/auth/departments';
 import { daysUntil } from '@/lib/dateUtils';
 import { normalizeVN } from '@/lib/search';
@@ -43,6 +44,8 @@ export function HRView() {
   const del = useHrStore((s) => s.delete);
   const currentUser = useAuthStore((s) => s.currentUser);
   const canEdit = hasPerm(currentUser, 'manageHR');
+  // Trưởng/Phó Phòng chỉ thấy nhân sự CÙNG PHÒNG; cấp BGĐ thấy tất cả ("job của nhân sự").
+  const scoped = useMemo(() => visibleEmployees(currentUser, employees), [currentUser, employees]);
 
   const [tab, setTab] = useState<'overview' | 'list' | 'org' | 'eval' | 'leave' | 'recruit'>('overview');
   const [detail, setDetail] = useState<HrEmployee | null>(null);
@@ -53,15 +56,15 @@ export function HRView() {
 
   const filtered = useMemo(() => {
     const q = normalizeVN(search.trim());
-    return employees.filter((e) => {
+    return scoped.filter((e) => {
       if (dept && e.department !== dept) return false;
       if (status && e.status !== status) return false;
       if (q && !normalizeVN(`${e.fullName} ${e.employeeCode} ${e.title} ${e.email} ${e.phone}`).includes(q)) return false;
       return true;
     });
-  }, [employees, search, dept, status]);
+  }, [scoped, search, dept, status]);
 
-  const totalExpiring = useMemo(() => employees.reduce((s, e) => s + expiringCount(e), 0), [employees]);
+  const totalExpiring = useMemo(() => scoped.reduce((s, e) => s + expiringCount(e), 0), [scoped]);
 
   const handleDelete = (e: HrEmployee) => {
     if (window.confirm(`Xoá hồ sơ nhân sự "${e.fullName}"? Hành động không thể hoàn tác.`)) void del(e.id);
@@ -71,7 +74,7 @@ export function HRView() {
   return (
     <Box sx={{ p: 2 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.5} flexWrap="wrap" gap={1}>
-        <Typography variant="h6" fontWeight={800}>👥 Nhân sự {employees.length ? `(${employees.length})` : ''}</Typography>
+        <Typography variant="h6" fontWeight={800}>👥 Nhân sự {scoped.length ? `(${scoped.length})` : ''}</Typography>
         {canEdit && tab !== 'recruit' && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModal({ employee: null })}>Thêm nhân sự</Button>}
       </Stack>
 
@@ -107,7 +110,7 @@ export function HRView() {
           </Stack>
 
           {filtered.length === 0 ? (
-            <Typography color="text.secondary">{employees.length ? 'Không có nhân sự khớp bộ lọc.' : 'Chưa có nhân sự nào. Bấm “Thêm nhân sự”.'}</Typography>
+            <Typography color="text.secondary">{scoped.length ? 'Không có nhân sự khớp bộ lọc.' : 'Chưa có nhân sự nào. Bấm “Thêm nhân sự”.'}</Typography>
           ) : (
             <Stack spacing={0.75}>
               {filtered.map((e) => {
@@ -142,16 +145,16 @@ export function HRView() {
         </>
       )}
 
-      {tab === 'overview' && <HrOverviewPanel employees={employees} />}
-      {tab === 'org' && <OrgChart employees={employees} onPick={(e) => setModal({ employee: e })} />}
-      {tab === 'eval' && <EvaluationsPanel employees={employees} />}
-      {tab === 'leave' && <LeavesPanel employees={employees} />}
+      {tab === 'overview' && <HrOverviewPanel employees={scoped} />}
+      {tab === 'org' && <OrgChart employees={scoped} onPick={(e) => setModal({ employee: e })} />}
+      {tab === 'eval' && <EvaluationsPanel employees={scoped} />}
+      {tab === 'leave' && <LeavesPanel employees={scoped} />}
       {tab === 'recruit' && <RecruitView embedded />}
 
       {modal && (
         <EmployeeModal
           employee={modal.employee}
-          all={employees}
+          all={scoped}
           canEdit={canEdit}
           onClose={() => setModal(null)}
           onSave={handleSave}

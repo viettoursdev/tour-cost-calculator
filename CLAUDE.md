@@ -166,15 +166,19 @@ When debugging hydration-time bugs, dump these in DevTools console first.
 
 ## Role Hierarchy
 
-`CEO → Ban Giám Đốc → Trưởng Phòng → Sales = Operations = Marketing → Admin → Accountant → Standard`
+`CEO → Ban Giám Đốc → Trợ lý Giám Đốc → Trưởng Phòng → Phó Phòng → Sales = Operations = Marketing → Admin → Accountant → NV Thử việc`
 
 Defined in `src/auth/ROLES.ts` and `src/auth/PERMISSIONS.ts`.
 
-- `Ban Giám Đốc`: full permissions like CEO (incl. `manageUsers`); sits just below CEO. Also a payment approver.
+- **`manageUsers` (quản lý tài khoản) is CEO-ONLY.** `Ban Giám Đốc` và `Trợ lý Giám Đốc` KHÔNG quản lý tài khoản.
+- `Trợ lý Giám Đốc`: cấp "Ban Giám Đốc" (rank 8, dưới BGĐ trên Trưởng Phòng) — quyền tương tự BGĐ (đầy đủ trừ `manageUsers`), phụ trách TOÀN BỘ phòng ban. Trong `BOARD_ROLES` (`isBoard`) + `APPROVER_ROLES`.
+- `Ban Giám Đốc`: full permissions như CEO TRỪ `manageUsers`. Trong `BOARD_ROLES` + payment approver.
+- `Trưởng Phòng` / `Phó Phòng`: chỉ thấy dữ liệu (hồ sơ/tour/báo giá) + nhân sự CÙNG PHÒNG mình — vd phòng nội địa (`dh_noidia`) chỉ thấy nội địa, phòng nước ngoài (`dh_nuocngoai`) chỉ thấy nước ngoài. Lọc qua `recordAccess` (`canViewRecord`/`visibleEmployees`) + RLS `tour_profile_can_view`.
+- `NV Thử việc` (đổi tên từ `Standard` ở migration 0077): cấp thấp nhất, không quyền gì.
 - `Admin`: view-only on contracts and history, no create/edit/delete
 - `Accountant`: view history only, no exports or rate card edits
 
-Check with `hasPerm(user, 'permName')`. Payment-approver roles: `APPROVER_ROLES` / `isApprover()` in `src/auth/ROLES.ts` (CEO, Ban Giám Đốc, Trưởng Phòng).
+Check with `hasPerm(user, 'permName')`. Cấp "Ban Giám Đốc" (thấy tất cả): `BOARD_ROLES` / `isBoard()` = CEO, Ban Giám Đốc, Trợ lý Giám Đốc. Payment-approver roles: `APPROVER_ROLES` / `isApprover()` (CEO, Ban Giám Đốc, Trợ lý Giám Đốc, Trưởng Phòng).
 
 **`department` + RLS (migration 0046/0047).** `profiles.department` được đồng bộ từ app qua `sbPushUsers`/`sbPullUsers`/`profileToUser` (TRƯỚC 0046 department KHÔNG được lưu xuống DB → quy tắc "thấy theo phòng" trong `recordAccess` không chạy thật). Role enum DB gồm cả `'Phó Phòng'`. RLS đọc `tour_profiles` siết server-side qua hàm `public.tour_profile_can_view(created_by, collaborators, followers)` (single source of truth cho cả policy lẫn pgTAP). **Lưu ý vận hành:** sau khi áp 0046, admin phải vào Quản lý người dùng → Lưu để populate `department`/`role` xuống `profiles`. **pgTAP RLS:** KHÔNG test row-filtering qua `SET ROLE authenticated` (pg_prove chạy superuser → không kích hoạt lọc RLS); test GỌI THẲNG hàm predicate với `set_config('request.jwt.claims', …)`.
 

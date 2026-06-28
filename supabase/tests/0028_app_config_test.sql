@@ -12,7 +12,7 @@ insert into auth.users (id, email, instance_id, aud, role)
 values (gen_random_uuid(), 'someone@viettours.com.vn', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
 select is(
   (select role from public.profiles where email = 'someone@viettours.com.vn'),
-  'Standard', 'non-bootstrap user gets Standard without any GUC');
+  'NV Thử việc', 'non-bootstrap user gets NV Thử việc without any GUC (Standard cũ, đổi ở 0077)');
 
 insert into auth.users (id, email, instance_id, aud, role)
 values (gen_random_uuid(), 'developer@viettours.com.vn', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
