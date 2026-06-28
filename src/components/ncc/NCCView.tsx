@@ -8,6 +8,9 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import AddIcon from '@mui/icons-material/Add';
+import TipsAndUpdatesOutlinedIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
+import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import { useNccStore } from '@/stores/nccStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -221,8 +224,9 @@ export function NCCView() {
           </Typography>
         </Box>
         {canEdit && (
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent="flex-end">
             <Button
+              size="small"
               variant={selMode ? 'contained' : 'outlined'}
               color="secondary"
               startIcon={<MergeTypeIcon />}
@@ -230,9 +234,9 @@ export function NCCView() {
             >
               {selMode ? 'Thoát gộp' : 'Gộp trùng'}
             </Button>
-            <Button variant="outlined" onClick={() => setSuggestOpen(true)}>🎯 Gợi ý NCC</Button>
-            <Button variant="outlined" onClick={() => setImportOpen(true)}>📥 Nhập danh sách</Button>
-            <Button variant="contained" onClick={() => setModal({ ncc: null })}>➕ Thêm NCC</Button>
+            <Button size="small" variant="outlined" startIcon={<TipsAndUpdatesOutlinedIcon />} onClick={() => setSuggestOpen(true)}>Gợi ý NCC</Button>
+            <Button size="small" variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={() => setImportOpen(true)}>Nhập danh sách</Button>
+            <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => setModal({ ncc: null })}>Thêm NCC</Button>
           </Stack>
         )}
       </Stack>
@@ -262,6 +266,7 @@ export function NCCView() {
         <Select
           size="small"
           value={filterSector}
+          displayEmpty
           onChange={(e) => setFilterSector(e.target.value)}
           sx={{ minWidth: 160, ...filterSelectSx }}
         >
@@ -270,7 +275,7 @@ export function NCCView() {
             <MenuItem key={s} value={s}>{s}</MenuItem>
           ))}
         </Select>
-        <Select size="small" value={filterContinent}
+        <Select size="small" value={filterContinent} displayEmpty
           onChange={(e) => { setFilterContinent(e.target.value); setFilterCountry(''); }}
           sx={{ minWidth: 150, ...filterSelectSx }}>
           <MenuItem value="">Tất cả châu lục</MenuItem>
