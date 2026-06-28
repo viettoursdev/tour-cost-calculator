@@ -251,7 +251,7 @@ export function NCCView() {
           placeholder="VD: Champa Island, anh Tuấn…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
           sx={{ flex: 1, minWidth: 240, maxWidth: 320, ...filterFieldSx }}
         />
         <TextField
@@ -260,7 +260,7 @@ export function NCCView() {
           placeholder="Tên tour NCC từng phục vụ…"
           value={tourSearch}
           onChange={(e) => setTourSearch(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
           sx={{ minWidth: 200, ...filterFieldSx }}
         />
         <Select
