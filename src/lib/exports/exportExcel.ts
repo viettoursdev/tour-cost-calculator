@@ -8,7 +8,7 @@ import { saveAs } from 'file-saver';
 import { getCATS } from '@/components/quote/constants';
 import { plainNote } from '@/lib/util';
 import { qtyOf } from '@/components/quote/calc';
-import { BRAND_TEAL_ARGB } from './brand';
+import { BRAND_TEAL_ARGB, addExcelLogo } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -65,6 +65,9 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   const cv: Partial<ExcelJS.Alignment> = { horizontal: 'center', vertical: 'middle' };
   const rt: Partial<ExcelJS.Alignment> = { horizontal: 'right', vertical: 'middle' };
   const lf: Partial<ExcelJS.Alignment> = { horizontal: 'left', vertical: 'middle', wrapText: true };
+
+  // ── Logo Viettours (wordmark teal) ở góc trên-trái, vùng A1:B2 ──
+  addExcelLogo(wb, ws);
 
   // ── Row 1: company header ──
   ws.getRow(1).height = 44;
