@@ -17,3 +17,8 @@ crons = ["0 1 * * *"]
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "viettours-files"
+
+# Workers AI — embedding cho Thư viện (kho kiến thức RAG) qua model @cf/baai/bge-m3.
+# Chạy ngay trong worker, KHÔNG cần API key ngoài. Hàm callEmbed() đọc env.AI.
+[ai]
+binding = "AI"

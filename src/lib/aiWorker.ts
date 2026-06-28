@@ -291,7 +291,7 @@ export async function callAIWorker(
 
 // ── Thư viện Viettours (kho kiến thức RAG) ──
 
-/** Tạo embedding cho các đoạn text qua Voyage (worker `/kb/embed`). */
+/** Tạo embedding cho các đoạn text qua Workers AI bge-m3 (worker `/kb/embed`). */
 export async function embedTexts(
   texts: string[],
   inputType: 'document' | 'query' = 'document',

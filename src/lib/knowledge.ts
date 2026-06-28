@@ -1,12 +1,13 @@
 /**
  * Thư viện Viettours — kho kiến thức nội bộ (RAG), tầng dữ liệu + điều phối.
  *
- * Luồng NẠP:   text → chunkText() → embedTexts() (Voyage) → lưu kb_sources/kb_chunks.
+ * Luồng NẠP:   text → chunkText() → embedTexts() (Workers AI bge-m3) → lưu kb_sources/kb_chunks.
  * Luồng HỎI:   câu hỏi → embedTexts(query) → RPC kb_search (RLS áp quyền) →
  *              streamKbAsk() (Claude trả lời có trích dẫn, hiện chữ dần).
  *
- * Embedding & trả lời đi qua Cloudflare Worker (giữ VOYAGE_API_KEY + ANTHROPIC_API_KEY);
- * truy hồi qua Supabase với JWT của người dùng nên RLS tự lọc theo quyền (xem 0067).
+ * Embedding chạy trong Cloudflare Worker qua Workers AI (bge-m3, không cần key ngoài);
+ * trả lời qua ANTHROPIC_API_KEY. Truy hồi qua Supabase với JWT của người dùng nên RLS
+ * tự lọc theo quyền (xem 0067). Vector vẫn 1024 chiều, khớp cột vector(1024).
  */
 import { sb } from '@/lib/supabase';
 import { embedTexts, fetchLink, streamKbAsk, uploadFileToWorker } from '@/lib/aiWorker';

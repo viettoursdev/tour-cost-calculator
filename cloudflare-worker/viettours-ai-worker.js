@@ -25,11 +25,12 @@ const MODEL_KB = 'claude-sonnet-4-6'; // Thư viện Viettours: trả lời RAG 
 const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
-// Voyage AI — embedding cho Thư viện (kho kiến thức RAG). VOYAGE_API_KEY là secret
-// đặt phía Cloudflare (Settings → Variables and Secrets), KHÔNG quản ở repo này.
-const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings';
-const VOYAGE_MODEL = 'voyage-3.5'; // đa ngôn ngữ, mạnh tiếng Việt
-const VOYAGE_DIM = 1024; // khớp cột vector(1024) trong migration 0067
+// Embedding cho Thư viện (kho kiến thức RAG) — chạy NGAY trong worker qua Cloudflare
+// Workers AI (binding `AI` trong wrangler.toml). KHÔNG cần API key ngoài (không Voyage).
+// bge-m3: đa ngôn ngữ, mạnh tiếng Việt, vector 1024 chiều → khớp cột vector(1024) ở
+// migration 0067. Anthropic KHÔNG có API embedding nên phần này không dùng Claude.
+const EMBED_MODEL = '@cf/baai/bge-m3';
+const EMBED_DIM = 1024; // khớp cột vector(1024) trong migration 0067
 
 // Prompt RAG: trả lời CHỈ dựa trên ngữ cảnh được cấp, kèm trích dẫn, chống bịa.
 const KB_SYSTEM_PROMPT = [
@@ -173,30 +174,18 @@ async function callClaude(env, content, maxTokens = 8000, model = MODEL) {
     .trim();
 }
 
-// Tạo embedding qua Voyage. inputType='document' khi nạp kho, 'query' khi tìm kiếm
-// (Voyage tối ưu khác nhau cho 2 mục đích). Trả mảng vector cùng thứ tự `texts`.
-async function callVoyage(env, texts, inputType = 'document') {
-  if (!env.VOYAGE_API_KEY) throw new Error('Worker chưa cấu hình VOYAGE_API_KEY');
-  const r = await fetch(VOYAGE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.VOYAGE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: VOYAGE_MODEL,
-      input: texts,
-      input_type: inputType,
-      output_dimension: VOYAGE_DIM,
-    }),
-  });
-  const data = await r.json();
-  if (!r.ok) throw new Error(data?.detail || data?.error?.message || `Voyage ${r.status}`);
-  // Sắp đúng thứ tự theo `index` rồi lấy mảng embedding.
-  return (data.data || [])
-    .slice()
-    .sort((a, b) => a.index - b.index)
-    .map((d) => d.embedding);
+// Tạo embedding qua Cloudflare Workers AI (bge-m3). Trả mảng vector CÙNG THỨ TỰ `texts`.
+// `inputType` giữ lại cho tương thích chữ ký (NẠP='document' / TÌM='query') nhưng bge-m3
+// không phân biệt 2 mục đích nên bỏ qua. Cần binding `AI` (xem wrangler.toml).
+async function callEmbed(env, texts, _inputType = 'document') {
+  if (!env.AI) throw new Error('Worker chưa bật Workers AI binding (AI)');
+  const res = await env.AI.run(EMBED_MODEL, { text: texts });
+  // bge-m3 trả { shape:[n,1024], data:[[...],[...]] }, data đúng thứ tự input `text`.
+  const vecs = res?.data;
+  if (!Array.isArray(vecs) || vecs.length !== texts.length) {
+    throw new Error('Workers AI trả embedding không hợp lệ');
+  }
+  return vecs;
 }
 
 // Lọc HTML → văn bản thuần + tiêu đề (cho /kb/fetch). Bỏ script/style/comment, đổi
@@ -675,15 +664,15 @@ export default {
         return json({ distance: el.distance?.text || null, duration: el.duration?.text || null, mode });
       }
 
-      // ── POST /kb/embed — tạo embedding (Voyage) cho các đoạn text ──
+      // ── POST /kb/embed — tạo embedding (Workers AI bge-m3) cho các đoạn text ──
       // Dùng khi NẠP kho (input_type='document') và khi TÌM KIẾM (input_type='query').
       if (path.endsWith('/kb/embed')) {
         if (!Array.isArray(body.texts) || body.texts.length === 0) {
           return json({ error: "Thiếu trường 'texts' (mảng chuỗi)" }, 400);
         }
-        if (body.texts.length > 128) return json({ error: 'Tối đa 128 đoạn mỗi lần' }, 400);
+        if (body.texts.length > 100) return json({ error: 'Tối đa 100 đoạn mỗi lần' }, 400);
         const inputType = body.input_type === 'query' ? 'query' : 'document';
-        const embeddings = await callVoyage(env, body.texts.map(String), inputType);
+        const embeddings = await callEmbed(env, body.texts.map(String), inputType);
         return json({ embeddings });
       }
 
