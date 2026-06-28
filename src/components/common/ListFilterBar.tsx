@@ -35,9 +35,9 @@ export function ListFilterBar({
       {dateRange === 'custom' && (
         <>
           <TextField size="small" type="date" label="Từ" value={from} onChange={(e) => onFrom(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150, ...filterFieldSx }} />
+            slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} sx={{ width: 150, ...filterFieldSx }} />
           <TextField size="small" type="date" label="Đến" value={to} onChange={(e) => onTo(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }} sx={{ width: 150, ...filterFieldSx }} />
+            slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} sx={{ width: 150, ...filterFieldSx }} />
         </>
       )}
       {owners && onOwner && (
