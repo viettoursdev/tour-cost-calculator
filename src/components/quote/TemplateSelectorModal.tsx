@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import {
-  Alert, Avatar, Box, Button, Card, CardActionArea, CardContent, Dialog, DialogContent,
+  Avatar, Box, Button, Card, CardActionArea, CardContent, Dialog, DialogContent,
   DialogTitle, IconButton, Stack, Tooltip, Typography,
 } from '@mui/material';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
@@ -91,7 +90,6 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const setView = useQuoteStore((s) => s.setView);
   const currentUser = useAuthStore((s) => s.currentUser);
   const signOut = useAuthStore((s) => s.signOut);
-  const [pendingConfirm, setPendingConfirm] = useState<Template | null>(null);
 
   const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
@@ -114,19 +112,8 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   };
 
   const handlePick = (key: Template) => {
-    if (hasDraft && hasItems) {
-      setPendingConfirm(key);
-    } else {
-      proceed(key);
-    }
-  };
-
-  const confirmReplace = () => {
-    if (pendingConfirm) {
-      const key = pendingConfirm;
-      setPendingConfirm(null);
-      proceed(key);
-    }
+    if (hasDraft && hasItems && !window.confirm('Báo giá hiện tại sẽ bị thay thế. Tiếp tục?')) return;
+    proceed(key);
   };
 
   return (
@@ -351,24 +338,6 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           </Box>
         )}
 
-        {pendingConfirm && (
-          <Alert
-            severity="warning"
-            sx={{ mt: 3 }}
-            action={
-              <>
-                <Button color="inherit" size="small" onClick={() => setPendingConfirm(null)}>
-                  Huỷ
-                </Button>
-                <Button color="inherit" size="small" onClick={confirmReplace}>
-                  Thay thế
-                </Button>
-              </>
-            }
-          >
-            Báo giá hiện tại sẽ bị thay thế. Tiếp tục?
-          </Alert>
-        )}
       </DialogContent>
     </Dialog>
   );
