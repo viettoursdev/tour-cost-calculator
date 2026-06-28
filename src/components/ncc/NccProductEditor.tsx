@@ -1,7 +1,7 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useState } from 'react';
 import {
   Alert, Autocomplete, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-  Link, MenuItem, Stack, TextField, Typography,
+  LinearProgress, Link, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
@@ -10,6 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useNccStore } from '@/stores/nccStore';
 import { useNccProductsStore } from '@/stores/nccProductsStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
+import { pickFiles } from '@/lib/pickFiles';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -55,31 +56,34 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
   const setFiles = (fn: (prev: FileAttachment[]) => FileAttachment[]) => setForm((p) => ({ ...p, files: fn(p.files) }));
 
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; pct: number } | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useUndoRedoShortcuts(undo, redo, !busy);
 
   const updRow = (id: string, patch: Partial<NccPrice>) => setPrices((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
-  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
-    const picked = e.target.files;
-    e.target.value = '';
-    if (!picked?.length) return;
+  const onAttach = async () => {
+    const list = await pickFiles({ accept: '.pdf,.doc,.docx,.xls,.xlsx,image/*', multiple: true });
+    if (!list.length) return;
     setUploading(true);
     setUploadErr(null);
+    setProgress({ done: 0, total: list.length, pct: 0 });
     try {
       const uploaded: FileAttachment[] = [];
-      for (const f of Array.from(picked)) {
-        const r = await uploadFileToWorker(f);
+      for (let i = 0; i < list.length; i++) {
+        const f = list[i];
+        const r = await uploadFileToWorker(f, (pct) => setProgress({ done: i, total: list.length, pct }));
         uploaded.push({ key: r.key, name: r.name, uploadedBy: user?.name, uploadedAt: new Date().toISOString() });
+        setProgress({ done: i + 1, total: list.length, pct: 100 });
       }
       setFiles((prev) => [...prev, ...uploaded]);
     } catch (err) {
       setUploadErr((err as Error).message || 'Lỗi không xác định');
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   };
 
@@ -176,15 +180,20 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
               <Box>
                 <Button
                   variant="outlined" size="small" startIcon={<AttachFileIcon />} disabled={uploading}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => void onAttach()}
                 >
-                  {uploading ? 'Đang tải lên…' : 'Đính kèm file (PDF/ảnh/Word…)'}
+                  {uploading
+                    ? progress && progress.total > 1
+                      ? `Đang tải lên ${progress.done}/${progress.total} (${progress.pct}%)…`
+                      : `Đang tải lên ${progress?.pct ?? 0}%…`
+                    : 'Đính kèm file (PDF/ảnh/Word…)'}
                 </Button>
-                <input
-                  ref={fileInputRef} type="file" multiple
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
-                  style={{ display: 'none' }} onChange={onPickFiles}
-                />
+                {uploading && (
+                  <LinearProgress
+                    variant="determinate" value={progress?.pct ?? 0}
+                    sx={{ mt: 0.75, borderRadius: 1, height: 6, maxWidth: 280 }}
+                  />
+                )}
               </Box>
               {uploadErr && (
                 <Alert severity="error" onClose={() => setUploadErr(null)} sx={{ mt: 0.5 }}>
