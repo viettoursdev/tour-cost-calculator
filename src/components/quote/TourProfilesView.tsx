@@ -1300,8 +1300,16 @@ export function TourProfilesView() {
             priority: info.priority || undefined, leadSource: info.leadSource || undefined,
             note: info.note || undefined,
           });
+          if (!created) {
+            // create() đã rollback + lưu lý do vào store.error → báo cho người dùng,
+            // GIỮ dialog mở để họ thử lại (đừng nuốt lỗi như trước).
+            const reason = useTourProfileStore.getState().error;
+            window.alert('❌ Không tạo được hồ sơ.' + (reason ? `\n\nLý do: ${reason}` : '') +
+              '\n\nNếu lỗi nhắc tới quyền/RLS: tài khoản chưa được đồng bộ — nhờ CEO vào Quản lý người dùng → Lưu để cập nhật username/phòng ban xuống hệ thống, rồi thử lại.');
+            return;
+          }
           setCreateOpen(false);
-          if (created) setExpanded((prev) => new Set(prev).add(created.id));
+          setExpanded((prev) => new Set(prev).add(created.id));
         }}
       />
 
