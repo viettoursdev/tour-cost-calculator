@@ -103,7 +103,8 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
     const startD = new Date(info.startDate);
     const endD = new Date(startD.getTime() + (info.days - 1) * 86400000);
     const fmtD = (d: Date) => d.toLocaleDateString('vi-VN');
-    pdf.text(`Khởi hành: ${fmtD(startD)}  →  Kết thúc: ${fmtD(endD)}`, pageW / 2, y, { align: 'center' });
+    // KHÔNG dùng "→": font VN nhúng (DejaVu subset) thiếu glyph mũi tên → vỡ chữ. Dùng "-".
+    pdf.text(`Khởi hành: ${fmtD(startD)}  -  Kết thúc: ${fmtD(endD)}`, pageW / 2, y, { align: 'center' });
     y += 7;
   }
 

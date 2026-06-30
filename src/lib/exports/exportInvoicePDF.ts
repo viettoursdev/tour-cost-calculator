@@ -112,7 +112,8 @@ export function exportInvoicePDF(args: InvoiceArgs): void {
   y += 4.5;
   if (draft.info.startDate) {
     const endD = calcEndDate(draft.info.startDate, draft.info.days);
-    pdf.text(`${T('Khởi hành', 'Departure')}: ${fmtDate(draft.info.startDate, EN)} → ${fmtDate(endD, EN)}`, pageW / 2 + 5, y);
+    // "-" thay "→": font VN nhúng thiếu glyph mũi tên → tránh vỡ chữ trên hoá đơn gửi khách.
+    pdf.text(`${T('Khởi hành', 'Departure')}: ${fmtDate(draft.info.startDate, EN)} - ${fmtDate(endD, EN)}`, pageW / 2 + 5, y);
     y += 4.5;
   }
   pdf.text(`Email: ${customer.email || '-'}`, mX, y);

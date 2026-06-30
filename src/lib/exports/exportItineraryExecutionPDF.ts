@@ -425,7 +425,7 @@ export async function exportItineraryExecutionPDF(
         setF('bold'); pdf.setFontSize(9.5); pdf.setTextColor(...NAVY);
         (wrap(d.hotelName || '—', CW - (tx - M) - 4)[0] ? [wrap(d.hotelName || '—', CW - (tx - M) - 4)[0]] : []).forEach((l) => pdf.text(l, tx, y + 11.5));
         if (d.hotelContact) { setF('normal'); pdf.setFontSize(8.3); pdf.setTextColor(...INK); pdf.text(d.hotelContact, tx, y + 16); }
-        setF('normal'); pdf.setFontSize(7); pdf.setTextColor(...MUTE); pdf.text('Quét QR → Google Maps', tx, y + 20);
+        setF('normal'); pdf.setFontSize(7); pdf.setTextColor(...MUTE); pdf.text('Quét QR mở Google Maps', tx, y + 20);
         y += cardH + 3;
       });
     } else {
