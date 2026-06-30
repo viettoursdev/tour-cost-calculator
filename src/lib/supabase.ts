@@ -4175,6 +4175,7 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     editedAt: r.edited_at ? new Date(r.edited_at as string).toISOString() : undefined,
     deleted: (r.deleted as boolean) ?? undefined,
     reactions: (r.reactions as ChatMessage['reactions']) ?? undefined,
+    mentions: Array.isArray(r.mentions) && (r.mentions as string[]).length ? (r.mentions as string[]) : undefined,
   };
 }
 
@@ -4200,7 +4201,7 @@ async function assembleChat(
   ] = await Promise.all([
     client.from('chat_members').select('username, last_read').eq('chat_id', chatId),
     client.from('chat_messages')
-      .select('id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions')
+      .select('id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions, mentions')
       .eq('chat_id', chatId)
       .order('sort_order', { ascending: true }),
   ]);
@@ -4429,6 +4430,7 @@ export async function sbSendChatMessage(
     edited_at: msg.editedAt ?? null,
     deleted: msg.deleted ?? false,
     reactions: msg.reactions ?? {},
+    mentions: msg.mentions ?? [],
   });
   if (insErr) throw new Error('sbSendChatMessage insert: ' + insErr.message);
 

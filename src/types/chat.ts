@@ -15,6 +15,7 @@ export type ChatMessage = {
   editedAt?: string;                    // ISO — đã chỉnh sửa
   deleted?: boolean;                    // đã thu hồi
   reactions?: Record<string, string[]>; // emoji → danh sách username
+  mentions?: string[];                  // username được @nhắc (nhóm) — để tô sáng & thông báo
 };
 
 /** Một cuộc trò chuyện (1-1 hoặc nhóm) giữa các tài khoản. */

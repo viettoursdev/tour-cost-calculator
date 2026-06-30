@@ -249,4 +249,23 @@ describe('chat gateway', () => {
     const result = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
     expect(result!.lastText).toBe('📎 photo.png');
   });
+
+  it('mentions round-trip — gửi @nhắc, đọc lại đúng danh sách', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'grp_mention__tester';
+    await sbEnsureChat({
+      id: chatId, members: ['tester', 'alpha', 'bravo'], isGroup: true, title: 'Nhóm @',
+      createdBy: 'tester', createdAt: new Date().toISOString(), messages: [],
+    }, c);
+
+    await sbSendChatMessage(chatId, {
+      id: 'msg-mention-001', by: 'tester', byName: 'QA Tester',
+      at: new Date().toISOString(), text: '@Alpha @Bravo họp nhé', mentions: ['alpha', 'bravo'],
+    }, c);
+
+    const result = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    const m = result!.messages.find((msg) => msg.id === 'msg-mention-001');
+    expect(m).toBeDefined();
+    expect(m!.mentions).toEqual(['alpha', 'bravo']);
+  });
 });
