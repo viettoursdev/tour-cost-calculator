@@ -27,7 +27,12 @@ export function calcVND(item: Item, rates: Record<string, number>, pax: number):
   // Matters for JSON imports where `enabled` may be undefined — legacy treats missing as
   // enabled, so we match that semantics rather than the stricter TS-types interpretation.
   if (item.enabled === false || item.foc === true || item.included === true) return 0;
-  const r = rates[item.cur] ?? 1;
+  // VND (và mọi mã không có tỷ giá > 0) quy về hệ số 1. QUAN TRỌNG: dùng `> 0`
+  // chứ KHÔNG dùng `?? 1` — vì `0 ?? 1 = 0` khiến hạng mục ngoại tệ có tỷ giá để
+  // trống/0 âm thầm thành 0 VND, lệch với currency.ts (foreignToVND coi 0 = ×1).
+  // Giữ ×1 đồng nhất hai đường; tỷ giá thiếu được surface qua foreignRatesMissing().
+  const raw = rates[item.cur];
+  const r = typeof raw === 'number' && raw > 0 ? raw : 1;
   return item.price * r * item.times * qtyOf(item, pax);
 }
 
@@ -50,6 +55,33 @@ export function subtotal(draft: QuoteDraft): number {
     const items = draft.items[cid] ?? [];
     return s + catTotal(items, draft.rates, draft.pax);
   }, 0);
+}
+
+/**
+ * Các mã ngoại tệ ĐANG được dùng bởi hạng mục có tính tiền (bật, không FOC/đã gồm,
+ * không phải tuỳ chọn) nhưng THIẾU tỷ giá > 0 trong `draft.rates`. Hàm THUẦN.
+ * Dùng để cảnh báo người dùng trước khi gửi báo giá — vì tỷ giá thiếu/0 sẽ bị quy
+ * ×1 (1 đơn vị ngoại tệ = 1 VND), làm tổng SAI rất xa mà không có lỗi rõ ràng.
+ */
+export function foreignRatesMissing(args: {
+  items: Partial<Record<CategoryId, Item[]>>;
+  catEnabled: Partial<Record<CategoryId, boolean>>;
+  rates: Record<string, number>;
+}): string[] {
+  const { items, catEnabled, rates } = args;
+  const missing = new Set<string>();
+  for (const cat of CATS) {
+    const cid = cat.id as CategoryId;
+    if (!catEnabled[cid]) continue;
+    for (const it of items[cid] ?? []) {
+      if (it.optional || it.enabled === false || it.foc === true || it.included === true) continue;
+      const cur = it.cur;
+      if (!cur || cur === 'VND') continue;
+      const r = rates[cur];
+      if (!(typeof r === 'number' && r > 0)) missing.add(cur);
+    }
+  }
+  return [...missing];
 }
 
 export type Totals = {
@@ -107,7 +139,9 @@ export function usedForeignCurrencies(items: Partial<Record<CategoryId, Item[]>>
  * VND formatter. Source: public/legacy.html:1693.
  */
 export const fmtVND = (n: number): string =>
-  Math.round(n).toLocaleString('vi-VN') + ' ₫';
+  // Phòng thủ: undefined/NaN (vd field optional chưa guard) → "0 ₫", KHÔNG để "NaN ₫"
+  // lọt ra bản in/file gửi khách. Số hợp lệ (kể cả 0 và âm) giữ nguyên.
+  Math.round(Number.isFinite(n) ? n : 0).toLocaleString('vi-VN') + ' ₫';
 
 /**
  * Non-VND currency formatter using Intl. Falls back to fmtVND for 'VND'.

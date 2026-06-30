@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcVND, catTotal, subtotal, computeTotals, usedForeignCurrencies } from './calc';
+import { calcVND, catTotal, subtotal, computeTotals, usedForeignCurrencies, foreignRatesMissing, fmtVND } from './calc';
 import type { Item, QuoteDraft, CategoryId } from '@/types';
 import { CATS } from './constants';
 
@@ -58,6 +58,42 @@ describe('usedForeignCurrencies', () => {
   });
 });
 
+describe('fmtVND', () => {
+  it('định dạng số VND, làm tròn', () => {
+    expect(fmtVND(1234567.8)).toBe('1.234.568 ₫');
+    expect(fmtVND(0)).toBe('0 ₫');
+    expect(fmtVND(-5000)).toBe('-5.000 ₫');
+  });
+  it('phòng thủ undefined/NaN → "0 ₫" (không để "NaN ₫" lọt ra file khách)', () => {
+    expect(fmtVND(undefined as unknown as number)).toBe('0 ₫');
+    expect(fmtVND(NaN)).toBe('0 ₫');
+  });
+});
+
+describe('foreignRatesMissing', () => {
+  const enable = (...ids: CategoryId[]) =>
+    ({ ...emptyDraft().catEnabled, ...Object.fromEntries(ids.map((i) => [i, true])) }) as Record<CategoryId, boolean>;
+
+  it('flags a foreign currency used by an enabled line with rate missing or 0', () => {
+    const items = { flight: [item({ cur: 'USD' }), item({ cur: 'EUR' })] } as Partial<Record<CategoryId, Item[]>>;
+    expect(foreignRatesMissing({ items, catEnabled: enable('flight'), rates: { USD: 0 } }))
+      .toEqual(['USD', 'EUR']); // USD rate 0, EUR missing
+  });
+
+  it('does not flag when every foreign currency has a rate > 0, nor VND', () => {
+    const items = { flight: [item({ cur: 'USD' }), item({ cur: 'VND' })] } as Partial<Record<CategoryId, Item[]>>;
+    expect(foreignRatesMissing({ items, catEnabled: enable('flight'), rates: { USD: 25_000 } })).toEqual([]);
+  });
+
+  it('ignores disabled categories, disabled/FOC/included/optional lines', () => {
+    const items = {
+      flight: [item({ cur: 'USD' })],                              // category disabled below
+      hotel: [item({ cur: 'EUR', enabled: false }), item({ cur: 'GBP', foc: true }), item({ cur: 'JPY', optional: true })],
+    } as Partial<Record<CategoryId, Item[]>>;
+    expect(foreignRatesMissing({ items, catEnabled: enable('hotel'), rates: {} })).toEqual([]);
+  });
+});
+
 describe('calcVND', () => {
   it('returns 0 when item is disabled (enabled === false)', () => {
     expect(calcVND(item({ enabled: false, price: 999 }), {}, 10)).toBe(0);
@@ -80,6 +116,12 @@ describe('calcVND', () => {
   it('converts USD price using provided rate', () => {
     expect(calcVND(item({ cur: 'USD', price: 100, times: 1 }), { USD: 25_000 }, 10))
       .toBe(2_500_000);
+  });
+
+  it('treats a 0 / missing foreign rate as ×1 (consistent with currency.foreignToVND), never ×0', () => {
+    // Trước đây `rates[cur] ?? 1` cho `0 ?? 1 = 0` → hạng mục biến mất khỏi tổng.
+    expect(calcVND(item({ cur: 'USD', price: 100 }), { USD: 0 }, 10)).toBe(100);
+    expect(calcVND(item({ cur: 'USD', price: 100 }), {}, 10)).toBe(100);
   });
 
   it('multiplies by pax for per_pax mode', () => {

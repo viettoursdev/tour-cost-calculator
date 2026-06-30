@@ -186,6 +186,7 @@ export function CostView() {
             cats={cats}
             items={items}
             catEnabled={catEnabled}
+            rates={rates}
             pricing={isDMC ? undefined : { totalCost: totals.totalCost, totalProfit: totals.totalProfit, grandTotal: totals.grandTotal }}
           />
         )}

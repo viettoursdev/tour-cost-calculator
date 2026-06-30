@@ -1,5 +1,7 @@
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import { lineWarnings, duplicateNames, nameKey } from './lineValidation';
+import { foreignRatesMissing } from './calc';
+import { fxLabel } from '@/lib/currency';
 import type { CategoryId, Item } from '@/types';
 
 type CatDef = { id: string; label: string; icon: string; color: string };
@@ -8,6 +10,8 @@ type Props = {
   cats: CatDef[];
   items: Partial<Record<CategoryId, Item[]>>;
   catEnabled: Partial<Record<CategoryId, boolean>>;
+  /** Bảng tỷ giá báo giá — để cảnh báo hạng mục ngoại tệ thiếu tỷ giá. */
+  rates: Record<string, number>;
   /** Tổng giá để cảnh báo định giá (chưa có lợi nhuận / bán dưới giá vốn). */
   pricing?: { totalCost: number; totalProfit: number; grandTotal: number };
 };
@@ -17,7 +21,7 @@ type Props = {
  * dưới giá vốn) + cảnh báo nhập liệu toàn báo giá + hạng mục "bật nhưng trống".
  * Bấm chip → cuộn tới hạng mục tương ứng.
  */
-export function QuoteWarningsBanner({ cats, items, catEnabled, pricing }: Props) {
+export function QuoteWarningsBanner({ cats, items, catEnabled, rates, pricing }: Props) {
   const rows = cats.map((cat) => {
     const arr = items[cat.id as CategoryId] ?? [];
     const dup = duplicateNames(arr);
@@ -34,6 +38,16 @@ export function QuoteWarningsBanner({ cats, items, catEnabled, pricing }: Props)
   if (pricing && pricing.totalCost > 0) {
     if (pricing.grandTotal < pricing.totalCost) priceMsgs.push('Giá bán đang THẤP HƠN giá vốn — kiểm tra lại margin/làm tròn.');
     else if (pricing.totalProfit <= 0) priceMsgs.push('Báo giá chưa có lợi nhuận (margin 0%) — xác nhận lại trước khi gửi.');
+  }
+
+  // Cảnh báo thiếu tỷ giá (đỏ, nghiêm trọng): hạng mục ngoại tệ chưa có tỷ giá > 0
+  // sẽ bị quy ×1 (1 ngoại tệ = 1 VND) → tổng SAI rất xa. Phải nhập tỷ giá trước khi gửi.
+  const missingRates = foreignRatesMissing({ items, catEnabled, rates });
+  if (missingRates.length > 0) {
+    priceMsgs.push(
+      `Thiếu tỷ giá cho ${missingRates.map(fxLabel).join(', ')} — hạng mục ngoại tệ đang bị tính 1:1 với VND. ` +
+        'Nhập tỷ giá trong bảng "Tỷ giá quy đổi → VND" trước khi gửi.',
+    );
   }
 
   if (rows.length === 0 && priceMsgs.length === 0) return null;
