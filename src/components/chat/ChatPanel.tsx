@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react';
 import {
   Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, LinearProgress, List, ListItemButton,
-  Menu, MenuItem, Stack, TextField, Tooltip, Typography,
+  Menu, MenuItem, Popover, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -13,12 +13,16 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ReplyIcon from '@mui/icons-material/Reply';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EmojiEmotionsOutlinedIcon from '@mui/icons-material/EmojiEmotionsOutlined';
+import AddReactionOutlinedIcon from '@mui/icons-material/AddReactionOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { canViewStaffRole } from '@/auth/ROLES';
 import { useChatStore, chatUnread, firstUnreadIndex } from '@/stores/chatStore';
-import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbChatTyping, type TypingChannel } from '@/lib/supabase';
+import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbChatTyping, sbSendNotificationMany, type TypingChannel } from '@/lib/supabase';
 import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
+import { chatDayLabel, sameDay, groupWithPrev, mentionQuery, applyMention, mentionSegments } from '@/lib/chatFormat';
+import { EmojiPicker } from '@/components/chat/EmojiPicker';
 import { toast } from '@/stores/toastStore';
 import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
 import { LEGACY } from '@/theme';
@@ -56,15 +60,22 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [typers, setTypers] = useState<{ u: string; name: string }[]>([]);
   // Mốc đọc CHỐT khi mở cuộc — để dải "Tin chưa đọc" không biến mất ngay khi tự đánh dấu đã đọc.
   const [anchor, setAnchor] = useState<{ id: string; read?: string } | null>(null);
+  const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
+  const [showReactPicker, setShowReactPicker] = useState(false);
+  const [mentionQ, setMentionQ] = useState<string | null>(null);
+  const [mentionSel, setMentionSel] = useState<string[]>([]); // username đã @nhắc trong tin đang soạn
+  const [dragOver, setDragOver] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingRef = useRef<TypingChannel | null>(null);
   const lastPingRef = useRef(0);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const previewOf = (m: ChatMessage) => (m.deleted ? 'Tin đã thu hồi' : m.text || (m.file ? `📎 ${m.file.name}` : ''));
 
   // Cuộc đang mở: subscribe RIÊNG (kèm toàn bộ tin nhắn) — danh sách `chats` không tải messages.
   const [active, setActive] = useState<Chat | null>(null);
   useEffect(() => {
+    setText(''); setReplyTarget(null); setEditTarget(null); setMentionSel([]); setMentionQ(null);
     if (!activeId) { setActive(null); return; }
     setActive(null); setAnchor(null);
     return sbSubscribeChat(activeId, setActive);
@@ -101,6 +112,31 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       typingRef.current.ping();
     }
   };
+  const handleType = (e: ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    const el = e.target as HTMLTextAreaElement;
+    onTypeText(el.value);
+    setMentionQ(active?.isGroup ? mentionQuery(el.value, el.selectionStart ?? el.value.length) : null);
+  };
+  const insertEmoji = (emoji: string) => {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? text.length;
+    const next = text.slice(0, caret) + emoji + text.slice(caret);
+    setText(next);
+    requestAnimationFrame(() => { if (el) { el.focus(); const p = caret + emoji.length; el.setSelectionRange(p, p); } });
+  };
+  const pickMention = (u: string) => {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? text.length;
+    const { value, caret: nc } = applyMention(text, caret, nameOf(u));
+    setText(value);
+    setMentionSel((s) => (s.includes(u) ? s : [...s, u]));
+    setMentionQ(null);
+    requestAnimationFrame(() => { if (el) { el.focus(); el.setSelectionRange(nc, nc); } });
+  };
+  const mentionCandidates = active?.isGroup && mentionQ !== null
+    ? active.members.filter((u) => u !== me?.u).map((u) => ({ u, name: nameOf(u) }))
+        .filter(({ name }) => name.toLowerCase().includes((mentionQ ?? '').toLowerCase())).slice(0, 6)
+    : [];
 
   const unreadIdx = active && anchor?.id === active.id && me
     ? firstUnreadIndex(active.messages, anchor.read, me.u)
@@ -131,14 +167,27 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       return;
     }
     if (!body && !file) return;
+    // Mentions: chỉ giữ những người mà tên @ còn xuất hiện trong nội dung đã soạn.
+    const mentions = active.isGroup && body ? mentionSel.filter((u) => body.includes('@' + nameOf(u))) : [];
     const msg: ChatMessage = {
       id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(),
       ...(body ? { text: body } : {}), ...(file ? { file } : {}),
       ...(replyTarget ? { replyTo: { id: replyTarget.id, byName: replyTarget.byName, text: previewOf(replyTarget) } } : {}),
+      ...(mentions.length ? { mentions } : {}),
     };
-    setText(''); setReplyTarget(null);
-    try { await sbSendChatMessage(active.id, msg); }
-    catch (e) { toast('Gửi lỗi: ' + (e as Error).message, 'error'); }
+    setText(''); setReplyTarget(null); setMentionSel([]); setMentionQ(null);
+    try {
+      await sbSendChatMessage(active.id, msg);
+      const notify = mentions.filter((u) => u !== me.u);
+      if (notify.length) {
+        void sbSendNotificationMany(notify, {
+          type: 'announcement',
+          title: `💬 ${me.name} nhắc bạn trong "${titleOf(active)}"`,
+          message: body.slice(0, 140),
+          createdBy: me.name,
+        }).catch(() => { /* thông báo phụ — bỏ qua lỗi */ });
+      }
+    } catch (e) { toast('Gửi lỗi: ' + (e as Error).message, 'error'); }
   };
 
   const startReply = (m: ChatMessage) => { setReplyTarget(m); setEditTarget(null); setMenuFor(null); };
@@ -154,16 +203,42 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     setMenuFor(null);
     void sbToggleChatReaction(active.id, m.id, emoji, me.u).catch((e) => toast('Lỗi: ' + (e as Error).message, 'error'));
   };
-  const onPickFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; e.target.value = '';
-    if (!f || !active) return;
-    if (f.size > MAX_FILE) { toast('File vượt quá 20MB.', 'warning'); return; }
-    setBusy(true); setUploadPct(0);
+  const pushFileMessage = async (file: ChatMessage['file']) => {
+    if (!me || !active || !file) return;
+    const msg: ChatMessage = { id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(), file };
+    try { await sbSendChatMessage(active.id, msg); }
+    catch (e) { toast('Gửi lỗi: ' + (e as Error).message, 'error'); }
+  };
+  // Tải & gửi NHIỀU file lần lượt (mỗi file là một tin). Dùng cho chọn/kéo-thả/dán.
+  const uploadAndSend = async (files: File[]) => {
+    if (!active) return;
+    const list = files.filter((f) => {
+      if (f.size > MAX_FILE) { toast(`"${f.name}" vượt quá 20MB.`, 'warning'); return false; }
+      return true;
+    });
+    if (!list.length) return;
+    setBusy(true);
     try {
-      const up = await uploadFileToWorker(f, setUploadPct);
-      await send({ key: up.key, name: up.name, size: f.size, mime: f.type });
-    } catch (e2) { toast('Tải file lỗi: ' + (e2 as Error).message, 'error'); }
+      for (const f of list) {
+        setUploadPct(0);
+        const up = await uploadFileToWorker(f, setUploadPct);
+        await pushFileMessage({ key: up.key, name: up.name, size: f.size, mime: f.type });
+      }
+    } catch (e) { toast('Tải file lỗi: ' + (e as Error).message, 'error'); }
     finally { setBusy(false); setUploadPct(0); }
+  };
+  const onPickFiles = (e: ChangeEvent<HTMLInputElement>) => {
+    const fs = Array.from(e.target.files ?? []); e.target.value = '';
+    void uploadAndSend(fs);
+  };
+  const onDropFiles = (e: DragEvent) => {
+    e.preventDefault(); setDragOver(false);
+    const fs = Array.from(e.dataTransfer?.files ?? []);
+    if (fs.length) void uploadAndSend(fs);
+  };
+  const onPasteFiles = (e: ClipboardEvent) => {
+    const fs = Array.from(e.clipboardData?.files ?? []);
+    if (fs.length) { e.preventDefault(); void uploadAndSend(fs); }
   };
 
   const others = users.filter((u) => u.u !== me?.u);
@@ -248,12 +323,31 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       {/* KHUNG TIN NHẮN */}
       {active && (
         <>
-          <Box ref={scrollRef} sx={{ flex: 1, overflowY: 'auto', p: 1.5, bgcolor: '#f7faf9', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          <Box ref={scrollRef} sx={{ position: 'relative', flex: 1, overflowY: 'auto', p: 1.5, bgcolor: '#f7faf9', display: 'flex', flexDirection: 'column', gap: 0.75 }}
+            onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+            onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
+            onDrop={onDropFiles}>
+            {dragOver && (
+              <Box sx={{ position: 'sticky', top: 0, zIndex: 2, alignSelf: 'stretch', py: 2, mb: 1, textAlign: 'center', borderRadius: 2,
+                border: '2px dashed', borderColor: LEGACY.teal, bgcolor: 'rgba(20,150,140,0.08)', color: LEGACY.teal, fontWeight: 700, pointerEvents: 'none' }}>
+                📎 Thả file để gửi (≤20MB mỗi file)
+              </Box>
+            )}
             {active.isGroup && <Chip size="small" label={`👥 ${active.members.map(nameOf).join(', ')}`} sx={{ alignSelf: 'center', mb: 1, height: 'auto', py: 0.5, '& .MuiChip-label': { whiteSpace: 'normal' } }} />}
             {active.messages.map((m, idx) => {
               const mine = m.by === me?.u;
+              const prev = active.messages[idx - 1];
+              const next = active.messages[idx + 1];
+              const showDay = !prev || !sameDay(prev.at, m.at);
+              const grouped = !showDay && groupWithPrev(prev, m);
+              const lastOfGroup = !next || !sameDay(m.at, next.at) || !groupWithPrev(m, next);
               return (
                 <Fragment key={m.id}>
+                {showDay && (
+                  <Box sx={{ alignSelf: 'center', my: 0.5 }}>
+                    <Chip size="small" label={chatDayLabel(m.at)} sx={{ height: 22, fontSize: 11, fontWeight: 700, bgcolor: 'rgba(15,58,74,0.08)', color: 'text.secondary' }} />
+                  </Box>
+                )}
                 {idx === unreadIdx && (
                   <Box sx={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', gap: 1, my: 0.5 }}>
                     <Box sx={{ flex: 1, height: '1px', bgcolor: '#dc3250', opacity: 0.35 }} />
@@ -261,8 +355,8 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                     <Box sx={{ flex: 1, height: '1px', bgcolor: '#dc3250', opacity: 0.35 }} />
                   </Box>
                 )}
-                <Box sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', '&:hover .msg-act': { opacity: 1 } }}>
-                  {active.isGroup && !mine && <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 700 }}>{m.byName}</Typography>}
+                <Box sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', mt: grouped ? -0.5 : 0, '&:hover .msg-act': { opacity: 1 } }}>
+                  {active.isGroup && !mine && !grouped && <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 700 }}>{m.byName}</Typography>}
                   <Stack direction={mine ? 'row-reverse' : 'row'} alignItems="center" spacing={0.25}>
                     <Box sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: mine ? LEGACY.teal : '#fff', color: mine ? '#fff' : 'inherit', boxShadow: 1, minWidth: 0 }}>
                       {m.deleted ? (
@@ -275,7 +369,15 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                               <Typography fontSize={12} noWrap sx={{ maxWidth: 220 }}>{m.replyTo.text}</Typography>
                             </Box>
                           )}
-                          {m.text && <Typography fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</Typography>}
+                          {m.text && (
+                            <Typography component="div" fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              {mentionSegments(m.text, (m.mentions ?? []).map(nameOf)).map((s, i) => (
+                                s.mention
+                                  ? <Box key={i} component="span" sx={{ fontWeight: 700, color: mine ? '#cffff5' : LEGACY.teal }}>{s.t}</Box>
+                                  : <Fragment key={i}>{s.t}</Fragment>
+                              ))}
+                            </Typography>
+                          )}
                           {m.file && (() => {
                             const mf = m.file;
                             const openPreview = () => setPreview({ key: mf.key, name: mf.name, mime: mf.mime });
@@ -324,9 +426,11 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                       })}
                     </Stack>
                   )}
-                  <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>
-                    {fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
-                  </Typography>
+                  {(lastOfGroup || m.editedAt) && (
+                    <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>
+                      {fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
+                    </Typography>
+                  )}
                   {mine && m.id === active.messages[active.messages.length - 1]?.id && (() => {
                     const seers = active.members.filter((u) => u !== me?.u && (active.reads?.[u] ?? '') >= m.at);
                     if (!seers.length) return null;
@@ -372,27 +476,57 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
               <IconButton size="small" onClick={() => { setReplyTarget(null); setEditTarget(null); if (editTarget) setText(''); }}><CloseIcon sx={{ fontSize: 16 }} /></IconButton>
             </Box>
           )}
-          <Box sx={{ p: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Tooltip title="Gửi file (≤20MB)"><IconButton component="label" disabled={busy}><AttachFileIcon /><input type="file" hidden onChange={onPickFile} /></IconButton></Tooltip>
-            <InputBase value={text} onChange={(e) => onTypeText(e.target.value)} placeholder={busy ? 'Đang tải file…' : 'Nhập tin nhắn…'} multiline maxRows={4}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
-              sx={{ flex: 1, px: 1.5, py: 0.5, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 3, fontSize: 14 }} />
-            <IconButton color="primary" disabled={busy || !text.trim()} onClick={() => void send()}><SendIcon /></IconButton>
+          <Box sx={{ position: 'relative' }}>
+            {mentionCandidates.length > 0 && (
+              <Box sx={{ position: 'absolute', bottom: '100%', left: 8, right: 8, mb: 0.5, bgcolor: '#fff', borderRadius: 2, boxShadow: 4, border: '1px solid rgba(15,58,74,0.12)', overflow: 'hidden', zIndex: 4 }}>
+                {mentionCandidates.map(({ u, name }) => (
+                  <Box key={u} onMouseDown={(e) => { e.preventDefault(); pickMention(u); }}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(20,150,140,0.08)' } }}>
+                    <Avatar sx={{ width: 24, height: 24, fontSize: 12, bgcolor: LEGACY.teal }}>{name.slice(0, 1).toUpperCase()}</Avatar>
+                    <Typography fontSize={13} fontWeight={600}>{name}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
+            <Box sx={{ p: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', alignItems: 'flex-end', gap: 0.25 }}>
+              <Tooltip title="Emoji"><IconButton disabled={busy} onClick={(e) => setEmojiAnchor(e.currentTarget)}><EmojiEmotionsOutlinedIcon /></IconButton></Tooltip>
+              <Tooltip title="Gửi file (≤20MB, chọn nhiều)"><IconButton component="label" disabled={busy}><AttachFileIcon /><input type="file" hidden multiple onChange={onPickFiles} /></IconButton></Tooltip>
+              <InputBase inputRef={inputRef} value={text} onChange={handleType} onPaste={onPasteFiles} multiline maxRows={4}
+                placeholder={busy ? 'Đang tải file…' : `Nhập tin nhắn…${active.isGroup ? ' (gõ @ để nhắc)' : ''}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    if (mentionCandidates.length > 0) { e.preventDefault(); pickMention(mentionCandidates[0].u); return; }
+                    e.preventDefault(); void send();
+                  } else if (e.key === 'Escape') { setMentionQ(null); }
+                }}
+                sx={{ flex: 1, px: 1.5, py: 0.5, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 3, fontSize: 14 }} />
+              <IconButton color="primary" disabled={busy || !text.trim()} onClick={() => void send()}><SendIcon /></IconButton>
+            </Box>
           </Box>
+          <Popover open={!!emojiAnchor} anchorEl={emojiAnchor} onClose={() => setEmojiAnchor(null)}
+            anchorOrigin={{ vertical: 'top', horizontal: 'left' }} transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+            <EmojiPicker onPick={(e) => insertEmoji(e)} />
+          </Popover>
         </>
       )}
 
-      <Menu anchorEl={menuFor?.el} open={!!menuFor} onClose={() => setMenuFor(null)}>
-        <Stack direction="row" sx={{ px: 1, py: 0.25 }}>
-          {REACTIONS.map((e) => (
-            <IconButton key={e} size="small" onClick={() => menuFor && react(menuFor.m, e)} sx={{ fontSize: 18, width: 34, height: 34 }}>{e}</IconButton>
-          ))}
-        </Stack>
-        <MenuItem onClick={() => menuFor && startReply(menuFor.m)}><ReplyIcon fontSize="small" sx={{ mr: 1 }} />Trả lời</MenuItem>
-        {menuFor?.m.by === me?.u && !!menuFor?.m.text && (
+      <Menu anchorEl={menuFor?.el} open={!!menuFor} onClose={() => { setMenuFor(null); setShowReactPicker(false); }}>
+        {showReactPicker && (
+          <EmojiPicker onPick={(e) => { if (menuFor) react(menuFor.m, e); setShowReactPicker(false); }} />
+        )}
+        {!showReactPicker && (
+          <Stack direction="row" alignItems="center" sx={{ px: 1, py: 0.25 }}>
+            {REACTIONS.map((e) => (
+              <IconButton key={e} size="small" onClick={() => menuFor && react(menuFor.m, e)} sx={{ fontSize: 18, width: 34, height: 34 }}>{e}</IconButton>
+            ))}
+            <Tooltip title="Thêm emoji"><IconButton size="small" onClick={() => setShowReactPicker(true)} sx={{ width: 34, height: 34 }}><AddReactionOutlinedIcon sx={{ fontSize: 18 }} /></IconButton></Tooltip>
+          </Stack>
+        )}
+        {!showReactPicker && <MenuItem onClick={() => menuFor && startReply(menuFor.m)}><ReplyIcon fontSize="small" sx={{ mr: 1 }} />Trả lời</MenuItem>}
+        {!showReactPicker && menuFor?.m.by === me?.u && !!menuFor?.m.text && (
           <MenuItem onClick={() => menuFor && startEdit(menuFor.m)}><EditIcon fontSize="small" sx={{ mr: 1 }} />Sửa</MenuItem>
         )}
-        {menuFor?.m.by === me?.u && (
+        {!showReactPicker && menuFor?.m.by === me?.u && (
           <MenuItem onClick={() => menuFor && void doDelete(menuFor.m)} sx={{ color: '#dc3250' }}><DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />Thu hồi</MenuItem>
         )}
       </Menu>
