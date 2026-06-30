@@ -9,6 +9,7 @@ import {
   canClose,
   dealGates,
   isTerminalStage,
+  effectiveStage,
   contractFlags,
   DEAL_STAGES,
   type DealInput,
@@ -79,14 +80,14 @@ describe('dealStage — suy giai đoạn từ dữ liệu thật', () => {
     );
   });
 
-  it('not_selected / cancelled / hợp đồng huỷ → lost (ưu tiên tuyệt đối)', () => {
+  it('not_selected → lost (Rớt thầu); cancelled / hợp đồng huỷ → cancelled (Huỷ tour)', () => {
     expect(dealStage({ status: 'not_selected' })).toBe('lost');
-    expect(dealStage({ status: 'cancelled' })).toBe('lost');
-    // Dù đã đi xa trong workflow, huỷ vẫn là lost.
+    expect(dealStage({ status: 'cancelled' })).toBe('cancelled');
+    // Dù đã đi xa trong workflow, huỷ vẫn là cancelled (Huỷ tour).
     expect(dealStage({ status: 'cancelled', contract: { signed: true }, workflow: setKey(wf(), 'departure', 'done') })).toBe(
-      'lost',
+      'cancelled',
     );
-    expect(dealStage({ status: 'won', contract: { cancelled: true } })).toBe('lost');
+    expect(dealStage({ status: 'won', contract: { cancelled: true } })).toBe('cancelled');
   });
 
   it('đơn điệu: bằng chứng giai đoạn sau luôn hàm ý giai đoạn đó (không tụt)', () => {
@@ -167,11 +168,36 @@ describe('nextAction — CTA theo giai đoạn', () => {
   it('acceptance → close', () => {
     expect(nextAction({ status: 'won', contract: { signed: true, hasAcceptance: true } }).action).toBe('close');
   });
-  it('closed & lost là terminal', () => {
+  it('closed / lost / cancelled là terminal', () => {
     expect(nextAction({ status: 'cancelled' }).action).toBe('done');
+    expect(nextAction({ status: 'not_selected' }).action).toBe('done');
     expect(isTerminalStage('closed')).toBe(true);
     expect(isTerminalStage('lost')).toBe(true);
+    expect(isTerminalStage('cancelled')).toBe(true);
     expect(isTerminalStage('operating')).toBe(false);
+  });
+});
+
+describe('effectiveStage — hợp nhất giai đoạn chọn tay với quy trình', () => {
+  it('không có chọn tay → đúng giai đoạn suy ra', () => {
+    expect(effectiveStage(undefined, 'quoting')).toBe('quoting');
+    expect(effectiveStage(null, 'request')).toBe('request');
+  });
+  it('quy trình thắng khi tiến XA hơn gợi ý tay', () => {
+    // Gợi ý "quoting" nhưng quy trình đã tới "contract" → hiển thị theo quy trình.
+    expect(effectiveStage('quoting', 'contract')).toBe('contract');
+  });
+  it('giữ gợi ý tay khi quy trình CHƯA tiến tới đó', () => {
+    // Hồ sơ trống (derived = request) nhưng đánh dấu tay "won" → giữ "won".
+    expect(effectiveStage('won', 'request')).toBe('won');
+  });
+  it('Huỷ tour / Rớt thầu (đánh dấu tay) LUÔN thắng', () => {
+    expect(effectiveStage('cancelled', 'operating')).toBe('cancelled');
+    expect(effectiveStage('lost', 'contract')).toBe('lost');
+  });
+  it('quy trình thật tự kết thúc → tôn trọng dù gợi ý tay là giai đoạn xuôi', () => {
+    expect(effectiveStage('quoting', 'lost')).toBe('lost');
+    expect(effectiveStage('won', 'cancelled')).toBe('cancelled');
   });
 });
 

@@ -15,6 +15,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
+import { toast } from '@/stores/toastStore';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
@@ -84,7 +85,10 @@ export function VisaProcBuilder({ initial, user, onBack }: Props) {
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      void useVisaProcStore.getState().save(doc, savedBy).catch(() => { /* swallow */ });
+      void useVisaProcStore.getState().save(doc, savedBy).catch((e) => {
+        // KHÔNG nuốt lỗi: auto-save thất bại (RLS/mạng) phải báo, kẻo người dùng tưởng đã lưu.
+        toast('Lưu quy trình visa thất bại — thử lại: ' + (e as Error).message, 'error');
+      });
     }, 1500);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);

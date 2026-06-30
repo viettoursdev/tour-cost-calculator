@@ -46,9 +46,15 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const persist = (next: User[]) => {
-    void useAuthStore.getState().saveUsers(next);
-  };
+  const persist = (next: User[]) => useAuthStore.getState().saveUsers(next);
+
+  // Tài khoản đăng nhập chỉ tồn tại sau khi người đó đăng nhập magic-link lần đầu
+  // (trigger handle_new_user tạo profiles). Panel này CHƯA tạo được auth user mới,
+  // nên báo rõ thay vì để tài khoản mới biến mất khi tải lại trang.
+  const NEW_ACCOUNT_HINT =
+    'Tài khoản đăng nhập chỉ được tạo sau khi người đó tự đăng nhập lần đầu bằng ' +
+    'link gửi tới email @viettours.com.vn. Hãy nhờ họ đăng nhập một lần, sau đó ' +
+    'bạn mới gán được chức vụ / phòng ban ở đây.';
 
   const handleExport = async () => {
     try {
@@ -78,8 +84,16 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
         (errors.length ? `• Bỏ qua (lỗi): ${errors.length} dòng\n\n${errors.slice(0, 8).join('\n')}${errors.length > 8 ? '\n…' : ''}\n` : '') +
         `\n⚠️ Không tài khoản nào bị xoá.`;
       if (!window.confirm(summary)) return;
-      persist(next);
-      window.alert(`✅ Đã cập nhật danh sách tài khoản (thêm ${added}, sửa ${updated}).`);
+      const skipped = await persist(next);
+      if (skipped.length) {
+        const names = skipped.map((u) => `@${u.u} (${u.email || 'thiếu email'})`);
+        window.alert(
+          `⚠️ Đã cập nhật ${updated} tài khoản có sẵn, NHƯNG ${skipped.length} tài khoản MỚI chưa lưu được:\n\n` +
+            `${names.slice(0, 15).join('\n')}${names.length > 15 ? '\n…' : ''}\n\n${NEW_ACCOUNT_HINT}`,
+        );
+      } else {
+        window.alert(`✅ Đã cập nhật danh sách tài khoản (thêm ${added}, sửa ${updated}).`);
+      }
     } catch (e) {
       window.alert(`Nhập Excel lỗi: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -101,7 +115,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
   const setF = <K extends keyof FormState>(k: K, v: FormState[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.u.trim()) { window.alert('Vui lòng nhập Username'); return; }
     if (!form.name.trim()) { window.alert('Vui lòng nhập Tên hiển thị'); return; }
     const email = form.email.trim().toLowerCase();
@@ -134,7 +148,11 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
     const next = editingId
       ? users.map((x) => (x.u === editingId ? newUser : x))
       : [...users, newUser];
-    persist(next);
+    const skipped = await persist(next);
+    if (skipped.some((x) => x.u === newUser.u)) {
+      window.alert(`⚠️ Chưa lưu được tài khoản mới "@${newUser.u}".\n\n${NEW_ACCOUNT_HINT}`);
+      return;
+    }
     setShowForm(false);
     setEditingId(null);
   };
@@ -285,7 +303,7 @@ export function UserManagementModal({ open, onClose, currentUser }: Props) {
                 <Button fullWidth onClick={() => { setShowForm(false); setEditingId(null); }}>
                   Huỷ
                 </Button>
-                <Button fullWidth variant="contained" color="success" onClick={handleSave} sx={{ flex: 2 }}>
+                <Button fullWidth variant="contained" color="success" onClick={() => void handleSave()} sx={{ flex: 2 }}>
                   {editingId ? '💾 Lưu thay đổi' : '➕ Tạo tài khoản'}
                 </Button>
               </Stack>

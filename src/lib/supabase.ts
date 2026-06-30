@@ -104,10 +104,14 @@ export async function sbPullUsers(client: SupabaseClient = sb): Promise<User[]> 
 /**
  * Upserts editable profile fields (username/email/phone/role/name/color) for
  * users whose email already has an auth.users + profile row. Does NOT create
- * auth users (admin API; Phase 3). Users with no matching profile row are
- * skipped and a warning is logged.
+ * auth users (admin API; Phase 3) — a `profiles` row only exists after the
+ * person first signs in via magic link (the `handle_new_user` trigger).
+ *
+ * Returns the users that could NOT be persisted because they have no matching
+ * auth account yet, so the caller can tell the operator instead of silently
+ * dropping them (they appear in the in-memory list but vanish on reload).
  */
-export async function sbPushUsers(users: User[], client: SupabaseClient = sb): Promise<void> {
+export async function sbPushUsers(users: User[], client: SupabaseClient = sb): Promise<User[]> {
   const emails = users.map((u) => u.email).filter(Boolean) as string[];
   const { data: existing, error } = await client.from('profiles')
     .select('id, email').in('email', emails);
@@ -136,6 +140,7 @@ export async function sbPushUsers(users: User[], client: SupabaseClient = sb): P
     const { error: upErr } = await client.from('profiles').upsert(updates, { onConflict: 'id' });
     if (upErr) throw new Error('sbPushUsers upsert: ' + upErr.message);
   }
+  return skipped;
 }
 
 /** No-op in Supabase (no plaintext password column exists). Kept for API compatibility. */
@@ -1417,6 +1422,69 @@ export async function sbSaveVisaProducts(
     updated_by: savedBy || '',
   }, { onConflict: 'one_row' });
   if (metaErr) throw new Error('sbSaveVisaProducts meta upsert: ' + metaErr.message);
+}
+
+const visaProductRow = (p: VisaProduct): Record<string, unknown> => ({
+  legacy_id: p.id,
+  country: p.country,
+  visa_type: p.visaType,
+  validity: p.validity ?? null,
+  location: p.location ?? null,
+  markup_type: p.markupType,
+  markup_value: p.markupValue,
+  markup_cur: p.markupCur,
+  note: p.note ?? '',
+  active: p.active,
+});
+
+/**
+ * Lưu MỘT sản phẩm visa (an toàn đồng thời — KHÔNG xoá/đụng sản phẩm khác). Thay cho
+ * `sbSaveVisaProducts` (full-overwrite) ở đường sửa từng dòng. Ném lỗi để store rollback.
+ */
+export async function sbUpsertVisaProduct(p: VisaProduct, client: SupabaseClient = sb): Promise<void> {
+  const { data: row, error } = await client
+    .from('visa_products')
+    .upsert(visaProductRow(p), { onConflict: 'legacy_id' })
+    .select('id')
+    .single();
+  if (error) throw new Error('sbUpsertVisaProduct: ' + error.message);
+  await replaceChildren(client, 'visa_product_fees', 'product_id', row!.id, (p.fees ?? []).map((f, i) => ({
+    product_id: row!.id,
+    legacy_fee_id: f.id,
+    name: f.name,
+    amount: f.amount,
+    cur: f.cur,
+    per_pax: f.perPax,
+    sort_order: i,
+  })));
+}
+
+/** Xoá MỘT sản phẩm visa theo legacy_id (fees cascade theo FK). */
+export async function sbDeleteVisaProduct(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('visa_products').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteVisaProduct: ' + error.message);
+}
+
+/**
+ * Ghi meta visa (tỷ giá + 1 mốc lịch sử) mà KHÔNG đụng bảng products — products đã được
+ * ghi per-row trước đó. Tách khỏi sửa từng dòng nên KHÔNG còn churn version mỗi keystroke;
+ * người gọi debounce để mỗi đợt sửa chỉ tạo 1 mốc khôi phục. Báo lỗi nhưng không chặn UI.
+ */
+export async function sbSnapshotVisaProducts(
+  products: VisaProduct[],
+  rates: Record<string, number>,
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: prevMeta } = await client.from('visa_products_meta').select('versions').maybeSingle();
+  const prevVersions: VisaProductVersion[] = (prevMeta?.versions as VisaProductVersion[]) ?? [];
+  const versionNo = (prevVersions[0]?.versionNo ?? 0) + 1;
+  const versions = [{ versionNo, savedAt: now, savedBy: savedBy || '', products }, ...prevVersions].slice(0, 20);
+  const { error } = await client.from('visa_products_meta').upsert({
+    one_row: true, rates, versions, updated_at: now, updated_by: savedBy || '',
+  }, { onConflict: 'one_row' });
+  if (error) throw new Error('sbSnapshotVisaProducts: ' + error.message);
 }
 
 // ── visa_procedures ──────────────────────────────────────────────────────────
@@ -3450,6 +3518,7 @@ const rowToTourProfile = (r: Record<string, unknown>): TourProfile => ({
   plannedContractValue: (r.planned_contract_value as number | null) ?? undefined,
   plannedSettlementValue: (r.planned_settlement_value as number | null) ?? undefined,
   primaryQuoteId: (r.primary_quote_id as string) ?? undefined,
+  manualStage: (r.manual_stage as TourProfile['manualStage']) ?? undefined,
   status: (r.status as TourProfile['status']) ?? 'open',
   note: (r.note as string) ?? undefined,
   collaborators: (r.collaborators as Collaborator[]) ?? [],
@@ -3486,6 +3555,7 @@ const tourProfileToRow = (p: TourProfile): Record<string, unknown> => ({
   planned_settlement_value: p.plannedSettlementValue ?? null,
   info_locked: false, // cột cũ (NOT NULL) — tính năng khoá hồ sơ đã bỏ; luôn ghi false.
   primary_quote_id: p.primaryQuoteId ?? null,
+  manual_stage: p.manualStage ?? null,
   status: p.status ?? 'open',
   note: p.note ?? '',
   collaborators: p.collaborators ?? [],

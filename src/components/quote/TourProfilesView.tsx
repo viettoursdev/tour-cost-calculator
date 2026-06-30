@@ -82,7 +82,7 @@ import {
   type MarginSummary, type CustomerPortfolio, type ProfilePortfolioRow, type DepartureRow,
 } from '@/lib/tourProfile';
 import { fmtVND, computeTotals } from './calc';
-import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
+import { contractFlags, dealStage, effectiveStage, stageMeta, DEAL_STAGES, DEAL_TERMINAL_STAGES, ALL_DEAL_STAGES, type DealStage } from './dealStage';
 import { DealCockpit } from './DealCockpit';
 import { FlightSummary } from './FlightSummary';
 import { exportTourProfilesExcel, type TourProfileExportRow } from '@/lib/exports/exportTourProfilesExcel';
@@ -91,8 +91,7 @@ import { LEGACY } from '@/theme';
 import { QUOTE_VALUE_ROLE_LABEL } from '@/types';
 import type { AuditAction, AuditEntry, CloudQuoteEntry, Collaborator, Customer, DeleteRequest, ExportRequest, FileAttachment, NotifComment, NotifThread, QuoteFlight, TourCategory, TourProfile, User } from '@/types';
 
-const STAGE_META = (st: DealStage) =>
-  st === 'lost' ? DEAL_STAGE_LOST : (DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]);
+const STAGE_META = stageMeta;
 
 /** Màu cho mức cảnh báo "cần chú ý". */
 const RISK_COLOR: Record<TourRiskLevel, string> = { urgent: '#dc2626', warn: '#d97706' };
@@ -341,6 +340,7 @@ export function TourProfilesView() {
   const guideAssignments = useGuideScheduleStore((s) => s.assignments);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setPrimaryQuote = useTourProfileStore((s) => s.setPrimaryQuote);
+  const setManualStage = useTourProfileStore((s) => s.setManualStage);
   const archive = useTourProfileStore((s) => s.archive);
   const removeProfile = useTourProfileStore((s) => s.remove);
   const createProfile = useTourProfileStore((s) => s.create);
@@ -445,9 +445,12 @@ export function TourProfilesView() {
       const primary = list.find((q) => q.cloudId === p.primaryQuoteId) ?? list[0];
       const v = ensure(p.id);
       v.primary = primary;
-      v.stage = primary
+      // Giai đoạn THẬT suy từ báo giá chính; hợp nhất với giai đoạn CHỌN TAY ("lưu tạm")
+      // qua effectiveStage — quy trình thắng khi tiến xa hơn, Huỷ tour/Rớt thầu tay luôn giữ.
+      const derived = primary
         ? dealStage({ status: primary.status, contract: contractFlags(contractByQuote.get(primary.cloudId)), departureISO: primary.departDate })
         : 'request';
+      v.stage = effectiveStage(p.manualStage, derived);
       // 3 mốc giá trị — ưu tiên báo giá người dùng GẮN vai trò khi lưu (valueRole),
       // fallback về cách suy gián tiếp (hợp đồng liên kết / quyết toán) cho dữ liệu cũ,
       // cuối cùng mới dùng số TẠM TÍNH nhập tay trên hồ sơ (giá trị thật theo quy trình
@@ -543,13 +546,17 @@ export function TourProfilesView() {
   // ── Tổng quan điều hành (gom theo các hồ sơ đang hiển thị) ──
   const summary = useMemo(() => {
     const wonStages = new Set<DealStage>(['won', 'contract', 'operating', 'acceptance', 'closed']);
-    let open = 0, archived = 0, won = 0, lost = 0, value = 0, remaining = 0, profit = 0, profitN = 0;
+    let open = 0, archived = 0, won = 0, lost = 0, cancelled = 0, value = 0, remaining = 0, profit = 0, profitN = 0;
     const byStage: Record<string, number> = {};
     for (const p of rows) {
       if (p.status === 'archived') archived++; else open++;
       const mt = metaOf(p.id);
       byStage[mt.stage] = (byStage[mt.stage] ?? 0) + 1;
-      if (mt.stage === 'lost') lost++; else if (wonStages.has(mt.stage)) won++;
+      // Huỷ tour ('cancelled') KHÔNG phải thắng thầu cũng không phải rớt thầu → đếm riêng
+      // (không vào won/lost nên không méo win-rate), nhưng vẫn hiển thị để tổng số khớp.
+      if (mt.stage === 'lost') lost++;
+      else if (mt.stage === 'cancelled') cancelled++;
+      else if (wonStages.has(mt.stage)) won++;
       value += mt.primary?.totalCost ?? 0;
       remaining += mt.primary?.paymentSummary?.remaining ?? 0;
       const ap = mt.primary?.settlementSummary?.actualProfit;
@@ -557,7 +564,7 @@ export function TourProfilesView() {
     }
     const decided = won + lost;
     const margin = marginSummary(rows.map((p) => metaOf(p.id).primary?.settlementSummary));
-    return { total: rows.length, open, archived, won, lost, byStage, value, remaining, profit, profitN, margin, winRate: decided ? Math.round((won / decided) * 100) : null };
+    return { total: rows.length, open, archived, won, lost, cancelled, byStage, value, remaining, profit, profitN, margin, winRate: decided ? Math.round((won / decided) * 100) : null };
   }, [rows, meta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── "Cần chú ý": gom cảnh báo (mốc quá hạn / công nợ / giấy tờ…) từ tourProfileRisks ──
@@ -875,6 +882,10 @@ export function TourProfilesView() {
         onOpenProfile={() => void openProfile(p)}
         onOpenQuote={(cid) => void openQuote(cid, false)}
         onSetPrimary={(cid) => void setPrimaryQuote(p.id, cid)}
+        onSetStage={(s) => {
+          void setManualStage(p.id, s).catch((e) =>
+            window.alert('❌ Không đổi được giai đoạn: ' + (e as Error).message));
+        }}
         onArchive={(on) => handleArchive(p, on)}
         onDelete={() => (deleteNeedsApproval(currentUser) ? setRequestDeleteState(p) : setDeleteState(p))}
         onMoveQuote={(cid, qname) => setMoveState({ cloudId: cid, fromProfileId: p.id, quoteName: qname })}
@@ -1298,7 +1309,7 @@ export function TourProfilesView() {
             startDate: info.startDate, pax: info.pax,
             days: info.days || undefined, nights: info.nights || undefined,
             priority: info.priority || undefined, leadSource: info.leadSource || undefined,
-            note: info.note || undefined,
+            note: info.note || undefined, manualStage: info.manualStage,
           });
           if (!created) {
             // create() đã rollback + lưu lý do vào store.error → báo cho người dùng,
@@ -1762,7 +1773,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   profile: TourProfile;
   primary?: CloudQuoteEntry;
   onClose: () => void;
-  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string; plannedContractValue: number | null; plannedSettlementValue: number | null }) => Promise<void>;
+  onSave: (info: { name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string; plannedContractValue: number | null; plannedSettlementValue: number | null; manualStage: DealStage | null }) => Promise<void>;
 }) {
   const customers = useCustomerStore((s) => s.customers);
   const showPrice = canSeePrices(useAuthStore((s) => s.currentUser));
@@ -1783,6 +1794,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
   const [plannedContract, setPlannedContract] = useState<string>(profile.plannedContractValue ? String(profile.plannedContractValue) : '');
   const [plannedSettlement, setPlannedSettlement] = useState<string>(profile.plannedSettlementValue ? String(profile.plannedSettlementValue) : '');
   const [note, setNote] = useState(profile.note ?? '');
+  const [manualStage, setManualStage] = useState<DealStage | undefined>(profile.manualStage);
   const [busy, setBusy] = useState(false);
   const hasPrimary = !!primary;
   // Cảnh báo lệch số ngày giữa hồ sơ (đang nhập) và báo giá chính.
@@ -1794,7 +1806,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
     setBusy(true);
     try {
       await onSave(
-        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, priority, leadSource, note, plannedContractValue: plannedContract ? Number(plannedContract) : null, plannedSettlementValue: plannedSettlement ? Number(plannedSettlement) : null },
+        { name, customerId: customer?.id ?? null, customerName, dest, departRegion, startDate: startDate || null, pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0, priority, leadSource, note, plannedContractValue: plannedContract ? Number(plannedContract) : null, plannedSettlementValue: plannedSettlement ? Number(plannedSettlement) : null, manualStage: manualStage ?? null },
       );
     } finally { setBusy(false); }
   };
@@ -1828,6 +1840,7 @@ function EditBasicInfoDialog({ profile, primary, onClose, onSave }: {
             </Typography>
           )}
           <PrioritySelect value={priority} onChange={setPriority} />
+          <StageSelect value={manualStage} onChange={setManualStage} />
           <ChipPicker label="Nguồn khách" presets={LEAD_SOURCES} value={leadSource} onChange={setLeadSource} placeholder="VD: Hội chợ, đối tác…" />
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
           {showPrice && (
@@ -2049,9 +2062,33 @@ function MoveQuoteDialog({ state, options, onClose, onMove }: {
   );
 }
 
+/** Bộ chọn giai đoạn (tạm) cho hộp thoại Tạo/Sửa hồ sơ — gồm "Tự động" + mọi giai đoạn. */
+function StageSelect({ value, onChange }: { value?: DealStage; onChange: (s: DealStage | undefined) => void }) {
+  return (
+    <Box>
+      <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+        Giai đoạn (tạm){' '}
+        <Typography component="span" variant="caption" color="text.disabled" sx={{ fontWeight: 400 }}>
+          — gợi ý, sẽ tự đổi theo quy trình (Huỷ tour / Rớt thầu thì luôn giữ)
+        </Typography>
+      </Typography>
+      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+        <Chip clickable size="small" label="Tự động" variant={!value ? 'filled' : 'outlined'}
+          onClick={() => onChange(undefined)}
+          sx={!value ? { bgcolor: 'rgba(100,116,139,0.18)', color: '#475569', fontWeight: 800 } : {}} />
+        {ALL_DEAL_STAGES.map((s) => (
+          <Chip key={s.key} clickable size="small" label={s.short} variant={value === s.key ? 'filled' : 'outlined'}
+            onClick={() => onChange(s.key)}
+            sx={value === s.key ? { bgcolor: `${s.color}22`, color: s.color, fontWeight: 800, borderColor: s.color } : {}} />
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 function CreateEmptyDialog({ open, onClose, onCreate }: {
   open: boolean; onClose: () => void;
-  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string }) => Promise<void>;
+  onCreate: (info: { category: TourCategory; name: string; customerId: string | null; customerName: string; dest: string; departRegion: string; startDate: string | null; pax: number; days: number; nights: number; priority: 'high' | 'medium' | 'low' | ''; leadSource: string; note: string; manualStage?: DealStage }) => Promise<void>;
 }) {
   const [category, setCategory] = useState<TourCategory>('incentive_domestic');
   const [name, setName] = useState('');
@@ -2066,12 +2103,13 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
   const [priority, setPriority] = useState<'high' | 'medium' | 'low' | ''>('');
   const [leadSource, setLeadSource] = useState('');
   const [note, setNote] = useState('');
+  const [manualStage, setManualStage] = useState<DealStage | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
       setCategory('incentive_domestic'); setName(''); setCustomer(null); setCustomerName('');
       setDest(''); setDepartRegion(''); setStartDate(''); setPax(''); setDays(''); setNights('');
-      setPriority(''); setLeadSource(''); setNote(''); setBusy(false);
+      setPriority(''); setLeadSource(''); setNote(''); setManualStage(undefined); setBusy(false);
     }
   }, [open]);
   const submit = async () => {
@@ -2081,7 +2119,7 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
         category, name: name.trim(), customerId: customer?.id ?? null, customerName: customerName.trim(),
         dest: dest.trim(), departRegion: departRegion.trim(), startDate: startDate || null,
         pax: Number(pax) || 0, days: Number(days) || 0, nights: Number(nights) || 0,
-        priority, leadSource: leadSource.trim(), note: note.trim(),
+        priority, leadSource: leadSource.trim(), note: note.trim(), manualStage,
       });
     } finally { setBusy(false); }
   };
@@ -2123,6 +2161,7 @@ function CreateEmptyDialog({ open, onClose, onCreate }: {
             <TextField size="small" label="Số đêm" type="number" value={nights} onChange={(e) => setNights(e.target.value)} inputProps={{ min: 0 }} fullWidth />
           </Stack>
           <PrioritySelect value={priority} onChange={setPriority} />
+          <StageSelect value={manualStage} onChange={setManualStage} />
           <ChipPicker label="Nguồn khách" presets={LEAD_SOURCES} value={leadSource} onChange={setLeadSource} placeholder="VD: Hội chợ, đối tác…" />
           <TextField size="small" label="Điểm đến / quốc gia" value={dest} onChange={(e) => setDest(e.target.value)} fullWidth />
           <TextField size="small" label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline minRows={2} fullWidth />
@@ -2153,7 +2192,7 @@ function FilterPanel({
   fltLeadSource: string; setFltLeadSource: (v: string) => void;
   onClear: () => void; activeFilters: number;
 }) {
-  const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
+  const stageCols = [...DEAL_STAGES, ...DEAL_TERMINAL_STAGES];
   return (
     <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(4,1fr)' }, gap: 1 }}>
@@ -2252,7 +2291,7 @@ function RequestDeleteDialog({ profile, users, currentUser, onClose, onRequest }
 }
 
 type Summary = {
-  total: number; open: number; archived: number; won: number; lost: number;
+  total: number; open: number; archived: number; won: number; lost: number; cancelled: number;
   byStage: Record<string, number>; value: number; remaining: number;
   profit: number; profitN: number; margin: MarginSummary; winRate: number | null;
 };
@@ -2301,7 +2340,8 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
     { label: 'Tổng hồ sơ', value: String(summary.total) },
     { label: 'Đang mở', value: String(summary.open) },
     { label: 'Đã chốt', value: String(summary.won), color: '#0d7a6a' },
-    { label: 'Thua / Huỷ', value: String(summary.lost), color: '#dc2626' },
+    { label: 'Rớt thầu', value: String(summary.lost), color: '#dc2626' },
+    ...(summary.cancelled > 0 ? [{ label: 'Huỷ tour', value: String(summary.cancelled), color: '#6b7280' }] : []),
     { label: 'Win-rate', value: summary.winRate === null ? '—' : `${summary.winRate}%`, color: '#7c3aed' },
   ];
   if (showPrice) {
@@ -2315,7 +2355,7 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
       cards.push({ label: 'Chênh KH↔thực', value: `${m.variancePct >= 0 ? '+' : ''}${m.variancePct.toFixed(1)}đ%`, color: m.variancePct >= 0 ? '#16a34a' : '#dc2626' });
     }
   }
-  const stageCols = [...DEAL_STAGES, DEAL_STAGE_LOST];
+  const stageCols = [...DEAL_STAGES, ...DEAL_TERMINAL_STAGES];
   return (
     <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2,1fr)', sm: 'repeat(4,1fr)', md: 'repeat(8,1fr)' }, gap: 1, mb: 1.5 }}>
@@ -2339,14 +2379,14 @@ function DashboardPanel({ summary, showPrice }: { summary: Summary; showPrice: b
 
 function ProfileRow({
   profile, stage, primary, guideCount, quotes, links, values, risks, expanded, compact, pinned, showPrice,
-  currentUser, users, onToggle, onTogglePin, onEdit, onQuickView, onOpenProfile, onOpenQuote, onSetPrimary, onArchive, onDelete, onMoveQuote,
+  currentUser, users, onToggle, onTogglePin, onEdit, onQuickView, onOpenProfile, onOpenQuote, onSetPrimary, onSetStage, onArchive, onDelete, onMoveQuote,
   onApproveDelete, onRejectDelete,
 }: {
   profile: TourProfile; stage: DealStage; primary?: CloudQuoteEntry; guideCount: number; quotes: CloudQuoteEntry[];
   links: ProfileLinks; values: ProfileValues; risks: TourRisk[]; expanded: boolean; compact: boolean; pinned: boolean; showPrice: boolean;
   currentUser: User | null; users: User[];
   onToggle: () => void; onTogglePin: () => void; onEdit: () => void; onQuickView: () => void; onOpenProfile: () => void; onOpenQuote: (cloudId: string) => void;
-  onSetPrimary: (cloudId: string) => void; onArchive: (on: boolean) => void; onDelete: () => void;
+  onSetPrimary: (cloudId: string) => void; onSetStage: (stage: DealStage | undefined) => void; onArchive: (on: boolean) => void; onDelete: () => void;
   onMoveQuote: (cloudId: string, quoteName: string) => void;
   onApproveDelete: () => void; onRejectDelete: () => void;
 }) {
@@ -2397,9 +2437,12 @@ function ProfileRow({
             <Tooltip title={cm.label}>
               <Chip size="small" label={`${cm.icon} ${cm.short}`} sx={{ height: 20, bgcolor: `${cm.color}1a`, color: cm.color, fontWeight: 700 }} />
             </Tooltip>
-            <Chip size="small" label={sm.short}
-              icon={<Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: sm.color, ml: 0.75 }} />}
-              sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700, '& .MuiChip-icon': { ml: 0.6 } }} />
+            <StageMenuChip stage={stage} manualStage={profile.manualStage} canEdit={canShare} onPick={onSetStage} />
+            {profile.manualStage && profile.manualStage !== stage && (
+              <Tooltip title={`Đã đánh dấu tay “${STAGE_META(profile.manualStage).short}”, nhưng quy trình thật đang ở “${sm.short}” nên hiển thị theo quy trình.`}>
+                <Chip size="small" label="đã ghi đè" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(100,116,139,0.12)', color: '#64748b', fontWeight: 700 }} />
+              </Tooltip>
+            )}
             {archived && (
               <Chip size="small" label="Lưu trữ" icon={<ArchiveOutlinedIcon sx={{ fontSize: 13 }} />}
                 sx={{ height: 20, bgcolor: 'rgba(100,116,139,0.14)', color: '#475569', fontWeight: 700, '& .MuiChip-icon': { color: '#475569' } }} />
@@ -2825,11 +2868,52 @@ function ValueLadder({ values, compact }: { values: ProfileValues; compact?: boo
  * Pipeline tiến độ giai đoạn — thanh segmented 7 bước (Yêu cầu→…→Đóng), tô màu
  * tới giai đoạn hiện tại, bước hiện tại nổi (đậm + nhãn). Deal thua/huỷ → badge đỏ.
  */
+/**
+ * Chip giai đoạn hiển thị; khi có quyền sửa → bấm để ĐÁNH DẤU TAY giai đoạn (gồm
+ * Huỷ tour / Rớt thầu) hoặc trả về "Tự động (theo quy trình)". Chỉ là gợi ý — quy
+ * trình thật vẫn thắng khi tiến xa hơn (effectiveStage).
+ */
+function StageMenuChip({ stage, manualStage, canEdit, onPick }: {
+  stage: DealStage; manualStage?: DealStage; canEdit: boolean;
+  onPick: (s: DealStage | undefined) => void;
+}) {
+  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const sm = STAGE_META(stage);
+  const chip = (
+    <Chip size="small" label={sm.short}
+      icon={<Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: sm.color, ml: 0.75 }} />}
+      onClick={canEdit ? (e) => setAnchor(e.currentTarget) : undefined}
+      sx={{ height: 20, bgcolor: `${sm.color}1a`, color: sm.color, fontWeight: 700,
+        cursor: canEdit ? 'pointer' : 'default', '& .MuiChip-icon': { ml: 0.6 } }} />
+  );
+  if (!canEdit) return chip;
+  const pick = (s: DealStage | undefined) => { onPick(s); setAnchor(null); };
+  return (
+    <>
+      <Tooltip title="Đổi giai đoạn (đánh dấu tay)">{chip}</Tooltip>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+        <MenuItem dense selected={!manualStage} onClick={() => pick(undefined)}>
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'text.disabled', mr: 1 }} />
+          Tự động (theo quy trình)
+        </MenuItem>
+        <Divider />
+        {ALL_DEAL_STAGES.map((s) => (
+          <MenuItem key={s.key} dense selected={manualStage === s.key} onClick={() => pick(s.key)}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color, mr: 1 }} />
+            {s.label}
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
+
 function StageStepper({ stage, compact }: { stage: DealStage; compact?: boolean }) {
-  if (stage === 'lost') {
+  if (stage === 'lost' || stage === 'cancelled') {
+    const sm = STAGE_META(stage);
     return (
-      <Chip size="small" label={DEAL_STAGE_LOST.short}
-        sx={{ height: 20, fontWeight: 800, bgcolor: `${DEAL_STAGE_LOST.color}1a`, color: DEAL_STAGE_LOST.color }} />
+      <Chip size="small" label={sm.short}
+        sx={{ height: 20, fontWeight: 800, bgcolor: `${sm.color}1a`, color: sm.color }} />
     );
   }
   const idx = Math.max(0, DEAL_STAGES.findIndex((s) => s.key === stage));
@@ -3292,7 +3376,8 @@ function CustomerPortfolioPanel({ portfolio, currentId, showPrice, onOpen }: {
   const stats: { label: string; value: string; color?: string }[] = [
     { label: 'Hồ sơ', value: String(portfolio.count) },
     { label: 'Đã chốt', value: String(portfolio.won), color: '#0d7a6a' },
-    { label: 'Thua / Huỷ', value: String(portfolio.lost), color: '#dc2626' },
+    { label: 'Rớt thầu', value: String(portfolio.lost), color: '#dc2626' },
+    ...(portfolio.cancelled > 0 ? [{ label: 'Huỷ tour', value: String(portfolio.cancelled), color: '#6b7280' }] : []),
   ];
   if (showPrice) {
     stats.push({ label: 'Tổng giá trị', value: fmtVND(portfolio.totalValue) });

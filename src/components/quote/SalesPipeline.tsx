@@ -11,7 +11,7 @@ import { filterRank } from '@/lib/search';
 import { fmtVND } from './calc';
 import { QUOTE_STATUS_META, QUOTE_STATUS_ORDER, LOSS_STATUSES } from './constants';
 import { LossReasonDialog } from './LossReasonDialog';
-import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from './dealStage';
+import { contractFlags, dealStage, DEAL_STAGES, DEAL_TERMINAL_STAGES, type DealStage } from './dealStage';
 import { scoreDeals, WIN_BAND_META, type WinScore } from './winScore';
 import { PriorityToClose, type ScoredDeal } from './PriorityToClose';
 import type { CloudQuoteEntry, QuoteStatus } from '@/types';
@@ -19,8 +19,8 @@ import type { CloudQuoteEntry, QuoteStatus } from '@/types';
 type Mode = 'status' | 'stage';
 const MODE_KEY = 'vte_pipeline_mode';
 
-// Cột giai đoạn hồ sơ: 7 giai đoạn xuôi + nhánh Thua/Huỷ.
-const STAGE_COLS = [...DEAL_STAGES, DEAL_STAGE_LOST];
+// Cột giai đoạn hồ sơ: 7 giai đoạn xuôi + 2 nhánh kết thúc (Huỷ tour / Rớt thầu).
+const STAGE_COLS = [...DEAL_STAGES, ...DEAL_TERMINAL_STAGES];
 
 export function SalesPipeline() {
   const quotes = useQuoteHistoryStore((s) => s.quotes);

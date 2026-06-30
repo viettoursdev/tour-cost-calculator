@@ -125,8 +125,8 @@ export type TourRisk = { key: string; level: TourRiskLevel; label: string };
 
 /** Giai đoạn được coi là "đã thắng/đang chạy" (đã có cam kết với khách). */
 const WON_STAGES = new Set(['won', 'contract', 'operating', 'acceptance', 'closed']);
-/** Giai đoạn đã đóng (không còn rủi ro tác nghiệp). */
-const DONE_STAGES = new Set(['closed', 'lost']);
+/** Giai đoạn đã đóng (không còn rủi ro tác nghiệp): đóng / rớt thầu / huỷ tour. */
+const DONE_STAGES = new Set(['closed', 'lost', 'cancelled']);
 
 /**
  * Suy ra các cảnh báo "cần chú ý" của một hồ sơ từ báo giá chính + số hợp đồng +
@@ -150,7 +150,7 @@ export function tourProfileRisks(args: {
   if (!primary || DONE_STAGES.has(stage)) {
     // Đã đóng/thua → không còn rủi ro tác nghiệp (trừ "lost" hiển nhiên).
     if (!primary) return risks;
-    if (stage === 'closed' || stage === 'lost') return risks;
+    if (stage === 'closed' || stage === 'lost' || stage === 'cancelled') return risks;
   }
   if (!primary) return risks;
 
@@ -330,7 +330,7 @@ export type ProfilePortfolioRow = {
 
 export type CustomerPortfolio = {
   customer: string;
-  count: number; won: number; lost: number;
+  count: number; won: number; lost: number; cancelled: number;
   totalValue: number; totalProfit: number; profitN: number;
   items: ProfilePortfolioRow[];
 };
@@ -359,13 +359,16 @@ export function groupByDepartureDay(rows: DepartureRow[]): Record<string, Depart
 export function customerPortfolio(rows: ProfilePortfolioRow[], customerName: string): CustomerPortfolio {
   const key = normName(customerName);
   const items = key ? rows.filter((r) => normName(r.customerName) === key) : [];
-  let won = 0, lost = 0, totalValue = 0, totalProfit = 0, profitN = 0;
+  let won = 0, lost = 0, cancelled = 0, totalValue = 0, totalProfit = 0, profitN = 0;
   for (const r of items) {
-    if (r.stage === 'lost') lost++; else if (WON_STAGES.has(r.stage)) won++;
+    // Huỷ tour đếm riêng — không gộp vào thắng/thua thầu (xem summary ở TourProfilesView).
+    if (r.stage === 'lost') lost++;
+    else if (r.stage === 'cancelled') cancelled++;
+    else if (WON_STAGES.has(r.stage)) won++;
     totalValue += r.value ?? 0;
     if (typeof r.profit === 'number') { totalProfit += r.profit; profitN++; }
   }
-  return { customer: customerName, count: items.length, won, lost, totalValue, totalProfit, profitN, items };
+  return { customer: customerName, count: items.length, won, lost, cancelled, totalValue, totalProfit, profitN, items };
 }
 
 export type MarginSummary = {

@@ -44,7 +44,7 @@ import { useContractStore } from '@/stores/contractStore';
 import { useTrainingStore } from '@/stores/trainingStore';
 import { useAuthStore } from '@/stores/authStore';
 import { ROLE_RANK, canReceivePush } from '@/auth/ROLES';
-import { contractFlags, dealStage, DEAL_STAGES, DEAL_STAGE_LOST, type DealStage } from '@/components/quote/dealStage';
+import { contractFlags, dealStage, effectiveStage, stageMeta, type DealStage } from '@/components/quote/dealStage';
 import { tourProfileRisks } from '@/lib/tourProfile';
 import { daysUntil } from '@/lib/dateUtils';
 import { TRAINING_SEED } from '@/lib/trainingSeed';
@@ -664,8 +664,7 @@ const TPF_DEP_KEY = 'vte_tour_profile_dep_notified';     // dedup mốc khởi h
 const TPF_STAGE_KEY = 'vte_tour_profile_stage_seen';     // baseline giai đoạn đã thấy {pid:u -> stage}
 const TPF_RISK_KEY = 'vte_tour_profile_risk_notified';   // dedup cảnh báo "cần chú ý" (1 lần/ngày/bộ-risk)
 
-const STAGE_LABEL = (st: DealStage): string =>
-  (st === 'lost' ? DEAL_STAGE_LOST : DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0]).short;
+const STAGE_LABEL = (st: DealStage): string => stageMeta(st).short;
 
 /**
  * Nhắc người theo dõi (follower) & cộng tác (collaborator) một hồ sơ tour khi:
@@ -700,7 +699,7 @@ export async function checkTourProfileFollowers(user: User): Promise<void> {
       if (!pq) continue;
       const c = contracts.find((x) => x.linkedQuoteId === pq.cloudId);
       const tpLink = { kind: 'tourProfile' as const, id: p.id, label: p.code };
-      const stage = dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate });
+      const stage = effectiveStage(p.manualStage, dealStage({ status: pq.status, contract: contractFlags(c), departureISO: pq.departDate }));
       const link = p.primaryQuoteId
         ? { kind: 'quote' as const, id: p.primaryQuoteId, label: p.code }
         : undefined;
@@ -759,7 +758,13 @@ export async function checkTourProfileFollowers(user: User): Promise<void> {
     }
 
     try { localStorage.setItem(TPF_DEP_KEY, JSON.stringify([...depSet].slice(-500))); } catch { /* ignore */ }
-    try { localStorage.setItem(TPF_STAGE_KEY, JSON.stringify(stageSeen)); } catch { /* ignore */ }
+    // Chặn phình: baseline giai đoạn là object map (không slice được như Set) → giữ
+    // ~2000 mục gần nhất (thứ tự chèn của object string-key được bảo toàn trong JS).
+    try {
+      const entries = Object.entries(stageSeen);
+      const bounded = entries.length > 2000 ? Object.fromEntries(entries.slice(-2000)) : stageSeen;
+      localStorage.setItem(TPF_STAGE_KEY, JSON.stringify(bounded));
+    } catch { /* ignore */ }
     try { localStorage.setItem(TPF_RISK_KEY, JSON.stringify([...riskSet].slice(-500))); } catch { /* ignore */ }
   } catch (e) {
     console.warn('checkTourProfileFollowers failed:', (e as Error).message);

@@ -29,7 +29,8 @@ import {
   nextAction,
   canDoAcceptance,
   DEAL_STAGES,
-  DEAL_STAGE_LOST,
+  isBranchStage,
+  stageMeta,
   isTerminalStage,
   type DealActionKey,
   type DealInput,
@@ -180,7 +181,7 @@ export function DealCockpit() {
   };
 
   const stageIdx = DEAL_STAGES.findIndex((s) => s.key === stage);
-  const isLost = stage === 'lost';
+  const isLost = isBranchStage(stage); // Rớt thầu / Huỷ tour — nhánh kết thúc ngoài đường dây
 
   return (
     <Box sx={{ p: 2, maxWidth: 1100, mx: 'auto' }}>
@@ -248,8 +249,8 @@ export function DealCockpit() {
 
       {/* CTA bước kế tiếp / nhánh thua */}
       {isLost ? (
-        <Alert severity="error" icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
-          Hồ sơ đã kết thúc — <strong>{DEAL_STAGE_LOST.label}</strong>
+        <Alert severity={stage === 'cancelled' ? 'warning' : 'error'} icon={<WarningAmberIcon />} sx={{ mb: 2 }}>
+          Hồ sơ đã kết thúc — <strong>{stageMeta(stage).label}</strong>
           {draft.lossReason ? `: ${draft.lossReason}` : ''}.
         </Alert>
       ) : (

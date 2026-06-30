@@ -13,7 +13,7 @@
 import type { Contract, QuoteStatus, WorkflowStatus, WorkflowStep } from '@/types';
 import { keyOf, type WorkflowStepKey } from './workflowConstants';
 
-/** Giai đoạn trong đường dây CRM. 7 giai đoạn xuôi + 1 nhánh kết thúc 'lost'. */
+/** Giai đoạn trong đường dây CRM. 7 giai đoạn xuôi + 2 nhánh kết thúc. */
 export type DealStage =
   | 'request' // ① Yêu cầu — vừa nhận, đang dựng báo giá
   | 'quoting' // ② Báo giá — đã gửi khách / đang deal
@@ -22,7 +22,14 @@ export type DealStage =
   | 'operating' // ⑤ Vận hành — đặt dịch vụ → khởi hành
   | 'acceptance' // ⑥ Nghiệm thu — sau tour, đối soát & thanh toán cuối
   | 'closed' // ⑦ Đóng hồ sơ — hoàn tất
-  | 'lost'; // ✗ Thua / Huỷ — nhánh kết thúc ngoài đường dây
+  | 'lost' // ✗ Rớt thầu — không được chọn, nhánh kết thúc ngoài đường dây
+  | 'cancelled'; // ✗ Huỷ tour — đã chốt nhưng huỷ, nhánh kết thúc ngoài đường dây
+
+/** Giai đoạn kết thúc ngoài đường dây xuôi (đánh dấu tay hoặc suy từ trạng thái). */
+export type TerminalStage = 'lost' | 'cancelled';
+const TERMINAL_STAGES = new Set<DealStage>(['lost', 'cancelled']);
+/** Giai đoạn này có phải nhánh kết thúc (Rớt thầu / Huỷ tour) không. */
+export const isBranchStage = (s: DealStage): s is TerminalStage => TERMINAL_STAGES.has(s);
 
 /** Trạng thái hợp đồng liên kết, đã rút gọn về các cờ máy trạng thái cần. */
 export interface DealContractFlags {
@@ -89,11 +96,21 @@ export const DEAL_STAGES: { key: DealStage; label: string; short: string; color:
   { key: 'closed', label: '⑦ Đóng hồ sơ', short: 'Đóng', color: '#334155' },
 ];
 
-/** Nhánh kết thúc ngoài đường dây xuôi (hiển thị cột riêng trên board). */
-export const DEAL_STAGE_LOST = { key: 'lost' as const, label: '✗ Thua / Huỷ', short: 'Thua/Huỷ', color: '#dc2626' };
+/** Nhánh kết thúc: Rớt thầu (đỏ) — báo giá không được khách chọn. */
+export const DEAL_STAGE_LOST = { key: 'lost' as const, label: '✗ Rớt thầu', short: 'Rớt thầu', color: '#dc2626' };
+/** Nhánh kết thúc: Huỷ tour (xám) — đã chốt/đang chạy nhưng huỷ. */
+export const DEAL_STAGE_CANCELLED = { key: 'cancelled' as const, label: '✗ Huỷ tour', short: 'Huỷ tour', color: '#6b7280' };
+/** Cả hai nhánh kết thúc — dùng cho cột board, bộ lọc, bộ chọn giai đoạn. */
+export const DEAL_TERMINAL_STAGES = [DEAL_STAGE_CANCELLED, DEAL_STAGE_LOST];
+/** Mọi giai đoạn (xuôi + kết thúc) — tiện cho bộ chọn/đối chiếu meta. */
+export const ALL_DEAL_STAGES = [...DEAL_STAGES, ...DEAL_TERMINAL_STAGES];
+
+/** Meta hiển thị của MỘT giai đoạn bất kỳ (xuôi hoặc kết thúc). */
+export const stageMeta = (st: DealStage): { key: DealStage; label: string; short: string; color: string } =>
+  ALL_DEAL_STAGES.find((s) => s.key === st) ?? DEAL_STAGES[0];
 
 /** Cấp độ tiến triển của từng giai đoạn xuôi (để lấy MAX bằng chứng). */
-const STAGE_LEVEL: Record<Exclude<DealStage, 'lost'>, number> = {
+const STAGE_LEVEL: Record<Exclude<DealStage, TerminalStage>, number> = {
   request: 0,
   quoting: 1,
   won: 2,
@@ -102,7 +119,7 @@ const STAGE_LEVEL: Record<Exclude<DealStage, 'lost'>, number> = {
   acceptance: 5,
   closed: 6,
 };
-const LEVEL_STAGE = (Object.keys(STAGE_LEVEL) as Exclude<DealStage, 'lost'>[]).sort(
+const LEVEL_STAGE = (Object.keys(STAGE_LEVEL) as Exclude<DealStage, TerminalStage>[]).sort(
   (a, b) => STAGE_LEVEL[a] - STAGE_LEVEL[b],
 );
 
@@ -138,14 +155,16 @@ const hasAcceptance = (d: DealInput): boolean =>
  * nên không bao giờ "tụt" giai đoạn sai cách.
  */
 export function dealStage(d: DealInput): DealStage {
-  // Nhánh kết thúc: báo giá không được chọn / huỷ, hoặc hợp đồng đã huỷ.
-  if (d.status === 'not_selected' || d.status === 'cancelled' || d.contract?.cancelled) return 'lost';
+  // Nhánh kết thúc: báo giá không được khách chọn → Rớt thầu.
+  if (d.status === 'not_selected') return 'lost';
+  // Đã chốt/đang chạy nhưng huỷ (báo giá huỷ hoặc hợp đồng huỷ) → Huỷ tour.
+  if (d.status === 'cancelled' || d.contract?.cancelled) return 'cancelled';
 
   const wf = d.workflow;
   const c = d.contract;
   let level = 0; // request
 
-  const bump = (s: Exclude<DealStage, 'lost'>): void => {
+  const bump = (s: Exclude<DealStage, TerminalStage>): void => {
     if (STAGE_LEVEL[s] > level) level = STAGE_LEVEL[s];
   };
 
@@ -159,8 +178,23 @@ export function dealStage(d: DealInput): DealStage {
   return LEVEL_STAGE[level];
 }
 
-/** Đã ở nhánh kết thúc (đóng hoặc thua/huỷ) — không còn hành động đẩy tiếp. */
-export const isTerminalStage = (s: DealStage): boolean => s === 'closed' || s === 'lost';
+/** Đã ở nhánh kết thúc (đóng / rớt thầu / huỷ tour) — không còn hành động đẩy tiếp. */
+export const isTerminalStage = (s: DealStage): boolean => s === 'closed' || isBranchStage(s);
+
+/**
+ * Giai đoạn HIỂN THỊ = hợp nhất giai đoạn CHỌN TAY (gợi ý lúc tạo, "lưu tạm") với
+ * giai đoạn SUY RA từ quy trình thật (`dealStage`). Quy tắc (theo quyết định sản phẩm):
+ *  • Người dùng chủ động đánh dấu kết thúc (Huỷ tour / Rớt thầu) → LUÔN giữ.
+ *  • Quy trình thật đã tự kết thúc (suy ra Rớt thầu/Huỷ tour từ trạng thái) → tôn trọng.
+ *  • Còn lại: gợi ý tay chỉ dùng khi quy trình THẬT chưa tiến XA hơn — khi quy trình
+ *    vượt qua mốc gợi ý thì giai đoạn thật thắng ("thực tế sẽ thay đổi theo quy trình").
+ */
+export function effectiveStage(manual: DealStage | undefined | null, derived: DealStage): DealStage {
+  if (!manual) return derived;
+  if (isBranchStage(manual)) return manual; // quyết định kết thúc của người dùng luôn thắng
+  if (isBranchStage(derived)) return derived; // quy trình thật đã kết thúc
+  return STAGE_LEVEL[derived] > STAGE_LEVEL[manual] ? derived : manual;
+}
 
 // ════════════════════════════════════════════════════════════════════════
 //  CỔNG CHẶN — predicate thuần. UI tự quyết chặn cứng hay cảnh báo mềm.
@@ -245,8 +279,10 @@ export function nextAction(d: DealInput): NextAction {
       return { stage, action: 'close', label: 'Đóng hồ sơ tour', gate: canClose(d) };
     case 'closed':
       return { stage, action: 'done', label: 'Hồ sơ đã đóng', gate: { ok: true } };
+    case 'cancelled':
+      return { stage: 'cancelled', action: 'done', label: 'Hồ sơ đã kết thúc (huỷ tour)', gate: { ok: true } };
     case 'lost':
     default:
-      return { stage: 'lost', action: 'done', label: 'Hồ sơ đã kết thúc (thua/huỷ)', gate: { ok: true } };
+      return { stage: 'lost', action: 'done', label: 'Hồ sơ đã kết thúc (rớt thầu)', gate: { ok: true } };
   }
 }

@@ -15,7 +15,8 @@ export interface AuthBackend {
   signOut(): Promise<void>;
   subscribe(cb: (session: AuthSession | null) => void): void;
   resolve(session: AuthSession): Promise<Resolution>;
-  pushUsers(users: User[]): Promise<void>;
+  /** Returns users that could not be persisted (no auth account yet). */
+  pushUsers(users: User[]): Promise<User[]>;
   purgeLegacyPasswords(): Promise<void>;
   getAccessToken(): Promise<string | null>;
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box, Button, IconButton, MenuItem, Paper, Select, Stack, Switch, TextField, Typography,
 } from '@mui/material';
@@ -29,30 +29,80 @@ export function VisaCatalog() {
   const [showFx, setShowFx] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
 
-  const saveProducts = (next: VisaProduct[]) => {
-    void useVisaProductsStore.getState().save({ products: next, rates }, savedBy);
+  // ── Lưu AN TOÀN: per-row (KHÔNG còn xoá-sạch-ghi-lại toàn catalog mỗi keystroke). ──
+  //  • setLocal: hiện sửa NGAY (mượt khi gõ).
+  //  • upsert: debounce 500ms/sản-phẩm → chỉ ghi ĐÚNG sản phẩm vừa sửa.
+  //  • snapshot: debounce 3s → mỗi đợt sửa chỉ tạo 1 mốc khôi phục (hết churn version).
+  //  • rời trang: flush mọi sửa đang chờ để không mất thao tác cuối.
+  const upsertTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pending = useRef<Map<string, VisaProduct>>(new Map());
+  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ratesRef = useRef(rates);
+  ratesRef.current = rates;
+
+  const scheduleSnapshot = () => {
+    if (snapTimer.current) clearTimeout(snapTimer.current);
+    snapTimer.current = setTimeout(() => {
+      void useVisaProductsStore.getState().snapshot(ratesRef.current, savedBy);
+    }, 3000);
+  };
+  const flushUpsert = (id: string) => {
+    const t = upsertTimers.current.get(id);
+    if (t) { clearTimeout(t); upsertTimers.current.delete(id); }
+    const p = pending.current.get(id);
+    if (!p) return;
+    pending.current.delete(id);
+    void useVisaProductsStore.getState().upsertProduct(p).then(scheduleSnapshot).catch(() => {});
+  };
+  const scheduleUpsert = (p: VisaProduct) => {
+    pending.current.set(p.id, p);
+    const t = upsertTimers.current.get(p.id);
+    if (t) clearTimeout(t);
+    upsertTimers.current.set(p.id, setTimeout(() => flushUpsert(p.id), 500));
   };
 
-  const addP = () => saveProducts([newVisaProduct(), ...products]);
-  const updP = (id: string, patch: Partial<VisaProduct>) =>
-    saveProducts(products.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  useEffect(() => () => {
+    // Unmount: ghi nốt mọi sửa đang chờ + 1 snapshot, tránh mất thao tác cuối.
+    pending.current.forEach((p) => { void useVisaProductsStore.getState().upsertProduct(p).catch(() => {}); });
+    upsertTimers.current.forEach((t) => clearTimeout(t));
+    if (snapTimer.current) { clearTimeout(snapTimer.current); void useVisaProductsStore.getState().snapshot(ratesRef.current, savedBy); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const setLocal = (next: VisaProduct[]) => useVisaProductsStore.getState().setLocal(next);
+
+  const addP = () => {
+    const np = newVisaProduct();
+    setLocal([np, ...useVisaProductsStore.getState().products]);
+    void useVisaProductsStore.getState().upsertProduct(np).then(scheduleSnapshot).catch(() => {});
+  };
+  const updP = (id: string, patch: Partial<VisaProduct>) => {
+    const cur = useVisaProductsStore.getState().products;
+    const found = cur.find((p) => p.id === id);
+    if (!found) return;
+    const merged = { ...found, ...patch };
+    setLocal(cur.map((p) => (p.id === id ? merged : p)));
+    scheduleUpsert(merged);
+  };
   const delP = (id: string) => {
     if (!window.confirm('Xoá sản phẩm visa này?')) return;
-    saveProducts(products.filter((p) => p.id !== id));
+    const t = upsertTimers.current.get(id);
+    if (t) { clearTimeout(t); upsertTimers.current.delete(id); }
+    pending.current.delete(id);
+    void useVisaProductsStore.getState().removeProduct(id).then(scheduleSnapshot).catch(() => {});
   };
 
   const addFee = (pid: string) => {
-    const p = products.find((x) => x.id === pid);
+    const p = useVisaProductsStore.getState().products.find((x) => x.id === pid);
     if (!p) return;
     updP(pid, { fees: [...(p.fees ?? []), newVisaFee('Phí khác')] });
   };
   const updFee = (pid: string, fid: string, patch: Partial<VisaFee>) => {
-    const p = products.find((x) => x.id === pid);
+    const p = useVisaProductsStore.getState().products.find((x) => x.id === pid);
     if (!p) return;
     updP(pid, { fees: p.fees.map((f) => (f.id === fid ? { ...f, ...patch } : f)) });
   };
   const delFee = (pid: string, fid: string) => {
-    const p = products.find((x) => x.id === pid);
+    const p = useVisaProductsStore.getState().products.find((x) => x.id === pid);
     if (!p) return;
     updP(pid, { fees: p.fees.filter((f) => f.id !== fid) });
   };
@@ -121,7 +171,12 @@ export function VisaCatalog() {
       <VisaCatalogHistoryModal
         open={histOpen}
         onClose={() => setHistOpen(false)}
-        onRestore={(restored) => { saveProducts(restored); setHistOpen(false); }}
+        onRestore={(restored) => {
+          // Khôi phục = thay TOÀN BỘ catalog về 1 phiên bản cũ (hành động chủ động, hiếm)
+          // → dùng full-overwrite + tạo mốc khôi phục mới.
+          void useVisaProductsStore.getState().save({ products: restored, rates }, savedBy);
+          setHistOpen(false);
+        }}
       />
 
       {!loaded && (

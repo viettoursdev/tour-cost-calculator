@@ -15,7 +15,7 @@ export const sbGetAccessToken = vi.fn(async () => null);
 
 // ── Users ──
 export const sbPullUsers = vi.fn(async () => []);
-export const sbPushUsers = vi.fn(async () => {});
+export const sbPushUsers = vi.fn(async (): Promise<unknown[]> => []);
 export const sbPurgeLegacyPasswords = vi.fn(async () => 0);
 
 // ── Rate card ──

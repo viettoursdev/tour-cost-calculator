@@ -1,4 +1,5 @@
 import type { Collaborator, FileAttachment } from './quote';
+import type { DealStage } from '@/components/quote/dealStage';
 
 /** Phân loại hồ sơ tour → tiền tố mã code. */
 export type TourKind = 'domestic' | 'intl';
@@ -97,6 +98,12 @@ export type TourProfile = {
   plannedSettlementValue?: number;
   /** cloudId của BÁO GIÁ CHÍNH → Cockpit suy giai đoạn/tổng từ đây. */
   primaryQuoteId?: string;
+  /**
+   * Giai đoạn CHỌN TAY ("lưu tạm"). Chỉ là GỢI Ý: giai đoạn hiển thị vẫn hợp nhất
+   * với giai đoạn suy ra từ quy trình thật qua `effectiveStage` — quy trình thắng khi
+   * tiến xa hơn. Riêng Huỷ tour / Rớt thầu (đánh dấu tay) thì luôn được giữ.
+   */
+  manualStage?: DealStage;
   status: TourProfileStatus;
   note?: string;
   // ── Chủ sở hữu & chia sẻ (khớp OwnedRecord ở recordAccess.ts) ──

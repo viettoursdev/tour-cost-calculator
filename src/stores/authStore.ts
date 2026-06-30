@@ -36,7 +36,8 @@ type AuthState = {
   cancelPendingSignIn: () => void;
   signOut: () => Promise<void>;
   expireSession: () => Promise<void>;
-  saveUsers: (users: User[]) => Promise<void>;
+  /** Persists the user list; resolves to users that could not be saved (no auth account yet). */
+  saveUsers: (users: User[]) => Promise<User[]>;
 };
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
@@ -175,6 +176,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   saveUsers: async (users) => {
     set({ users });
-    await authBackend.pushUsers(users);
+    return authBackend.pushUsers(users);
   },
 }));

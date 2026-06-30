@@ -194,13 +194,15 @@ describe('customerPortfolio — Khách hàng 360', () => {
     { id: '2', code: 'B', name: 'T2', customerName: 'manulife ', stage: 'lost', value: 50 },
     { id: '3', code: 'C', name: 'T3', customerName: 'Manulife', stage: 'won', value: 80, profit: 10 },
     { id: '4', code: 'D', name: 'T4', customerName: 'Herbalife', stage: 'won', value: 200, profit: 40 },
+    { id: '5', code: 'E', name: 'T5', customerName: 'Manulife', stage: 'cancelled', value: 70 },
   ];
   it('gom theo tên (không phân biệt hoa/thường/space), tổng đúng', () => {
     const p = customerPortfolio(rows, 'Manulife');
-    expect(p.count).toBe(3);
+    expect(p.count).toBe(4);        // 3 + hồ sơ huỷ tour
     expect(p.won).toBe(2);          // closed + won
     expect(p.lost).toBe(1);
-    expect(p.totalValue).toBe(230);
+    expect(p.cancelled).toBe(1);    // huỷ tour đếm riêng, không vào won/lost
+    expect(p.totalValue).toBe(300); // 230 + 70
     expect(p.totalProfit).toBe(30); // 20 + 10 (chỉ 2 hồ sơ có profit)
     expect(p.profitN).toBe(2);
   });

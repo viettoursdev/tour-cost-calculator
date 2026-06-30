@@ -10,6 +10,7 @@ import {
 import { useAuthStore } from './authStore';
 import { useQuoteHistoryStore } from './quoteHistoryStore';
 import { generateTourCode, visibleTourProfiles, nextPrimaryAfterDelete, tourCategoryOf } from '@/lib/tourProfile';
+import { stageMeta, type DealStage } from '@/components/quote/dealStage';
 import { logAudit } from '@/lib/audit';
 import type { Collaborator, DeleteRequest, FileAttachment, MarginApproval, TourCategory, TourKind, TourProfile } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -34,6 +35,8 @@ export type NewTourProfileInput = {
   leadSource?: string;
   note?: string;
   primaryQuoteId?: string;
+  /** Giai đoạn chọn tay lúc tạo ("lưu tạm") — gợi ý, quy trình thật sẽ thắng khi tiến xa hơn. */
+  manualStage?: DealStage;
   collaborators?: Collaborator[];
 };
 
@@ -56,10 +59,12 @@ type State = {
   save: (p: TourProfile) => Promise<boolean>;
   remove: (id: string) => Promise<void>;
   setPrimaryQuote: (id: string, quoteId: string) => Promise<void>;
+  /** Đặt/đổi/xoá giai đoạn chọn tay (gợi ý). `undefined` = bỏ chọn tay, để quy trình tự suy. */
+  setManualStage: (id: string, stage: DealStage | undefined) => Promise<void>;
   /** SỬA TAY thông tin cơ bản (tên/khách/điểm đến/ngày/số khách/ghi chú) trên hồ sơ.
    *  Giá trị nhập tay hiển thị ngay; nhưng khi LƯU báo giá chính, `syncFromPrimary`
    *  sẽ ghi đè lại các trường tên/khách/ngày/pax theo báo giá. */
-  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string; plannedContractValue?: number | null; plannedSettlementValue?: number | null }) => Promise<void>;
+  setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string; plannedContractValue?: number | null; plannedSettlementValue?: number | null; manualStage?: DealStage | null }) => Promise<void>;
   /** Đồng bộ thông tin (tên/khách/ngày/pax) từ báo giá chính xuống hồ sơ khi lưu cloud
    *  — GHI ĐÈ giá trị trên hồ sơ (chỉ giữ giá trị cũ khi báo giá để trống). */
   syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
@@ -144,6 +149,7 @@ export const useTourProfileStore = create<State>()(
         leadSource: input.leadSource,
         note: input.note,
         primaryQuoteId: input.primaryQuoteId,
+        manualStage: input.manualStage,
         status: 'open',
         collaborators: input.collaborators ?? [],
         followers: [],
@@ -198,6 +204,14 @@ export const useTourProfileStore = create<State>()(
       logAudit('update', 'Hồ sơ tour', p.code, 'Đổi báo giá chính');
     },
 
+    setManualStage: async (id, stage) => {
+      const p = get().profiles.find((x) => x.id === id);
+      if (!p || p.manualStage === stage) return;
+      const ok = await get().save({ ...p, manualStage: stage });
+      if (!ok) throw new Error(get().error || 'Không lưu được giai đoạn hồ sơ.');
+      logAudit('update', 'Hồ sơ tour', p.code, stage ? `Đổi giai đoạn (tay) → ${stageMeta(stage).short}` : 'Bỏ chọn giai đoạn tay');
+    },
+
     setBasicInfo: async (id, info) => {
       const p = get().profiles.find((x) => x.id === id);
       if (!p) return;
@@ -217,6 +231,7 @@ export const useTourProfileStore = create<State>()(
         note: info.note !== undefined ? (info.note.trim() || undefined) : p.note,
         plannedContractValue: info.plannedContractValue !== undefined ? (info.plannedContractValue || undefined) : p.plannedContractValue,
         plannedSettlementValue: info.plannedSettlementValue !== undefined ? (info.plannedSettlementValue || undefined) : p.plannedSettlementValue,
+        manualStage: info.manualStage !== undefined ? (info.manualStage || undefined) : p.manualStage,
       };
       const ok = await get().save(next);
       // Ghi DB thất bại (thường do RLS từ chối khi không có quyền sửa) → báo lỗi cho
