@@ -29,6 +29,7 @@ export const HOME_SECTION_IDS = [
   'owing',
   'docs',
   'leaves',
+  'myAttendance',
   'followups',
 ] as const;
 

@@ -16,11 +16,15 @@ import { useCustomerStore } from '@/stores/customerStore';
 import { useQuoteStore, type QuoteViewKey } from '@/stores/quoteStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { useHrStore } from '@/stores/hrStore';
+import { useAttendanceStore } from '@/stores/attendanceStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useRecentStore } from '@/stores/recentStore';
 import { useHomeTargetsStore } from '@/stores/homeTargetsStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { ROLE_RANK, isApprover } from '@/auth/ROLES';
+import { myEmployee } from '@/auth/recordAccess';
+import { periodLabelVN } from '@/lib/attendance/attendanceCalc';
+import { AttendanceSelfDialog } from '@/components/hr/AttendanceSelfDialog';
 import { canViewTravelerDocs } from '@/auth/customerDocs';
 import { fmtVND } from './calc';
 import { TodoPanel } from '@/components/todo/TodoPanel';
@@ -42,7 +46,7 @@ import {
 } from './homePresets';
 import { Section, Kpi, Sparkline, Row, QuickBtn } from './homeWidgets';
 import { SECTION_LABELS, FULL_SPAN, LEAVE_TYPE_LABEL, PRI_ICON, PRI_COLOR, countdown } from './homeConst';
-import type { CloudQuoteEntry, Department, Todo } from '@/types';
+import { ATTENDANCE_CONFIRM_LABEL, type CloudQuoteEntry, type Department, type Todo } from '@/types';
 
 const PROCESS_DEPTS: Department[] = ['dh_noidia', 'dh_nuocngoai', 'hdv', 'visa', 'ketoan'];
 
@@ -56,6 +60,7 @@ export function HomeView() {
   const customers = useCustomerStore((s) => s.customers);
   const leaves = useHrLeaveStore((s) => s.leaves);
   const employees = useHrStore((s) => s.employees);
+  const attendances = useAttendanceStore((s) => s.attendances);
   const loadCloud = useQuoteStore((s) => s.loadCloud);
   const setView = useQuoteStore((s) => s.setView);
   const currentQuoteId = useQuoteStore((s) => s.draft.currentQuoteId);
@@ -73,6 +78,19 @@ export function HomeView() {
   const [todoOpen, setTodoOpen] = useState(false);
   const [editTodo, setEditTodo] = useState<Todo | null>(null);
   const [scope, setScope] = useState<Scope>('me');
+  const [attSelfOpen, setAttSelfOpen] = useState(false);
+
+  // Bảng công của CHÍNH user (khớp hồ sơ nhân sự qua email/tên) đã được công bố.
+  const myEmp = useMemo(() => myEmployee(me, employees), [me, employees]);
+  const myAttendance = useMemo(
+    () => (myEmp
+      ? attendances
+        .filter((a) => a.employeeLegacyId === myEmp.id && a.status !== 'draft')
+        .sort((a, b) => b.period.localeCompare(a.period))
+      : []),
+    [myEmp, attendances],
+  );
+  const myAttPending = useMemo(() => myAttendance.filter((a) => a.confirmation.status === 'pending'), [myAttendance]);
 
   const amApprover = !!me && isApprover(me.role);
   // Quản lý (≥ Phó Phòng) mới được lọc theo phòng / tất cả.
@@ -89,8 +107,12 @@ export function HomeView() {
 
   // Catalog khả dụng theo quyền (thẻ nghỉ phép chỉ cho người duyệt).
   const applicableIds = useMemo(
-    () => HOME_SECTION_IDS.filter((id) => (id === 'leaves' ? amApprover : true)),
-    [amApprover],
+    () => HOME_SECTION_IDS.filter((id) => {
+      if (id === 'leaves') return amApprover;
+      if (id === 'myAttendance') return !!myEmp;
+      return true;
+    }),
+    [amApprover, myEmp],
   );
   // Bố cục đặt tên (preset). `presetState` chuẩn hoá từ blob; `layout` = preset đang chọn.
   const presetState: PresetState = useMemo(() => normalizePresets(applicableIds, homeRaw), [applicableIds, homeRaw]);
@@ -581,6 +603,20 @@ export function HomeView() {
         </Stack>
       </Section>
     ),
+    myAttendance: () => (!myEmp || myAttendance.length === 0) ? null : (
+      <Section icon="📋" title="Bảng công của tôi" count={myAttPending.length} color="#0d7a6a" {...collapseProps('myAttendance')}>
+        <Stack spacing={0.75}>
+          {myAttendance.slice(0, rows).map((a) => (
+            <Row key={a.id} onClick={() => setAttSelfOpen(true)}
+              primary={periodLabelVN(a.period)}
+              secondary={`Số công: ${a.summary.totalHC}${a.summary.paidLeave ? ` · phép ${a.summary.paidLeave}` : ''}${a.summary.unpaidLeave ? ` · không lương ${a.summary.unpaidLeave}` : ''}`}
+              right={<Chip size="small"
+                color={a.confirmation.status === 'confirmed' ? 'success' : a.confirmation.status === 'disputed' ? 'warning' : 'info'}
+                label={ATTENDANCE_CONFIRM_LABEL[a.confirmation.status]} />} />
+          ))}
+        </Stack>
+      </Section>
+    ),
     followups: () => (
       <Section icon="📅" title="Hẹn liên hệ khách hôm nay" count={data.followups.length} color="#2563eb" onAll={() => go('customer')} {...collapseProps('followups')}>
         <Stack spacing={0.75}>
@@ -649,6 +685,7 @@ export function HomeView() {
       </Stack>
 
       {todoOpen && <TodoModal todo={editTodo} onClose={() => setTodoOpen(false)} />}
+      {attSelfOpen && myEmp && <AttendanceSelfDialog employee={myEmp} onClose={() => setAttSelfOpen(false)} />}
       <HomeCustomizeModal
         open={customizeOpen}
         onClose={() => setCustomizeOpen(false)}

@@ -22,6 +22,7 @@ export const SECTION_LABELS: Record<string, string> = {
   owing: '💰 Đã khởi hành còn nợ NCC',
   docs: '🛂 Giấy tờ khách sắp hết hạn',
   leaves: '🌴 Nghỉ phép chờ duyệt',
+  myAttendance: '📋 Bảng công của tôi',
   followups: '📅 Hẹn liên hệ khách hôm nay',
 };
 

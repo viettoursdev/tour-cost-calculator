@@ -91,3 +91,31 @@ export function visibleEmployees<T extends DeptScopedRecord>(user: User | null |
   if (seesEverything(user)) return list;
   return list.filter((e) => canViewEmployee(user, e));
 }
+
+/** Hình dạng tối thiểu để khớp tài khoản đăng nhập với hồ sơ nhân sự. */
+export interface SelfMatchRecord {
+  profileEmail?: string;
+  email?: string;
+  fullName?: string;
+}
+
+const ci = (s: string | undefined | null) => (s ?? '').trim().toLowerCase();
+
+/**
+ * Tìm hồ sơ nhân sự ỨNG VỚI tài khoản đang đăng nhập (để xem/xác nhận bảng công của chính
+ * mình). Ưu tiên `profileEmail`, rồi `email`, cuối cùng so tên (không phân biệt hoa/thường).
+ */
+export function myEmployee<T extends SelfMatchRecord>(
+  user: User | null | undefined,
+  employees: T[],
+): T | undefined {
+  if (!user) return undefined;
+  const email = ci(user.email);
+  if (email) {
+    const byEmail = employees.find((e) => ci(e.profileEmail) === email || ci(e.email) === email);
+    if (byEmail) return byEmail;
+  }
+  const name = ci(user.name);
+  if (name) return employees.find((e) => ci(e.fullName) === name);
+  return undefined;
+}
