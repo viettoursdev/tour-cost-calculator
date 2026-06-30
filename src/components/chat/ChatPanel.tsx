@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, LinearProgress, List, ListItemButton,
   Menu, MenuItem, Stack, TextField, Tooltip, Typography,
@@ -15,8 +15,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { canViewStaffRole } from '@/auth/ROLES';
-import { useChatStore, chatUnread } from '@/stores/chatStore';
-import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction } from '@/lib/supabase';
+import { useChatStore, chatUnread, firstUnreadIndex } from '@/stores/chatStore';
+import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbChatTyping, type TypingChannel } from '@/lib/supabase';
+import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
 import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
@@ -35,7 +36,11 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const me = useAuthStore((s) => s.currentUser);
   const users = useAuthStore((s) => s.users);
   const chats = useChatStore((s) => s.chats);
+  const online = useChatStore((s) => s.online);
+  const setPanelOpen = useChatStore((s) => s.setPanelOpen);
+  const setActiveChatId = useChatStore((s) => s.setActiveChatId);
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
+  const isOnline = (u?: string) => !!u && u !== me?.u && online.includes(u);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [newMode, setNewMode] = useState(false);
@@ -48,7 +53,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [replyTarget, setReplyTarget] = useState<ChatMessage | null>(null);
   const [editTarget, setEditTarget] = useState<ChatMessage | null>(null);
   const [menuFor, setMenuFor] = useState<{ m: ChatMessage; el: HTMLElement } | null>(null);
+  const [typers, setTypers] = useState<{ u: string; name: string }[]>([]);
+  // Mốc đọc CHỐT khi mở cuộc — để dải "Tin chưa đọc" không biến mất ngay khi tự đánh dấu đã đọc.
+  const [anchor, setAnchor] = useState<{ id: string; read?: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const typingRef = useRef<TypingChannel | null>(null);
+  const lastPingRef = useRef(0);
 
   const previewOf = (m: ChatMessage) => (m.deleted ? 'Tin đã thu hồi' : m.text || (m.file ? `📎 ${m.file.name}` : ''));
 
@@ -56,17 +66,45 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [active, setActive] = useState<Chat | null>(null);
   useEffect(() => {
     if (!activeId) { setActive(null); return; }
-    setActive(null);
+    setActive(null); setAnchor(null);
     return sbSubscribeChat(activeId, setActive);
   }, [activeId]);
   const titleOf = (c: Chat) => (c.isGroup ? (c.title || 'Nhóm') : nameOf(c.members.find((m) => m !== me?.u) ?? ''));
 
-  // Đánh dấu đã đọc + cuộn xuống khi mở/đổi cuộc / có tin mới.
+  // Báo cho store biết panel đang mở (để khỏi báo trùng tin của cuộc đang xem) + xin quyền OS notif.
+  useEffect(() => { setPanelOpen(open); if (open) void requestBrowserNotifPermission(); }, [open, setPanelOpen]);
+  useEffect(() => { setActiveChatId(activeId); }, [activeId, setActiveChatId]);
+
+  // Kênh "đang nhập…" cho cuộc đang mở (Realtime broadcast).
   useEffect(() => {
-    if (!active || !me) return;
+    setTypers([]);
+    if (!activeId || !me) { typingRef.current = null; return; }
+    const ch = sbChatTyping(activeId, me.u, me.name, setTypers);
+    typingRef.current = ch;
+    return () => { ch.close(); typingRef.current = null; };
+  }, [activeId, me]);
+
+  // Đánh dấu đã đọc + chốt mốc unread + cuộn xuống khi mở/đổi cuộc / có tin mới.
+  useEffect(() => {
+    if (!active || !me || active.id !== activeId) return;
+    setAnchor((a) => a ?? { id: active.id, read: active.reads?.[me.u] });
     if (chatUnread(active, me.u)) void sbMarkChatRead(active.id, me.u);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50);
   }, [active?.messages.length, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Gõ phím → báo "đang nhập" (throttle 1.5s).
+  const onTypeText = (v: string) => {
+    setText(v);
+    const now = Date.now();
+    if (v && typingRef.current && now - lastPingRef.current > 1500) {
+      lastPingRef.current = now;
+      typingRef.current.ping();
+    }
+  };
+
+  const unreadIdx = active && anchor?.id === active.id && me
+    ? firstUnreadIndex(active.messages, anchor.read, me.u)
+    : -1;
 
   const openDM = async (otherU: string) => {
     if (!me) return;
@@ -135,7 +173,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       slotProps={{ paper: { sx: { width: { xs: '100%', sm: 440 }, display: 'flex', flexDirection: 'column' } } }}>
       <Box sx={{ px: 2, py: 1.5, background: LEGACY.headerGradient, color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
         {(active || newMode) && <IconButton size="small" onClick={() => { setActiveId(null); setNewMode(false); }} sx={{ color: '#fff' }}><ArrowBackIcon /></IconButton>}
-        <Typography fontWeight={800} sx={{ flex: 1 }}>{active ? titleOf(active) : newMode ? 'Cuộc trò chuyện mới' : '💬 Tin nhắn nội bộ'}</Typography>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography fontWeight={800} noWrap>{active ? titleOf(active) : newMode ? 'Cuộc trò chuyện mới' : '💬 Tin nhắn nội bộ'}</Typography>
+          {active && !active.isGroup && isOnline(active.members.find((m) => m !== me?.u)) && (
+            <Typography sx={{ fontSize: 11, lineHeight: 1.2, opacity: 0.95 }}>● Đang hoạt động</Typography>
+          )}
+        </Box>
         {!active && !newMode && <Tooltip title="Trò chuyện mới"><IconButton size="small" onClick={() => setNewMode(true)} sx={{ color: '#fff' }}><AddCommentIcon /></IconButton></Tooltip>}
         <IconButton size="small" onClick={onClose} sx={{ color: '#fff' }}><CloseIcon /></IconButton>
       </Box>
@@ -152,7 +195,11 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                 return (
                   <ListItemButton key={c.id} onClick={() => setActiveId(c.id)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                     <Badge color="error" variant="dot" invisible={!unread} sx={{ mr: 1.5 }}>
-                      <Avatar sx={{ width: 36, height: 36, bgcolor: c.isGroup ? '#7c3aed' : LEGACY.teal, fontSize: 15 }}>{c.isGroup ? '👥' : titleOf(c).slice(0, 1).toUpperCase()}</Avatar>
+                      <Badge overlap="circular" variant="dot" anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        invisible={c.isGroup || !isOnline(c.members.find((m) => m !== me?.u))}
+                        sx={{ '& .MuiBadge-dot': { bgcolor: '#22c55e', border: '2px solid #fff', width: 11, height: 11, borderRadius: '50%' } }}>
+                        <Avatar sx={{ width: 36, height: 36, bgcolor: c.isGroup ? '#7c3aed' : LEGACY.teal, fontSize: 15 }}>{c.isGroup ? '👥' : titleOf(c).slice(0, 1).toUpperCase()}</Avatar>
+                      </Badge>
                     </Badge>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography fontSize={14} fontWeight={unread ? 800 : 700} noWrap>{titleOf(c)}</Typography>
@@ -176,9 +223,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           <Stack sx={{ mt: 1, mb: 2 }}>
             {others.map((u) => (
               <Stack key={u.u} direction="row" alignItems="center" spacing={1.5} sx={{ py: 0.75, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(0,0,0,0.03)' }, px: 1, borderRadius: 1 }} onClick={() => void openDM(u.u)}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: u.color || LEGACY.teal, fontSize: 14 }}>{u.name.slice(0, 1).toUpperCase()}</Avatar>
+                <Badge overlap="circular" variant="dot" anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} invisible={!isOnline(u.u)}
+                  sx={{ '& .MuiBadge-dot': { bgcolor: '#22c55e', border: '2px solid #fff', width: 10, height: 10, borderRadius: '50%' } }}>
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: u.color || LEGACY.teal, fontSize: 14 }}>{u.name.slice(0, 1).toUpperCase()}</Avatar>
+                </Badge>
                 <Box sx={{ flex: 1 }}>
-                  <Typography fontSize={14} fontWeight={700}>{u.name}</Typography>
+                  <Typography fontSize={14} fontWeight={700}>{u.name}{isOnline(u.u) ? ' · đang hoạt động' : ''}</Typography>
                   {canViewStaffRole(me) && <Typography variant="caption" color="text.secondary">{u.role}</Typography>}
                 </Box>
                 <Checkbox checked={groupSel.includes(u.u)} onClick={(e) => { e.stopPropagation(); setGroupSel((s) => s.includes(u.u) ? s.filter((x) => x !== u.u) : [...s, u.u]); }} />
@@ -200,10 +250,18 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
         <>
           <Box ref={scrollRef} sx={{ flex: 1, overflowY: 'auto', p: 1.5, bgcolor: '#f7faf9', display: 'flex', flexDirection: 'column', gap: 0.75 }}>
             {active.isGroup && <Chip size="small" label={`👥 ${active.members.map(nameOf).join(', ')}`} sx={{ alignSelf: 'center', mb: 1, height: 'auto', py: 0.5, '& .MuiChip-label': { whiteSpace: 'normal' } }} />}
-            {active.messages.map((m) => {
+            {active.messages.map((m, idx) => {
               const mine = m.by === me?.u;
               return (
-                <Box key={m.id} sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', '&:hover .msg-act': { opacity: 1 } }}>
+                <Fragment key={m.id}>
+                {idx === unreadIdx && (
+                  <Box sx={{ alignSelf: 'stretch', display: 'flex', alignItems: 'center', gap: 1, my: 0.5 }}>
+                    <Box sx={{ flex: 1, height: '1px', bgcolor: '#dc3250', opacity: 0.35 }} />
+                    <Typography sx={{ fontSize: 11, fontWeight: 800, color: '#dc3250' }}>Tin chưa đọc</Typography>
+                    <Box sx={{ flex: 1, height: '1px', bgcolor: '#dc3250', opacity: 0.35 }} />
+                  </Box>
+                )}
+                <Box sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', '&:hover .msg-act': { opacity: 1 } }}>
                   {active.isGroup && !mine && <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 700 }}>{m.byName}</Typography>}
                   <Stack direction={mine ? 'row-reverse' : 'row'} alignItems="center" spacing={0.25}>
                     <Box sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: mine ? LEGACY.teal : '#fff', color: mine ? '#fff' : 'inherit', boxShadow: 1, minWidth: 0 }}>
@@ -279,9 +337,19 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                     );
                   })()}
                 </Box>
+                </Fragment>
               );
             })}
           </Box>
+          {active && typers.length > 0 && (
+            <Box sx={{ px: 2, pb: 0.5, mt: -0.25 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                {active.isGroup
+                  ? `${typers.map((t) => t.name).join(', ')} đang nhập…`
+                  : 'Đang nhập…'}
+              </Typography>
+            </Box>
+          )}
           {busy && (
             <Box sx={{ px: 1.5, py: 0.5, borderTop: '1px solid rgba(15,58,74,0.08)' }}>
               <Stack direction="row" alignItems="center" spacing={1}>
@@ -306,7 +374,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           )}
           <Box sx={{ p: 1, borderTop: '1px solid rgba(15,58,74,0.1)', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Tooltip title="Gửi file (≤20MB)"><IconButton component="label" disabled={busy}><AttachFileIcon /><input type="file" hidden onChange={onPickFile} /></IconButton></Tooltip>
-            <InputBase value={text} onChange={(e) => setText(e.target.value)} placeholder={busy ? 'Đang tải file…' : 'Nhập tin nhắn…'} multiline maxRows={4}
+            <InputBase value={text} onChange={(e) => onTypeText(e.target.value)} placeholder={busy ? 'Đang tải file…' : 'Nhập tin nhắn…'} multiline maxRows={4}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
               sx={{ flex: 1, px: 1.5, py: 0.5, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 3, fontSize: 14 }} />
             <IconButton color="primary" disabled={busy || !text.trim()} onClick={() => void send()}><SendIcon /></IconButton>

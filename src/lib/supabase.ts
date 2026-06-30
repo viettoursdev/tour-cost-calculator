@@ -4574,6 +4574,66 @@ export async function sbMarkChatRead(
   if (error) throw new Error('sbMarkChatRead: ' + error.message);
 }
 
+/**
+ * Tham gia kênh hiện diện (Realtime presence) toàn cục để biết AI ĐANG ONLINE.
+ * - Track username của mình; `cb` nhận danh sách username online mỗi khi thay đổi.
+ * - Trả về hàm huỷ (rời kênh).
+ */
+export function sbJoinPresence(
+  username: string,
+  name: string,
+  cb: (online: string[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  const channel = client.channel('presence:online', { config: { presence: { key: username } } });
+  const emit = () => cb(Object.keys(channel.presenceState()));
+  channel
+    .on('presence', { event: 'sync' }, emit)
+    .on('presence', { event: 'join' }, emit)
+    .on('presence', { event: 'leave' }, emit)
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') void channel.track({ u: username, name, at: new Date().toISOString() });
+    });
+  return () => { void client.removeChannel(channel); };
+}
+
+export type TypingChannel = { ping: () => void; close: () => void };
+
+/**
+ * Kênh "đang nhập…" cho MỘT cuộc trò chuyện (Realtime broadcast — không lưu DB).
+ * - `ping()`: báo cho người khác biết mình đang gõ (UI nên throttle khi gõ).
+ * - `onTyping`: nhận danh sách người ĐANG gõ (trừ mình); tự hết hạn sau ~4s.
+ */
+export function sbChatTyping(
+  chatId: string,
+  meU: string,
+  meName: string,
+  onTyping: (typers: { u: string; name: string }[]) => void,
+  client: SupabaseClient = sb,
+): TypingChannel {
+  const channel = client.channel(`typing:${chatId}`, { config: { broadcast: { self: false } } });
+  const seen = new Map<string, { name: string; at: number }>();
+  const TTL = 4000;
+  const emit = () => {
+    const now = Date.now();
+    for (const [u, v] of seen) if (now - v.at > TTL) seen.delete(u);
+    onTyping([...seen].map(([u, v]) => ({ u, name: v.name })));
+  };
+  channel
+    .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      const p = payload as { u?: string; name?: string };
+      if (!p?.u || p.u === meU) return;
+      seen.set(p.u, { name: p.name ?? p.u, at: Date.now() });
+      emit();
+    })
+    .subscribe();
+  const timer = setInterval(emit, 1500);
+  return {
+    ping: () => { void channel.send({ type: 'broadcast', event: 'typing', payload: { u: meU, name: meName } }); },
+    close: () => { clearInterval(timer); void client.removeChannel(channel); },
+  };
+}
+
 // ── Phase 2 Task 7 — Quote cross-links + status ──────────────────────────────
 // Functions: sbSetRegularEntryLink/sbSetDMCEntryLink, sbSetQuoteStatus/sbSetDMCQuoteStatus
 

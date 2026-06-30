@@ -92,7 +92,7 @@ export function MainApp() {
     window.addEventListener('storage', onFxStorage);
     const notifUnsub = useNotificationStore.getState().init(currentUser.u);
     const todoUnsub = useTodoStore.getState().init();
-    const chatUnsub = useChatStore.getState().init(currentUser.u);
+    const chatUnsub = useChatStore.getState().init(currentUser.u, currentUser.name);
     usePaymentStore.getState().init();
     const paUnsub = usePaymentApprovalStore.getState().init();
     const vpUnsub = useVisaProductsStore.getState().init();
