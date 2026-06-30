@@ -1,8 +1,11 @@
 import type { AdvanceLine, AdvancePayMethod, AdvanceSettlePay, TourAdvance } from '@/types';
 
 type Rates = Record<string, number>;
+// Tỷ giá → VND. Dùng `> 0` (KHÔNG `?? 1`): tỷ giá đặt 0/để trống KHÔNG được biến dòng
+// thành 0 VND (giấu chi phí thực → thổi phồng lợi nhuận). 0/thiếu/VND → ×1, nhất quán
+// với calc.ts & currency.ts. Xem [[tcc-full-overwrite-upsert-only]] cùng lớp ngữ nghĩa rate-0.
 const rateOf = (cur: string | undefined, rates: Rates): number =>
-  !cur || cur === 'VND' ? 1 : (rates[cur] ?? 1);
+  !cur || cur === 'VND' ? 1 : (Number(rates[cur]) > 0 ? rates[cur] : 1);
 
 /** Số tiền dự toán của 1 dòng (VND) = số lượng × đơn giá × tỷ giá. */
 export const lineAmount = (l: AdvanceLine, rates: Rates = {}): number =>

@@ -16,6 +16,20 @@ describe('lineAmount / lineActual', () => {
   });
 });
 
+describe('rateOf (đa ngoại tệ) — qua lineAmount/settlePayVND', () => {
+  it('ngoại tệ có tỷ giá > 0 → quy đổi đúng', () => {
+    expect(lineAmount(L({ qty: 2, price: 100, cur: 'USD' }), { USD: 25_000 })).toBe(5_000_000);
+  });
+  it('tỷ giá = 0 hoặc thiếu → ×1 (KHÔNG biến dòng thành 0 → tránh thổi phồng lợi nhuận)', () => {
+    expect(lineAmount(L({ qty: 2, price: 100, cur: 'USD' }), { USD: 0 })).toBe(200);   // không phải 0
+    expect(lineAmount(L({ qty: 2, price: 100, cur: 'USD' }), {})).toBe(200);            // thiếu rate → ×1
+  });
+  it('settlePayVND theo cùng quy tắc rate-0', () => {
+    expect(settlePayVND({ id: 'e', method: 'cash', amount: 100, cur: 'EUR' } as AdvanceSettlePay, { EUR: 28_000 })).toBe(2_800_000);
+    expect(settlePayVND({ id: 'e', method: 'cash', amount: 100, cur: 'EUR' } as AdvanceSettlePay, { EUR: 0 })).toBe(100);
+  });
+});
+
 describe('advanceTotals', () => {
   it('tổng dự toán, quyết toán, số dư', () => {
     const adv: TourAdvance = {
