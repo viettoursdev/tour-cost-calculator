@@ -19,6 +19,7 @@ export * from './publicVisaList';
 export * from './todo';
 export * from './process';
 export * from './hr';
+export * from './attendance';
 export * from './inventory';
 export * from './training';
 export * from './exportRequest';
