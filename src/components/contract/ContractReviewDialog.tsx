@@ -3,6 +3,7 @@ import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography,
 } from '@mui/material';
 import { numericChecks, reviewContractAI, type ContractReview, type ReviewSeverity } from './contractReview';
+import { contractHealth } from './contractHealth';
 import type { Contract } from '@/types';
 
 const SEV_COLOR: Record<ReviewSeverity, string> = { 'cao': '#dc3250', 'trung bình': '#d18a13', 'thấp': '#0d7a6a' };
@@ -26,11 +27,30 @@ export function ContractReviewDialog({ contract, onClose }: { contract: Contract
   }, [contract?.id]);
 
   const checks = contract ? numericChecks(contract) : [];
+  const health = contract ? contractHealth(contract) : null;
 
   return (
     <Dialog open={!!contract} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>🤖 AI rà soát hợp đồng {contract?.contractNo ? `· ${contract.contractNo}` : ''}</DialogTitle>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <span>🩺 Sức khoẻ hợp đồng {contract?.contractNo ? `· ${contract.contractNo}` : ''}</span>
+        {health && (
+          <Chip size="small" label={`${health.icon} ${health.label}`}
+            sx={{ color: health.color, bgcolor: `${health.color}18`, fontWeight: 700 }} />
+        )}
+      </DialogTitle>
       <DialogContent dividers>
+        {/* Hồ sơ còn thiếu (tất định) */}
+        {health && health.issues.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Hồ sơ còn thiếu</Typography>
+            <Stack spacing={0.25} sx={{ mt: 0.5 }}>
+              {health.issues.map((it, i) => (
+                <Typography key={i} variant="body2" sx={{ color: '#b9770f' }}>◐ {it}</Typography>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
         {/* Kiểm tra số liệu tức thì (không cần AI) */}
         <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Kiểm tra số liệu</Typography>
         <Stack spacing={0.5} sx={{ mt: 0.75, mb: 2 }}>

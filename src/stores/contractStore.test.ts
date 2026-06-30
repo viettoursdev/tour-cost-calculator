@@ -151,4 +151,29 @@ describe('contractStore', () => {
     expect(useContractStore.getState().contracts[0].contractStatus).toBe('signed');
     expect(useContractStore.getState().contracts[0].updatedBy).toBe('Tony');
   });
+
+  // Chống tái xuất lỗi mất payment khi nhiều người sửa song song: mỗi thao tác
+  // CHỈ đẩy hợp đồng vừa đổi (per-row), KHÔNG đẩy cả danh sách.
+  it('per-row push: each mutation pushes ONLY the changed contract', async () => {
+    useContractStore.setState({
+      contracts: [contract({ id: 'hd1' }), contract({ id: 'hd2' }), contract({ id: 'hd3' })],
+    }, false);
+    const push = vi.mocked(sb.sbPushContracts);
+    const lastPushedIds = () => {
+      const calls = push.mock.calls;
+      return calls[calls.length - 1][0].map((c: Contract) => c.id);
+    };
+
+    await useContractStore.getState().updateStatus('hd2', 'signed');
+    expect(lastPushedIds()).toEqual(['hd2']);
+
+    await useContractStore.getState().updatePayments('hd3', [payment({ id: 'pp', amount: 1 })]);
+    expect(lastPushedIds()).toEqual(['hd3']);
+
+    await useContractStore.getState().markAcceptance('hd1', '2026-06-10', 'OK');
+    expect(lastPushedIds()).toEqual(['hd1']);
+
+    await useContractStore.getState().save(contract({ id: 'hd2', tourName: 'X' }));
+    expect(lastPushedIds()).toEqual(['hd2']);
+  });
 });

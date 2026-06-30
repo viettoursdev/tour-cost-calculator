@@ -27,6 +27,27 @@ export type ContractCancel = {
   penalty: number;
 };
 
+/** Một dòng dịch vụ trong checklist nghiệm thu (seed từ includes của HĐ). */
+export type AcceptanceServiceItem = {
+  label: string;
+  delivered: boolean;
+};
+
+/** Chi tiết biên bản nghiệm thu (BBNT hiện đại). Lưu trong cột acceptance_detail. */
+export type AcceptanceRecord = {
+  /** Checklist dịch vụ đã giao so với cam kết. */
+  services: AcceptanceServiceItem[];
+  /** Đại diện ký Bên A (Viettours). */
+  repA: string;
+  /** Đại diện ký Bên B (khách). */
+  repB: string;
+  /** Mức hài lòng của khách 1–5 (tuỳ chọn). */
+  satisfaction?: number;
+  /** Người phát hành + thời điểm (ISO). */
+  issuedBy?: string;
+  issuedAt?: string;
+};
+
 export type Contract = {
   id: string;
   contractNo: string;
@@ -49,6 +70,8 @@ export type Contract = {
   hasAcceptance: boolean;
   acceptanceDate?: string;
   acceptanceNote?: string;
+  /** Chi tiết BBNT (checklist dịch vụ, chữ ký, mức hài lòng). */
+  acceptance?: AcceptanceRecord;
   createdAt: string;
   createdBy: string;
   updatedAt?: string;

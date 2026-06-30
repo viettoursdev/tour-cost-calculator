@@ -3,7 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { sbSubscribeContracts, sbPushContracts, sbDeleteContract } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
-import type { Contract, ContractPayment } from '@/types';
+import type { Contract, ContractPayment, AcceptanceRecord } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
 type ContractState = {
@@ -14,7 +14,7 @@ type ContractState = {
   save: (form: Contract) => Promise<void>;
   delete: (id: string) => Promise<void>;
   updatePayments: (id: string, payments: ContractPayment[]) => Promise<void>;
-  markAcceptance: (id: string, date: string, note: string) => Promise<void>;
+  markAcceptance: (id: string, date: string, note: string, detail?: AcceptanceRecord) => Promise<void>;
   updateStatus: (id: string, status: Contract['contractStatus']) => Promise<void>;
 };
 
@@ -65,7 +65,10 @@ export const useContractStore = create<ContractState>()(
 
       set({ contracts: next, syncing: true });
       try {
-        await sbPushContracts(next, { name: u.name, role: u.role });
+        // Chỉ đẩy hợp đồng vừa đổi (per-row) — KHÔNG đẩy cả list, tránh
+        // replaceChildren ghi đè payments của hợp đồng khác từ snapshot cũ
+        // khi nhiều người sửa song song. Xem [[tcc-full-overwrite-upsert-only]].
+        await sbPushContracts([saved], { name: u.name, role: u.role });
         logAudit(isNew ? 'create' : 'update', 'Hợp đồng', saved.tourName || saved.id);
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
@@ -94,12 +97,12 @@ export const useContractStore = create<ContractState>()(
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
       const now = new Date().toISOString();
-      const next = get().contracts.map((c) =>
-        c.id === id ? { ...c, payments, updatedAt: now, updatedBy: u.name } : c,
-      );
-      set({ contracts: next, syncing: true });
+      const target = get().contracts.find((c) => c.id === id);
+      if (!target) return;
+      const saved = { ...target, payments, updatedAt: now, updatedBy: u.name };
+      set({ contracts: get().contracts.map((c) => (c.id === id ? saved : c)), syncing: true });
       try {
-        await sbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts([saved], { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi: ' + (e as Error).message);
       } finally {
@@ -107,26 +110,26 @@ export const useContractStore = create<ContractState>()(
       }
     },
 
-    markAcceptance: async (id, date, note) => {
+    markAcceptance: async (id, date, note, detail) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
       const now = new Date().toISOString();
-      const next = get().contracts.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              hasAcceptance: true,
-              acceptanceDate: date,
-              acceptanceNote: note,
-              contractStatus: 'completed' as const,
-              updatedAt: now,
-              updatedBy: u.name,
-            }
-          : c,
-      );
-      set({ contracts: next, syncing: true });
+      const target = get().contracts.find((c) => c.id === id);
+      if (!target) return;
+      const saved: Contract = {
+        ...target,
+        hasAcceptance: true,
+        acceptanceDate: date,
+        acceptanceNote: note,
+        acceptance: detail ? { ...detail, issuedBy: u.name, issuedAt: now } : target.acceptance,
+        contractStatus: 'completed',
+        updatedAt: now,
+        updatedBy: u.name,
+      };
+      set({ contracts: get().contracts.map((c) => (c.id === id ? saved : c)), syncing: true });
       try {
-        await sbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts([saved], { name: u.name, role: u.role });
+        logAudit('update', 'Nghiệm thu HĐ', saved.tourName || saved.id);
       } catch (e) {
         window.alert('❌ Lỗi: ' + (e as Error).message);
       } finally {
@@ -138,12 +141,12 @@ export const useContractStore = create<ContractState>()(
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
       const now = new Date().toISOString();
-      const next = get().contracts.map((c) =>
-        c.id === id ? { ...c, contractStatus: status, updatedAt: now, updatedBy: u.name } : c,
-      );
-      set({ contracts: next, syncing: true });
+      const target = get().contracts.find((c) => c.id === id);
+      if (!target) return;
+      const saved = { ...target, contractStatus: status, updatedAt: now, updatedBy: u.name };
+      set({ contracts: get().contracts.map((c) => (c.id === id ? saved : c)), syncing: true });
       try {
-        await sbPushContracts(next, { name: u.name, role: u.role });
+        await sbPushContracts([saved], { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi: ' + (e as Error).message);
       } finally {

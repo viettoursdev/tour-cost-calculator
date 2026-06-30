@@ -15,7 +15,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useContractStore } from '@/stores/contractStore';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useAuthStore } from '@/stores/authStore';
-import { canMakeContract } from '@/components/quote/dealStage';
+import { canMakeContract, canDoAcceptance, contractFlags } from '@/components/quote/dealStage';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canManageArea } from '@/auth/departments';
 import { canViewAll } from '@/auth/ROLES';
@@ -32,6 +32,7 @@ import { ListFilterBar } from '@/components/common/ListFilterBar';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
 import { FilePreviewDialog } from '@/components/common/FilePreviewDialog';
 import { contractIssues } from './contractValidation';
+import { contractHealth } from './contractHealth';
 import { ContractReviewDialog } from './ContractReviewDialog';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
@@ -104,6 +105,15 @@ export function ContractView() {
     (s, c) => s + (c.payments ?? []).filter((p) => p.status === 'paid').reduce((ss, p) => ss + ((p.receivedAmount ?? +p.amount) || 0), 0),
     0,
   );
+
+  // Mở BBNT — cảnh báo mềm nếu tour CHƯA khởi hành (đồng bộ cổng dealStage).
+  const openAcceptance = (c: Contract) => {
+    if (!c.hasAcceptance) {
+      const gate = canDoAcceptance({ contract: contractFlags(c), departureISO: c.tourStartDate ?? null });
+      if (!gate.ok && !window.confirm(`⚠️ ${gate.reason}\n\nVẫn phát hành biên bản nghiệm thu?`)) return;
+    }
+    setAcceptanceTarget(c);
+  };
 
   const handlePickQuote = (quote: CloudQuoteEntry | null) => {
     setQuotePicker(false);
@@ -196,6 +206,7 @@ export function ContractView() {
       {/* Contract list */}
       {filtered.map((c) => {
         const status = CONTRACT_STATUS[(c.contractStatus || 'draft') as ContractStatusKey];
+        const health = contractHealth(c);
         const totalAmt = Math.round((+c.pricePerPax || 0) * (+c.contractPax || 0));
         const paidAmt = (c.payments ?? []).filter((p) => p.status === 'paid').reduce((s, p) => s + ((p.receivedAmount ?? +p.amount) || 0), 0);
         return (
@@ -205,6 +216,11 @@ export function ContractView() {
               <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flex: 1, flexWrap: 'wrap', gap: 1 }}>
                 <Chip label={`${status.icon} ${status.label}`} size="small"
                   sx={{ bgcolor: status.bg, color: status.color, border: `1px solid ${status.color}40` }} />
+                <Tooltip title={health.level === 'good' ? 'Hồ sơ hợp đồng đầy đủ & số liệu khớp'
+                  : [...health.numericWarnings, ...health.issues].join(' · ')}>
+                  <Chip label={`${health.icon} ${health.label}`} size="small" variant="outlined"
+                    sx={{ color: health.color, borderColor: `${health.color}66`, fontWeight: 700 }} />
+                </Tooltip>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography fontWeight={700} noWrap>
                     {c.contractNo ? `#${c.contractNo}` : '(chưa có số)'} — {c.tourName || '(chưa có tên)'}
@@ -257,7 +273,7 @@ export function ContractView() {
                 </Button>
                 {(c.hasAcceptance || (c.contractStatus === 'completed' && canEdit)) && (
                   <Button size="small" variant="outlined"
-                    onClick={() => setAcceptanceTarget(c)}>
+                    onClick={() => openAcceptance(c)}>
                     📋 {c.hasAcceptance ? 'Xem biên bản nghiệm thu' : 'Phát hành biên bản nghiệm thu'}
                   </Button>
                 )}
@@ -286,7 +302,7 @@ export function ContractView() {
       {acceptanceTarget && (
         <AcceptanceCertModal
           contract={acceptanceTarget}
-          onSave={(date, note) => { markAcceptance(acceptanceTarget.id, date, note); setAcceptanceTarget(null); }}
+          onSave={(date, note, detail) => { markAcceptance(acceptanceTarget.id, date, note, detail); setAcceptanceTarget(null); }}
           onClose={() => setAcceptanceTarget(null)}
         />
       )}
@@ -317,7 +333,7 @@ export function ContractView() {
             </Typography>
           </Box>
         )}
-        <MenuItem onClick={() => { const c = exportAnchor?.c; closeExport(); if (c) setReviewTarget(c); }}><AutoAwesomeIcon fontSize="small" sx={{ mr: 1, color: '#7c3aed' }} />AI rà soát hợp đồng</MenuItem>
+        <MenuItem onClick={() => { const c = exportAnchor?.c; closeExport(); if (c) setReviewTarget(c); }}><AutoAwesomeIcon fontSize="small" sx={{ mr: 1, color: '#7c3aed' }} />Sức khoẻ &amp; AI rà soát hợp đồng</MenuItem>
         <MenuItem onClick={() => exportAnchor && doPreview(exportAnchor.c)}><VisibilityIcon fontSize="small" sx={{ mr: 1 }} />Xem trước (PDF)</MenuItem>
         <MenuItem onClick={() => exportAnchor && doExportPDF(exportAnchor.c)}><PictureAsPdfIcon fontSize="small" sx={{ mr: 1 }} />Tải PDF</MenuItem>
         <MenuItem onClick={() => exportAnchor && doExportWord(exportAnchor.c)}><ArticleIcon fontSize="small" sx={{ mr: 1 }} />Tải Word (.docx)</MenuItem>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   IconButton, LinearProgress, List, ListItemButton, ListItemText,
@@ -23,9 +23,22 @@ type Props = {
 };
 
 export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props) {
-  const [payments, setPayments] = useState<ContractPayment[]>(
-    (contract.payments ?? []).map((p, i) => p.id ? p : { ...p, id: `p_${i}_${Date.now()}` }),
-  );
+  const ensureIds = (list: ContractPayment[]) =>
+    list.map((p, i) => (p.id ? p : { ...p, id: `p_${i}_${Date.now()}` }));
+  const [payments, setPayments] = useState<ContractPayment[]>(ensureIds(contract.payments ?? []));
+
+  // Đồng bộ lại khi hợp đồng đổi từ ngoài (realtime / người khác sửa). So sánh
+  // bằng signature để không ghi đè khi chính ta vừa commit (giá trị đã trùng).
+  const lastSig = useRef(JSON.stringify(payments));
+  useEffect(() => {
+    const incoming = ensureIds(contract.payments ?? []);
+    const sig = JSON.stringify(incoming);
+    if (sig !== lastSig.current) {
+      lastSig.current = sig;
+      setPayments(incoming);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract.payments]);
   const [adding, setAdding] = useState(false);
   const [newP, setNewP] = useState({ label: '', amount: '', dueDate: '', note: '' });
   const [editAmt, setEditAmt] = useState<{ id: string; val: string } | null>(null);
@@ -40,6 +53,7 @@ export function PaymentPanel({ contract, canEdit, onUpdate, currentUser }: Props
   const paidPct = totalAmount > 0 ? Math.min(100, (totalPaid / totalAmount) * 100) : 0;
 
   const commit = (next: ContractPayment[]) => {
+    lastSig.current = JSON.stringify(next); // ta là nguồn thay đổi → đừng để effect reset
     setPayments(next);
     onUpdate(next);
   };

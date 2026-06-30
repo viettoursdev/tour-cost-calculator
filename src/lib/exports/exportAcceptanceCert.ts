@@ -5,10 +5,12 @@
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
 import { drawLogo } from './brand';
-import type { Contract } from '@/types';
+import type { Contract, AcceptanceRecord } from '@/types';
 
-type AcceptanceForm = { date: string; note: string };
+type AcceptanceForm = { date: string; note: string; detail?: AcceptanceRecord };
 type SavedBy = { name: string; role: string };
+
+const fmtV = (n: number) => Math.round(n || 0).toLocaleString('vi-VN') + ' đ';
 
 export function exportAcceptanceCertPDF(
   contract: Contract,
@@ -72,28 +74,52 @@ export function exportAcceptanceCertPDF(
   atL('ĐIỀU 1: NỘI DUNG DỊCH VỤ NGHIỆM THU'); ln(7);
   pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
   const totalAmount = Math.round((+contract.pricePerPax || 0) * (+contract.contractPax || 0));
+  const collected = (contract.payments ?? [])
+    .filter((p) => p.status === 'paid')
+    .reduce((s, p) => s + ((p.receivedAmount ?? +p.amount) || 0), 0);
+  const remaining = totalAmount - collected;
   const rows: [string, string][] = [
     ['Tên chương trình:', contract.tourName || '—'],
     ['Điểm đến:', contract.tourDest || '—'],
     ['Thời gian:', `${contract.tourDays || '—'}N${contract.tourNights || '—'}Đ`],
     ['Số khách:', `${contract.contractPax || '—'} khách`],
-    ['Giá trị hợp đồng:', `${totalAmount.toLocaleString('vi-VN')} đ`],
+    ['Giá trị hợp đồng:', fmtV(totalAmount)],
+    ['Đã thanh toán:', fmtV(collected)],
+    ['Còn lại:', remaining > 0 ? fmtV(remaining) : 'Đã thanh toán đủ'],
   ];
   rows.forEach(([k, v]) => { atL(k); pdf.text(v, 80, y); ln(6); });
   ln(3); line();
 
-  // ── Điều 2 ──
+  // ── Điều 2: checklist dịch vụ đã giao ──
+  const services = form.detail?.services ?? [];
+  if (services.length) {
+    pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
+    atL('ĐIỀU 2: DỊCH VỤ ĐÃ CUNG CẤP'); ln(7);
+    pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
+    services.forEach((s) => {
+      const mark = s.delivered ? '[x]' : '[ ]';
+      const lines = pdf.splitTextToSize(`${mark} ${s.label}`, mX2 - mX - 4);
+      lines.forEach((l: string, i: number) => { pdf.text(l, mX + (i ? 6 : 0), y); ln(5.5); });
+    });
+    ln(3); line();
+  }
+
+  // ── Kết quả nghiệm thu ──
   pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
-  atL('ĐIỀU 2: KẾT QUẢ NGHIỆM THU'); ln(7);
+  atL(`ĐIỀU ${services.length ? 3 : 2}: KẾT QUẢ NGHIỆM THU`); ln(7);
   pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
   const noteText = form.note || 'Hai bên xác nhận dịch vụ du lịch đã được thực hiện đúng theo hợp đồng.';
   const noteLines = pdf.splitTextToSize(noteText, mX2 - mX);
   noteLines.forEach((l: string) => { atL(l); ln(5.5); });
+  if (form.detail?.satisfaction) {
+    // Tránh glyph ★/☆ (font DejaVu subset có thể thiếu → tofu). Dùng chữ.
+    atL(`Mức hài lòng của khách: ${form.detail.satisfaction}/5 sao`); ln(5.5);
+  }
   ln(3); line();
 
-  // ── Điều 3 ──
+  // ── Cam kết thanh lý ──
   pdf.setFont(FONT, 'bold'); pdf.setFontSize(11);
-  atL('ĐIỀU 3: CAM KẾT THANH LÝ HỢP ĐỒNG'); ln(7);
+  atL(`ĐIỀU ${services.length ? 4 : 3}: CAM KẾT THANH LÝ HỢP ĐỒNG`); ln(7);
   pdf.setFont(FONT, 'normal'); pdf.setFontSize(10);
   atL(`Hợp đồng số ${contract.contractNo || '_____'} được coi là đã hoàn thành và thanh lý kể từ ngày ký biên bản này.`); ln(10);
 
@@ -106,8 +132,10 @@ export function exportAcceptanceCertPDF(
   pdf.text('(Ký, ghi rõ họ tên)', mX + 15, sigY + 5, { align: 'center' });
   pdf.text('(Ký, ghi rõ họ tên)', mX2 - 15, sigY + 5, { align: 'center' });
   pdf.setFont(FONT, 'bold'); pdf.setFontSize(10);
-  pdf.text(user.name.toUpperCase(), mX + 15, sigY + 30, { align: 'center' });
-  pdf.text((contract.partyB?.rep || '').toUpperCase(), mX2 - 15, sigY + 30, { align: 'center' });
+  const signA = form.detail?.repA || user.name;
+  const signB = form.detail?.repB || contract.partyB?.rep || '';
+  pdf.text(signA.toUpperCase(), mX + 15, sigY + 30, { align: 'center' });
+  pdf.text(signB.toUpperCase(), mX2 - 15, sigY + 30, { align: 'center' });
 
   const safeName = `${contract.contractNo || 'HD'}_${(contract.partyB?.name || '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20)}`;
   pdf.save(`BBNT_${safeName}.pdf`);
