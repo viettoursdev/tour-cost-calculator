@@ -23,6 +23,7 @@ import { LeavesPanel } from './LeavesPanel';
 import { HrOverviewPanel } from './HrOverviewPanel';
 import { Employee360 } from './Employee360';
 import { RecruitView } from './RecruitView';
+import { AttendancePanel } from './AttendancePanel';
 
 const STATUS_COLOR: Record<EmploymentStatus, 'default' | 'success' | 'warning'> = {
   probation: 'warning', official: 'success', resigned: 'default',
@@ -47,7 +48,7 @@ export function HRView() {
   // Trưởng/Phó Phòng chỉ thấy nhân sự CÙNG PHÒNG; cấp BGĐ thấy tất cả ("job của nhân sự").
   const scoped = useMemo(() => visibleEmployees(currentUser, employees), [currentUser, employees]);
 
-  const [tab, setTab] = useState<'overview' | 'list' | 'org' | 'eval' | 'leave' | 'recruit'>('overview');
+  const [tab, setTab] = useState<'overview' | 'list' | 'attendance' | 'org' | 'eval' | 'leave' | 'recruit'>('overview');
   const [detail, setDetail] = useState<HrEmployee | null>(null);
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('');
@@ -89,6 +90,7 @@ export function HRView() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 1.5 }}>
         <Tab value="overview" label="Tổng quan" />
         <Tab value="list" label="Danh sách" />
+        <Tab value="attendance" label="Chấm công" />
         <Tab value="org" label="Sơ đồ tổ chức" />
         <Tab value="eval" label="Đánh giá" />
         <Tab value="leave" label="Nghỉ phép" />
@@ -146,6 +148,7 @@ export function HRView() {
       )}
 
       {tab === 'overview' && <HrOverviewPanel employees={scoped} />}
+      {tab === 'attendance' && <AttendancePanel employees={scoped} />}
       {tab === 'org' && <OrgChart employees={scoped} onPick={(e) => setModal({ employee: e })} />}
       {tab === 'eval' && <EvaluationsPanel employees={scoped} />}
       {tab === 'leave' && <LeavesPanel employees={scoped} />}
