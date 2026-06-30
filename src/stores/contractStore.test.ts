@@ -116,13 +116,15 @@ describe('contractStore', () => {
     expect(sb.sbPushContracts).not.toHaveBeenCalled();
   });
 
-  it('delete removes by id and pushes', async () => {
+  it('delete removes by id via targeted sbDeleteContract (KHÔNG full-overwrite)', async () => {
     useContractStore.setState({
       contracts: [contract({ id: 'hd1' }), contract({ id: 'hd2' })],
     }, false);
     await useContractStore.getState().delete('hd1');
     expect(useContractStore.getState().contracts.map((c) => c.id)).toEqual(['hd2']);
-    expect(sb.sbPushContracts).toHaveBeenCalledTimes(1);
+    expect(sb.sbDeleteContract).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbDeleteContract).mock.calls[0][0]).toBe('hd1');
+    expect(sb.sbPushContracts).not.toHaveBeenCalled();
   });
 
   it('updatePayments replaces payments on matching contract', async () => {

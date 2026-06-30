@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getViettoursClient, truncate } from './_setup';
-import { sbPushVisaProjects, sbSubscribeVisaProjects } from '../../src/lib/supabase';
+import { sbPushVisaProjects, sbSubscribeVisaProjects, sbDeleteVisaProject } from '../../src/lib/supabase';
 import type { VisaProjectDoc } from '../../src/types/visa';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
@@ -96,8 +96,12 @@ describe('visa_projects gateway', () => {
     expect(p.createdByName).toBe('QA Bot');
     expect(p.createdByUsername).not.toBe(p.createdByName);
 
-    // Full-overwrite: push empty list removes the project
+    // UPSERT-ONLY: đẩy danh sách rỗng KHÔNG còn xoá (chống wipe song song).
     await sbPushVisaProjects([], { name: 'QA Bot', role: 'Operations' }, c);
+    const stillThere = await once<VisaProjectDoc[]>((cb) => sbSubscribeVisaProjects(cb, c));
+    expect(stillThere).toHaveLength(1);
+    // Xoá thật qua targeted sbDeleteVisaProject.
+    await sbDeleteVisaProject('proj-1', c);
     const listAfter = await once<VisaProjectDoc[]>((cb) => sbSubscribeVisaProjects(cb, c));
     expect(listAfter).toHaveLength(0);
   });

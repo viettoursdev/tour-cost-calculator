@@ -63,6 +63,7 @@ export const sbDeleteNcc = vi.fn(async () => {});
 export const sbSubscribeContracts = vi.fn(() => () => {});
 export const sbGetContracts = vi.fn(async () => []);
 export const sbPushContracts = vi.fn(async () => {});
+export const sbDeleteContract = vi.fn(async () => {});
 
 // ── Notifications ──
 export const sbSendNotification = vi.fn(async () => {});
@@ -99,9 +100,11 @@ export const sbSubscribeVisaProcs = vi.fn(() => () => {});
 
 export const sbSubscribeVisaProjects = vi.fn(() => () => {});
 export const sbPushVisaProjects = vi.fn(async () => {});
+export const sbDeleteVisaProject = vi.fn(async () => {});
 
 export const sbSubscribePois = vi.fn(() => () => {});
 export const sbPushPois = vi.fn(async () => {});
+export const sbDeletePoi = vi.fn(async () => {});
 export const sbSubscribeGuideSchedule = vi.fn(() => () => {});
 export const sbPushGuideSchedule = vi.fn(async () => {});
 export const sbSubscribeEmailLinks = vi.fn(() => () => {});

@@ -429,22 +429,8 @@ export async function sbPushPois(
   pushedBy: { name: string; role: string },
   client: SupabaseClient = sb,
 ): Promise<void> {
-  const legacyIds = list.map((p) => p.id);
-  // Full-overwrite: fetch existing legacy_ids, delete the set-difference, then upsert.
-  if (legacyIds.length > 0) {
-    const { data: existing, error: fetchErr } = await client.from('pois').select('legacy_id');
-    if (fetchErr) throw new Error('sbPushPois fetch: ' + fetchErr.message);
-    const toDelete = (existing ?? [])
-      .map((r) => r.legacy_id as string)
-      .filter((lid) => lid && !legacyIds.includes(lid));
-    if (toDelete.length > 0) {
-      const del = await client.from('pois').delete().in('legacy_id', toDelete);
-      if (del.error) throw new Error('sbPushPois delete: ' + del.error.message);
-    }
-  } else {
-    const del = await client.from('pois').delete().not('legacy_id', 'is', null);
-    if (del.error) throw new Error('sbPushPois delete all: ' + del.error.message);
-  }
+  // UPSERT-ONLY — không xoá-diff (chống wipe khi sửa song song). Xoá đi qua
+  // sbDeletePoi (targeted theo legacy_id). Xem ghi chú ở sbPushCustomers.
   if (list.length > 0) {
     const now = new Date().toISOString();
     const rows = list.map((p) => ({
@@ -459,6 +445,12 @@ export async function sbPushPois(
     const up = await client.from('pois').upsert(rows, { onConflict: 'legacy_id' });
     if (up.error) throw new Error('sbPushPois upsert: ' + up.error.message);
   }
+}
+
+/** Xoá hẳn 1 điểm tham quan (POI) theo legacy_id. */
+export async function sbDeletePoi(id: string, client: SupabaseClient = sb): Promise<void> {
+  const del = await client.from('pois').delete().eq('legacy_id', id);
+  if (del.error) throw new Error('sbDeletePoi: ' + del.error.message);
 }
 
 // ── Audit log ─────────────────────────────────────────────────────────────────
@@ -1017,22 +1009,14 @@ export async function sbPushContracts(
     );
   }
 
-  // Full-overwrite: delete contracts no longer in the list using safe fetch-then-delete.
-  const keepIds = list.map((c) => c.id);
-  if (keepIds.length > 0) {
-    const { data: existing, error: fetchErr } = await client.from('contracts').select('legacy_id');
-    if (fetchErr) throw new Error('sbPushContracts fetch: ' + fetchErr.message);
-    const toDelete = (existing ?? [])
-      .map((r) => r.legacy_id as string)
-      .filter((lid) => lid && !keepIds.includes(lid));
-    if (toDelete.length > 0) {
-      const del = await client.from('contracts').delete().in('legacy_id', toDelete);
-      if (del.error) throw new Error('sbPushContracts delete: ' + del.error.message);
-    }
-  } else {
-    const del = await client.from('contracts').delete().not('legacy_id', 'is', null);
-    if (del.error) throw new Error('sbPushContracts delete all: ' + del.error.message);
-  }
+  // UPSERT-ONLY — không xoá-diff (chống wipe khi sửa song song). Xoá đi qua
+  // sbDeleteContract (targeted theo legacy_id). Xem ghi chú ở sbPushCustomers.
+}
+
+/** Xoá hẳn 1 hợp đồng theo legacy_id (con contract_payments/contract_cancels cascade). */
+export async function sbDeleteContract(id: string, client: SupabaseClient = sb): Promise<void> {
+  const del = await client.from('contracts').delete().eq('legacy_id', id);
+  if (del.error) throw new Error('sbDeleteContract: ' + del.error.message);
 }
 
 // ── Rate Card ─────────────────────────────────────────────────────────────────
@@ -1982,23 +1966,14 @@ export async function sbPushVisaProjects(
     await saveAttachments(client, 'visa_project', p.id, p.attachments ?? []);
   }
 
-  // Full-overwrite: delete projects removed from the list (safe fetch-then-delete).
-  const keepIds = list.map((p) => p.id);
-  if (keepIds.length > 0) {
-    const { data: existing, error: fetchErr } = await client.from('visa_projects').select('legacy_id');
-    if (fetchErr) throw new Error('sbPushVisaProjects fetch: ' + fetchErr.message);
-    const toDelete = (existing ?? [])
-      .map((r) => r.legacy_id as string)
-      .filter((lid) => lid && !keepIds.includes(lid));
-    if (toDelete.length > 0) {
-      const del = await client.from('visa_projects').delete().in('legacy_id', toDelete);
-      if (del.error) throw new Error('sbPushVisaProjects delete stale: ' + del.error.message);
-    }
-  } else {
-    // Empty push = wipe all (full-overwrite parity with fbPushVisaProjects).
-    const del = await client.from('visa_projects').delete().not('legacy_id', 'is', null);
-    if (del.error) throw new Error('sbPushVisaProjects delete all: ' + del.error.message);
-  }
+  // UPSERT-ONLY — không xoá-diff (chống wipe khi sửa song song). Xoá đi qua
+  // sbDeleteVisaProject (targeted theo legacy_id). Xem ghi chú ở sbPushCustomers.
+}
+
+/** Xoá hẳn 1 dự án visa theo legacy_id. */
+export async function sbDeleteVisaProject(id: string, client: SupabaseClient = sb): Promise<void> {
+  const del = await client.from('visa_projects').delete().eq('legacy_id', id);
+  if (del.error) throw new Error('sbDeleteVisaProject: ' + del.error.message);
 }
 
 // ── Itineraries ───────────────────────────────────────────────────────────────

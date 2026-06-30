@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { getViettoursClient, truncate } from './_setup';
-import { sbPushContracts, sbGetContracts, sbSubscribeContracts } from '../../src/lib/supabase';
+import { sbPushContracts, sbGetContracts, sbSubscribeContracts, sbDeleteContract } from '../../src/lib/supabase';
 import type { Contract } from '../../src/types/contract';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
@@ -69,11 +69,17 @@ describe('contracts gateway', () => {
     expect(list.some((x) => x.id === 'ct-1')).toBe(true);
   });
 
-  it('full-overwrite removes contracts not in the new list', async () => {
+  it('push là UPSERT-ONLY — không xoá hợp đồng vắng mặt (chống wipe song song)', async () => {
     const c = await getViettoursClient();
     await sbPushContracts([BASE, { ...BASE, id: 'ct-2', contractNo: 'HD-002' }], { name: 'QA', role: 'Sales' }, c);
+    // Đẩy danh sách CŨ (thiếu ct-2) — ct-2 PHẢI còn nguyên.
     await sbPushContracts([BASE], { name: 'QA', role: 'Sales' }, c);
-    const list = await sbGetContracts(c);
+    let list = await sbGetContracts(c);
+    expect(list.map((x) => x.id)).toContain('ct-2');
+    // Xoá thật qua targeted sbDeleteContract.
+    await sbDeleteContract('ct-2', c);
+    list = await sbGetContracts(c);
     expect(list.map((x) => x.id)).not.toContain('ct-2');
+    expect(list.map((x) => x.id)).toContain(BASE.id);
   });
 });

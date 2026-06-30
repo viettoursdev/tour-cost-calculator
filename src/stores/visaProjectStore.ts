@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeVisaProjects, sbPushVisaProjects } from '@/lib/supabase';
+import { sbSubscribeVisaProjects, sbPushVisaProjects, sbDeleteVisaProject } from '@/lib/supabase';
 import { normalizeVN } from '@/lib/search';
 import { useAuthStore } from './authStore';
 import type { VisaProjectDoc } from '@/types';
@@ -88,7 +88,7 @@ export const useVisaProjectStore = create<State>()(
       const next = get().projects.filter((p) => p.id !== id);
       set({ projects: next, syncing: true });
       try {
-        await sbPushVisaProjects(next, { name: u.name, role: u.role });
+        await sbDeleteVisaProject(id); // targeted — KHÔNG full-overwrite (chống wipe song song)
       } catch (e) {
         window.alert('❌ Lỗi xoá dự án visa: ' + (e as Error).message);
       } finally {

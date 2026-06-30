@@ -40,6 +40,15 @@ describe('poiStore', () => {
     expect(sb.sbPushPois).toHaveBeenCalledTimes(1);
   });
 
+  it('remove xoá theo id qua targeted sbDeletePoi (KHÔNG full-overwrite)', async () => {
+    usePoiStore.setState({ pois: [poi({ id: 'p1', place: 'Bà Nà' }), poi({ id: 'p2', place: 'Hội An' })] }, false);
+    await usePoiStore.getState().remove('p1');
+    expect(usePoiStore.getState().pois.map((p) => p.id)).toEqual(['p2']);
+    expect(sb.sbDeletePoi).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbDeletePoi).mock.calls[0][0]).toBe('p1');
+    expect(sb.sbPushPois).not.toHaveBeenCalled();
+  });
+
   it('upsertMany adds new places and skips duplicates (case-insensitive)', async () => {
     usePoiStore.setState({ pois: [poi({ id: 'p1', place: 'Bà Nà', commentary: 'cũ' })] }, false);
     const added = await usePoiStore.getState().upsertMany([

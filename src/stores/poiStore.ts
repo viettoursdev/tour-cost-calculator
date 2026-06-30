@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribePois, sbPushPois } from '@/lib/supabase';
+import { sbSubscribePois, sbPushPois, sbDeletePoi } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { PoiEntry } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -50,7 +50,7 @@ export const usePoiStore = create<State>()(
       if (!u) return;
       const next = get().pois.filter((p) => p.id !== id);
       set({ pois: next, syncing: true });
-      try { await sbPushPois(next, { name: u.name, role: u.role }); }
+      try { await sbDeletePoi(id); } // targeted — KHÔNG full-overwrite (chống wipe song song)
       catch (e) { window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeContracts, sbPushContracts } from '@/lib/supabase';
+import { sbSubscribeContracts, sbPushContracts, sbDeleteContract } from '@/lib/supabase';
 import { logAudit } from '@/lib/audit';
 import { useAuthStore } from './authStore';
 import type { Contract, ContractPayment } from '@/types';
@@ -81,7 +81,7 @@ export const useContractStore = create<ContractState>()(
       const next = get().contracts.filter((c) => c.id !== id);
       set({ contracts: next, syncing: true });
       try {
-        await sbPushContracts(next, { name: u.name, role: u.role });
+        await sbDeleteContract(id); // targeted — KHÔNG full-overwrite (chống wipe song song)
         logAudit('delete', 'Hợp đồng', target?.tourName || id);
       } catch (e) {
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);

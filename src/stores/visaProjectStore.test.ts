@@ -105,10 +105,12 @@ describe('visaProjectStore', () => {
     expect(useVisaProjectStore.getState().projects).toHaveLength(2);
   });
 
-  it('remove deletes by id and pushes', async () => {
+  it('remove deletes by id via targeted sbDeleteVisaProject (KHÔNG full-overwrite)', async () => {
     useVisaProjectStore.setState({ projects: [proj({ id: 'p1' }), proj({ id: 'p2' })] }, false);
     await useVisaProjectStore.getState().remove('p1');
     expect(useVisaProjectStore.getState().projects.map((p) => p.id)).toEqual(['p2']);
-    expect(sb.sbPushVisaProjects).toHaveBeenCalledTimes(1);
+    expect(sb.sbDeleteVisaProject).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sb.sbDeleteVisaProject).mock.calls[0][0]).toBe('p1');
+    expect(sb.sbPushVisaProjects).not.toHaveBeenCalled();
   });
 });
