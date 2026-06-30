@@ -3558,6 +3558,9 @@ function DirectLinkPanel({ profile }: { profile: TourProfile }) {
   const itineraries = useItineraryStore((s) => s.list);
   const visaProjects = useVisaProjectStore((s) => s.projects);
   const contracts = useContractStore((s) => s.contracts);
+  const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const dmcQuotes = useQuoteHistoryStore((s) => s.dmcQuotes);
+  const attachQuote = useTourProfileStore((s) => s.attachQuote);
   const [busy, setBusy] = useState(false);
 
   const run = async (fn: () => Promise<void>) => {
@@ -3581,8 +3584,14 @@ function DirectLinkPanel({ profile }: { profile: TourProfile }) {
     const c = contracts.find((x) => x.id === id);
     if (c) await useContractStore.getState().save({ ...c, tourProfileId: on ? profile.id : null });
   });
+  // Báo giá & DMC là dòng index (quotes/quote_versions), gắn qua tour_profile_id —
+  // dùng attachQuote (tự dọn hồ sơ nguồn nếu đang gắn nơi khác; DMC không làm primary).
+  const setQuote = (id: string, on: boolean) => run(() => attachQuote(id, profile.id, on, false));
+  const setDmc = (id: string, on: boolean) => run(() => attachQuote(id, profile.id, on, true));
 
   const sections: { title: string; items: LinkItem[]; set: (id: string, on: boolean) => void }[] = [
+    { title: '📝 Báo giá', set: setQuote, items: quotes.map((q) => ({ id: q.cloudId, label: q.name, sub: q.quoteCode, tourProfileId: q.tourProfileId })) },
+    { title: '📊 Breakdown DMC', set: setDmc, items: dmcQuotes.map((q) => ({ id: q.cloudId, label: q.name, sub: q.quoteCode, tourProfileId: q.tourProfileId })) },
     { title: '🍽️ Thực đơn', set: setMenu, items: menus.map((m) => ({ id: m.id, label: m.title, sub: m.code, tourProfileId: m.tourProfileId })) },
     { title: '🗺️ Chương trình tour', set: setItin, items: itineraries.map((i) => ({ id: i.id, label: i.title, sub: i.code, tourProfileId: i.tourProfileId })) },
     { title: '🛂 Dự án visa', set: setVisa, items: visaProjects.map((v) => ({ id: v.id, label: v.name || v.code, sub: v.country, tourProfileId: v.tourProfileId })) },
@@ -3593,7 +3602,7 @@ function DirectLinkPanel({ profile }: { profile: TourProfile }) {
     <Paper variant="outlined" sx={{ p: 1.5, mt: 2 }}>
       <Typography fontWeight={800} fontSize={13.5} sx={{ mb: 0.5 }}>🔗 Gắn liên kết trực tiếp vào hồ sơ</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-        Gắn thực đơn / chương trình / visa / hợp đồng thẳng vào hồ sơ tour — dùng được kể cả khi chưa có báo giá.
+        Gắn báo giá / DMC / thực đơn / chương trình / visa / hợp đồng thẳng vào hồ sơ tour — chọn qua lại được, dùng cả khi chưa có báo giá.
       </Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
         {sections.map((s) => (

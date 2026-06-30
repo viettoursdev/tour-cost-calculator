@@ -96,6 +96,10 @@ type State = {
   onQuoteDeleted: (profileId: string, deletedCloudId: string) => Promise<void>;
   /** Chuyển một báo giá từ hồ sơ này sang hồ sơ khác (sửa khi gắn nhầm). */
   moveQuote: (cloudId: string, fromProfileId: string, toProfileId: string) => Promise<void>;
+  /** Gắn/gỡ một báo giá (thường hoặc DMC) vào hồ sơ trực tiếp từ phía hồ sơ.
+   *  `isDmc`: DMC KHÔNG bao giờ trở thành báo giá chính (primary). Nếu báo giá đang
+   *  thuộc hồ sơ khác, gắn = chuyển (tự dọn hồ sơ nguồn như moveQuote). */
+  attachQuote: (cloudId: string, profileId: string, on: boolean, isDmc?: boolean) => Promise<void>;
 };
 
 export const useTourProfileStore = create<State>()(
@@ -396,6 +400,30 @@ export const useTourProfileStore = create<State>()(
       // 3) Hồ sơ đích: nếu chưa có báo giá chính → đặt báo giá này làm chính.
       if (!target.primaryQuoteId) await get().setPrimaryQuote(target.id, cloudId);
       logAudit('update', 'Hồ sơ tour', target.name || target.code, 'Nhận báo giá chuyển từ hồ sơ khác');
+    },
+
+    attachQuote: async (cloudId, profileId, on, isDmc) => {
+      const hist = useQuoteHistoryStore.getState();
+      const entry = [...hist.quotes, ...hist.dmcQuotes].find((q) => q.cloudId === cloudId);
+      const from = entry?.tourProfileId;
+      if (on) {
+        const target = get().profiles.find((x) => x.id === profileId);
+        if (!target) return;
+        if (from === profileId) return; // đã thuộc hồ sơ này rồi
+        // 1) Trỏ báo giá sang hồ sơ đích.
+        await sbSetQuoteTourProfile(cloudId, target.id, target.code);
+        // 2) Hồ sơ nguồn (nếu có): dọn primary mồ côi như khi xoá báo giá.
+        if (from) await get().onQuoteDeleted(from, cloudId);
+        // 3) DMC không bao giờ làm báo giá chính; báo giá thường thì làm chính nếu hồ sơ chưa có.
+        if (!isDmc && !target.primaryQuoteId) await get().setPrimaryQuote(target.id, cloudId);
+        logAudit('update', 'Hồ sơ tour', target.name || target.code, isDmc ? 'Gắn breakdown DMC' : 'Gắn báo giá');
+      } else {
+        if (!from || from !== profileId) return;
+        await sbSetQuoteTourProfile(cloudId, null, null);
+        await get().onQuoteDeleted(profileId, cloudId);
+        const p = get().profiles.find((x) => x.id === profileId);
+        logAudit('update', 'Hồ sơ tour', p?.code ?? profileId, isDmc ? 'Gỡ breakdown DMC' : 'Gỡ báo giá');
+      }
     },
   })),
 );
