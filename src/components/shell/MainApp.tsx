@@ -31,6 +31,7 @@ import { useHrGuideStore } from '@/stores/hrGuideStore';
 import { useHrEvalStore } from '@/stores/hrEvalStore';
 import { useHrRecruitStore } from '@/stores/hrRecruitStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
+import { useAttendanceStore } from '@/stores/attendanceStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useTrainingStore } from '@/stores/trainingStore';
@@ -104,6 +105,7 @@ export function MainApp() {
     const hrEvalUnsub = useHrEvalStore.getState().init();
     const hrRecruitUnsub = useHrRecruitStore.getState().init();
     const hrLeaveUnsub = useHrLeaveStore.getState().init();
+    const hrAttendanceUnsub = useAttendanceStore.getState().init();
     const invUnsub = useInventoryStore.getState().init();
     const trainingUnsub = useTrainingStore.getState().init();
     const exportReqUnsub = useExportRequestStore.getState().init();
@@ -171,6 +173,7 @@ export function MainApp() {
       hrEvalUnsub?.();
       hrRecruitUnsub?.();
       hrLeaveUnsub?.();
+      hrAttendanceUnsub?.();
       invUnsub?.();
       trainingUnsub?.();
       exportReqUnsub?.();
