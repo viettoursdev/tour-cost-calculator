@@ -14,6 +14,7 @@ import { userLabel } from '@/auth/ROLES';
 import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useVisaProcStore } from '@/stores/visaProcStore';
+import { TourProfileLinkChip } from '@/components/quote/TourProfileLinkChip';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { openFilePreview } from '@/stores/filePreviewStore';
@@ -159,6 +160,9 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
             <Typography variant="caption" display="block" color="text.secondary">
               Mã {doc.code} · đồng bộ Cloud
             </Typography>
+            <Box sx={{ mt: 0.5 }}>
+              <TourProfileLinkChip tourProfileId={initial.tourProfileId} beforeNavigate={onClose} />
+            </Box>
           </Box>
           <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} />
         </Stack>

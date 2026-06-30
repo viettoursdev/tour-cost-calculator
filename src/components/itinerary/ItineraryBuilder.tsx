@@ -32,6 +32,7 @@ import { callAIWorker } from '@/lib/aiWorker';
 // Trình xuất lịch trình nạp động khi bấm.
 import { useMenuStore } from '@/stores/menuStore';
 import { useQuoteStore } from '@/stores/quoteStore';
+import { TourProfileLinkChip } from '@/components/quote/TourProfileLinkChip';
 import { useLinkNavStore } from '@/stores/linkNavStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { filterRank } from '@/lib/search';
@@ -467,7 +468,10 @@ export function ItineraryBuilder({ initial, user, onBack }: Props) {
       <Box sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 40%,#14a08c)', color: '#fff', px: 2.5, py: 1.25 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" fontWeight={900} noWrap>🗺️ Trình tạo Chương trình tour</Typography>
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+              <Typography variant="subtitle1" fontWeight={900} noWrap>🗺️ Trình tạo Chương trình tour</Typography>
+              <TourProfileLinkChip tourProfileId={initial?.tourProfileId} light />
+            </Stack>
             <Typography variant="caption" sx={{ opacity: 0.85 }}>
               Mã: <strong style={{ fontFamily: 'monospace' }}>{code}</strong>
             </Typography>

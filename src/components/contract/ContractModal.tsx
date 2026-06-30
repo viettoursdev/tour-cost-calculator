@@ -9,6 +9,7 @@ import { CONTRACT_STATUS } from './constants';
 import { useHistoryState } from '@/lib/useHistoryState';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
 import { UndoRedoButtons } from '@/components/common/UndoRedoButtons';
+import { TourProfileLinkChip } from '@/components/quote/TourProfileLinkChip';
 import type { Contract, ContractCancel, ContractPayment } from '@/types';
 
 type Props = {
@@ -60,7 +61,10 @@ export function ContractModal({ initial, onSave, onClose }: Props) {
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Box sx={{ flex: 1 }}>{initial.id ? '✏️ Sửa hợp đồng' : '➕ Tạo hợp đồng mới'}</Box>
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          {initial.id ? '✏️ Sửa hợp đồng' : '➕ Tạo hợp đồng mới'}
+          <TourProfileLinkChip tourProfileId={initial.tourProfileId} beforeNavigate={onClose} />
+        </Box>
         <UndoRedoButtons undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} />
       </DialogTitle>
 
