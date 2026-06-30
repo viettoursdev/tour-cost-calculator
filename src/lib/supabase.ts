@@ -4176,6 +4176,9 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     deleted: (r.deleted as boolean) ?? undefined,
     reactions: (r.reactions as ChatMessage['reactions']) ?? undefined,
     mentions: Array.isArray(r.mentions) && (r.mentions as string[]).length ? (r.mentions as string[]) : undefined,
+    pinned: (r.pinned as boolean) ? true : undefined,
+    system: (r.is_system as boolean) ? true : undefined,
+    forwardedFrom: (r.forwarded_from as string) ?? undefined,
   };
 }
 
@@ -4201,7 +4204,7 @@ async function assembleChat(
   ] = await Promise.all([
     client.from('chat_members').select('username, last_read').eq('chat_id', chatId),
     client.from('chat_messages')
-      .select('id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions, mentions')
+      .select('id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions, mentions, pinned, is_system, forwarded_from')
       .eq('chat_id', chatId)
       .order('sort_order', { ascending: true }),
   ]);
@@ -4431,6 +4434,9 @@ export async function sbSendChatMessage(
     deleted: msg.deleted ?? false,
     reactions: msg.reactions ?? {},
     mentions: msg.mentions ?? [],
+    pinned: msg.pinned ?? false,
+    is_system: msg.system ?? false,
+    forwarded_from: msg.forwardedFrom ?? null,
   });
   if (insErr) throw new Error('sbSendChatMessage insert: ' + insErr.message);
 
@@ -4574,6 +4580,57 @@ export async function sbMarkChatRead(
     .eq('chat_id', id)
     .eq('username', username);
   if (error) throw new Error('sbMarkChatRead: ' + error.message);
+}
+
+/** Ghim / bỏ ghim một tin nhắn trong cuộc (theo legacy_id). */
+export async function sbSetChatMessagePinned(
+  id: string,
+  msgId: string,
+  pinned: boolean,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('chat_messages')
+    .update({ pinned })
+    .eq('chat_id', id)
+    .eq('legacy_id', msgId);
+  if (error) throw new Error('sbSetChatMessagePinned: ' + error.message);
+}
+
+/** Đổi tên một cuộc trò chuyện (nhóm). */
+export async function sbRenameChat(
+  id: string,
+  title: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('chats').update({ title }).eq('id', id);
+  if (error) throw new Error('sbRenameChat: ' + error.message);
+}
+
+/** Thêm thành viên vào nhóm (upsert theo PK (chat_id, username), bỏ qua trùng). */
+export async function sbAddChatMembers(
+  id: string,
+  usernames: string[],
+  client: SupabaseClient = sb,
+): Promise<void> {
+  if (!usernames.length) return;
+  const idMap = await usernamesToIds(client, usernames);
+  const rows = usernames.map((uname) => ({ chat_id: id, user_id: idMap.get(uname) ?? null, username: uname }));
+  const { error } = await client.from('chat_members')
+    .upsert(rows, { onConflict: 'chat_id,username', ignoreDuplicates: true });
+  if (error) throw new Error('sbAddChatMembers: ' + error.message);
+}
+
+/** Xoá một thành viên khỏi nhóm (cũng dùng cho "rời nhóm" khi username = chính mình). */
+export async function sbRemoveChatMember(
+  id: string,
+  username: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('chat_members')
+    .delete()
+    .eq('chat_id', id)
+    .eq('username', username);
+  if (error) throw new Error('sbRemoveChatMember: ' + error.message);
 }
 
 /**

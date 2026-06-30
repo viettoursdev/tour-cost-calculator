@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sameDay, chatDayLabel, groupWithPrev, mentionQuery, applyMention, mentionSegments } from './chatFormat';
+import { sameDay, chatDayLabel, groupWithPrev, mentionQuery, applyMention, mentionSegments, matchMessageIds, searchHighlight } from './chatFormat';
 import type { ChatMessage } from '@/types';
 
 const msg = (over: Partial<ChatMessage>): ChatMessage => ({
@@ -77,5 +77,34 @@ describe('mentionSegments', () => {
   });
   it('không có tên → một đoạn thường', () => {
     expect(mentionSegments('xin chào', [])).toEqual([{ t: 'xin chào', mention: false }]);
+  });
+});
+
+describe('matchMessageIds', () => {
+  const msgs: ChatMessage[] = [
+    msg({ id: 'a', text: 'Chào team nhé' }),
+    msg({ id: 'b', text: 'Báo giá tour Đà Nẵng' }),
+    msg({ id: 'c', text: 'tour Hà Nội' }),
+    msg({ id: 'd', text: 'đã thu hồi', deleted: true }),
+    msg({ id: 'e', text: 'X vào nhóm', system: true }),
+  ];
+  it('khớp không phân biệt hoa/thường, bỏ thu hồi & hệ thống', () => {
+    expect(matchMessageIds(msgs, 'TOUR')).toEqual(['b', 'c']);
+    expect(matchMessageIds(msgs, '')).toEqual([]);
+    expect(matchMessageIds(msgs, 'xyz')).toEqual([]);
+  });
+});
+
+describe('searchHighlight', () => {
+  it('đánh dấu các đoạn khớp', () => {
+    expect(searchHighlight('tour Đà Nẵng tour', 'tour')).toEqual([
+      { t: 'tour', hit: true },
+      { t: ' Đà Nẵng ', hit: false },
+      { t: 'tour', hit: true },
+    ]);
+  });
+  it('không khớp → một đoạn thường; query rỗng giữ nguyên', () => {
+    expect(searchHighlight('abc', 'z')).toEqual([{ t: 'abc', hit: false }]);
+    expect(searchHighlight('abc', '')).toEqual([{ t: 'abc', hit: false }]);
   });
 });

@@ -57,6 +57,31 @@ export function applyMention(value: string, caret: number, name: string): { valu
   return { value: before + insert + after, caret: (before + insert).length };
 }
 
+/** ID các tin khớp từ khoá tìm kiếm (text chứa query, không phân biệt hoa/thường; bỏ tin thu hồi/hệ thống). */
+export function matchMessageIds(messages: ChatMessage[], query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return messages.filter((m) => !m.deleted && !m.system && (m.text ?? '').toLowerCase().includes(q)).map((m) => m.id);
+}
+
+/** Tách text thành các đoạn, đánh dấu đoạn nào KHỚP từ khoá tìm kiếm (để tô nền). */
+export function searchHighlight(text: string, query: string): { t: string; hit: boolean }[] {
+  const q = query.trim();
+  if (!q) return text ? [{ t: text, hit: false }] : [];
+  const lower = text.toLowerCase();
+  const ql = q.toLowerCase();
+  const out: { t: string; hit: boolean }[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const at = lower.indexOf(ql, i);
+    if (at < 0) { out.push({ t: text.slice(i), hit: false }); break; }
+    if (at > i) out.push({ t: text.slice(i, at), hit: false });
+    out.push({ t: text.slice(at, at + q.length), hit: true });
+    i = at + q.length;
+  }
+  return out;
+}
+
 /** Tách text thành các đoạn, đánh dấu đoạn nào là @mention (khớp '@Tên' với danh sách tên). */
 export function mentionSegments(text: string, names: string[]): { t: string; mention: boolean }[] {
   const tags = [...new Set(names)].filter(Boolean).sort((a, b) => b.length - a.length).map((n) => `@${n}`);

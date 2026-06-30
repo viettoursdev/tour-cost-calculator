@@ -3,6 +3,7 @@ import { getViettoursClient, truncate } from './_setup';
 import {
   sbSubscribeChats, sbSubscribeChat, sbEnsureChat, sbSendChatMessage,
   sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbMarkChatRead,
+  sbSetChatMessagePinned, sbRenameChat, sbAddChatMembers, sbRemoveChatMember,
 } from '../../src/lib/supabase';
 import type { Chat, ChatMessage } from '@/types/chat';
 
@@ -267,5 +268,46 @@ describe('chat gateway', () => {
     const m = result!.messages.find((msg) => msg.id === 'msg-mention-001');
     expect(m).toBeDefined();
     expect(m!.mentions).toEqual(['alpha', 'bravo']);
+  });
+
+  it('ghim / bỏ ghim tin nhắn', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_echo__tester';
+    await sbEnsureChat({ id: chatId, members: ['tester', 'echo'], isGroup: false, createdBy: 'tester', createdAt: new Date().toISOString(), messages: [] }, c);
+    await sbSendChatMessage(chatId, { id: 'msg-pin', by: 'tester', byName: 'QA', at: new Date().toISOString(), text: 'ghim tin này' }, c);
+
+    await sbSetChatMessagePinned(chatId, 'msg-pin', true, c);
+    let res = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(res!.messages.find((m) => m.id === 'msg-pin')!.pinned).toBe(true);
+
+    await sbSetChatMessagePinned(chatId, 'msg-pin', false, c);
+    res = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(res!.messages.find((m) => m.id === 'msg-pin')!.pinned).toBeUndefined();
+  });
+
+  it('chuyển tiếp giữ forwardedFrom', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_foxtrot__tester';
+    await sbEnsureChat({ id: chatId, members: ['tester', 'foxtrot'], isGroup: false, createdBy: 'tester', createdAt: new Date().toISOString(), messages: [] }, c);
+    await sbSendChatMessage(chatId, { id: 'msg-fwd', by: 'tester', byName: 'QA', at: new Date().toISOString(), text: 'đã chuyển tiếp', forwardedFrom: 'Người Gốc' }, c);
+
+    const res = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(res!.messages.find((m) => m.id === 'msg-fwd')!.forwardedFrom).toBe('Người Gốc');
+  });
+
+  it('quản lý nhóm: đổi tên + thêm/xoá thành viên', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'grp_manage__1';
+    await sbEnsureChat({ id: chatId, members: ['tester', 'alpha'], isGroup: true, title: 'Nhóm cũ', createdBy: 'tester', createdAt: new Date().toISOString(), messages: [] }, c);
+
+    await sbRenameChat(chatId, 'Nhóm mới', c);
+    await sbAddChatMembers(chatId, ['bravo'], c);
+    let res = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(res!.title).toBe('Nhóm mới');
+    expect(res!.members.sort()).toEqual(['alpha', 'bravo', 'tester']);
+
+    await sbRemoveChatMember(chatId, 'alpha', c);
+    res = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
+    expect(res!.members.sort()).toEqual(['bravo', 'tester']);
   });
 });

@@ -5,14 +5,22 @@ import { playChatPing } from '@/lib/chatPing';
 import type { Chat, ChatMessage } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
+const mutedKey = (u: string) => `vte_chat_muted_${u}`;
+const loadMuted = (u: string): string[] => {
+  try { return JSON.parse(localStorage.getItem(mutedKey(u)) || '[]') as string[]; }
+  catch { return []; }
+};
+
 type ChatState = {
   chats: Chat[];
   online: string[];                 // username đang online (presence)
   username: string | null;
   panelOpen: boolean;               // khung chat đang mở?
   activeChatId: string | null;      // cuộc đang xem (để KHÔNG báo trùng)
+  muted: string[];                  // chatId đã tắt thông báo (lưu localStorage theo user)
   setPanelOpen: (v: boolean) => void;
   setActiveChatId: (id: string | null) => void;
+  toggleMute: (chatId: string) => void;
   init: (username: string, name: string) => Unsubscribe;
 };
 
@@ -22,18 +30,26 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   username: null,
   panelOpen: false,
   activeChatId: null,
+  muted: [],
   setPanelOpen: (v) => set({ panelOpen: v }),
   setActiveChatId: (id) => set({ activeChatId: id }),
+  toggleMute: (chatId) => {
+    const { muted, username } = get();
+    const next = muted.includes(chatId) ? muted.filter((x) => x !== chatId) : [...muted, chatId];
+    set({ muted: next });
+    if (username) { try { localStorage.setItem(mutedKey(username), JSON.stringify(next)); } catch { /* ignore */ } }
+  },
   init: (username, name) => {
-    set({ username, chats: [], online: [] });
+    set({ username, chats: [], online: [], muted: loadMuted(username) });
     const seen: Record<string, string> = {}; // baseline lastAt theo từng cuộc
 
     const unsubChats = sbSubscribeChats(username, (chats) => {
       // Báo tin ĐẾN mới (âm thanh + OS notif) — bỏ qua cuộc đang mở & đang focus.
       const incoming = pickNewIncoming(seen, chats, username);
       if (incoming.length) {
-        const { panelOpen, activeChatId } = get();
+        const { panelOpen, activeChatId, muted } = get();
         for (const c of incoming) {
+          if (muted.includes(c.id)) continue;       // đã tắt thông báo cuộc này
           const focused = !document.hidden && panelOpen && activeChatId === c.id;
           if (focused) continue;
           playChatPing();

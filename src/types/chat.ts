@@ -16,6 +16,9 @@ export type ChatMessage = {
   deleted?: boolean;                    // đã thu hồi
   reactions?: Record<string, string[]>; // emoji → danh sách username
   mentions?: string[];                  // username được @nhắc (nhóm) — để tô sáng & thông báo
+  pinned?: boolean;                     // đã ghim trong cuộc
+  system?: boolean;                     // tin hệ thống (sự kiện nhóm: thêm/xoá/đổi tên/rời)
+  forwardedFrom?: string;               // byName của người gửi gốc khi chuyển tiếp
 };
 
 /** Một cuộc trò chuyện (1-1 hoặc nhóm) giữa các tài khoản. */
