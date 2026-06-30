@@ -11,7 +11,7 @@ import {
 import { saveAs } from 'file-saver';
 import { PROC_KIND_ICON } from '@/components/visa/constants';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
-import { BRAND_TEAL_HEX, LOGO_W_PX, LOGO_H_PX } from './brand';
+import { BRAND_TEAL_HEX, BRAND_HOTLINE, LOGO_W_PX, LOGO_H_PX } from './brand';
 import type { VisaProcDoc } from '@/types';
 
 const FONT = 'Aptos';
@@ -181,7 +181,7 @@ export async function exportVisaProcDocx(it: VisaProcDoc): Promise<void> {
 
   C.push(P(tr('Hồ sơ được lập bởi Viettours Incentives & Events. Vui lòng kiểm tra & bổ sung theo yêu cầu lãnh sự quán.',
     { size: 14, italics: true, color: MUTE }), { before: 120, after: 0 }));
-  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn',
+  C.push(P(tr(`VIETTOURS INCENTIVES & EVENTS  ·  Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`,
     { size: 14, color: MUTE }), { align: AlignmentType.CENTER, before: 160 }));
 
   const docDoc = new Document({

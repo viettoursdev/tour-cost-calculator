@@ -8,7 +8,7 @@ import { getCATS } from '@/components/quote/constants';
 import { calcVND, computeTotals, qtyOf } from '@/components/quote/calc';
 import { fmtCurrency, toOutputCurrency } from '@/lib/currency';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
+import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type Params = {
@@ -55,7 +55,7 @@ export function exportDMCPDF({ draft, savedBy }: Params): void {
   pdf.setFontSize(brandSize); pdf.setTextColor(...teal);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('Hotline 091 951 7777  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: brandMaxW });
+  pdf.text(`Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`, brandX, y + 11, { maxWidth: brandMaxW });
   pdf.setFontSize(7); pdf.setTextColor(...gray);
   pdf.text('NHÂN VIÊN PHỤ TRÁCH', pageW - mX, y + 2, { align: 'right' });
   pdf.setFontSize(9.5); pdf.setTextColor(...teal); pdf.setFont(FONT, 'bold');

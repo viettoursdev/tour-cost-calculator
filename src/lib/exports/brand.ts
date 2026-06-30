@@ -15,6 +15,9 @@ export const BRAND_TEAL_HEX = '0D7A6A';
 /** Cùng màu, dạng ARGB — cho ExcelJS (fgColor.argb = "AARRGGBB"). */
 export const BRAND_TEAL_ARGB = 'FF0D7A6A';
 
+/** Hotline thương hiệu Viettours — NGUỒN DUY NHẤT, đổi ở đây = đổi mọi file xuất. */
+export const BRAND_HOTLINE = '091 951 7777';
+
 /** Logo chuẩn: 4.65cm × 1.25cm (tỉ lệ thật ≈ 3.72:1, không méo). */
 export const LOGO_W_MM = 46.5;
 export const LOGO_H_MM = 12.5;

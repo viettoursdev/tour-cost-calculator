@@ -10,7 +10,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { VTE_LOGO, b64ToU8 } from './vteLogo';
-import { BRAND_TEAL_HEX, LOGO_W_PX, LOGO_H_PX } from './brand';
+import { BRAND_TEAL_HEX, BRAND_HOTLINE, LOGO_W_PX, LOGO_H_PX } from './brand';
 import type { Menu } from '@/types';
 
 const FONT = 'Aptos';
@@ -199,7 +199,7 @@ export async function exportMenuDocx(it: Menu, code: string, includePrices = tru
 
   C.push(P(tr('✱ Thực đơn có thể điều chỉnh theo mùa, tình hình nguyên liệu và yêu cầu thực tế của đoàn.',
     { size: 14, italics: true, color: MUTE }), { before: 120, after: 0 }));
-  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn',
+  C.push(P(tr(`VIETTOURS INCENTIVES & EVENTS  ·  Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`,
     { size: 14, color: MUTE }), { align: AlignmentType.CENTER, before: 200 }));
 
   const docDoc = new Document({

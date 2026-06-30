@@ -4,7 +4,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
+import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
 import { workflowProgress, WORKFLOW_STATUS_META } from '@/components/quote/workflowConstants';
 import type { QuoteInfo, WorkflowStep } from '@/types';
@@ -100,7 +100,7 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
 
   ensure(10);
   setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn', PW / 2, y + 4, { align: 'center' });
+  pdf.text(`VIETTOURS INCENTIVES & EVENTS  ·  Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`, PW / 2, y + 4, { align: 'center' });
 
   const slug = (info.name ?? '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);
   pdf.save(`QuyTrinh_${slug || 'BaoGia'}.pdf`);

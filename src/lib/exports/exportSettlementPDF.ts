@@ -4,7 +4,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
+import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import type { QuoteInfo } from '@/types';
 import type { SettlementResult } from '@/components/quote/paymentUtils';
 
@@ -45,7 +45,7 @@ export function exportSettlementPDF({
   setF('bold'); pdf.setFontSize(12); pdf.setTextColor(...TEAL);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   setF('normal'); pdf.setFontSize(8.5); pdf.setTextColor(...MUTE);
-  pdf.text('Hotline 091 951 7777 · www.viettours.com.vn', brandX, y + 11);
+  pdf.text(`Hotline ${BRAND_HOTLINE} · www.viettours.com.vn`, brandX, y + 11);
   y = logoBottom + 6;
 
   setF('bold'); pdf.setFontSize(16); pdf.setTextColor(...NAVY);

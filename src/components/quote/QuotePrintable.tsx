@@ -8,6 +8,7 @@ import { effectiveValidUntil, fmtDateVN, isoDate } from './quoteValidity';
 import { getCATS } from './constants';
 import { pricingLines } from './pricing';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
+import { BRAND_HOTLINE } from '@/lib/exports/brand';
 import type { Item, QuoteDraft } from '@/types';
 
 const TEAL = '#14a08c';
@@ -69,7 +70,7 @@ export const QuotePrintable = forwardRef<HTMLDivElement, Props>(({ draft, savedB
           <img src={VTE_LOGO} alt="Viettours" style={{ width: 120, height: 'auto' }} />
           <div>
             <div style={{ color: TEAL, fontWeight: 800, fontSize: 17 }}>VIETTOURS INCENTIVES &amp; EVENTS</div>
-            <div style={{ color: '#7a828a', fontSize: 11 }}>Hotline 091 951 7777 · www.viettours.com.vn</div>
+            <div style={{ color: '#7a828a', fontSize: 11 }}>Hotline {BRAND_HOTLINE} · www.viettours.com.vn</div>
           </div>
         </div>
         <div style={{ textAlign: 'right', fontSize: 11, color: '#7a828a' }}>

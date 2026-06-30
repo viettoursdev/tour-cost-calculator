@@ -8,7 +8,7 @@ import { saveAs } from 'file-saver';
 import { getCATS } from '@/components/quote/constants';
 import { plainNote } from '@/lib/util';
 import { qtyOf } from '@/components/quote/calc';
-import { BRAND_TEAL_ARGB, addExcelLogo } from './brand';
+import { BRAND_TEAL_ARGB, BRAND_HOTLINE, addExcelLogo } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -78,7 +78,7 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   t.alignment = { horizontal: 'left', vertical: 'middle' };
   ws.mergeCells(`C2:${LAST}2`);
   const sub = ws.getCell('C2');
-  sub.value = 'VIETTOURS INCENTIVES & EVENTS   ·   Hotline 091 951 7777   ·   www.viettours.com.vn';
+  sub.value = `VIETTOURS INCENTIVES & EVENTS   ·   Hotline ${BRAND_HOTLINE}   ·   www.viettours.com.vn`;
   sub.font = fnt({ size: 8.5, color: { argb: TEAL } });
   sub.alignment = { horizontal: 'left' };
   for (let c = 1; c <= ncol; c++) {

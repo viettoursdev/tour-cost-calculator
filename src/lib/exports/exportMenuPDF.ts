@@ -6,7 +6,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
+import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import type { Menu } from '@/types';
 
 type RGB = [number, number, number];
@@ -170,7 +170,7 @@ export function exportMenuPDF(it: Menu, code: string, includePrices = true): voi
   const dl2: string[] = pdf.splitTextToSize('✱ Thực đơn có thể điều chỉnh theo mùa, tình hình nguyên liệu và yêu cầu thực tế của đoàn.', CW);
   pdf.text(dl2, M, y + 4);
   y += dl2.length * 4 + 4;
-  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn', PW / 2, y + 2, { align: 'center' });
+  pdf.text(`VIETTOURS INCENTIVES & EVENTS  ·  Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`, PW / 2, y + 2, { align: 'center' });
 
   const slug = (it.destination || 'Tour').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 30);
   pdf.save(`ThucDon_${code}_${slug}.pdf`);

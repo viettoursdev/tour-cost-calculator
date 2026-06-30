@@ -9,7 +9,7 @@ import { plainNote } from '@/lib/util';
 import { calcVND, computeTotals, fmtVND } from '@/components/quote/calc';
 import { pricingLines } from '@/components/quote/pricing';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
+import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import type { Item, QuoteDraft } from '@/types';
 
 type ExportParams = {
@@ -72,7 +72,7 @@ export function exportPDFQuote({ draft, savedBy, mode = 'detailed' }: ExportPara
   pdf.setFontSize(brandSize); pdf.setTextColor(...teal);
   pdf.text('VIETTOURS INCENTIVES & EVENTS', brandX, y + 6);
   pdf.setFontSize(7.5); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');
-  pdf.text('Hotline 091 951 7777  ·  www.viettours.com.vn', brandX, y + 11, { maxWidth: brandMaxW });
+  pdf.text(`Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`, brandX, y + 11, { maxWidth: brandMaxW });
 
   // Salesperson contact (right side)
   pdf.setFontSize(7); pdf.setTextColor(...gray); pdf.setFont(FONT, 'normal');

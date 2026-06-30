@@ -5,7 +5,7 @@
  */
 import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
-import { BRAND_TEAL, drawLogo, LOGO_W_MM } from './brand';
+import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import type { VisaProcDoc } from '@/types';
 
 type RGB = [number, number, number];
@@ -168,7 +168,7 @@ export function exportVisaProcPDF(it: VisaProcDoc): void {
   );
   pdf.text(dl, M, y + 4);
   y += dl.length * 4 + 4;
-  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn',
+  pdf.text(`VIETTOURS INCENTIVES & EVENTS  ·  Hotline ${BRAND_HOTLINE}  ·  www.viettours.com.vn`,
     PW / 2, y + 2, { align: 'center' });
 
   const slug = (it.title ?? '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);
