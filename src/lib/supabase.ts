@@ -1225,8 +1225,10 @@ export function sbPushNcc(
   pushedBy: { name: string; role: string },
   client: SupabaseClient = sb,
 ): Promise<void> {
-  // Serialize: overlapping full-overwrite pushes race the trailing delete against
-  // each other's contact inserts → supplier_contacts_supplier_id_fkey violation.
+  // UPSERT-ONLY — KHÔNG xoá-diff. App đã chuyển hẳn sang per-row sbUpsertNcc/sbDeleteNcc;
+  // hàm này chỉ còn cho bulk-import/restore. Bỏ xoá-diff để dù có nối lại cũng KHÔNG
+  // wipe nhà cung cấp khi sửa song song (bất biến: không sbPush* nào tự xoá). Xoá đi qua
+  // sbDeleteNcc. Xem ghi chú ở sbPushCustomers.
   return serializeWrites('suppliers', async () => {
   const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
   for (const ncc of list) {
@@ -1239,23 +1241,6 @@ export function sbPushNcc(
     await replaceChildren(client, 'supplier_contacts', 'supplier_id', up!.id, ncc.contacts.map((ct, i) => ({
       supplier_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, sort_order: i,
     })));
-  }
-  // Full-overwrite: delete suppliers removed from the list using safe fetch-then-delete pattern.
-  const keepIds = list.map((n) => n.id);
-  if (keepIds.length > 0) {
-    const { data: existing, error: fetchErr } = await client.from('suppliers').select('legacy_id');
-    if (fetchErr) throw new Error('sbPushNcc fetch: ' + fetchErr.message);
-    const toDelete = (existing ?? [])
-      .map((r) => r.legacy_id as string)
-      .filter((lid) => lid && !keepIds.includes(lid));
-    if (toDelete.length > 0) {
-      const del = await client.from('suppliers').delete().in('legacy_id', toDelete);
-      if (del.error) throw new Error('sbPushNcc delete: ' + del.error.message);
-    }
-  } else {
-    // Empty push = wipe all (full-overwrite parity with fbPushNcc).
-    const del = await client.from('suppliers').delete().not('legacy_id', 'is', null);
-    if (del.error) throw new Error('sbPushNcc delete all: ' + del.error.message);
   }
   });
 }
