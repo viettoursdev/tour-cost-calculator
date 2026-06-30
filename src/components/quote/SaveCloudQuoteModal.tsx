@@ -104,7 +104,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
   );
 
   // Ghi đè lên báo giá có sẵn: chọn 1 báo giá đã lưu để lưu chồng lên (dồn thành
-  // phiên bản mới, tối đa 20 bản) thay vì tạo báo giá mới. Bỏ chính báo giá đang
+  // phiên bản mới, tối đa 30 bản) thay vì tạo báo giá mới. Bỏ chính báo giá đang
   // mở khỏi danh sách để tránh nhầm với nút "Cập nhật".
   const overwriteOptions = useMemo(
     () => sourceQuotes.filter((q) => q.cloudId !== currentQuoteId),
@@ -150,7 +150,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
       if (dup) {
         const merge = window.confirm(
           `⚠ Đã có báo giá trùng tên "${dup.name}"${dup.quoteCode ? ` (${dup.quoteCode})` : ''}.\n\n` +
-          'OK = Lưu chồng thành phiên bản mới của báo giá này (không tạo báo giá mới, giữ tối đa 20 bản).\n' +
+          'OK = Lưu chồng thành phiên bản mới của báo giá này (không tạo báo giá mới, giữ tối đa 30 bản).\n' +
           'Huỷ = Vẫn tạo báo giá mới riêng.',
         );
         if (merge) overwrite = { cloudId: dup.cloudId, id: dup.id };
@@ -318,7 +318,7 @@ export function SaveCloudQuoteModal({ open, onClose }: Props) {
                   {...params}
                   label="♻️ Ghi đè lên báo giá có sẵn (optional)"
                   placeholder="Chọn báo giá để lưu chồng (không tạo báo giá mới)"
-                  helperText="Lưu chồng = thêm 1 phiên bản mới vào báo giá đã chọn (giữ tối đa 20 bản gần nhất)."
+                  helperText="Lưu chồng = thêm 1 phiên bản mới vào báo giá đã chọn (giữ tối đa 30 bản gần nhất)."
                 />
               )}
               renderOption={(props, q) => (

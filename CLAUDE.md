@@ -122,7 +122,7 @@ Supabase client config (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) is read f
 | `customers` | Customer list |
 | `contracts` | All contracts |
 | `quotes` | Quote metadata index (regular + DMC). `tour_profile_id`/`tour_code` link mỗi báo giá vào một hồ sơ tour. |
-| `quote_versions` | Full state per quote version (max 20); shredded children in `quote_items`, `quote_groups`, `quote_collab_payments`, `quote_flights`, `quote_workflow_steps`, `quote_passengers`. DMC quotes share this table, distinguished by `template = 'dmc'`. |
+| `quote_versions` | Full state per quote version (max 30, migration `0080`); shredded children in `quote_items`, `quote_groups`, `quote_collab_payments`, `quote_flights`, `quote_workflow_steps`, `quote_passengers`. DMC quotes share this table, distinguished by `template = 'dmc'`. |
 | `tour_profiles` | **Hồ sơ tour** — aggregate root MỎNG làm trung tâm liên kết (1 hồ sơ : N báo giá). Mã `code` `NĐ/NN.DD.MM.YY.NN` sinh atomic qua RPC `next_tour_code` (advisory lock theo ngày). Sở hữu `created_by_username` + `collaborators`/`followers` (jsonb) + `primary_quote_id` (báo giá chính → suy giai đoạn/tổng qua `dealStage`). KHÔNG lưu giai đoạn/tổng. Các thực thể (`contracts`/`visa_projects`/`itineraries`/`menus`/`quotes`) có cột `tour_profile_id` (FK ON DELETE SET NULL, migration 0045) — ĐỌC KÉP: ưu tiên `tour_profile_id`, fallback suy qua `linked_quote_id`→báo giá→hồ sơ. **RLS đọc** scoped qua hàm `tour_profile_can_view` (0047): creator/collab/follower/BGĐ-CEO/Trưởng-Phó Phòng cùng phòng, kiểu KHÔNG-khoá-cứng. Gateway `sb*TourProfile`, store `tourProfileStore`, view `cockpit` = `TourProfilesView`. |
 | `itineraries` | Itinerary records |
 | `menus` / `restaurants` | Menu and restaurant records |

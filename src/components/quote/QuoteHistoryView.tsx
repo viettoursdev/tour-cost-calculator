@@ -464,7 +464,7 @@ export function QuoteHistoryView() {
       filterable: false,
       renderCell: (p) => (
         <Stack direction="row">
-          <Tooltip title="Lịch sử phiên bản (tối đa 20 bản)">
+          <Tooltip title="Lịch sử phiên bản (tối đa 30 bản)">
             <IconButton size="small" onClick={() => setVersionsRow(p.row)}>
               <HistoryIcon fontSize="small" />
             </IconButton>

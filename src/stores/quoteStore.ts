@@ -809,7 +809,7 @@ export const useQuoteStore = create<QuoteState>()(
           const isNew = !overwrite && !draft.currentQuoteId;
           // Tra bản ghi index hiện có theo cloudId để TÁI DÙNG `id` → sbSaveQuote
           // cập nhật đúng chỗ (không sinh dòng index trùng) & dồn snapshot vào
-          // cùng một project (giữ tối đa 20 phiên bản).
+          // cùng một project (giữ tối đa 30 phiên bản).
           const existingEntry = existing.find((q) => q.cloudId === cloudId);
           const id = overwrite?.id ?? existingEntry?.id ?? Date.now();
           const quoteCode = isNew ? generateQuoteCode(draft.template, existing) : undefined;

@@ -3903,6 +3903,48 @@ export async function sbGetDMCQuoteProject(
   return getQuoteProjectImpl(cloudId, client);
 }
 
+/** Tra uuid của báo giá theo cloud_id; ném nếu không tìm thấy. Dùng cho các thao
+ *  tác trên phiên bản (xoá / đổi tên) — quote_versions khoá theo quote_id (uuid). */
+async function quoteUuidByCloudId(
+  cloudId: string,
+  fn: string,
+  client: SupabaseClient,
+): Promise<string> {
+  const { data: qRow, error } = await client
+    .from('quotes').select('id').eq('cloud_id', cloudId).maybeSingle();
+  if (error) throw new Error(`${fn} fetch quote: ` + error.message);
+  const quoteId = (qRow as Record<string, unknown> | null)?.id as string | undefined;
+  if (!quoteId) throw new Error(`${fn}: không tìm thấy báo giá`);
+  return quoteId;
+}
+
+/** Xoá MỘT phiên bản của báo giá (theo cloudId + versionNo) — KHÔNG xoá báo giá.
+ *  RLS `qv_write` (for all) cho phép viettours-user xoá trực tiếp quote_versions.
+ *  Dùng chung cho cả báo giá thường lẫn DMC (cùng bảng, cloud_id là duy nhất). */
+export async function sbDeleteQuoteVersion(
+  cloudId: string,
+  versionNo: number,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const quoteId = await quoteUuidByCloudId(cloudId, 'sbDeleteQuoteVersion', client);
+  const { error } = await client
+    .from('quote_versions').delete().eq('quote_id', quoteId).eq('version_no', versionNo);
+  if (error) throw new Error('sbDeleteQuoteVersion: ' + error.message);
+}
+
+/** Đổi ghi chú/tên hiển thị của một phiên bản (theo cloudId + versionNo). */
+export async function sbRenameQuoteVersion(
+  cloudId: string,
+  versionNo: number,
+  note: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const quoteId = await quoteUuidByCloudId(cloudId, 'sbRenameQuoteVersion', client);
+  const { error } = await client
+    .from('quote_versions').update({ note: note.trim() }).eq('quote_id', quoteId).eq('version_no', versionNo);
+  if (error) throw new Error('sbRenameQuoteVersion: ' + error.message);
+}
+
 /**
  * Nạp LƯỜI chỉ thông tin chuyến bay của một báo giá (theo cloudId) — dùng cho
  * khung "✈️ Chuyến bay" trong Hồ sơ tour mà không tải cả dự án. Trả [] nếu
