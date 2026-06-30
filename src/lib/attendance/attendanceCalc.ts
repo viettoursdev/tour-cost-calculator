@@ -35,14 +35,8 @@ export function summarizeAttendance(
       continue;
     }
     totalHC += def.work;
+    present += def.worked; // phần ĐI LÀM THẬT (mã nghỉ = 0, không gộp nửa-nghỉ vào "đi làm")
     switch (def.category) {
-      case 'work':
-        present += def.work;
-        break;
-      case 'half':
-        // Nửa làm nửa nghỉ: phần "làm" tính vào present (xấp xỉ qua work, tối đa 1).
-        present += Math.min(def.work, 1);
-        break;
       case 'leave_paid':
         paidLeave += 1;
         break;

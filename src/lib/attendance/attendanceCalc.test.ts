@@ -53,6 +53,14 @@ describe('summarizeAttendance', () => {
     expect(s.unknownCodes).not.toContain('X');
   });
 
+  it('present = phần đi làm thật, KHÔNG gộp nửa-nghỉ-phép', () => {
+    // XB worked 0.5 · P/2 worked 0 (nghỉ phép nửa) · XP worked 0.5 → present 1.0
+    const s = summarizeAttendance(cells('XB', 'P/2', 'XP'));
+    expect(s.present).toBe(1);
+    // totalHC: XB 0.5 + P/2 0.5 + XP 1 = 2
+    expect(s.totalHC).toBe(2);
+  });
+
   it('không tính công cho mã lạ', () => {
     const s = summarizeAttendance(cells('WTF'));
     expect(s.totalHC).toBe(0);

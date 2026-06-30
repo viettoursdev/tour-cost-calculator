@@ -26,6 +26,7 @@ export function AttendanceImportDialog({
 }) {
   const currentUser = useAuthStore((s) => s.currentUser);
   const upsertMany = useAttendanceStore((s) => s.upsertMany);
+  const allAttendances = useAttendanceStore((s) => s.attendances);
 
   const [fileName, setFileName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -64,13 +65,34 @@ export function AttendanceImportDialog({
     [result],
   );
 
+  // Bản ghi sẵn có của kỳ này → giữ lịch sử phản hồi + cảnh báo nếu ghi đè kỳ đã công bố.
+  const existingById = useMemo(() => {
+    const m = new Map<string, HrAttendance>();
+    if (result) for (const a of allAttendances) if (a.period === result.period) m.set(a.id, a);
+    return m;
+  }, [allAttendances, result]);
+
+  const overwritePublished = useMemo(
+    () => matchedRows.reduce((n, r) => {
+      const prior = existingById.get(attendanceId(r.matchedEmployeeId!, result!.period));
+      return n + (prior && (prior.status !== 'draft' || prior.confirmation.status !== 'pending') ? 1 : 0);
+    }, 0),
+    [matchedRows, existingById, result],
+  );
+
   const commit = async () => {
     if (!result || !currentUser || !matchedRows.length) return;
+    if (overwritePublished > 0 && !window.confirm(
+      `${overwritePublished} bảng công trong kỳ này đã CÔNG BỐ hoặc có xác nhận/phản hồi. `
+      + `Nhập đè sẽ đưa các bảng đó về NHÁP và yêu cầu nhân viên xác nhận lại (lịch sử phản hồi vẫn được giữ). Tiếp tục?`,
+    )) return;
     const now = new Date().toISOString();
     const list: HrAttendance[] = matchedRows.map((r) => {
       const emp = empById.get(r.matchedEmployeeId!);
+      const id = attendanceId(r.matchedEmployeeId!, result.period);
+      const prior = existingById.get(id);
       return {
-        id: attendanceId(r.matchedEmployeeId!, result.period),
+        id,
         employeeLegacyId: r.matchedEmployeeId!,
         employeeCode: emp?.employeeCode || r.employeeCode,
         fullName: emp?.fullName || r.fullName,
@@ -80,10 +102,10 @@ export function AttendanceImportDialog({
         summary: summarizeAttendance(r.days),
         status: 'draft',
         confirmation: { status: 'pending' },
-        feedback: [],
+        feedback: prior?.feedback ?? [], // GIỮ lịch sử phản hồi cũ (chống mất vết kiểm)
         source: 'excel',
-        createdAt: now,
-        createdBy: currentUser.name,
+        createdAt: prior?.createdAt ?? now,
+        createdBy: prior?.createdBy ?? currentUser.name,
       };
     });
     setBusy(true);
@@ -131,6 +153,12 @@ export function AttendanceImportDialog({
                 <Alert severity="warning">
                   {result.unmatched} dòng KHÔNG khớp nhân viên (theo MÃ NV/tên) sẽ <b>bị bỏ qua</b>. Hãy đảm bảo
                   MÃ NV trong file trùng mã hồ sơ nhân sự.
+                </Alert>
+              )}
+              {overwritePublished > 0 && (
+                <Alert severity="warning">
+                  <b>{overwritePublished}</b> bảng công trong kỳ đã <b>công bố</b> hoặc có xác nhận/phản hồi. Nhập đè sẽ
+                  đưa về <b>nháp</b> và cần nhân viên xác nhận lại (lịch sử phản hồi vẫn giữ).
                 </Alert>
               )}
               {unknownCodes.length > 0 && (

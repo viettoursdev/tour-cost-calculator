@@ -19,6 +19,7 @@ export type AttendanceCodeDef = {
   code: string;               // mã hiển thị trong ô (vd "X", "P", "XC/2")
   label: string;              // diễn giải tiếng Việt
   work: number;               // số công quy đổi (0, 0.5, 1) — cộng vào "SỐ NGÀY HC"
+  worked: number;             // phần ĐI LÀM THẬT (0, 0.5, 1) — cho dải phân bổ; mã nghỉ = 0
   paid: boolean;              // có hưởng lương công ty hay không
   category: AttendanceCategory;
   color: string;              // màu nền ô trên lưới Gantt (hex)

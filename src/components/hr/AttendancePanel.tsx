@@ -235,6 +235,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
             {/* Hàng nhân viên */}
             {employees.map((e) => {
               const a = rowByEmp.get(e.id);
+              const rowEditable = canEdit && a?.status !== 'locked'; // kỳ đã khoá → không sửa
               return (
                 <Box key={e.id} sx={{ display: 'flex', '&:hover': { bgcolor: 'action.hover' } }}>
                   <Box sx={{ width: NAME_W, flexShrink: 0, p: 0.5, position: 'sticky', left: 0, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', minWidth: 0 }}>
@@ -249,11 +250,11 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
                     return (
                       <Tooltip key={iso} title={cell ? `${cell.code}${def ? ' · ' + def.label : ' · (mã lạ)'}${cell.note ? ' · ' + cell.note : ''}` : ''} disableInteractive>
                         <Box
-                          onClick={canEdit ? (ev) => setEditAnchor({ el: ev.currentTarget, empId: e.id, iso }) : undefined}
+                          onClick={rowEditable ? (ev) => setEditAnchor({ el: ev.currentTarget, empId: e.id, iso }) : undefined}
                           sx={{
                             width: CELL_W, flexShrink: 0, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             bgcolor: bg, color: fg, fontSize: 9, fontWeight: 700, borderRight: '1px solid #fff', borderBottom: '1px solid', borderColor: 'divider',
-                            cursor: canEdit ? 'pointer' : 'default',
+                            cursor: rowEditable ? 'pointer' : 'default',
                           }}
                         >
                           {cell?.code ?? ''}

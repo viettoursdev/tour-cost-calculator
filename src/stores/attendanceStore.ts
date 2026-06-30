@@ -85,10 +85,21 @@ export const useAttendanceStore = create<State>()(
         createdAt: now,
         createdBy: u.name,
       };
+      // Dữ liệu công thay đổi sau khi NV đã xác nhận/báo sai sót → đưa về "chờ xác nhận"
+      // để NV xác nhận lại (tránh hiển thị "đã xác nhận" với số liệu đã bị sửa).
+      const resetConfirm = !!existing && existing.confirmation.status !== 'pending';
+      const feedback = resetConfirm
+        ? [...(existing!.feedback ?? []), {
+            id: fbId(), at: now, byName: u.name, type: 'dispute' as const,
+            note: `${u.name} (nhân sự) đã điều chỉnh bảng công sau xác nhận — cần xác nhận lại.`,
+          }]
+        : (existing?.feedback ?? []);
       const updated: HrAttendance = {
         ...base,
         days,
         summary: summarizeAttendance(days),
+        confirmation: resetConfirm ? { status: 'pending' } : base.confirmation,
+        feedback,
         updatedAt: now,
         updatedBy: u.name,
       };
