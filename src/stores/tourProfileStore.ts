@@ -67,7 +67,7 @@ type State = {
   setBasicInfo: (id: string, info: { name?: string; customerId?: string | null; customerName?: string; dest?: string; departRegion?: string; startDate?: string | null; pax?: number; days?: number; nights?: number; priority?: 'high' | 'medium' | 'low' | ''; leadSource?: string; note?: string; plannedContractValue?: number | null; plannedSettlementValue?: number | null; manualStage?: DealStage | null }) => Promise<void>;
   /** Đồng bộ thông tin (tên/khách/ngày/pax) từ báo giá chính xuống hồ sơ khi lưu cloud
    *  — GHI ĐÈ giá trị trên hồ sơ (chỉ giữ giá trị cũ khi báo giá để trống). */
-  syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number }) => Promise<void>;
+  syncFromPrimary: (id: string, info: { name?: string; customerId?: string; customerName?: string; dest?: string; startDate?: string | null; pax?: number; days?: number; nights?: number }) => Promise<void>;
   addCollaborator: (id: string, c: Collaborator) => Promise<void>;
   addFollower: (id: string, c: Collaborator) => Promise<void>;
   addEventStaff: (id: string, c: Collaborator) => Promise<void>;
@@ -257,10 +257,13 @@ export const useTourProfileStore = create<State>()(
         dest: info.dest ?? p.dest,
         startDate: info.startDate !== undefined ? info.startDate : p.startDate,
         pax: info.pax ?? p.pax,
+        days: info.days ?? p.days,
+        nights: info.nights ?? p.nights,
       };
       // Chỉ ghi khi thực sự có thay đổi (tránh ghi thừa mỗi lần lưu báo giá).
       if (next.name === p.name && next.customerId === p.customerId && next.customerName === p.customerName &&
-          next.dest === p.dest && next.startDate === p.startDate && next.pax === p.pax) return;
+          next.dest === p.dest && next.startDate === p.startDate && next.pax === p.pax &&
+          next.days === p.days && next.nights === p.nights) return;
       await get().save(next);
     },
 

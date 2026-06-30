@@ -140,6 +140,13 @@ export const sbAddThreadComment = vi.fn(async () => {});
 export const sbSetThreadStatus = vi.fn(async () => {});
 export const sbSendNotificationMany = vi.fn(async () => {});
 
+// ── Tour profiles ──
+export const sbSubscribeTourProfiles = vi.fn(() => () => {});
+export const sbUpsertTourProfile = vi.fn(async () => {});
+export const sbDeleteTourProfile = vi.fn(async () => {});
+export const sbNextTourCode = vi.fn(async () => 'NĐ.01.01.25.01');
+export const sbSetQuoteTourProfile = vi.fn(async () => {});
+
 // ── Chat ──
 export const dmChatId = vi.fn((a: string, b: string) => 'dm_' + [a, b].sort().join('__'));
 export const sbSubscribeChats = vi.fn(() => () => {});

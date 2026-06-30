@@ -840,6 +840,8 @@ export const useQuoteStore = create<QuoteState>()(
                   dest: draft.info.dest || undefined,
                   startDate: draft.info.startDate ?? null,
                   pax: draft.pax,
+                  days: draft.info.days,
+                  nights: draft.info.nights,
                   primaryQuoteId: cloudId,
                   collaborators,
                 });
@@ -860,6 +862,8 @@ export const useQuoteStore = create<QuoteState>()(
                     dest: draft.info.dest || undefined,
                     startDate: draft.info.startDate ?? null,
                     pax: draft.pax,
+                    days: draft.info.days,
+                    nights: draft.info.nights,
                   });
                 } catch { /* non-blocking */ }
               }

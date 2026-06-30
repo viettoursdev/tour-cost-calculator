@@ -817,6 +817,25 @@ export function TourProfilesView() {
     useQuoteStore.getState().setView('cost'); // rời tab Hồ sơ tour → màn báo giá để kiểm tra & Lưu
   };
 
+  // Đồng bộ NGƯỢC: sửa thông tin cơ bản trên hồ sơ KHI báo giá chính đang MỞ →
+  // cập nhật luôn header báo giá để thông tin đồng nhất tức thì (không phải mở lại).
+  // Chỉ đẩy các ô CÓ giá trị — ô để trống nghĩa là "kế thừa từ báo giá", không ghi đè.
+  const pushBasicsToOpenQuote = (
+    prof: TourProfile,
+    info: { name: string; dest: string; startDate: string | null; pax: number; days: number; nights: number },
+  ) => {
+    const prim = metaOf(prof.id).primary;
+    if (!prim || currentQuoteId !== prim.cloudId) return;
+    const qs = useQuoteStore.getState();
+    const patch: { name?: string; dest?: string; startDate?: string | null; days?: number; nights?: number } = {};
+    if (info.name.trim()) patch.name = info.name.trim();
+    if (info.dest.trim()) patch.dest = info.dest.trim();
+    if (info.startDate) patch.startDate = info.startDate;
+    if (info.days > 0) { patch.days = info.days; patch.nights = info.nights; }
+    if (Object.keys(patch).length > 0) qs.patchInfo(patch);
+    if (info.pax > 0) qs.setPax(info.pax);
+  };
+
   // Xuất hồ sơ ra PDF 1 trang (gửi/in nội bộ). Nạp động exportTourProfilePDF.
   const exportProfilePDF = (p: TourProfile) => {
     const mt = metaOf(p.id);
@@ -1025,7 +1044,7 @@ export function TourProfilesView() {
             primary={metaOf(p.id).primary}
             onClose={() => setEditId(null)}
             onSave={async (info) => {
-              try { await setBasicInfo(p.id, info); setEditId(null); }
+              try { await setBasicInfo(p.id, info); pushBasicsToOpenQuote(p, info); setEditId(null); }
               catch (e) { window.alert('❌ Không lưu được thay đổi: ' + (e as Error).message + '\n\nCó thể bạn không có quyền sửa hồ sơ này — chỉ người tạo, cộng tác viên, Trưởng/Phó Phòng cùng phòng hoặc Ban Giám Đốc/CEO mới sửa được. Hãy nhờ họ thêm bạn làm cộng tác.'); }
             }}
           />
@@ -1392,7 +1411,7 @@ export function TourProfilesView() {
             primary={metaOf(ep.id).primary}
             onClose={() => setEditId(null)}
             onSave={async (info) => {
-              try { await setBasicInfo(ep.id, info); setEditId(null); }
+              try { await setBasicInfo(ep.id, info); pushBasicsToOpenQuote(ep, info); setEditId(null); }
               catch (e) { window.alert('❌ Không lưu được thay đổi: ' + (e as Error).message + '\n\nCó thể bạn không có quyền sửa hồ sơ này — chỉ người tạo, cộng tác viên, Trưởng/Phó Phòng cùng phòng hoặc Ban Giám Đốc/CEO mới sửa được. Hãy nhờ họ thêm bạn làm cộng tác.'); }
             }}
           />
