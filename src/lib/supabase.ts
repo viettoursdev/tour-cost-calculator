@@ -3157,7 +3157,10 @@ function rowToCloudQuoteEntry(
     valueRole: (r.quote_value_role as CloudQuoteEntry['valueRole']) ?? undefined,
     profit: (r.quote_profit as number | null) ?? undefined,
     lossReason: (r.loss_reason as string) ?? undefined,
-    customerId: (r.customer_id as string) ?? undefined,
+    // quotes.customer_id lưu UUID (FK), nhưng cả app khớp khách theo Customer.id =
+    // legacy_id. Đọc legacy_id qua embed FK (cust_ref) để customerId LUÔN là legacy,
+    // khớp custById/customers.find. KHÔNG trả uuid thô (sẽ trượt mọi lookup).
+    customerId: (r.cust_ref as { legacy_id?: string } | null)?.legacy_id ?? undefined,
     customerName: (r.customer_name as string) ?? undefined,
     departDate: r.depart_date ? new Date(r.depart_date as string).toISOString().slice(0, 10) : undefined,
     workflowDue: (r.workflow_due as CloudQuoteEntry['workflowDue']) ?? undefined,
@@ -3307,7 +3310,7 @@ async function saveSingleQuoteEntry(
     .from('quotes')
     .upsert(row, { onConflict: 'cloud_id' })
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, quote_value_role, quote_profit, loss_reason, ' +
-            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ' +
+            'customer_id, cust_ref:customers(legacy_id), customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, tour_profile_id, tour_code, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .single();
@@ -3358,7 +3361,7 @@ async function loadQuoteHistory(
   let q = client
     .from('quotes')
     .select('id, cloud_id, legacy_num_id, quote_code, name, template, pax, total_cost, status, quote_value_role, quote_profit, loss_reason, ' +
-            'customer_id, customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ncc_due, ' +
+            'customer_id, cust_ref:customers(legacy_id), customer_name, depart_date, workflow_due, workflow_summary, payment_summary, settlement_summary, ncc_due, ' +
             'linked_quote_id, linked_quote_name, linked_quote_template, tour_profile_id, tour_code, share, ' +
             'created_by_name, created_by_username, created_at, updated_at, updated_by_name')
     .order('created_at', { ascending: false });

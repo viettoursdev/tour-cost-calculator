@@ -21,8 +21,10 @@ import {
   sbBackfillWorkflowIndex,
   sbSetQuotePaymentSummary,
   sbBackfillPaymentIndex,
+  sbPushCustomers,
 } from '../../src/lib/supabase';
 import type { CloudQuoteEntry, QuoteDraft, Collaborator } from '../../src/types/quote';
+import type { Customer } from '../../src/types/customer';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void): Promise<T> =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
@@ -32,7 +34,8 @@ describe('quote history index (Task 4)', () => {
     await truncate(['quote_collaborators', 'attachments', 'quote_line_items',
       'quote_group_items', 'quote_groups', 'quote_payments',
       'quote_flight_fares', 'quote_flight_segments', 'quote_flights',
-      'quote_workflow_logs', 'quote_workflow_steps', 'quote_versions', 'quotes']);
+      'quote_workflow_logs', 'quote_workflow_steps', 'quote_versions', 'quotes',
+      'customer_interactions', 'customer_contacts', 'customers']);
   });
 
   // ── generateQuoteCode ──────────────────────────────────────────────────────
@@ -91,6 +94,25 @@ describe('quote history index (Task 4)', () => {
     expect(entry.createdAt).toBeTruthy();
     expect(entry.updatedAt).toBeTruthy();
     expect(entry.updatedBy).toBe('QA Tester (Sales)');
+  });
+
+  it('sbSaveQuote: customerId round-trip ra legacy_id (KHÔNG lộ uuid FK)', async () => {
+    const c = await getViettoursClient();
+    const savedBy = { u: 'tester', name: 'QA Tester', role: 'Sales' };
+    // Tạo khách: app định danh bằng legacy_id 'cust-q'; DB sinh uuid riêng.
+    await sbPushCustomers(
+      [{ id: 'cust-q', name: 'Khách Q', type: 'company', contacts: [], note: '', createdAt: '2026-01-01T00:00:00.000Z', createdBy: 'tester' } as Customer],
+      { name: 'QA', role: 'Sales' }, c,
+    );
+    const entry = await sbSaveQuote(
+      { id: 2001, cloudId: 'qreg-cust', name: 'Tour có khách', template: 'domestic', pax: 5, totalCost: 1_000_000, customerId: 'cust-q', customerName: 'Khách Q' },
+      savedBy, c,
+    );
+    // Trả về phải là legacy 'cust-q', KHÔNG phải uuid (nếu uuid → mọi lookup theo Customer.id trượt).
+    expect(entry.customerId).toBe('cust-q');
+    // Đọc lại qua subscribe cũng ra legacy.
+    const hist = await once<CloudQuoteEntry[]>((cb) => sbSubscribeQuoteHistory(cb, c));
+    expect(hist.find((e) => e.cloudId === 'qreg-cust')?.customerId).toBe('cust-q');
   });
 
   it('sbSaveQuote: update preserves quote_code and createdAt, applies new pax/totalCost', async () => {
