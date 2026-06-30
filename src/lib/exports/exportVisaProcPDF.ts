@@ -168,7 +168,7 @@ export function exportVisaProcPDF(it: VisaProcDoc): void {
   );
   pdf.text(dl, M, y + 4);
   y += dl.length * 4 + 4;
-  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn',
+  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn',
     PW / 2, y + 2, { align: 'center' });
 
   const slug = (it.title ?? '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);

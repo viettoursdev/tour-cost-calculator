@@ -199,7 +199,7 @@ export async function exportMenuDocx(it: Menu, code: string, includePrices = tru
 
   C.push(P(tr('✱ Thực đơn có thể điều chỉnh theo mùa, tình hình nguyên liệu và yêu cầu thực tế của đoàn.',
     { size: 14, italics: true, color: MUTE }), { before: 120, after: 0 }));
-  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn',
+  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn',
     { size: 14, color: MUTE }), { align: AlignmentType.CENTER, before: 200 }));
 
   const docDoc = new Document({

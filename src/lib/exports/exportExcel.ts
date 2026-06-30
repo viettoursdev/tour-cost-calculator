@@ -74,15 +74,15 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   ws.mergeCells(`C1:${LAST}1`);
   const t = ws.getCell('C1');
   t.value = 'BẢNG BÁO GIÁ DỊCH VỤ DU LỊCH';
-  t.font = fnt({ size: 16, bold: true, color: { argb: NAVY } });
+  t.font = fnt({ size: 16, bold: true, color: { argb: TEAL } });
   t.alignment = { horizontal: 'left', vertical: 'middle' };
   ws.mergeCells(`C2:${LAST}2`);
   const sub = ws.getCell('C2');
-  sub.value = 'VIETTOURS INCENTIVES & EVENTS   ·   Hotline 1900 1839   ·   www.viettours.com.vn';
+  sub.value = 'VIETTOURS INCENTIVES & EVENTS   ·   Hotline 091 951 7777   ·   www.viettours.com.vn';
   sub.font = fnt({ size: 8.5, color: { argb: TEAL } });
   sub.alignment = { horizontal: 'left' };
   for (let c = 1; c <= ncol; c++) {
-    ws.getCell(3, c).border = { bottom: { style: 'medium', color: { argb: NAVY } } };
+    ws.getCell(3, c).border = { bottom: { style: 'medium', color: { argb: TEAL } } };
   }
 
   // ── Rate block (foreign only) ──
@@ -132,8 +132,8 @@ export async function exportExcelQuote({ draft, savedBy }: ExportParams): Promis
   heads.forEach((h, i) => {
     const c = ws.getCell(H, i + 1);
     c.value = h; c.font = fnt({ size: 9.5, bold: true, color: { argb: WHITE } });
-    c.fill = fill(NAVY); c.alignment = cen;
-    c.border = { top: { style: 'thin', color: { argb: NAVY } }, bottom: { style: 'thin', color: { argb: NAVY } }, left: { style: 'thin', color: { argb: NAVY } }, right: { style: 'thin', color: { argb: NAVY } } };
+    c.fill = fill(TEAL); c.alignment = cen;
+    c.border = { top: { style: 'thin', color: { argb: TEAL } }, bottom: { style: 'thin', color: { argb: TEAL } }, left: { style: 'thin', color: { argb: TEAL } }, right: { style: 'thin', color: { argb: TEAL } } };
   });
   ws.getRow(H).height = 28;
 

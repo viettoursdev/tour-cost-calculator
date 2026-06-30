@@ -181,7 +181,7 @@ export async function exportVisaProcDocx(it: VisaProcDoc): Promise<void> {
 
   C.push(P(tr('Hồ sơ được lập bởi Viettours Incentives & Events. Vui lòng kiểm tra & bổ sung theo yêu cầu lãnh sự quán.',
     { size: 14, italics: true, color: MUTE }), { before: 120, after: 0 }));
-  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn',
+  C.push(P(tr('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn',
     { size: 14, color: MUTE }), { align: AlignmentType.CENTER, before: 160 }));
 
   const docDoc = new Document({

@@ -100,7 +100,7 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
 
   ensure(10);
   setF('normal'); pdf.setFontSize(8); pdf.setTextColor(...MUTE);
-  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 1900 1839  ·  www.viettours.com.vn', PW / 2, y + 4, { align: 'center' });
+  pdf.text('VIETTOURS INCENTIVES & EVENTS  ·  Hotline 091 951 7777  ·  www.viettours.com.vn', PW / 2, y + 4, { align: 'center' });
 
   const slug = (info.name ?? '').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 28);
   pdf.save(`QuyTrinh_${slug || 'BaoGia'}.pdf`);
