@@ -151,7 +151,9 @@ export function NCCView() {
       s.name,
       ...(s.contacts ?? []).map((ct) => ct.name ?? ''),
     ].filter(Boolean).join(' ');
-    return sortList(filterRank(base, search, text), sort);
+    // Khớp CHÍNH XÁC theo ký tự tên NCC/tên người liên hệ (không fuzzy) — gõ một
+    // phần tên vẫn ra, nhưng các ký tự phải liền mạch, tránh kết quả lệch.
+    return sortList(filterRank(base, search, text, { fuzzy: false }), sort);
   }, [visible, search, tourSearch, filterSector, filterContinent, filterCountry, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Ncc) => {
@@ -162,16 +164,21 @@ export function NCCView() {
       setDupPrompt({ form, dup });
       return;
     }
+    const isNew = !form.id;
     await save(form);
     setModal(null);
+    toast(isNew ? `✅ Đã lưu nhà cung cấp mới "${form.name}".` : `✅ Đã cập nhật nhà cung cấp "${form.name}".`);
   };
 
   // Người dùng chọn "Vẫn tạo NCC mới" trong hộp thoại trùng tên.
   const handleDupCreate = async () => {
     if (!dupPrompt) return;
-    await save(dupPrompt.form);
+    const { form } = dupPrompt;
+    const isNew = !form.id;
+    await save(form);
     setDupPrompt(null);
     setModal(null);
+    toast(isNew ? `✅ Đã lưu nhà cung cấp mới "${form.name}".` : `✅ Đã cập nhật nhà cung cấp "${form.name}".`);
   };
 
   // Người dùng chọn "Gộp vào bản đã có": dồn thông tin vừa nhập vào NCC trùng tên.

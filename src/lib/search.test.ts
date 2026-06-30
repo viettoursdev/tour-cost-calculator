@@ -31,6 +31,13 @@ describe('searchScore', () => {
     // "nang" is a subsequence of "n a n g" inside the haystack even with a gap
     expect(searchScore('Nha Trang', 'nhtr')).toBeGreaterThan(0);
   });
+  it('precise mode (fuzzy:false) requires a contiguous substring', () => {
+    // fuzzy subsequence is OFF → scattered chars no longer match…
+    expect(searchScore('Nha Trang', 'nhtr', { fuzzy: false })).toBe(0);
+    // …but a real partial substring of the name still matches (no full name needed).
+    expect(searchScore('Champa Island Resort', 'champa', { fuzzy: false })).toBeGreaterThan(0);
+    expect(searchScore('Champa Island Resort', 'island', { fuzzy: false })).toBeGreaterThan(0);
+  });
   it('empty query matches everything', () => {
     expect(searchScore('anything', '')).toBeGreaterThan(0);
   });

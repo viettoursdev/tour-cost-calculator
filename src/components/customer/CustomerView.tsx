@@ -101,15 +101,19 @@ export function CustomerView() {
       c.name, c.note, c.address, c.taxCode, c.source, ...(c.tags ?? []),
       ...(c.contacts ?? []).map((ct) => `${ct.name ?? ''} ${ct.phone ?? ''} ${ct.email ?? ''} ${ct.position ?? ''}`),
     ].filter(Boolean).join(' ');
-    return sortList(filterRank(base, search, text), sort);
+    // Khớp CHÍNH XÁC theo ký tự tên/contact (không fuzzy) — gõ một phần tên
+    // công ty vẫn ra, nhưng các ký tự phải liền mạch, tránh kết quả lệch.
+    return sortList(filterRank(base, search, text, { fuzzy: false }), sort);
   }, [visible, search, filterType, sort, owner, dateRange, dateFrom, dateTo]);
 
   const handleSave = async (form: Customer) => {
     const norm = normalizeVN(form.name);
     const dup = customers.find((c) => c.id !== form.id && normalizeVN(c.name) === norm);
     if (dup && !window.confirm(`⚠ Đã có khách hàng trùng tên "${dup.name}". Vẫn lưu?`)) return;
+    const isNew = !form.id;
     await save(form);
     setModal(null);
+    toast(isNew ? `✅ Đã lưu khách hàng mới "${form.name}".` : `✅ Đã cập nhật khách hàng "${form.name}".`);
   };
 
   // Xoá ngay + toast Hoàn tác (thay hộp thoại xác nhận).
