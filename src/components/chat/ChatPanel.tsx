@@ -15,14 +15,26 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EmojiEmotionsOutlinedIcon from '@mui/icons-material/EmojiEmotionsOutlined';
 import AddReactionOutlinedIcon from '@mui/icons-material/AddReactionOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import ForwardOutlinedIcon from '@mui/icons-material/ForwardOutlined';
+import BookmarkAddOutlinedIcon from '@mui/icons-material/BookmarkAddOutlined';
+import NotificationsOffOutlinedIcon from '@mui/icons-material/NotificationsOffOutlined';
+import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
+import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useAuthStore } from '@/stores/authStore';
 import { canViewStaffRole } from '@/auth/ROLES';
 import { useChatStore, chatUnread, firstUnreadIndex } from '@/stores/chatStore';
-import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbChatTyping, sbSendNotificationMany, type TypingChannel } from '@/lib/supabase';
+import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbSetChatMessagePinned, sbChatTyping, sbSendNotificationMany, type TypingChannel } from '@/lib/supabase';
 import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
-import { chatDayLabel, sameDay, groupWithPrev, mentionQuery, applyMention, mentionSegments } from '@/lib/chatFormat';
+import { chatDayLabel, sameDay, groupWithPrev, mentionQuery, applyMention, mentionSegments, matchMessageIds, searchHighlight } from '@/lib/chatFormat';
 import { EmojiPicker } from '@/components/chat/EmojiPicker';
+import { GroupManageDialog } from '@/components/chat/GroupManageDialog';
+import { ForwardDialog } from '@/components/chat/ForwardDialog';
 import { toast } from '@/stores/toastStore';
 import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
 import { LEGACY } from '@/theme';
@@ -43,6 +55,8 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const online = useChatStore((s) => s.online);
   const setPanelOpen = useChatStore((s) => s.setPanelOpen);
   const setActiveChatId = useChatStore((s) => s.setActiveChatId);
+  const muted = useChatStore((s) => s.muted);
+  const toggleMute = useChatStore((s) => s.toggleMute);
   const nameOf = (u: string) => users.find((x) => x.u === u)?.name ?? u;
   const isOnline = (u?: string) => !!u && u !== me?.u && online.includes(u);
 
@@ -65,6 +79,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [mentionQ, setMentionQ] = useState<string | null>(null);
   const [mentionSel, setMentionSel] = useState<string[]>([]); // username đã @nhắc trong tin đang soạn
   const [dragOver, setDragOver] = useState(false);
+  const [listQ, setListQ] = useState('');            // tìm trong danh sách cuộc
+  const [searchOpen, setSearchOpen] = useState(false); // thanh tìm trong cuộc
+  const [searchQ, setSearchQ] = useState('');
+  const [matchPos, setMatchPos] = useState(0);
+  const [manageOpen, setManageOpen] = useState(false); // dialog quản lý nhóm
+  const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null); // tin đang chuyển tiếp
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingRef = useRef<TypingChannel | null>(null);
   const lastPingRef = useRef(0);
@@ -76,11 +96,16 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [active, setActive] = useState<Chat | null>(null);
   useEffect(() => {
     setText(''); setReplyTarget(null); setEditTarget(null); setMentionSel([]); setMentionQ(null);
+    setSearchOpen(false); setSearchQ(''); setMatchPos(0); setManageOpen(false);
     if (!activeId) { setActive(null); return; }
     setActive(null); setAnchor(null);
     return sbSubscribeChat(activeId, setActive);
   }, [activeId]);
-  const titleOf = (c: Chat) => (c.isGroup ? (c.title || 'Nhóm') : nameOf(c.members.find((m) => m !== me?.u) ?? ''));
+  const titleOf = (c: Chat) => {
+    if (c.isGroup) return c.title || 'Nhóm';
+    if (c.id === `saved_${me?.u ?? ''}` || (c.members.length === 1 && c.members[0] === me?.u)) return '📌 Tin đã lưu';
+    return nameOf(c.members.find((m) => m !== me?.u) ?? '');
+  };
 
   // Báo cho store biết panel đang mở (để khỏi báo trùng tin của cuộc đang xem) + xin quyền OS notif.
   useEffect(() => { setPanelOpen(open); if (open) void requestBrowserNotifPermission(); }, [open, setPanelOpen]);
@@ -102,6 +127,14 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     if (chatUnread(active, me.u)) void sbMarkChatRead(active.id, me.u);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50);
   }, [active?.messages.length, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tìm trong cuộc: đổi từ khoá → về kết quả đầu & cuộn tới.
+  useEffect(() => {
+    if (!searchQ || !active) { setMatchPos(0); return; }
+    const ids = matchMessageIds(active.messages, searchQ);
+    setMatchPos(0);
+    if (ids[0]) setTimeout(() => scrollToMsg(ids[0]), 30);
+  }, [searchQ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Gõ phím → báo "đang nhập" (throttle 1.5s).
   const onTypeText = (v: string) => {
@@ -203,6 +236,41 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     setMenuFor(null);
     void sbToggleChatReaction(active.id, m.id, emoji, me.u).catch((e) => toast('Lỗi: ' + (e as Error).message, 'error'));
   };
+  const savedChatId = me ? `saved_${me.u}` : '';
+  const togglePin = (m: ChatMessage) => {
+    if (!active) return;
+    setMenuFor(null);
+    void sbSetChatMessagePinned(active.id, m.id, !m.pinned).catch((e) => toast('Ghim lỗi: ' + (e as Error).message, 'error'));
+  };
+  const forwardTo = async (targetChatId: string, m: ChatMessage) => {
+    if (!me) return;
+    const copy: ChatMessage = {
+      id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(),
+      ...(m.text ? { text: m.text } : {}), ...(m.file ? { file: m.file } : {}),
+      forwardedFrom: m.forwardedFrom ?? m.byName,
+    };
+    try { await sbSendChatMessage(targetChatId, copy); }
+    catch (e) { toast('Chuyển tiếp lỗi: ' + (e as Error).message, 'error'); }
+  };
+  const saveMessage = async (m: ChatMessage) => {
+    if (!me) return;
+    setMenuFor(null);
+    try {
+      await sbEnsureChat({ id: savedChatId, members: [me.u], isGroup: false, createdBy: me.u, createdAt: new Date().toISOString(), title: 'Tin đã lưu', messages: [] });
+      await forwardTo(savedChatId, m);
+      toast('Đã lưu vào "Tin đã lưu".', 'success');
+    } catch (e) { toast('Lưu lỗi: ' + (e as Error).message, 'error'); }
+  };
+  // Tin hệ thống ghi lại sự kiện nhóm (đổi tên/thêm/xoá/rời) — hiển thị giữa khung.
+  const sendSystem = (text: string) => {
+    if (!me || !active) return;
+    const msg: ChatMessage = { id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(), text: `${me.name} ${text}`, system: true };
+    void sbSendChatMessage(active.id, msg).catch(() => { /* phụ trợ — bỏ qua lỗi */ });
+  };
+  const scrollToMsg = (mid: string) => {
+    const el = scrollRef.current?.querySelector(`[data-mid="${CSS.escape(mid)}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
   const pushFileMessage = async (file: ChatMessage['file']) => {
     if (!me || !active || !file) return;
     const msg: ChatMessage = { id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(), file };
@@ -243,6 +311,22 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
 
   const others = users.filter((u) => u.u !== me?.u);
 
+  // Tìm trong cuộc đang mở.
+  const matchIds = active && searchQ.trim() ? matchMessageIds(active.messages, searchQ) : [];
+  const activeMatchId = matchIds[matchPos];
+  const gotoMatch = (delta: number) => {
+    if (!matchIds.length) return;
+    const n = (matchPos + delta + matchIds.length) % matchIds.length;
+    setMatchPos(n); scrollToMsg(matchIds[n]);
+  };
+  // Lọc danh sách cuộc theo tên/preview/thành viên.
+  const lq = listQ.trim().toLowerCase();
+  const shownChats = lq
+    ? chats.filter((c) => `${titleOf(c)} ${c.lastText ?? ''} ${c.members.map(nameOf).join(' ')}`.toLowerCase().includes(lq))
+    : chats;
+  const isMuted = active ? muted.includes(active.id) : false;
+  const pinned = active ? active.messages.filter((m) => m.pinned && !m.deleted) : [];
+
   return (
     <Drawer anchor="right" open={open} onClose={onClose}
       slotProps={{ paper: { sx: { width: { xs: '100%', sm: 440 }, display: 'flex', flexDirection: 'column' } } }}>
@@ -255,38 +339,61 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           )}
         </Box>
         {!active && !newMode && <Tooltip title="Trò chuyện mới"><IconButton size="small" onClick={() => setNewMode(true)} sx={{ color: '#fff' }}><AddCommentIcon /></IconButton></Tooltip>}
+        {active && (
+          <>
+            <Tooltip title="Tìm trong cuộc"><IconButton size="small" onClick={() => { setSearchOpen((v) => !v); setSearchQ(''); }} sx={{ color: '#fff', opacity: searchOpen ? 1 : 0.85 }}><SearchIcon /></IconButton></Tooltip>
+            <Tooltip title={isMuted ? 'Bật lại thông báo' : 'Tắt thông báo'}><IconButton size="small" onClick={() => toggleMute(active.id)} sx={{ color: '#fff' }}>{isMuted ? <NotificationsOffOutlinedIcon /> : <NotificationsActiveOutlinedIcon />}</IconButton></Tooltip>
+            {active.isGroup && <Tooltip title="Quản lý nhóm"><IconButton size="small" onClick={() => setManageOpen(true)} sx={{ color: '#fff' }}><GroupAddOutlinedIcon /></IconButton></Tooltip>}
+          </>
+        )}
         <IconButton size="small" onClick={onClose} sx={{ color: '#fff' }}><CloseIcon /></IconButton>
       </Box>
 
       {/* DANH SÁCH CUỘC TRÒ CHUYỆN */}
       {!active && !newMode && (
-        <Box sx={{ flex: 1, overflowY: 'auto' }}>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {chats.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>Chưa có cuộc trò chuyện. Bấm ✏️ để bắt đầu.</Box>
           ) : (
-            <List disablePadding>
-              {chats.map((c) => {
-                const unread = me ? chatUnread(c, me.u) : false;
-                return (
-                  <ListItemButton key={c.id} onClick={() => setActiveId(c.id)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-                    <Badge color="error" variant="dot" invisible={!unread} sx={{ mr: 1.5 }}>
-                      <Badge overlap="circular" variant="dot" anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                        invisible={c.isGroup || !isOnline(c.members.find((m) => m !== me?.u))}
-                        sx={{ '& .MuiBadge-dot': { bgcolor: '#22c55e', border: '2px solid #fff', width: 11, height: 11, borderRadius: '50%' } }}>
-                        <Avatar sx={{ width: 36, height: 36, bgcolor: c.isGroup ? '#7c3aed' : LEGACY.teal, fontSize: 15 }}>{c.isGroup ? '👥' : titleOf(c).slice(0, 1).toUpperCase()}</Avatar>
-                      </Badge>
-                    </Badge>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography fontSize={14} fontWeight={unread ? 800 : 700} noWrap>{titleOf(c)}</Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                        {c.lastByName ? `${c.lastByName}: ` : ''}{c.lastText || 'Bắt đầu trò chuyện…'}
-                      </Typography>
-                    </Box>
-                    {c.lastAt && <Typography variant="caption" color="text.disabled" sx={{ ml: 1, whiteSpace: 'nowrap' }}>{fmtTime(c.lastAt).split(' ')[0]}</Typography>}
-                  </ListItemButton>
-                );
-              })}
-            </List>
+            <>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                <InputBase fullWidth value={listQ} onChange={(e) => setListQ(e.target.value)} placeholder="Tìm cuộc trò chuyện…" sx={{ fontSize: 14 }} />
+                {listQ && <IconButton size="small" onClick={() => setListQ('')}><CloseIcon sx={{ fontSize: 16 }} /></IconButton>}
+              </Box>
+              {shownChats.length === 0 ? (
+                <Box sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>Không tìm thấy cuộc phù hợp.</Box>
+              ) : (
+                <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                  <List disablePadding>
+                    {shownChats.map((c) => {
+                      const unread = me ? chatUnread(c, me.u) : false;
+                      return (
+                        <ListItemButton key={c.id} onClick={() => setActiveId(c.id)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                          <Badge color="error" variant="dot" invisible={!unread || muted.includes(c.id)} sx={{ mr: 1.5 }}>
+                            <Badge overlap="circular" variant="dot" anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                              invisible={c.isGroup || !isOnline(c.members.find((m) => m !== me?.u))}
+                              sx={{ '& .MuiBadge-dot': { bgcolor: '#22c55e', border: '2px solid #fff', width: 11, height: 11, borderRadius: '50%' } }}>
+                              <Avatar sx={{ width: 36, height: 36, bgcolor: c.isGroup ? '#7c3aed' : LEGACY.teal, fontSize: 15 }}>{c.isGroup ? '👥' : titleOf(c).slice(0, 1).toUpperCase()}</Avatar>
+                            </Badge>
+                          </Badge>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography fontSize={14} fontWeight={unread ? 800 : 700} noWrap>{titleOf(c)}</Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                              {c.lastByName ? `${c.lastByName}: ` : ''}{c.lastText || 'Bắt đầu trò chuyện…'}
+                            </Typography>
+                          </Box>
+                          <Stack alignItems="flex-end" sx={{ ml: 1 }}>
+                            {c.lastAt && <Typography variant="caption" color="text.disabled" sx={{ whiteSpace: 'nowrap' }}>{fmtTime(c.lastAt).split(' ')[0]}</Typography>}
+                            {muted.includes(c.id) && <NotificationsOffOutlinedIcon sx={{ fontSize: 14, color: 'text.disabled' }} />}
+                          </Stack>
+                        </ListItemButton>
+                      );
+                    })}
+                  </List>
+                </Box>
+              )}
+            </>
           )}
         </Box>
       )}
@@ -323,6 +430,32 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
       {/* KHUNG TIN NHẮN */}
       {active && (
         <>
+          {searchOpen && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1.5, py: 0.75, borderBottom: '1px solid rgba(15,58,74,0.1)', bgcolor: 'rgba(20,150,140,0.06)' }}>
+              <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+              <InputBase autoFocus fullWidth value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Tìm trong cuộc trò chuyện…" sx={{ fontSize: 14 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); gotoMatch(e.shiftKey ? -1 : 1); } if (e.key === 'Escape') { setSearchOpen(false); setSearchQ(''); } }} />
+              <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap', minWidth: 48, textAlign: 'center' }}>
+                {searchQ.trim() ? (matchIds.length ? `${matchPos + 1}/${matchIds.length}` : '0') : ''}
+              </Typography>
+              <IconButton size="small" disabled={!matchIds.length} onClick={() => gotoMatch(-1)}><KeyboardArrowUpIcon fontSize="small" /></IconButton>
+              <IconButton size="small" disabled={!matchIds.length} onClick={() => gotoMatch(1)}><KeyboardArrowDownIcon fontSize="small" /></IconButton>
+              <IconButton size="small" onClick={() => { setSearchOpen(false); setSearchQ(''); }}><CloseIcon fontSize="small" /></IconButton>
+            </Box>
+          )}
+          {pinned.length > 0 && (
+            <Box sx={{ px: 1.5, py: 0.75, borderBottom: '1px solid rgba(15,58,74,0.1)', bgcolor: 'rgba(245,158,11,0.08)', maxHeight: 96, overflowY: 'auto' }}>
+              {pinned.slice().reverse().map((m) => (
+                <Stack key={m.id} direction="row" alignItems="center" spacing={0.75} sx={{ py: 0.25 }}>
+                  <PushPinIcon sx={{ fontSize: 14, color: '#d18a13' }} />
+                  <Typography fontSize={12.5} noWrap sx={{ flex: 1, cursor: 'pointer', minWidth: 0 }} onClick={() => scrollToMsg(m.id)}>
+                    <b>{m.byName}:</b> {m.text || (m.file ? `📎 ${m.file.name}` : '')}
+                  </Typography>
+                  <Tooltip title="Bỏ ghim"><IconButton size="small" sx={{ width: 22, height: 22 }} onClick={() => togglePin(m)}><CloseIcon sx={{ fontSize: 13 }} /></IconButton></Tooltip>
+                </Stack>
+              ))}
+            </Box>
+          )}
           <Box ref={scrollRef} sx={{ position: 'relative', flex: 1, overflowY: 'auto', p: 1.5, bgcolor: '#f7faf9', display: 'flex', flexDirection: 'column', gap: 0.75 }}
             onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
             onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
@@ -355,7 +488,12 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                     <Box sx={{ flex: 1, height: '1px', bgcolor: '#dc3250', opacity: 0.35 }} />
                   </Box>
                 )}
-                <Box sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', mt: grouped ? -0.5 : 0, '&:hover .msg-act': { opacity: 1 } }}>
+                {m.system ? (
+                  <Box data-mid={m.id} sx={{ alignSelf: 'center', my: 0.25, maxWidth: '92%' }}>
+                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', textAlign: 'center', bgcolor: 'rgba(15,58,74,0.06)', px: 1.5, py: 0.4, borderRadius: 3 }}>{m.text}</Typography>
+                  </Box>
+                ) : (
+                <Box data-mid={m.id} sx={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '82%', mt: grouped ? -0.5 : 0, borderRadius: 2, outline: m.id === activeMatchId ? '2px solid #d18a13' : 'none', outlineOffset: 2, '&:hover .msg-act': { opacity: 1 } }}>
                   {active.isGroup && !mine && !grouped && <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary', fontWeight: 700 }}>{m.byName}</Typography>}
                   <Stack direction={mine ? 'row-reverse' : 'row'} alignItems="center" spacing={0.25}>
                     <Box sx={{ px: 1.5, py: 1, borderRadius: 2, bgcolor: mine ? LEGACY.teal : '#fff', color: mine ? '#fff' : 'inherit', boxShadow: 1, minWidth: 0 }}>
@@ -363,6 +501,9 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                         <Typography fontSize={13} sx={{ fontStyle: 'italic', opacity: 0.75 }}>🚫 Tin đã thu hồi</Typography>
                       ) : (
                         <>
+                          {m.forwardedFrom && (
+                            <Typography fontSize={11} sx={{ fontStyle: 'italic', opacity: 0.75, mb: 0.25 }}>↗ Chuyển tiếp từ {m.forwardedFrom}</Typography>
+                          )}
                           {m.replyTo && (
                             <Box sx={{ borderLeft: '3px solid', borderColor: mine ? 'rgba(255,255,255,0.65)' : LEGACY.teal, pl: 1, mb: 0.5, opacity: 0.9 }}>
                               <Typography fontSize={11} fontWeight={700} noWrap>{m.replyTo.byName}</Typography>
@@ -371,11 +512,17 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                           )}
                           {m.text && (
                             <Typography component="div" fontSize={14} sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                              {mentionSegments(m.text, (m.mentions ?? []).map(nameOf)).map((s, i) => (
-                                s.mention
-                                  ? <Box key={i} component="span" sx={{ fontWeight: 700, color: mine ? '#cffff5' : LEGACY.teal }}>{s.t}</Box>
-                                  : <Fragment key={i}>{s.t}</Fragment>
-                              ))}
+                              {searchQ.trim() && matchIds.includes(m.id)
+                                ? searchHighlight(m.text, searchQ).map((s, i) => (
+                                    s.hit
+                                      ? <Box key={i} component="span" sx={{ bgcolor: m.id === activeMatchId ? '#ffd54a' : 'rgba(245,158,11,0.4)', color: '#3a2c00', borderRadius: 0.5 }}>{s.t}</Box>
+                                      : <Fragment key={i}>{s.t}</Fragment>
+                                  ))
+                                : mentionSegments(m.text, (m.mentions ?? []).map(nameOf)).map((s, i) => (
+                                    s.mention
+                                      ? <Box key={i} component="span" sx={{ fontWeight: 700, color: mine ? '#cffff5' : LEGACY.teal }}>{s.t}</Box>
+                                      : <Fragment key={i}>{s.t}</Fragment>
+                                  ))}
                             </Typography>
                           )}
                           {m.file && (() => {
@@ -426,9 +573,9 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                       })}
                     </Stack>
                   )}
-                  {(lastOfGroup || m.editedAt) && (
+                  {(lastOfGroup || m.editedAt || m.pinned) && (
                     <Typography variant="caption" sx={{ color: 'text.disabled', display: 'block', textAlign: mine ? 'right' : 'left', mx: 1 }}>
-                      {fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
+                      {m.pinned ? '📌 ' : ''}{fmtTime(m.at)}{m.editedAt && !m.deleted ? ' · đã sửa' : ''}
                     </Typography>
                   )}
                   {mine && m.id === active.messages[active.messages.length - 1]?.id && (() => {
@@ -441,6 +588,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                     );
                   })()}
                 </Box>
+                )}
                 </Fragment>
               );
             })}
@@ -523,6 +671,9 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           </Stack>
         )}
         {!showReactPicker && <MenuItem onClick={() => menuFor && startReply(menuFor.m)}><ReplyIcon fontSize="small" sx={{ mr: 1 }} />Trả lời</MenuItem>}
+        {!showReactPicker && <MenuItem onClick={() => menuFor && togglePin(menuFor.m)}>{menuFor?.m.pinned ? <PushPinIcon fontSize="small" sx={{ mr: 1 }} /> : <PushPinOutlinedIcon fontSize="small" sx={{ mr: 1 }} />}{menuFor?.m.pinned ? 'Bỏ ghim' : 'Ghim'}</MenuItem>}
+        {!showReactPicker && <MenuItem onClick={() => { if (menuFor) setForwardMsg(menuFor.m); setMenuFor(null); }}><ForwardOutlinedIcon fontSize="small" sx={{ mr: 1 }} />Chuyển tiếp</MenuItem>}
+        {!showReactPicker && <MenuItem onClick={() => menuFor && void saveMessage(menuFor.m)}><BookmarkAddOutlinedIcon fontSize="small" sx={{ mr: 1 }} />Lưu</MenuItem>}
         {!showReactPicker && menuFor?.m.by === me?.u && !!menuFor?.m.text && (
           <MenuItem onClick={() => menuFor && startEdit(menuFor.m)}><EditIcon fontSize="small" sx={{ mr: 1 }} />Sửa</MenuItem>
         )}
@@ -530,6 +681,13 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           <MenuItem onClick={() => menuFor && void doDelete(menuFor.m)} sx={{ color: '#dc3250' }}><DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />Thu hồi</MenuItem>
         )}
       </Menu>
+
+      {active && me && active.isGroup && (
+        <GroupManageDialog open={manageOpen} onClose={() => setManageOpen(false)} chat={active} me={me} users={users}
+          nameOf={nameOf} onSystem={sendSystem} onLeft={() => { setManageOpen(false); setActiveId(null); }} />
+      )}
+      <ForwardDialog open={!!forwardMsg} onClose={() => setForwardMsg(null)} chats={chats} titleOf={titleOf}
+        onPick={(cid) => { if (forwardMsg) { void forwardTo(cid, forwardMsg); toast('Đã chuyển tiếp.', 'success'); } }} />
 
       <FilePreviewDialog open={!!preview} onClose={() => setPreview(null)} file={preview} />
     </Drawer>
