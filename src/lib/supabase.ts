@@ -3247,7 +3247,7 @@ async function saveSingleQuoteEntry(
   // 1. Fetch the existing row for this cloud_id (to preserve code/createdAt on update)
   const { data: existing, error: fetchErr } = await client
     .from('quotes')
-    .select('id, quote_code, created_at, created_by_name, created_by_username')
+    .select('id, quote_code, template, created_at, created_by_name, created_by_username')
     .eq('cloud_id', entry.cloudId)
     .maybeSingle();
   if (fetchErr) throw new Error('sbSaveQuote fetch: ' + fetchErr.message);
@@ -3256,6 +3256,24 @@ async function saveSingleQuoteEntry(
   let createdAt: string;
   let createdByName: string;
   let createdByUsername: string;
+  // Phân loại (Báo giá vs DMC) là BẤT BIẾN sau khi tạo: khi cập nhật một báo giá đã
+  // tồn tại, GIỮ template trong DB thay vì lấy từ draft. Nếu draft mang template khác
+  // (ví dụ điều hướng thoát màn DMC đặt tạm template='intl' mà còn currentQuoteId trỏ
+  // về DMC) thì lần Lưu kế tiếp KHÔNG còn dời báo giá sang sheet khác — "lưu nhầm qua
+  // nhau". Chốt chặn này song hành với save_quote_state (migration 0083).
+  let resolvedTemplate: string = entry.template;
+  if (existing) {
+    const storedTemplate = existing.template as string | null;
+    if (storedTemplate) {
+      if (storedTemplate !== entry.template) {
+        console.warn(
+          `sbSaveQuote: bỏ qua đổi template ${storedTemplate} → ${entry.template} ` +
+          `cho cloud_id=${entry.cloudId} (giữ phân loại gốc để tránh dời sheet Báo giá↔DMC).`,
+        );
+      }
+      resolvedTemplate = storedTemplate;
+    }
+  }
 
   if (existing) {
     // update: preserve code + createdAt + creator info
@@ -3294,7 +3312,7 @@ async function saveSingleQuoteEntry(
     legacy_num_id: entry.id,
     quote_code: quoteCode,
     name: entry.name,
-    template: entry.template,
+    template: resolvedTemplate,
     pax: entry.pax,
     total_cost: entry.totalCost,
     created_at: createdAt,

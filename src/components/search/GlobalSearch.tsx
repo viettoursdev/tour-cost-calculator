@@ -156,11 +156,11 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
       if (!confirmLeave()) return;
       void st.loadCloud(it.id, { dmc: it.kind === 'dmc' }).then((r) => { if (!r.ok) window.alert('⚠ ' + r.error); });
     } else if (it.kind === 'customer' || it.kind === 'ncc' || it.kind === 'contract') {
-      if (needLeave('view')) { if (!confirmLeave()) return; useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } })); }
+      if (needLeave('view')) { if (!confirmLeave()) return; useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl', currentQuoteId: null } })); }
       st.setView(it.kind);
     } else if (it.kind === 'tourProfile') {
       // Mở tab "Hồ sơ tour" + focus đúng hồ sơ (TourProfilesView consume lúc mount).
-      if (needLeave('view')) { if (!confirmLeave()) return; useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } })); }
+      if (needLeave('view')) { if (!confirmLeave()) return; useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl', currentQuoteId: null } })); }
       useTourProfileStore.getState().requestFocus(it.id);
       st.setView('cockpit');
     } else {
@@ -178,7 +178,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
     const st = useQuoteStore.getState();
     if (st.draft.template !== 'domestic' && st.draft.template !== 'intl') {
       if (!window.confirm('Mở mục này? Thay đổi chưa lưu ở màn hình hiện tại có thể mất.')) return;
-      useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } }));
+      useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl', currentQuoteId: null } }));
     }
     st.setView(nav.v);
     onClose();

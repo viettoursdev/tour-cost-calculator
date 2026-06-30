@@ -159,8 +159,10 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
       case 'tourProfile': {
         // link.id = id hồ sơ tour → mở tab Hồ sơ tour & focus đúng hồ sơ.
         // Thoát template 'dmc' (bị setView ép về 'cost') để vào được tab cockpit.
+        // Xoá currentQuoteId để lần Lưu sau KHÔNG ghi đè báo giá DMC bằng template 'intl'
+        // (chống dời sheet Báo giá↔DMC).
         if (useQuoteStore.getState().draft.template === 'dmc') {
-          useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl' } }));
+          useQuoteStore.setState((s) => ({ draft: { ...s.draft, template: 'intl', currentQuoteId: null } }));
         }
         useTourProfileStore.getState().requestFocus(link.id);
         setView('cockpit');

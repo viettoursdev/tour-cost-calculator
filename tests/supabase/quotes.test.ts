@@ -118,6 +118,29 @@ describe('quote history index (Task 4)', () => {
     expect(updated.totalCost).toBe(12_000_000);
   });
 
+  it('sbSaveQuote: template is IMMUTABLE on update — a saved quote never changes sheet (Báo giá↔DMC)', async () => {
+    const c = await getViettoursClient();
+    const savedBy = { u: 'tester', name: 'QA Tester', role: 'Sales' };
+
+    // Tạo một báo giá DMC.
+    const dmc = await sbSaveDMCQuote(
+      { id: 1500, cloudId: 'qlock-1', name: 'DMC gốc', template: 'dmc', pax: 20, totalCost: 5_000 },
+      savedBy,
+      c,
+    );
+    expect(dmc.template).toBe('dmc');
+
+    // Lưu chồng cùng cloud_id NHƯNG draft mang template 'intl' (mô phỏng lỗi client
+    // đặt tạm template='intl' mà vẫn giữ currentQuoteId trỏ về báo giá DMC).
+    const flipped = await sbSaveQuote(
+      { id: 1500, cloudId: 'qlock-1', name: 'DMC gốc', template: 'intl', pax: 20, totalCost: 5_000 },
+      savedBy,
+      c,
+    );
+    // Phải GIỮ template gốc 'dmc' — không bị dời sang sheet Báo giá.
+    expect(flipped.template).toBe('dmc');
+  });
+
   it('sbSaveQuote: second regular quote gets seq 02 (counts existing same-template rows)', async () => {
     const c = await getViettoursClient();
     const savedBy = { u: 'tester', name: 'QA', role: 'CEO' };
