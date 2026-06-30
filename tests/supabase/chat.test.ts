@@ -152,6 +152,8 @@ describe('chat gateway', () => {
     expect(m!.text).toBe('edited text');
     expect(m!.editedAt).toBeTruthy();
     expect(new Date(m!.editedAt!).getTime()).toBeGreaterThanOrEqual(new Date(before).getTime());
+    // Preview danh sách phải đồng bộ với nội dung đã sửa (Fix 3).
+    expect(result!.lastText).toBe('edited text');
   });
 
   it('sbDeleteChatMessage — soft delete sets deleted=true, clears text+file', async () => {
@@ -177,6 +179,8 @@ describe('chat gateway', () => {
     expect(m!.deleted).toBe(true);
     expect(m!.text).toBeUndefined();
     expect(m!.file).toBeUndefined();
+    // Preview danh sách phải hiện "Tin đã thu hồi" thay vì nội dung cũ (Fix 3).
+    expect(result!.lastText).toBe('Tin đã thu hồi');
   });
 
   it('sbToggleChatReaction — adds then removes; emoji key dropped when array empties', async () => {
@@ -205,7 +209,9 @@ describe('chat gateway', () => {
     expect(m2!.reactions).not.toHaveProperty('👍');
   });
 
-  it('sbMarkChatRead — last_read for that member advances', async () => {
+  // Đánh dấu đã đọc cho CHÍNH MÌNH (RLS 0086 chỉ cho cập nhật dòng của mình — app
+  // luôn gọi sbMarkChatRead với username của người đang đăng nhập).
+  it('sbMarkChatRead — last_read for the current member advances', async () => {
     const c = await getViettoursClient();
     const chatId = 'dm_read__tester';
     await sbEnsureChat({
@@ -214,12 +220,12 @@ describe('chat gateway', () => {
     }, c);
 
     const snap1 = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
-    const readBefore = snap1!.reads?.['read'];
+    const readBefore = snap1!.reads?.['tester'];
 
-    await sbMarkChatRead(chatId, 'read', c);
+    await sbMarkChatRead(chatId, 'tester', c);
 
     const snap2 = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
-    const readAfter = snap2!.reads?.['read'];
+    const readAfter = snap2!.reads?.['tester'];
     expect(readAfter).toBeTruthy();
     if (readBefore) {
       expect(new Date(readAfter!).getTime()).toBeGreaterThanOrEqual(new Date(readBefore).getTime());

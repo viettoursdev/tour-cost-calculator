@@ -4461,10 +4461,32 @@ export async function sbSendChatMessage(
 }
 
 /**
+ * Recompute chats.last_text/last_by_name from the chat's most recent message.
+ * Keeps the conversation-list preview in sync after an edit or revoke of the
+ * last message. Does NOT touch last_at (editing must not re-sort the list).
+ */
+async function refreshChatLastPreview(client: SupabaseClient, chatId: string): Promise<void> {
+  const { data } = await client.from('chat_messages')
+    .select('text, file, deleted, by_name')
+    .eq('chat_id', chatId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return;
+  const row = data as unknown as Record<string, unknown>;
+  const file = row.file as ChatMessage['file'] | null;
+  const lastText = row.deleted
+    ? 'Tin đã thu hồi'
+    : ((row.text as string) || (file ? `📎 ${file.name}` : ''));
+  await client.from('chats')
+    .update({ last_text: lastText, last_by_name: (row.by_name as string) ?? null })
+    .eq('id', chatId);
+}
+
+/**
  * Edit the text of an existing message.
  * - Sets text and edited_at on the row matching (chat_id, legacy_id).
- * - Note: lastText in chats is not updated on edit here; the subscriber
- *   assembles it from messages.
+ * - Refreshes the conversation-list preview from the latest message.
  */
 export async function sbEditChatMessage(
   id: string,
@@ -4477,6 +4499,7 @@ export async function sbEditChatMessage(
     .eq('chat_id', id)
     .eq('legacy_id', msgId);
   if (error) throw new Error('sbEditChatMessage: ' + error.message);
+  await refreshChatLastPreview(client, id);
 }
 
 /**
@@ -4494,6 +4517,7 @@ export async function sbDeleteChatMessage(
     .eq('chat_id', id)
     .eq('legacy_id', msgId);
   if (error) throw new Error('sbDeleteChatMessage: ' + error.message);
+  await refreshChatLastPreview(client, id);
 }
 
 /**

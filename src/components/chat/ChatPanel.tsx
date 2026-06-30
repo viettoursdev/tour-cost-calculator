@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, LinearProgress, List, ListItemButton,
   Menu, MenuItem, Stack, TextField, Tooltip, Typography,
@@ -16,7 +16,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useAuthStore } from '@/stores/authStore';
 import { canViewStaffRole } from '@/auth/ROLES';
 import { useChatStore, chatUnread } from '@/stores/chatStore';
-import { dmChatId, sbEnsureChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction } from '@/lib/supabase';
+import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction } from '@/lib/supabase';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { toast } from '@/stores/toastStore';
 import { FilePreviewDialog, type PreviewFile } from '@/components/common/FilePreviewDialog';
@@ -52,7 +52,13 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
 
   const previewOf = (m: ChatMessage) => (m.deleted ? 'Tin đã thu hồi' : m.text || (m.file ? `📎 ${m.file.name}` : ''));
 
-  const active = useMemo(() => chats.find((c) => c.id === activeId) ?? null, [chats, activeId]);
+  // Cuộc đang mở: subscribe RIÊNG (kèm toàn bộ tin nhắn) — danh sách `chats` không tải messages.
+  const [active, setActive] = useState<Chat | null>(null);
+  useEffect(() => {
+    if (!activeId) { setActive(null); return; }
+    setActive(null);
+    return sbSubscribeChat(activeId, setActive);
+  }, [activeId]);
   const titleOf = (c: Chat) => (c.isGroup ? (c.title || 'Nhóm') : nameOf(c.members.find((m) => m !== me?.u) ?? ''));
 
   // Đánh dấu đã đọc + cuộn xuống khi mở/đổi cuộc / có tin mới.
