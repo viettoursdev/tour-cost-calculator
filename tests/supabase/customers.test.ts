@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Customer, CustomerInteraction } from '../../src/types/customer';
 import { getViettoursClient, truncate } from './_setup';
-import { sbPushCustomers, sbSubscribeCustomers } from '../../src/lib/supabase';
+import { sbPushCustomers, sbSubscribeCustomers, sbDeleteCustomers } from '../../src/lib/supabase';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
@@ -39,7 +39,7 @@ describe('customers gateway', () => {
     expect(new Date(cu.createdAt).getTime()).toBe(new Date(originalCreatedAt).getTime());
   });
 
-  it('removes deleted customers on full-overwrite push', async () => {
+  it('push is UPSERT-ONLY — không xoá khách vắng mặt (chống wipe khi sửa song song)', async () => {
     const c = await getViettoursClient();
     const custA: Customer = {
       id: 'cust-a', name: 'Alpha', type: 'company',
@@ -51,10 +51,15 @@ describe('customers gateway', () => {
     };
     // Push both A and B first.
     await sbPushCustomers([custA, custB], { name: 'QA', role: 'Sales' }, c);
-    // Push only A — B should be removed.
+    // Push only A (mô phỏng danh sách CŨ) — B PHẢI còn nguyên (upsert-only, không xoá-diff).
     await sbPushCustomers([custA], { name: 'QA', role: 'Sales' }, c);
+    let list = await once<Customer[]>((cb) => sbSubscribeCustomers(cb, c));
+    expect(list.find((x) => x.id === 'cust-a')).toBeDefined();
+    expect(list.find((x) => x.id === 'cust-b')).toBeDefined();
 
-    const list = await once<Customer[]>((cb) => sbSubscribeCustomers(cb, c));
+    // Xoá thật chỉ qua sbDeleteCustomers (targeted).
+    await sbDeleteCustomers([custB], c);
+    list = await once<Customer[]>((cb) => sbSubscribeCustomers(cb, c));
     expect(list.find((x) => x.id === 'cust-a')).toBeDefined();
     expect(list.find((x) => x.id === 'cust-b')).toBeUndefined();
   });

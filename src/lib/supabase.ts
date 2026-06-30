@@ -590,23 +590,12 @@ export function sbPushCustomers(
       by_username: ia.byU, by_name: ia.byName, type: ia.type, text: ia.text, sort_order: i,
     })));
   }
-  // Full-overwrite: delete customers removed from the list using safe fetch-then-delete pattern.
-  const keepIds = list.map((c) => c.id);
-  if (keepIds.length > 0) {
-    const { data: existing, error: fetchErr } = await client.from('customers').select('legacy_id');
-    if (fetchErr) throw new Error('sbPushCustomers fetch: ' + fetchErr.message);
-    const toDelete = (existing ?? [])
-      .map((r) => r.legacy_id as string)
-      .filter((lid) => lid && !keepIds.includes(lid));
-    if (toDelete.length > 0) {
-      const del = await client.from('customers').delete().in('legacy_id', toDelete);
-      if (del.error) throw new Error('sbPushCustomers delete: ' + del.error.message);
-    }
-  } else {
-    // Empty push = wipe all (full-overwrite parity with fbPushCustomers).
-    const del = await client.from('customers').delete().not('legacy_id', 'is', null);
-    if (del.error) throw new Error('sbPushCustomers delete all: ' + del.error.message);
-  }
+  // UPSERT-ONLY — KHÔNG xoá-diff. Trước đây hàm này xoá mọi khách không có trong
+  // `list`; nhưng MỌI thao tác xoá thật đã đi qua sbDeleteCustomers (xoá theo
+  // dbId/legacy_id, kể cả nhánh `merge`), nên xoá-diff ở đây THỪA và là nguồn mất
+  // dữ liệu: khi 2 người sửa song song, người lưu với danh sách CŨ sẽ xoá nhầm
+  // khách MỚI người kia vừa thêm (RLS `for all` không chặn xoá). Bỏ hẳn xoá-diff
+  // → upsert-only an toàn tuyệt đối; xoá vẫn chính xác qua sbDeleteCustomers.
   });
 }
 
