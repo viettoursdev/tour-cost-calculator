@@ -261,7 +261,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
                           <Chip size="small" label={NOTIF_PRIORITY[n.priority].label}
                             sx={{ height: 17, fontSize: 9.5, fontWeight: 800, bgcolor: NOTIF_PRIORITY[n.priority].color, color: '#fff' }} />
                         )}
-                        <Typography fontWeight={n.read ? 600 : 800} fontSize={15.5} noWrap sx={{ flex: 1 }}>
+                        <Typography fontWeight={n.read ? 600 : 800} fontSize={15.5} noWrap sx={{ flex: 1, minWidth: 0 }}>
                           {n.title}
                         </Typography>
                       </Stack>

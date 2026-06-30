@@ -201,7 +201,7 @@ export function ExecBoard() {
               {d.bySale.map((s) => (
                 <Box key={s.name}>
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <Typography fontSize={12.5} fontWeight={700} sx={{ flex: 1 }} noWrap>{s.name}</Typography>
+                    <Typography fontSize={12.5} fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>{s.name}</Typography>
                     <Typography variant="caption" color="text.secondary">{s.count} deal</Typography>
                     <Typography fontSize={12.5} fontWeight={700} sx={{ minWidth: 72, textAlign: 'right' }}>{fmtShort(s.value)}</Typography>
                   </Stack>

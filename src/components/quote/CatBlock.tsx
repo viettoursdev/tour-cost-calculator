@@ -147,7 +147,7 @@ export function CatBlock({
             }} />
           </Box>
           <Box sx={{ fontSize: 20 }}>{cat.icon}</Box>
-          <Typography fontWeight={700} sx={{ flex: 1 }}>{cat.label}</Typography>
+          <Typography fontWeight={700} sx={{ flex: 1, minWidth: 0 }} noWrap>{cat.label}</Typography>
           {onOpenRate && enabled && !readOnly && (
             <Box
               component="button"

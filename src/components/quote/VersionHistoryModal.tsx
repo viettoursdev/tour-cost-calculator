@@ -148,6 +148,7 @@ export function VersionHistoryModal({ open, onClose, cloudId: propCloudId, isDmc
                     border: '1px solid rgba(20,150,140,0.25)', borderRadius: 2, px: 1.5, py: 1,
                     bgcolor: i === 0 ? 'rgba(168,230,221,0.18)' : 'transparent',
                     opacity: busy ? 0.6 : 1,
+                    flexWrap: 'wrap', rowGap: 1,
                   }}
                 >
                   <Chip
@@ -156,7 +157,7 @@ export function VersionHistoryModal({ open, onClose, cloudId: propCloudId, isDmc
                     color={i === 0 ? 'success' : 'default'}
                     sx={{ fontWeight: 700, flexShrink: 0 }}
                   />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box sx={{ flex: 1, minWidth: 140 }}>
                     {editing ? (
                       <TextField
                         value={editText}
@@ -170,15 +171,15 @@ export function VersionHistoryModal({ open, onClose, cloudId: propCloudId, isDmc
                         InputProps={{ sx: { fontSize: 14, fontWeight: 600 } }}
                       />
                     ) : (
-                      <Typography variant="body2" fontWeight={600} noWrap>{v.note || `Phiên bản ${v.versionNo}`}</Typography>
+                      <Typography variant="body2" fontWeight={600} sx={{ overflowWrap: 'anywhere' }}>{v.note || `Phiên bản ${v.versionNo}`}</Typography>
                     )}
-                    <Typography variant="caption" color="text.secondary" noWrap>
+                    <Typography variant="caption" color="text.secondary" component="div" sx={{ overflowWrap: 'anywhere' }}>
                       {new Date(v.savedAt).toLocaleString('vi-VN')} · {v.savedBy}
                       {total != null ? ` · ${fmtVND(total)}` : ''}
                     </Typography>
                   </Box>
                   {editing ? (
-                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
                       <Tooltip title="Lưu tên">
                         <span>
                           <IconButton size="small" color="success" onClick={() => saveEdit(v)} disabled={busy}>
@@ -189,7 +190,7 @@ export function VersionHistoryModal({ open, onClose, cloudId: propCloudId, isDmc
                       <Button size="small" onClick={() => setEditingNo(null)} disabled={busy}>Huỷ</Button>
                     </Stack>
                   ) : (
-                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                    <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0, ml: 'auto' }}>
                       <Tooltip title="Đổi tên bản lưu">
                         <span>
                           <IconButton size="small" onClick={() => startEdit(v)} disabled={busy}>

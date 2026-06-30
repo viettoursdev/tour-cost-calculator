@@ -117,7 +117,7 @@ export function HrOverviewPanel({ employees }: { employees: HrEmployee[] }) {
             {docAlerts.slice(0, 8).map((a, i) => (
               <Stack key={i} direction="row" spacing={1} alignItems="center">
                 {dchip(a.days)}
-                <Typography variant="body2" noWrap>{a.emp} · {a.kind}{a.name ? ` (${a.name})` : ''}</Typography>
+                <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>{a.emp} · {a.kind}{a.name ? ` (${a.name})` : ''}</Typography>
               </Stack>
             ))}
             {docAlerts.length > 8 && <Typography variant="caption" color="text.secondary">…và {docAlerts.length - 8} mục khác</Typography>}
@@ -127,7 +127,7 @@ export function HrOverviewPanel({ employees }: { employees: HrEmployee[] }) {
         <AlertCard icon={<BadgeOutlinedIcon />} title="Thẻ HDV sắp hết hạn" color="#dc3250" count={cardAlerts.length}>
           <Stack spacing={0.5}>
             {cardAlerts.slice(0, 8).map((a, i) => (
-              <Stack key={i} direction="row" spacing={1} alignItems="center">{dchip(a.days)}<Typography variant="body2" noWrap>{a.name}</Typography></Stack>
+              <Stack key={i} direction="row" spacing={1} alignItems="center">{dchip(a.days)}<Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>{a.name}</Typography></Stack>
             ))}
             {cardAlerts.length > 8 && <Typography variant="caption" color="text.secondary">…và {cardAlerts.length - 8} mục khác</Typography>}
           </Stack>
@@ -138,7 +138,7 @@ export function HrOverviewPanel({ employees }: { employees: HrEmployee[] }) {
             {stuck.slice(0, 8).map((c, i) => (
               <Stack key={i} direction="row" spacing={1} alignItems="center">
                 <Chip size="small" variant="outlined" label={`${c.days}n`} />
-                <Typography variant="body2" noWrap>{c.name} · {CANDIDATE_STAGE_LABEL[c.stage]}</Typography>
+                <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>{c.name} · {CANDIDATE_STAGE_LABEL[c.stage]}</Typography>
               </Stack>
             ))}
           </Stack>

@@ -2539,7 +2539,7 @@ function ProfileRow({
                     sx={{ border: '1px solid rgba(15,58,74,0.12)', borderRadius: 1.5, px: 1, py: 0.5 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
-                        <Typography fontSize={13} fontWeight={600} noWrap>
+                        <Typography fontSize={13} fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>
                           {isPrimary ? '★ ' : ''}{q.name}
                         </Typography>
                         {q.valueRole && q.valueRole !== 'current' && (
@@ -3263,7 +3263,7 @@ function CompareOptionsPanel({ options, primaryId, showPrice, currentId, onOpen 
             {options.map((q) => (
               <Box component="th" key={q.cloudId} sx={{ bgcolor: q.cloudId === currentId ? 'rgba(13,122,106,0.1)' : 'rgba(0,0,0,0.03)' }}>
                 <Stack direction="row" alignItems="center" spacing={0.5}>
-                  <Typography fontSize={12.5} fontWeight={800} noWrap>{q.cloudId === primaryId ? '★ ' : ''}{q.name}</Typography>
+                  <Typography fontSize={12.5} fontWeight={800} noWrap sx={{ flex: 1, minWidth: 0 }}>{q.cloudId === primaryId ? '★ ' : ''}{q.name}</Typography>
                   <Button size="small" sx={{ minWidth: 0, p: 0.25 }} onClick={() => onOpen(q.cloudId)}>Mở</Button>
                 </Stack>
               </Box>

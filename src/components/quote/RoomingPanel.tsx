@@ -124,7 +124,7 @@ export function RoomingPanel({ rows, onChange }: Props) {
                 {r.members.length === 0 && <Typography variant="caption" color="text.disabled">Phòng trống — gán khách bên dưới.</Typography>}
                 {r.members.map((m) => (
                   <Stack key={m.id} direction="row" alignItems="center" spacing={0.5}>
-                    <Typography variant="body2" sx={{ flex: 1 }} noWrap>{m.name || '(chưa tên)'}</Typography>
+                    <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{m.name || '(chưa tên)'}</Typography>
                     <Tooltip title="Bỏ khỏi phòng"><IconButton size="small" onClick={() => removeFromRoom(m.id)}>
                       <PersonRemoveIcon fontSize="inherit" /></IconButton></Tooltip>
                   </Stack>
@@ -143,7 +143,7 @@ export function RoomingPanel({ rows, onChange }: Props) {
             <Stack spacing={0.5}>
               {unassigned.map((g) => (
                 <Stack key={g.id} direction="row" alignItems="center" spacing={1}>
-                  <Typography variant="body2" sx={{ flex: 1 }} noWrap>{g.name || '(chưa tên)'}</Typography>
+                  <Typography variant="body2" sx={{ flex: 1, minWidth: 0 }} noWrap>{g.name || '(chưa tên)'}</Typography>
                   <TextField select size="small" value="" sx={{ minWidth: 150 }}
                     onChange={(e) => assign(g.id, e.target.value)} label="Xếp vào phòng">
                     <MenuItem value="" sx={{ display: 'none' }} />
