@@ -3843,8 +3843,8 @@ async function getQuoteProjectImpl(
     if (e) throw new Error('sbGetQuoteProject children: ' + (e as { message: string }).message);
   }
 
-  // 4. Assemble currentState from shredded rows
-  const currentState = assembleQuote({
+  // 4. Assemble fresh state from shredded rows (items/flights/workflow/groups/…)
+  const assembled = assembleQuote({
     quote: row,
     lineItems: (lineItems ?? []) as unknown as Record<string, unknown>[],
     flights: (flights ?? []) as unknown as Record<string, unknown>[],
@@ -3859,10 +3859,10 @@ async function getQuoteProjectImpl(
   });
 
   // 4b. Batch-load per-step attachments using composite parent_id = `${cloudId}::${step.id}`
-  if (currentState.workflow && currentState.workflow.length > 0) {
-    const compositeIds = currentState.workflow.map((s) => `${cloudId}::${s.id}`);
+  if (assembled.workflow && assembled.workflow.length > 0) {
+    const compositeIds = assembled.workflow.map((s) => `${cloudId}::${s.id}`);
     const attMap = await loadAttachmentsForParents(client, 'quote_workflow_step', compositeIds);
-    for (const step of currentState.workflow) {
+    for (const step of assembled.workflow) {
       const atts = attMap.get(`${cloudId}::${step.id}`);
       if (atts && atts.length > 0) step.attachments = atts;
     }
@@ -3879,6 +3879,14 @@ async function getQuoteProjectImpl(
       state: vr.state as QuoteDraft,
     };
   });
+
+  // 4c. currentState = full snapshot của version mới nhất (NỀN) phủ field tươi từ
+  // shredded/index (assembled) lên trên. Vì assembleQuote chỉ tái dựng một số field,
+  // nền version giữ lại các field nó KHÔNG xử lý: validUntil/rateDate/cancellation/
+  // advance/catOrder/deadline/request… (chống mất khi lưu cloud → mở lại). Field
+  // index-owned (status/valueRole/rates/tourProfileId) được loadCloud override tiếp.
+  const latestState = mappedVersions[0]?.state as QuoteDraft | undefined;
+  const currentState: QuoteDraft = latestState ? { ...latestState, ...assembled } : assembled;
 
   // 6. Map collaborators (username → Collaborator)
   const collaborators: Collaborator[] = (collabRows ?? []).map((r) => {
@@ -5063,6 +5071,83 @@ export async function sbPushHrGuides(
     const del = await client.from('hr_guides').delete().not('legacy_id', 'is', null);
     if (del.error) throw new Error('sbPushHrGuides delete all: ' + del.error.message);
   }
+}
+
+// ── HR Attendance (Chấm công / bảng công, row-per NV×tháng, xem 0084) ─────────
+
+import type {
+  HrAttendance, AttendanceDays, AttendanceSummary, AttendanceStatus,
+  AttendanceConfirmation, AttendanceFeedback, AttendanceSource,
+} from '@/types/attendance';
+
+const rowToHrAttendance = (r: Record<string, unknown>): HrAttendance => ({
+  id: r.legacy_id as string,
+  employeeLegacyId: (r.employee_legacy_id as string) ?? '',
+  employeeCode: (r.employee_code as string) ?? '',
+  fullName: (r.full_name as string) ?? '',
+  department: (r.department as string) ?? '',
+  period: (r.period as string) ?? '',
+  days: (r.days as AttendanceDays) ?? {},
+  summary: (r.summary as AttendanceSummary) ?? ({} as AttendanceSummary),
+  status: (r.status as AttendanceStatus) ?? 'draft',
+  confirmation: (r.confirmation as AttendanceConfirmation) ?? { status: 'pending' },
+  feedback: (r.feedback as AttendanceFeedback[]) ?? [],
+  source: (r.source as AttendanceSource) ?? 'manual',
+  createdAt: (r.created_at as string) ?? new Date().toISOString(),
+  createdBy: (r.created_by_name as string) ?? '',
+  updatedAt: (r.updated_at as string) ?? undefined,
+  updatedBy: (r.updated_by_name as string) ?? undefined,
+});
+
+const hrAttendanceToRow = (a: HrAttendance): Record<string, unknown> => ({
+  legacy_id: a.id,
+  employee_legacy_id: a.employeeLegacyId,
+  employee_code: a.employeeCode,
+  full_name: a.fullName,
+  department: a.department,
+  period: a.period,
+  days: a.days ?? {},
+  summary: a.summary ?? {},
+  status: a.status,
+  confirmation: a.confirmation ?? { status: 'pending' },
+  feedback: a.feedback ?? [],
+  source: a.source,
+  created_by_name: a.createdBy,
+  created_at: a.createdAt,
+  updated_at: a.updatedAt ?? null,
+  updated_by_name: a.updatedBy ?? null,
+});
+
+export function sbSubscribeHrAttendance(
+  cb: (list: HrAttendance[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'hr_attendance', async (cl) => {
+    const { data, error } = await cl
+      .from('hr_attendance')
+      .select('*')
+      .order('period', { ascending: false });
+    if (error) throw new Error('sbSubscribeHrAttendance: ' + error.message);
+    return (data ?? []).map(rowToHrAttendance);
+  }, cb);
+}
+
+/** Upsert một bảng công (đụng đúng dòng theo legacy_id → không ghi đè người khác). */
+export async function sbUpsertHrAttendance(a: HrAttendance, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('hr_attendance').upsert(hrAttendanceToRow(a), { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbUpsertHrAttendance: ' + error.message);
+}
+
+/** Upsert nhiều bảng công (import cả tháng). */
+export async function sbUpsertHrAttendances(list: HrAttendance[], client: SupabaseClient = sb): Promise<void> {
+  if (!list.length) return;
+  const { error } = await client.from('hr_attendance').upsert(list.map(hrAttendanceToRow), { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbUpsertHrAttendances: ' + error.message);
+}
+
+export async function sbDeleteHrAttendance(id: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('hr_attendance').delete().eq('legacy_id', id);
+  if (error) throw new Error('sbDeleteHrAttendance: ' + error.message);
 }
 
 // ── HR Evaluations (Đánh giá / KPI) ───────────────────────────────────────────

@@ -465,6 +465,32 @@ describe('Task 5 — sbSaveQuoteState / sbGetQuoteProject', () => {
     expect(project!.updatedBy).toBe('QA');
   });
 
+  it('currentState GIỮ field chỉ-có-trong-state (validUntil/rateDate/cancellation/advance/catOrder) — không mất khi lưu cloud rồi nạp lại', async () => {
+    const c = await getViettoursClient();
+    const draft = makeDraft({
+      validUntil: '2026-12-31',
+      rateDate: '2026-09-01',
+      cancellation: [{ when: 'Trước 30 ngày', penalty: 50 }],
+      catOrder: ['transport', 'hotel'],
+      advance: { status: 'draft', tourCosts: [], otherCosts: [], advanceRequested: 5_000_000, note: 'Tạm ứng test' } as QuoteDraft['advance'],
+    });
+    await sbSaveQuoteState(CLOUD_ID, draft, 'Bản có điều khoản', { name: 'QA', role: 'Sales' }, c);
+
+    const project = await sbGetQuoteProject(CLOUD_ID, c);
+    expect(project).not.toBeNull();
+    const cs = project!.currentState;
+    // assembleQuote KHÔNG tái dựng các field này → phải lấy từ snapshot version mới nhất.
+    expect(cs.validUntil).toBe('2026-12-31');
+    expect(cs.rateDate).toBe('2026-09-01');
+    expect(cs.cancellation).toEqual([{ when: 'Trước 30 ngày', penalty: 50 }]);
+    expect(cs.catOrder).toEqual(['transport', 'hotel']);
+    expect(cs.advance?.advanceRequested).toBe(5_000_000);
+    expect(cs.advance?.note).toBe('Tạm ứng test');
+    // Field tươi từ shredded vẫn đúng (assembled phủ lên nền).
+    expect(cs.pax).toBe(20);
+    expect(cs.items.hotel?.[0]?.name).toBe('Vinpearl Paradise Hạ Long');
+  });
+
   it('versions accumulate and version_no increments correctly', async () => {
     const c = await getViettoursClient();
     await sbSaveQuote(
