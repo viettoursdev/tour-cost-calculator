@@ -10,6 +10,14 @@ import type { Chat, ChatMessage } from '@/types/chat';
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
   new Promise<T>((res) => { const un = fn((v) => { un(); res(v); }); });
 
+const waitFor = async (pred: () => boolean, ms = 3000) => {
+  const t0 = Date.now();
+  while (!pred()) {
+    if (Date.now() - t0 > ms) throw new Error('waitFor timeout');
+    await new Promise((r) => setTimeout(r, 20));
+  }
+};
+
 describe('chat gateway', () => {
   beforeEach(async () => {
     await truncate(['chat_messages', 'chat_members', 'chats']);
@@ -309,5 +317,31 @@ describe('chat gateway', () => {
     await sbRemoveChatMember(chatId, 'alpha', c);
     res = await once<Chat | null>((cb) => sbSubscribeChat(chatId, cb, c));
     expect(res!.members.sort()).toEqual(['bravo', 'tester']);
+  });
+
+  it('phân trang: mở nạp trang mới nhất + loadOlder nạp tin cũ', async () => {
+    const c = await getViettoursClient();
+    const chatId = 'dm_golf__tester';
+    await sbEnsureChat({ id: chatId, members: ['tester', 'golf'], isGroup: false, createdBy: 'tester', createdAt: new Date().toISOString(), messages: [] }, c);
+    const base = Date.now();
+    for (let i = 0; i < 35; i++) {
+      await sbSendChatMessage(chatId, { id: `pg-${i}`, by: 'tester', byName: 'QA', at: new Date(base + i * 1000).toISOString(), text: `tin ${i}` }, c);
+    }
+
+    let latest: Chat | null = null;
+    let hasMore = false;
+    const sub = sbSubscribeChat(chatId, (chat, meta) => { latest = chat; if (meta) hasMore = meta.hasMore; }, c);
+    try {
+      await waitFor(() => !!latest && latest.messages.length === 30); // trang đầu = 30 tin mới nhất
+      expect(hasMore).toBe(true);
+      expect(latest!.messages[0].text).toBe('tin 5');
+      expect(latest!.messages[29].text).toBe('tin 34');
+
+      const n = await sub.loadOlder();
+      expect(n).toBe(5);
+      await waitFor(() => !!latest && latest.messages.length === 35);
+      expect(latest!.messages[0].text).toBe('tin 0');
+      expect(hasMore).toBe(false);
+    } finally { sub(); }
   });
 });

@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type UIEvent } from 'react';
 import {
-  Avatar, Badge, Box, Button, Checkbox, Chip, Drawer, IconButton, InputBase, LinearProgress, List, ListItemButton,
+  Avatar, Badge, Box, Button, Checkbox, Chip, CircularProgress, Drawer, IconButton, InputBase, LinearProgress, List, ListItemButton,
   Menu, MenuItem, Popover, Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -28,7 +28,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useAuthStore } from '@/stores/authStore';
 import { canViewStaffRole } from '@/auth/ROLES';
 import { useChatStore, chatUnread, firstUnreadIndex } from '@/stores/chatStore';
-import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbSetChatMessagePinned, sbChatTyping, sbSendNotificationMany, type TypingChannel } from '@/lib/supabase';
+import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatRead, sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbSetChatMessagePinned, sbChatTyping, sbSendNotificationMany, type TypingChannel, type ChatSubscription } from '@/lib/supabase';
 import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { chatDayLabel, sameDay, groupWithPrev, mentionQuery, applyMention, mentionSegments, matchMessageIds, searchHighlight } from '@/lib/chatFormat';
@@ -41,6 +41,7 @@ import { LEGACY } from '@/theme';
 import type { Chat, ChatMessage } from '@/types';
 
 const MAX_FILE = 20 * 1024 * 1024;
+const CHAT_PAGE_HINT = 12; // chỉ hiện "Đầu cuộc trò chuyện" khi đủ nhiều tin
 const REACTIONS = ['👍', '❤️', '😄', '🎉', '✅', '😮'];
 const uid = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const fmtTime = (iso: string) => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
@@ -85,22 +86,53 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [matchPos, setMatchPos] = useState(0);
   const [manageOpen, setManageOpen] = useState(false); // dialog quản lý nhóm
   const [forwardMsg, setForwardMsg] = useState<ChatMessage | null>(null); // tin đang chuyển tiếp
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingRef = useRef<TypingChannel | null>(null);
   const lastPingRef = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const chatSubRef = useRef<ChatSubscription | null>(null);
+  const skipAutoScrollRef = useRef(false);            // bỏ auto-cuộn-đáy khi tải tin cũ
+  const restoreHeightRef = useRef<number | null>(null); // chiều cao trước khi chèn tin cũ (giữ vị trí)
 
   const previewOf = (m: ChatMessage) => (m.deleted ? 'Tin đã thu hồi' : m.text || (m.file ? `📎 ${m.file.name}` : ''));
 
-  // Cuộc đang mở: subscribe RIÊNG (kèm toàn bộ tin nhắn) — danh sách `chats` không tải messages.
+  // Cuộc đang mở: subscribe RIÊNG (nạp trang tin mới nhất + cập nhật tăng dần).
   const [active, setActive] = useState<Chat | null>(null);
   useEffect(() => {
     setText(''); setReplyTarget(null); setEditTarget(null); setMentionSel([]); setMentionQ(null);
     setSearchOpen(false); setSearchQ(''); setMatchPos(0); setManageOpen(false);
-    if (!activeId) { setActive(null); return; }
+    setHasMoreOlder(false); setLoadingOlder(false); skipAutoScrollRef.current = false; restoreHeightRef.current = null;
+    if (!activeId) { setActive(null); chatSubRef.current = null; return; }
     setActive(null); setAnchor(null);
-    return sbSubscribeChat(activeId, setActive);
+    const sub = sbSubscribeChat(activeId, (chat, meta) => { setActive(chat); if (meta) setHasMoreOlder(meta.hasMore); });
+    chatSubRef.current = sub;
+    return () => { sub(); chatSubRef.current = null; };
   }, [activeId]);
+
+  // Giữ vị trí cuộn sau khi chèn trang tin CŨ ở đầu (tránh nhảy màn).
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && restoreHeightRef.current != null) {
+      el.scrollTop = el.scrollTop + (el.scrollHeight - restoreHeightRef.current);
+      restoreHeightRef.current = null;
+      setLoadingOlder(false);
+    }
+  }, [active?.messages.length]);
+
+  // Cuộn lên đầu → tải thêm trang tin cũ.
+  const onMessagesScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollTop <= 64 && hasMoreOlder && !loadingOlder && chatSubRef.current) {
+      setLoadingOlder(true);
+      skipAutoScrollRef.current = true;
+      restoreHeightRef.current = el.scrollHeight;
+      void chatSubRef.current.loadOlder().then((n) => {
+        if (!n) { setLoadingOlder(false); skipAutoScrollRef.current = false; restoreHeightRef.current = null; }
+      });
+    }
+  };
   const titleOf = (c: Chat) => {
     if (c.isGroup) return c.title || 'Nhóm';
     if (c.id === `saved_${me?.u ?? ''}` || (c.members.length === 1 && c.members[0] === me?.u)) return '📌 Tin đã lưu';
@@ -125,6 +157,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     if (!active || !me || active.id !== activeId) return;
     setAnchor((a) => a ?? { id: active.id, read: active.reads?.[me.u] });
     if (chatUnread(active, me.u)) void sbMarkChatRead(active.id, me.u);
+    if (skipAutoScrollRef.current) { skipAutoScrollRef.current = false; return; } // đang tải tin cũ → giữ vị trí
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }), 50);
   }, [active?.messages.length, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -456,10 +489,16 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
               ))}
             </Box>
           )}
-          <Box ref={scrollRef} sx={{ position: 'relative', flex: 1, overflowY: 'auto', p: 1.5, bgcolor: '#f7faf9', display: 'flex', flexDirection: 'column', gap: 0.75 }}
+          <Box ref={scrollRef} onScroll={onMessagesScroll} sx={{ position: 'relative', flex: 1, overflowY: 'auto', p: 1.5, bgcolor: '#f7faf9', display: 'flex', flexDirection: 'column', gap: 0.75 }}
             onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
             onDragLeave={(e) => { if (e.currentTarget === e.target) setDragOver(false); }}
             onDrop={onDropFiles}>
+            {loadingOlder && (
+              <Box sx={{ alignSelf: 'center', py: 0.5 }}><CircularProgress size={18} /></Box>
+            )}
+            {!hasMoreOlder && !loadingOlder && active.messages.length > CHAT_PAGE_HINT && (
+              <Typography sx={{ alignSelf: 'center', fontSize: 11, color: 'text.disabled', py: 0.5 }}>· Đầu cuộc trò chuyện ·</Typography>
+            )}
             {dragOver && (
               <Box sx={{ position: 'sticky', top: 0, zIndex: 2, alignSelf: 'stretch', py: 2, mb: 1, textAlign: 'center', borderRadius: 2,
                 border: '2px dashed', borderColor: LEGACY.teal, bgcolor: 'rgba(20,150,140,0.08)', color: LEGACY.teal, fontWeight: 700, pointerEvents: 'none' }}>

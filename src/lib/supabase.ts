@@ -4136,6 +4136,11 @@ export async function sbUpdateDMCCollaborators(
 import type { Chat, ChatMessage } from '@/types/chat';
 
 const CHAT_MSG_CAP = 500;
+const CHAT_PAGE_SIZE = 30; // số tin nạp mỗi trang (mở cuộc + cuộn tải thêm)
+const CHAT_MSG_COLS = 'id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions, mentions, pinned, is_system, forwarded_from, sort_order';
+
+/** Kết nối realtime cho MỘT cuộc: hàm huỷ, kèm loadOlder() để cuộn tải tin cũ. */
+export type ChatSubscription = (() => void) & { loadOlder: () => Promise<number> };
 
 /** ID for a 1-1 DM (stable, sorted). */
 export const dmChatId = (a: string, b: string): string => 'dm_' + [a, b].sort().join('__');
@@ -4183,42 +4188,26 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
 }
 
 /**
- * Assemble a single chat with its messages from the DB.
- * Used by sbSubscribeChat and internally.
+ * Fetch just the chats row (metadata) for one chat.
  */
-async function assembleChat(
-  client: SupabaseClient,
-  chatId: string,
-): Promise<Chat | null> {
-  const { data: chatRow, error: cErr } = await client
-    .from('chats')
-    .select('*')
-    .eq('id', chatId)
-    .maybeSingle();
-  if (cErr) throw new Error('assembleChat chats: ' + cErr.message);
-  if (!chatRow) return null;
+async function fetchChatRow(client: SupabaseClient, chatId: string): Promise<Record<string, unknown> | null> {
+  const { data, error } = await client.from('chats').select('*').eq('id', chatId).maybeSingle();
+  if (error) throw new Error('fetchChatRow: ' + error.message);
+  return data ? (data as unknown as Record<string, unknown>) : null;
+}
 
-  const [
-    { data: memberRows, error: mErr },
-    { data: msgRows, error: msgErr },
-  ] = await Promise.all([
-    client.from('chat_members').select('username, last_read').eq('chat_id', chatId),
-    client.from('chat_messages')
-      .select('id, legacy_id, by_username, by_name, at, text, file, reply_to, edited_at, deleted, reactions, mentions, pinned, is_system, forwarded_from')
-      .eq('chat_id', chatId)
-      .order('sort_order', { ascending: true }),
-  ]);
-  if (mErr) throw new Error('assembleChat members: ' + mErr.message);
-  if (msgErr) throw new Error('assembleChat messages: ' + msgErr.message);
-
-  const members = (memberRows ?? []).map((r) => r.username as string).filter(Boolean);
+/**
+ * Fetch members + last-read map for one chat.
+ */
+async function fetchChatMembers(client: SupabaseClient, chatId: string): Promise<{ members: string[]; reads: Record<string, string> }> {
+  const { data, error } = await client.from('chat_members').select('username, last_read').eq('chat_id', chatId);
+  if (error) throw new Error('fetchChatMembers: ' + error.message);
+  const members = (data ?? []).map((r) => r.username as string).filter(Boolean);
   const reads: Record<string, string> = {};
-  for (const r of memberRows ?? []) {
+  for (const r of data ?? []) {
     if (r.last_read) reads[r.username as string] = new Date(r.last_read as string).toISOString();
   }
-  const messages = (msgRows ?? []).map((r) => rowToChatMessage(r as unknown as Record<string, unknown>));
-
-  return rowToChat(chatRow as unknown as Record<string, unknown>, members, reads, messages);
+  return { members, reads };
 }
 
 /**
@@ -4284,8 +4273,10 @@ async function assembleChats(
 
 /**
  * Realtime subscribe to all chats where `username` is a member.
-
+ *
  * Messages are empty in the list view (only loaded in sbSubscribeChat).
+ * Reloads are DEBOUNCED (coalesce bursts) và LỌC theo liên quan: tin nhắn của
+ * cuộc mà user KHÔNG thuộc sẽ không kích hoạt reload danh sách.
  */
 export function sbSubscribeChats(
   username: string,
@@ -4293,49 +4284,166 @@ export function sbSubscribeChats(
   client: SupabaseClient = sb,
 ): () => void {
   let active = true;
+  const myChatIds = new Set<string>();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
   const reload = () =>
     assembleChats(client, username)
-      .then((v) => { if (active) cb(v); })
+      .then((v) => { if (!active) return; myChatIds.clear(); for (const c of v) myChatIds.add(c.id); cb(v); })
       .catch((e) => { console.warn('sbSubscribeChats load error:', (e as Error).message); });
 
-  reload();
+  const schedule = () => {
+    if (timer || !active) return;
+    timer = setTimeout(() => { timer = null; void reload(); }, 200);
+  };
+
+  void reload();
 
   const channelId = `chat_list:${username}:${Math.random().toString(36).slice(2)}`;
   const channel = client
     .channel(channelId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => reload())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members' }, () => reload())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, schedule)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members' }, schedule)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (payload) => {
+      const cid = ((payload.new as Record<string, unknown>)?.chat_id ?? (payload.old as Record<string, unknown>)?.chat_id) as string | undefined;
+      if (!cid || myChatIds.has(cid)) schedule(); // chỉ reload khi tin thuộc cuộc của mình
+    })
     .subscribe();
 
-  return () => { active = false; client.removeChannel(channel); };
+  return () => { active = false; if (timer) clearTimeout(timer); client.removeChannel(channel); };
 }
 
 /**
- * Realtime subscribe to a single chat (with its messages).
+ * Realtime subscribe to a single chat — CẬP NHẬT TĂNG DẦN + PHÂN TRANG.
+ *
+ * - Mở cuộc chỉ nạp CHAT_PAGE_SIZE tin mới nhất; `loadOlder()` nạp thêm trang cũ.
+ * - Sự kiện realtime chỉ áp DELTA (thêm/sửa/xoá 1 tin, đổi meta, đổi thành viên)
+ *   thay vì tải lại toàn bộ → không còn quét tối đa 500 tin mỗi lần gõ/gửi.
+ * - `cb(chat, { hasMore })`: hasMore = còn tin cũ để tải thêm.
+ * - Trả về hàm huỷ, đính kèm `.loadOlder()`.
  */
 export function sbSubscribeChat(
   id: string,
-  cb: (chat: Chat | null) => void,
+  cb: (chat: Chat | null, meta?: { hasMore: boolean }) => void,
   client: SupabaseClient = sb,
-): () => void {
+): ChatSubscription {
   let active = true;
-  const reload = () =>
-    assembleChat(client, id)
-      .then((v) => { if (active) cb(v); })
-      .catch((e) => { console.warn('sbSubscribeChat load error:', (e as Error).message); });
+  let ready = false;
+  let chatRow: Record<string, unknown> | null = null;
+  let members: string[] = [];
+  let reads: Record<string, string> = {};
+  let msgs: ChatMessage[] = [];
+  const idSet = new Set<string>();                 // legacyId đã có (dedup)
+  const uuidToLegacy = new Map<string, string>();  // uuid → legacyId (cho DELETE)
+  let oldestSort = Infinity;
+  let hasMore = false;
+  let loadingOlder = false;
+  const pending: Array<() => void> = [];           // sự kiện tới trong lúc đang nạp
 
-  reload();
+  const emit = () => { if (active && chatRow) cb(rowToChat(chatRow, members, reads, [...msgs]), { hasMore }); };
+
+  // Nạp một mảng rows (asc theo sort_order) vào msgs; dedup + cập nhật oldestSort.
+  const ingest = (rows: Record<string, unknown>[], prepend: boolean) => {
+    const added: ChatMessage[] = [];
+    for (const r of rows) {
+      const so = r.sort_order as number;
+      const m = rowToChatMessage(r);
+      uuidToLegacy.set(r.id as string, m.id);
+      if (idSet.has(m.id)) {
+        const idx = msgs.findIndex((x) => x.id === m.id);
+        if (idx >= 0) msgs[idx] = m;
+        continue;
+      }
+      idSet.add(m.id);
+      if (typeof so === 'number' && so < oldestSort) oldestSort = so;
+      added.push(m);
+    }
+    if (added.length) msgs = prepend ? [...added, ...msgs] : [...msgs, ...added];
+  };
+
+  const handleMsg = (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+    if (payload.eventType === 'DELETE') {
+      const uuid = payload.old?.id as string | undefined;
+      const legacy = uuid ? uuidToLegacy.get(uuid) : undefined;
+      if (legacy && idSet.has(legacy)) { idSet.delete(legacy); msgs = msgs.filter((m) => m.id !== legacy); emit(); }
+      return;
+    }
+    const r = payload.new;
+    const m = rowToChatMessage(r);
+    uuidToLegacy.set(r.id as string, m.id);
+    const idx = msgs.findIndex((x) => x.id === m.id);
+    if (idx >= 0) { msgs = msgs.map((x, i) => (i === idx ? m : x)); }         // sửa/thu hồi/ghim/reaction
+    else if (payload.eventType === 'INSERT') { idSet.add(m.id); msgs = [...msgs, m]; } // tin mới → cuối
+    else return; // UPDATE cho tin ngoài trang đang xem — bỏ qua
+    emit();
+  };
+
+  const handleChat = (payload: { eventType: string; new: Record<string, unknown> }) => {
+    if (payload.eventType === 'DELETE') { chatRow = null; cb(null); return; }
+    chatRow = payload.new;
+    emit();
+  };
+
+  const refreshMembers = () =>
+    fetchChatMembers(client, id).then((mem) => { if (!active) return; members = mem.members; reads = mem.reads; emit(); })
+      .catch((e) => console.warn('sbSubscribeChat members:', (e as Error).message));
 
   const channelId = `chat:${id}:${Math.random().toString(36).slice(2)}`;
   const channel = client
     .channel(channelId)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${id}` }, () => reload())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members', filter: `chat_id=eq.${id}` }, () => reload())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${id}` }, () => reload())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chats', filter: `id=eq.${id}` },
+      (p) => { const fn = () => handleChat(p as unknown as { eventType: string; new: Record<string, unknown> }); if (ready) fn(); else pending.push(fn); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_members', filter: `chat_id=eq.${id}` },
+      () => { if (ready) void refreshMembers(); else pending.push(() => void refreshMembers()); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `chat_id=eq.${id}` },
+      (p) => { const fn = () => handleMsg(p as unknown as { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }); if (ready) fn(); else pending.push(fn); })
     .subscribe();
 
-  return () => { active = false; client.removeChannel(channel); };
+  const init = async () => {
+    try {
+      const row = await fetchChatRow(client, id);
+      if (!active) return;
+      if (!row) { cb(null); ready = true; return; }
+      chatRow = row;
+      const mem = await fetchChatMembers(client, id);
+      if (!active) return;
+      members = mem.members; reads = mem.reads;
+      const { data, error } = await client.from('chat_messages').select(CHAT_MSG_COLS)
+        .eq('chat_id', id).order('sort_order', { ascending: false }).limit(CHAT_PAGE_SIZE);
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []).slice().reverse() as unknown as Record<string, unknown>[];
+      hasMore = (data ?? []).length === CHAT_PAGE_SIZE;
+      ingest(rows, false);
+      ready = true;
+      for (const fn of pending) fn();  // phát lại sự kiện đến trong lúc nạp
+      pending.length = 0;
+      emit();
+    } catch (e) {
+      console.warn('sbSubscribeChat init:', (e as Error).message);
+      ready = true;
+    }
+  };
+  void init();
+
+  const loadOlder = async (): Promise<number> => {
+    if (!active || loadingOlder || !hasMore || !chatRow) return 0;
+    loadingOlder = true;
+    try {
+      const { data, error } = await client.from('chat_messages').select(CHAT_MSG_COLS)
+        .eq('chat_id', id).lt('sort_order', oldestSort).order('sort_order', { ascending: false }).limit(CHAT_PAGE_SIZE);
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []).slice().reverse() as unknown as Record<string, unknown>[];
+      hasMore = (data ?? []).length === CHAT_PAGE_SIZE;
+      ingest(rows, true);
+      emit();
+      return rows.length;
+    } catch (e) { console.warn('sbSubscribeChat loadOlder:', (e as Error).message); return 0; }
+    finally { loadingOlder = false; }
+  };
+
+  const unsub = (() => { active = false; client.removeChannel(channel); }) as ChatSubscription;
+  unsub.loadOlder = loadOlder;
+  return unsub;
 }
 
 /**
