@@ -93,6 +93,60 @@ export const keyByLabel = (label: string): WorkflowStepKey | undefined => LABEL_
 /** Khoá hiệu lực của bước: key đã lưu, hoặc suy từ nhãn. */
 export const keyOf = (s: WorkflowStep): WorkflowStepKey | undefined => (s.key as WorkflowStepKey | undefined) ?? keyByLabel(s.label);
 
+/** Phụ thuộc bước: mỗi bước chuẩn cần các bước-khoá nào HOÀN TẤT trước (gợi ý,
+ *  chỉ áp cho 13 bước có khoá; bước tự thêm không ràng buộc). */
+export const WORKFLOW_DEPS: Record<WorkflowStepKey, WorkflowStepKey[]> = {
+  receive: [], quote: ['receive'], confirm_service: ['quote'], visa: ['quote'],
+  contract: ['quote'], deposit_ncc: ['contract'], final_service: ['confirm_service'],
+  comms: ['contract'], deposit_pretrip: ['contract'],
+  departure: ['final_service', 'deposit_pretrip'], acceptance: ['departure'],
+  final_payment: ['acceptance'], close: ['final_payment', 'acceptance'],
+};
+
+/** Bước là "cổng phê duyệt" — cần người có quyền duyệt (isApprover) trước khi Hoàn
+ *  tất: cọc NCC · ký HĐ · cọc trước đi · thanh toán cuối · nghiệm thu. */
+export const WORKFLOW_GATE_KEYS = new Set<WorkflowStepKey>([
+  'contract', 'deposit_ncc', 'deposit_pretrip', 'final_payment', 'acceptance',
+]);
+export const isGate = (s: WorkflowStep): boolean => { const k = keyOf(s); return !!k && WORKFLOW_GATE_KEYS.has(k); };
+
+/** Dấu hành động phê duyệt lưu trong NHẬT KÝ bước (bền, không cần cột DB mới —
+ *  round-trip qua quote_workflow_logs & steps jsonb như mọi log khác). */
+export const APPROVE_ACTION = '✅ Phê duyệt cổng';
+
+/** Lần phê duyệt gần nhất của 1 bước (đọc từ nhật ký) — null nếu chưa duyệt. */
+export function approvalOf(step: WorkflowStep): { by: string; at: string } | null {
+  const log = step.log ?? [];
+  for (let i = log.length - 1; i >= 0; i--) {
+    if (log[i].action === APPROVE_ACTION) return { by: log[i].by, at: log[i].at };
+  }
+  return null;
+}
+
+export type GateStatus = 'none' | 'pending' | 'approved';
+/** Trạng thái cổng phê duyệt của bước. */
+export function gateStatus(step: WorkflowStep): GateStatus {
+  if (!isGate(step)) return 'none';
+  return approvalOf(step) ? 'approved' : 'pending';
+}
+
+/** Nhãn các prereq CHƯA hoàn tất (bỏ skipped) ĐANG CÓ trong quy trình — để cảnh
+ *  báo khi hoàn tất sớm. Rỗng nếu bước không có khoá hoặc mọi prereq đã xong. */
+export function unmetDeps(step: WorkflowStep, steps: WorkflowStep[]): string[] {
+  const k = keyOf(step);
+  if (!k) return [];
+  const need = WORKFLOW_DEPS[k] ?? [];
+  if (!need.length) return [];
+  const byKey = new Map<WorkflowStepKey, WorkflowStep>();
+  for (const s of steps) { const sk = keyOf(s); if (sk) byKey.set(sk, s); }
+  const out: string[] = [];
+  for (const dep of need) {
+    const s = byKey.get(dep);
+    if (s && s.status !== 'done' && s.status !== 'skipped') out.push(s.label);
+  }
+  return out;
+}
+
 /** Mẫu quy trình theo loại tour. */
 export type WorkflowPreset = 'standard' | 'domestic' | 'mice';
 export const WORKFLOW_PRESET_META: Record<WorkflowPreset, { label: string; desc: string }> = {

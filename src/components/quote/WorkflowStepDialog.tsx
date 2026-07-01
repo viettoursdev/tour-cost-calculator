@@ -7,8 +7,9 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import HistoryIcon from '@mui/icons-material/History';
-import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs } from './workflowConstants';
-import { ROLE_RANK, canViewStaffRole } from '@/auth/ROLES';
+import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs, isGate, approvalOf, APPROVE_ACTION } from './workflowConstants';
+import { ROLE_RANK, canViewStaffRole, isApprover } from '@/auth/ROLES';
+import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
 import { pickFiles } from '@/lib/pickFiles';
@@ -46,6 +47,15 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
   const removeAtt = (i: number) => setS((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }));
   const logDesc = [...(s.log ?? [])].reverse(); // mới nhất lên đầu
   const blockedNoReason = s.status === 'blocked' && !(s.note ?? '').trim();
+  // Cổng phê duyệt: bước cọc/HĐ/nghiệm thu cần người có quyền duyệt trước khi Hoàn tất.
+  const gate = isGate(s);
+  const approval = approvalOf(s);
+  const iAmApprover = !!me && isApprover(me.role);
+  const gateBlocksDone = gate && !approval; // chưa duyệt → chưa được Hoàn tất
+  const doApprove = () => setS((p) => ({
+    ...p, status: 'done', doneDate: p.doneDate ?? new Date().toISOString().slice(0, 10),
+    log: [...(p.log ?? []), { at: new Date().toISOString(), by: me?.name ?? '', action: APPROVE_ACTION }],
+  }));
   const cycleMs = cycleTimeMs(s);
   const cycleText = cycleMs == null ? null : (() => {
     const h = Math.round(cycleMs / 3600000);
@@ -75,7 +85,9 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
             <TextField select label="Trạng thái" value={s.status} onChange={(e) => set({ status: e.target.value as WorkflowStatus })}>
               {WORKFLOW_STATUS_ORDER.map((k) => (
-                <MenuItem key={k} value={k} sx={{ color: WORKFLOW_STATUS_META[k].color, fontWeight: 700 }}>{WORKFLOW_STATUS_META[k].label}</MenuItem>
+                <MenuItem key={k} value={k} disabled={k === 'done' && gateBlocksDone} sx={{ color: WORKFLOW_STATUS_META[k].color, fontWeight: 700 }}>
+                  {WORKFLOW_STATUS_META[k].label}{k === 'done' && gateBlocksDone ? ' 🔒' : ''}
+                </MenuItem>
               ))}
             </TextField>
             <TextField select label="Người phụ trách" value={s.assignee ?? ''} onChange={(e) => set({ assignee: e.target.value || undefined })}
@@ -97,6 +109,26 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               <Typography variant="caption" color="text.secondary">Gợi ý phụ trách:</Typography>
               <Chip size="small" color="primary" variant="outlined" label={`Gán ${suggested.name} (${suggested.role})`} onClick={() => set({ assignee: suggested.u })} />
             </Stack>
+          )}
+          {gate && (
+            <Box sx={{ p: 1.25, borderRadius: 1.5, border: '1px solid', borderColor: approval ? 'success.light' : '#f5a623', bgcolor: approval ? 'rgba(39,174,96,0.06)' : 'rgba(245,166,35,0.08)' }}>
+              <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
+                <VerifiedUserOutlinedIcon fontSize="small" sx={{ color: approval ? '#27ae60' : '#f5a623' }} />
+                <Typography fontSize={13} fontWeight={800} sx={{ flex: 1, minWidth: 120 }}>Cổng phê duyệt</Typography>
+                {approval ? (
+                  <Chip size="small" color="success" label={`Đã duyệt · ${approval.by} · ${new Date(approval.at).toLocaleDateString('vi-VN')}`} />
+                ) : iAmApprover ? (
+                  <Button size="small" variant="contained" color="success" startIcon={<VerifiedUserOutlinedIcon />} onClick={doApprove}>Phê duyệt &amp; hoàn tất</Button>
+                ) : (
+                  <Chip size="small" variant="outlined" sx={{ color: '#b45309', borderColor: '#f5a623' }} label="Chờ duyệt (CEO/BGĐ/Trưởng Phòng)" />
+                )}
+              </Stack>
+              {!approval && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  Bước cọc/hợp đồng/nghiệm thu cần người có quyền phê duyệt trước khi đánh dấu Hoàn tất.
+                </Typography>
+              )}
+            </Box>
           )}
           <TextField label={s.status === 'blocked' ? 'Ghi chú · LÝ DO TẠM HOÃN (bắt buộc)' : 'Ghi chú'}
             value={s.note ?? ''} onChange={(e) => set({ note: e.target.value })} fullWidth multiline minRows={2}
@@ -146,7 +178,7 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">Huỷ</Button>
-        <Button variant="contained" disabled={uploading || blockedNoReason} onClick={() => onSave(s)} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
+        <Button variant="contained" disabled={uploading || blockedNoReason || (gate && s.status === 'done' && !approval)} onClick={() => onSave(s)} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
       </DialogActions>
     </Dialog>
   );

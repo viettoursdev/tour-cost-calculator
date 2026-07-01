@@ -23,7 +23,9 @@ import { getCATS } from './constants';
 import {
   appendLog, applySignals, defaultWorkflow, fillDueDates, newWorkflowStep, setStepStatus, suggestionFor,
   workflowProgress, workflowSignals, WORKFLOW_STATUS_META, WORKFLOW_PRESET_META, type WorkflowPreset,
+  isGate, approvalOf, unmetDeps, APPROVE_ACTION,
 } from './workflowConstants';
+import { isApprover } from '@/auth/ROLES';
 import { WorkflowKanban } from './WorkflowKanban';
 import { WorkflowList } from './WorkflowList';
 import { WorkflowChecklist } from './WorkflowChecklist';
@@ -115,6 +117,21 @@ export function WorkflowView() {
   const setStatus = (id: string, status: WorkflowStatus) => {
     const before = steps.find((s) => s.id === id);
     if (before && before.status === status) return;
+    // Cổng phê duyệt & phụ thuộc bước — chỉ chặn khi HOÀN TẤT.
+    let approve = false;
+    if (status === 'done' && before) {
+      if (isGate(before) && !approvalOf(before)) {
+        if (!(currentUser && isApprover(currentUser.role))) {
+          window.alert(`"${before.label}" là cổng phê duyệt — cần CEO/BGĐ/Trưởng Phòng duyệt trước khi hoàn tất. Nhờ người có quyền mở chi tiết bước để bấm "Phê duyệt".`);
+          return;
+        }
+        if (!window.confirm(`"${before.label}" là cổng phê duyệt. Bạn (${currentUser.name}) phê duyệt & hoàn tất bước này?`)) return;
+        approve = true;
+      } else {
+        const unmet = unmetDeps(before, steps);
+        if (unmet.length && !window.confirm(`Bước "${before.label}" còn phụ thuộc bước chưa xong:\n• ${unmet.join('\n• ')}\n\nVẫn đánh dấu HOÀN TẤT?`)) return;
+      }
+    }
     // Tạm hoãn cần lý do — ghi vào ghi chú (nếu chưa có) + nhật ký.
     let reason: string | undefined;
     if (status === 'blocked' && !before?.note?.trim()) {
@@ -126,7 +143,8 @@ export function WorkflowView() {
     let next = setStepStatus(steps, id, status);
     if (reason) next = next.map((s) => (s.id === id ? { ...s, note: s.note?.trim() ? s.note : reason } : s));
     const label = `Trạng thái → ${WORKFLOW_STATUS_META[status].label}${reason ? ` (${reason})` : ''}`;
-    next = next.map((s) => (s.id === id ? appendLog(s, [label], byName) : s));
+    const actions = approve ? [APPROVE_ACTION, label] : [label];
+    next = next.map((s) => (s.id === id ? appendLog(s, actions, byName) : s));
     setWorkflow(next);
   };
   const del = (id: string) => { if (window.confirm('Xoá bước này khỏi quy trình?')) setWorkflow(steps.filter((s) => s.id !== id)); };

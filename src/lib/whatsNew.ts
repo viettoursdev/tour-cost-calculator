@@ -9,6 +9,13 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-01b', date: '01/07/2026', title: 'Cổng phê duyệt & phụ thuộc bước',
+    items: [
+      { icon: '🛡️', title: 'Cổng phê duyệt tại mốc tiền', desc: 'Bước cọc NCC · ký hợp đồng · cọc trước đi · thanh toán cuối · nghiệm thu chỉ được đánh dấu Hoàn tất sau khi CEO/BGĐ/Trưởng Phòng bấm "Phê duyệt" (ghi rõ người & thời điểm).' },
+      { icon: '🔒', title: 'Phụ thuộc giữa các bước', desc: 'Quy trình điều hành cảnh báo khi hoàn tất một bước trong khi bước phía trước chưa xong (vd chốt cọc khi chưa ký hợp đồng) — hiện huy hiệu 🔒 trên thẻ.' },
+    ],
+  },
+  {
     id: '2026-07-01a', date: '01/07/2026', title: 'Phân tích SLA & nút thắt vận hành',
     items: [
       { icon: '📊', title: 'SLA & nút thắt trong Điều phối', desc: 'Trong view "Điều phối" có nút chuyển "📊 SLA & nút thắt": xem tức thì tour đang kẹt ở bước nào, bước nào hay quá hạn nhất trên toàn hệ thống.' },

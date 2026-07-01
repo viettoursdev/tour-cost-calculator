@@ -1,6 +1,6 @@
 import { Box, Checkbox, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { deadlineMeta } from '@/components/visa/constants';
-import { WORKFLOW_STATUS_META } from './workflowConstants';
+import { WORKFLOW_STATUS_META, gateStatus, unmetDeps } from './workflowConstants';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
 type Props = {
@@ -18,6 +18,8 @@ export function WorkflowChecklist({ steps, users, suggestions = {}, onSetStatus 
         const done = s.status === 'done';
         const meta = WORKFLOW_STATUS_META[s.status];
         const dl = s.dueDate ? deadlineMeta(s.dueDate, done) : null;
+        const gate = gateStatus(s);
+        const deps = done || s.status === 'skipped' ? [] : unmetDeps(s, steps);
         return (
           <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
             <Tooltip title={done ? 'Bỏ đánh dấu hoàn tất' : s.status === 'blocked' ? 'Đang tạm hoãn — đánh dấu hoàn tất' : s.status === 'doing' ? 'Đang làm — đánh dấu hoàn tất' : 'Đánh dấu hoàn tất'}>
@@ -33,6 +35,11 @@ export function WorkflowChecklist({ steps, users, suggestions = {}, onSetStatus 
                 <Chip size="small" label={`↗ ${WORKFLOW_STATUS_META[suggestions[s.id]].label}`} onClick={() => onSetStatus(s.id, suggestions[s.id])}
                   sx={{ height: 18, fontWeight: 700, bgcolor: WORKFLOW_STATUS_META[suggestions[s.id]].color, color: '#fff', cursor: 'pointer' }} />
               </Tooltip>
+            )}
+            {gate === 'pending' && <Chip size="small" label="🛡️" title="Cổng phê duyệt — chờ duyệt" sx={{ height: 20, bgcolor: '#f5a62322', color: '#b45309' }} />}
+            {gate === 'approved' && <Chip size="small" label="🛡️✓" title="Đã phê duyệt" sx={{ height: 20, bgcolor: '#27ae6022', color: '#1b7a43' }} />}
+            {deps.length > 0 && (
+              <Tooltip title={`Chờ hoàn tất: ${deps.join(', ')}`}><Chip size="small" label={`🔒 ${deps.length}`} sx={{ height: 20, color: '#475569' }} /></Tooltip>
             )}
             {s.assignee && <Chip size="small" variant="outlined" label={`👤 ${nameOf(s.assignee)}`} />}
             {dl && <Typography variant="caption" sx={{ color: dl.color, fontWeight: 700, minWidth: 90, textAlign: 'right' }}>⏱ {dl.text}</Typography>}

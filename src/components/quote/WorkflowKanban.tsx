@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Box, Chip, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import Sortable from 'sortablejs';
 import { deadlineMeta } from '@/components/visa/constants';
-import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep } from './workflowConstants';
+import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, gateStatus, unmetDeps } from './workflowConstants';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
 type Props = {
@@ -59,6 +59,8 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
               {items.map((s) => {
                 const dl = s.dueDate ? deadlineMeta(s.dueDate, s.status === 'done' || s.status === 'skipped') : null;
                 const dept = s.assignee ? undefined : roleOfStep(s);
+                const gate = gateStatus(s);
+                const deps = s.status === 'done' || s.status === 'skipped' ? [] : unmetDeps(s, steps);
                 return (
                   <Paper
                     key={s.id} data-id={s.id} elevation={0} onClick={() => onOpen(s)}
@@ -73,6 +75,17 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
                     {suggestions[s.id] && (
                       <Chip size="small" label={`↗ nên: ${WORKFLOW_STATUS_META[suggestions[s.id]].label}`}
                         sx={{ mt: 0.5, height: 20, fontWeight: 700, bgcolor: WORKFLOW_STATUS_META[suggestions[s.id]].color, color: '#fff' }} />
+                    )}
+                    {(gate !== 'none' || deps.length > 0) && (
+                      <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                        {gate === 'pending' && <Chip size="small" label="🛡️ Chờ duyệt" sx={{ height: 20, fontWeight: 700, bgcolor: '#f5a62322', color: '#b45309' }} />}
+                        {gate === 'approved' && <Chip size="small" label="🛡️ Đã duyệt" sx={{ height: 20, fontWeight: 700, bgcolor: '#27ae6022', color: '#1b7a43' }} />}
+                        {deps.length > 0 && (
+                          <Tooltip title={`Chờ hoàn tất: ${deps.join(', ')}`}>
+                            <Chip size="small" label={`🔒 ${deps.length} phụ thuộc`} sx={{ height: 20, fontWeight: 700, bgcolor: 'rgba(100,116,139,0.15)', color: '#475569' }} />
+                          </Tooltip>
+                        )}
+                      </Stack>
                     )}
                     {(s.assignee || dept || dl) && (
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>

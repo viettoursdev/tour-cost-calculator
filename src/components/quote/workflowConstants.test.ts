@@ -3,6 +3,7 @@ import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
   workflowSignals, applySignals, fillDueDates, parseDueRuleOffset, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
   appendLog, roleOfStep, workflowBoardSummary, cycleTimeMs,
+  isGate, gateStatus, approvalOf, unmetDeps, APPROVE_ACTION,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -149,6 +150,47 @@ describe('fillDueDates', () => {
   it('no-op without departure', () => {
     const w: WorkflowStep[] = [{ id: 'a', label: 'A', status: 'todo', dueOffset: 7 }];
     expect(fillDueDates(w, null)).toBe(w);
+  });
+});
+
+describe('dependencies + approval gate', () => {
+  it('isGate/gateStatus theo khoá bước', () => {
+    const std = defaultWorkflow('standard');
+    const contract = std.find((s) => s.key === 'contract')!;
+    const receive = std.find((s) => s.key === 'receive')!;
+    expect(isGate(contract)).toBe(true);
+    expect(isGate(receive)).toBe(false);
+    expect(gateStatus(contract)).toBe('pending'); // là cổng, chưa duyệt
+    expect(gateStatus(receive)).toBe('none');
+  });
+
+  it('approvalOf đọc lần duyệt mới nhất từ nhật ký', () => {
+    let s = defaultWorkflow('standard').find((x) => x.key === 'contract')!;
+    expect(approvalOf(s)).toBeNull();
+    s = appendLog(s, [APPROVE_ACTION], 'Sếp A');
+    const a = approvalOf(s);
+    expect(a?.by).toBe('Sếp A');
+    expect(gateStatus(s)).toBe('approved');
+  });
+
+  it('unmetDeps liệt kê prereq chưa xong ĐANG có trong quy trình', () => {
+    const std = defaultWorkflow('standard');
+    const contract = std.find((s) => s.key === 'contract')!;
+    // 'contract' phụ thuộc 'quote' (chưa done) → cảnh báo
+    expect(unmetDeps(contract, std)).toContain('Triển khai báo giá');
+    // đánh dấu quote done → hết cảnh báo
+    const done = std.map((s) => (s.key === 'quote' ? { ...s, status: 'done' as const } : s));
+    expect(unmetDeps(done.find((s) => s.key === 'contract')!, done)).toEqual([]);
+  });
+
+  it('unmetDeps bỏ qua prereq không có trong quy trình (vd nội địa bỏ visa)', () => {
+    const dom = defaultWorkflow('domestic'); // không có bước visa
+    const dep = dom.find((s) => s.key === 'departure')!;
+    // departure phụ thuộc final_service + deposit_pretrip (đều có trong domestic)
+    const labels = unmetDeps(dep, dom);
+    expect(labels.length).toBeGreaterThan(0);
+    // bước tự thêm (không khoá) → không ràng buộc
+    expect(unmetDeps({ id: 'x', label: 'Tự thêm', status: 'todo' }, dom)).toEqual([]);
   });
 });
 
