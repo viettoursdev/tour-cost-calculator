@@ -5,6 +5,7 @@ import {
   sbEditChatMessage, sbDeleteChatMessage, sbToggleChatReaction, sbMarkChatRead,
   sbSetChatMessagePinned, sbRenameChat, sbAddChatMembers, sbRemoveChatMember,
 } from '../../src/lib/supabase';
+import { sbSearchChatMessages } from '../../src/lib/chatSearch';
 import type { Chat, ChatMessage } from '@/types/chat';
 
 const once = <T>(fn: (cb: (v: T) => void) => () => void) =>
@@ -343,5 +344,25 @@ describe('chat gateway', () => {
       expect(latest!.messages[0].text).toBe('tin 0');
       expect(hasMore).toBe(false);
     } finally { sub(); }
+  });
+
+  it('tìm kiếm toàn cục: khớp mọi cuộc, không phân biệt hoa/thường, bỏ thu hồi & hệ thống', async () => {
+    const c = await getViettoursClient();
+    const t0 = new Date('2026-07-01T00:00:00.000Z').getTime();
+    await sbEnsureChat({ id: 'dm_hotel__tester', members: ['tester', 'hotel'], isGroup: false, createdBy: 'tester', createdAt: new Date(t0).toISOString(), messages: [] }, c);
+    await sbEnsureChat({ id: 'grp_search__1', members: ['tester', 'alpha'], isGroup: true, title: 'Nhóm tìm', createdBy: 'tester', createdAt: new Date(t0).toISOString(), messages: [] }, c);
+    await sbSendChatMessage('dm_hotel__tester', { id: 's1', by: 'tester', byName: 'QA', at: new Date(t0 + 1000).toISOString(), text: 'Báo giá tour Đà Nẵng gấp' }, c);
+    await sbSendChatMessage('grp_search__1', { id: 's2', by: 'tester', byName: 'QA', at: new Date(t0 + 2000).toISOString(), text: 'Lịch TOUR Hà Nội' }, c);
+    await sbSendChatMessage('grp_search__1', { id: 's3', by: 'tester', byName: 'QA', at: new Date(t0 + 3000).toISOString(), text: 'tin sẽ thu hồi tour' }, c);
+    await sbDeleteChatMessage('grp_search__1', 's3', c);
+    await sbSendChatMessage('grp_search__1', { id: 's4', by: 'tester', byName: 'QA', at: new Date(t0 + 4000).toISOString(), text: 'X vào nhóm tour', system: true }, c);
+
+    const hits = await sbSearchChatMessages('tour', c);
+    const ids = hits.map((h) => h.msgId);
+    expect(ids).toContain('s1');     // DM
+    expect(ids).toContain('s2');     // nhóm, khác hoa/thường
+    expect(ids).not.toContain('s3'); // đã thu hồi
+    expect(ids).not.toContain('s4'); // tin hệ thống
+    expect(await sbSearchChatMessages('a', c)).toEqual([]); // <2 ký tự → rỗng
   });
 });

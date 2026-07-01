@@ -32,6 +32,7 @@ import { dmChatId, sbEnsureChat, sbSubscribeChat, sbSendChatMessage, sbMarkChatR
 import { requestBrowserNotifPermission } from '@/lib/notifications';
 import { uploadFileToWorker, workerFileUrl } from '@/lib/aiWorker';
 import { chatDayLabel, sameDay, groupWithPrev, mentionQuery, applyMention, mentionSegments, matchMessageIds, searchHighlight } from '@/lib/chatFormat';
+import { sbSearchChatMessages, type ChatSearchHit } from '@/lib/chatSearch';
 import { EmojiPicker } from '@/components/chat/EmojiPicker';
 import { GroupManageDialog } from '@/components/chat/GroupManageDialog';
 import { ForwardDialog } from '@/components/chat/ForwardDialog';
@@ -81,6 +82,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const [mentionSel, setMentionSel] = useState<string[]>([]); // username đã @nhắc trong tin đang soạn
   const [dragOver, setDragOver] = useState(false);
   const [listQ, setListQ] = useState('');            // tìm trong danh sách cuộc
+  const [msgResults, setMsgResults] = useState<ChatSearchHit[]>([]); // tìm tin nhắn toàn cục
   const [searchOpen, setSearchOpen] = useState(false); // thanh tìm trong cuộc
   const [searchQ, setSearchQ] = useState('');
   const [matchPos, setMatchPos] = useState(0);
@@ -138,6 +140,17 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     if (c.id === `saved_${me?.u ?? ''}` || (c.members.length === 1 && c.members[0] === me?.u)) return '📌 Tin đã lưu';
     return nameOf(c.members.find((m) => m !== me?.u) ?? '');
   };
+
+  // Tìm TIN NHẮN toàn cục theo ô tìm ở danh sách (debounce 300ms; RLS lọc theo cuộc của mình).
+  useEffect(() => {
+    const q = listQ.trim();
+    if (q.length < 2) { setMsgResults([]); return; }
+    let alive = true;
+    const t = setTimeout(() => {
+      sbSearchChatMessages(q).then((r) => { if (alive) setMsgResults(r); }).catch(() => { if (alive) setMsgResults([]); });
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [listQ]);
 
   // Báo cho store biết panel đang mở (để khỏi báo trùng tin của cuộc đang xem) + xin quyền OS notif.
   useEffect(() => { setPanelOpen(open); if (open) void requestBrowserNotifPermission(); }, [open, setPanelOpen]);
@@ -304,6 +317,13 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
     const el = scrollRef.current?.querySelector(`[data-mid="${CSS.escape(mid)}"]`);
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   };
+  // Mở cuộc từ kết quả tìm tin toàn cục + bật tìm-trong-cuộc để tô sáng từ khoá.
+  const openMessageHit = (hit: ChatSearchHit) => {
+    const q = listQ.trim();
+    setActiveId(hit.chatId);
+    setListQ('');
+    if (q) setTimeout(() => { setSearchOpen(true); setSearchQ(q); }, 80);
+  };
   const pushFileMessage = async (file: ChatMessage['file']) => {
     if (!me || !active || !file) return;
     const msg: ChatMessage = { id: uid(), by: me.u, byName: me.name, at: new Date().toISOString(), file };
@@ -391,13 +411,17 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
             <>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                 <SearchIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-                <InputBase fullWidth value={listQ} onChange={(e) => setListQ(e.target.value)} placeholder="Tìm cuộc trò chuyện…" sx={{ fontSize: 14 }} />
+                <InputBase fullWidth value={listQ} onChange={(e) => setListQ(e.target.value)} placeholder="Tìm cuộc & tin nhắn…" sx={{ fontSize: 14 }} />
                 {listQ && <IconButton size="small" onClick={() => setListQ('')}><CloseIcon sx={{ fontSize: 16 }} /></IconButton>}
               </Box>
-              {shownChats.length === 0 ? (
-                <Box sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>Không tìm thấy cuộc phù hợp.</Box>
-              ) : (
-                <Box sx={{ flex: 1, overflowY: 'auto' }}>
+              <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                {lq && shownChats.length === 0 && msgResults.length === 0 && (
+                  <Box sx={{ p: 4, textAlign: 'center', color: 'text.disabled' }}>Không tìm thấy kết quả cho “{listQ}”.</Box>
+                )}
+                {lq && shownChats.length > 0 && (
+                  <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>CUỘC TRÒ CHUYỆN</Typography>
+                )}
+                {shownChats.length > 0 && (
                   <List disablePadding>
                     {shownChats.map((c) => {
                       const unread = me ? chatUnread(c, me.u) : false;
@@ -424,8 +448,33 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
                       );
                     })}
                   </List>
-                </Box>
-              )}
+                )}
+                {lq && msgResults.length > 0 && (
+                  <>
+                    <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>TIN NHẮN ({msgResults.length})</Typography>
+                    <List disablePadding>
+                      {msgResults.map((hit) => {
+                        const c = chats.find((x) => x.id === hit.chatId);
+                        return (
+                          <ListItemButton key={hit.chatId + hit.msgId} onClick={() => openMessageHit(hit)} sx={{ borderBottom: '1px solid rgba(0,0,0,0.05)', alignItems: 'flex-start' }}>
+                            <Avatar sx={{ width: 32, height: 32, mr: 1.5, mt: 0.25, fontSize: 13, bgcolor: c?.isGroup ? '#7c3aed' : LEGACY.teal }}>{c?.isGroup ? '👥' : (c ? titleOf(c) : '?').slice(0, 1).toUpperCase()}</Avatar>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+                                <Typography fontSize={13.5} fontWeight={700} noWrap>{c ? titleOf(c) : 'Cuộc trò chuyện'}</Typography>
+                                <Typography variant="caption" color="text.disabled" sx={{ whiteSpace: 'nowrap', ml: 1 }}>{fmtTime(hit.at).split(' ')[0]}</Typography>
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                                {hit.byName ? `${hit.byName}: ` : ''}
+                                {searchHighlight(hit.text, listQ).map((s, i) => (s.hit ? <Box key={i} component="span" sx={{ bgcolor: 'rgba(245,158,11,0.35)' }}>{s.t}</Box> : <Fragment key={i}>{s.t}</Fragment>))}
+                              </Typography>
+                            </Box>
+                          </ListItemButton>
+                        );
+                      })}
+                    </List>
+                  </>
+                )}
+              </Box>
             </>
           )}
         </Box>
