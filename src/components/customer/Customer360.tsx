@@ -18,6 +18,7 @@ import { fmtVND } from '@/components/quote/calc';
 import { QUOTE_STATUS_META } from '@/components/quote/constants';
 import { EmailLinksPanel } from '@/components/email/EmailLinksPanel';
 import { TravelerDocsPanel } from './TravelerDocs';
+import { computeCustomerHealth, statsForCustomer } from './customerHealth';
 import type { Customer, CustomerInteractionType } from '@/types';
 
 const ITYPE_META: Record<CustomerInteractionType, { label: string; icon: string }> = {
@@ -77,6 +78,11 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
     };
   }, [quotes, dmcQuotes, customer]);
 
+  const health = useMemo(
+    () => computeCustomerHealth(statsForCustomer(cust, [...quotes, ...dmcQuotes]), new Date().toISOString().slice(0, 10)),
+    [cust, quotes, dmcQuotes],
+  );
+
   const linkedContracts = useMemo(() => contracts.filter((c) => c.linkedQuoteId && cloudIds.has(c.linkedQuoteId)), [contracts, cloudIds]);
   // Dự án visa gắn khách: TRỰC TIẾP (applicant có customerId) hoặc gián tiếp qua báo giá.
   const linkedVisa = useMemo(() => {
@@ -111,6 +117,23 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
         )}
       </DialogTitle>
       <DialogContent dividers>
+        {/* Sức khoẻ khách hàng (RFM) */}
+        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderLeft: `5px solid ${health.color}` }}>
+          <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+            <Chip label={`${health.label}`} sx={{ bgcolor: `${health.color}1a`, color: health.color, fontWeight: 800 }} />
+            <Typography fontWeight={800} fontSize={20} sx={{ color: health.color }}>{health.score}<Typography component="span" variant="caption" color="text.secondary">/100 điểm sức khoẻ</Typography></Typography>
+            <Box sx={{ flex: 1 }} />
+            <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+              {health.factors.map((f) => (
+                <Box key={f.label} sx={{ textAlign: 'center', minWidth: 84 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 700 }}>{f.label}</Typography>
+                  <Typography variant="caption" sx={{ display: 'block' }}>{f.detail}</Typography>
+                </Box>
+              ))}
+            </Stack>
+          </Stack>
+        </Paper>
+
         <Stack direction="row" spacing={1.25} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
           <Stat label="Tour / Báo giá" value={String(tours.length)} />
           <Stat label="Tổng giá trị" value={fmtVND(totalValue)} color="#0d7a6a" />

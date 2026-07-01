@@ -10,7 +10,9 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useCustomerStore } from '@/stores/customerStore';
 import { useNccStore } from '@/stores/nccStore';
+import { useQuoteHistoryStore } from '@/stores/quoteHistoryStore';
 import { useAuthStore } from '@/stores/authStore';
+import { computeCustomerHealth, statsForCustomer, TIER_META, type HealthResult, type HealthTier } from './customerHealth';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canManageArea } from '@/auth/departments';
 import { visibleRecords, canShareRecord } from '@/auth/recordAccess';
@@ -60,7 +62,18 @@ export function CustomerView() {
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
   const [dueOnly, setDueOnly] = useState(false);
+  const [tierFilter, setTierFilter] = useState<HealthTier | ''>('');
   const [exporting, setExporting] = useState(false);
+  const quotes = useQuoteHistoryStore((s) => s.quotes);
+  const dmcQuotes = useQuoteHistoryStore((s) => s.dmcQuotes);
+  // Điểm sức khoẻ/hạng theo từng khách (RFM) — tính 1 lần từ lịch sử báo giá.
+  const healthById = useMemo(() => {
+    const all = [...quotes, ...dmcQuotes];
+    const today = new Date().toISOString().slice(0, 10);
+    const m = new Map<string, HealthResult>();
+    for (const c of visible) m.set(c.id, computeCustomerHealth(statsForCustomer(c, all), today));
+    return m;
+  }, [visible, quotes, dmcQuotes]);
   const [modal, setModal] = useState<ModalState>(null);
   const [view360, setView360] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -102,6 +115,7 @@ export function CustomerView() {
       if (filterType && c.type !== filterType) return false;
       if (owner && c.createdBy !== owner) return false;
       if (dueOnly && !followUpDue(c)) return false;
+      if (tierFilter && healthById.get(c.id)?.tier !== tierFilter) return false;
       if (!inDateRange(c.updatedAt ?? c.createdAt, dateRange, dateFrom, dateTo)) return false;
       return true;
     });
@@ -112,7 +126,7 @@ export function CustomerView() {
     // Khớp CHÍNH XÁC theo ký tự tên/contact (không fuzzy) — gõ một phần tên
     // công ty vẫn ra, nhưng các ký tự phải liền mạch, tránh kết quả lệch.
     return sortList(filterRank(base, search, text, { fuzzy: false }), sort);
-  }, [visible, search, filterType, sort, owner, dueOnly, dateRange, dateFrom, dateTo]);
+  }, [visible, search, filterType, sort, owner, dueOnly, tierFilter, healthById, dateRange, dateFrom, dateTo]);
 
   const dueCount = useMemo(() => visible.filter(followUpDue).length, [visible]);
 
@@ -227,6 +241,13 @@ export function CustomerView() {
             <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
           ))}
         </Select>
+        <Select size="small" value={tierFilter} displayEmpty
+          onChange={(e) => setTierFilter(e.target.value as HealthTier | '')} sx={{ minWidth: 140, ...filterSelectSx }}>
+          <MenuItem value="">Mọi hạng</MenuItem>
+          {(Object.keys(TIER_META) as HealthTier[]).map((t) => (
+            <MenuItem key={t} value={t}>{TIER_META[t].label}</MenuItem>
+          ))}
+        </Select>
         <ListFilterBar
           dateRange={dateRange} onDateRange={setDateRange}
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
@@ -245,12 +266,12 @@ export function CustomerView() {
           title={compact ? 'Hiện đầy đủ (kèm contact)' : 'Thu gọn (ẩn contact)'}>
           {compact ? '▦ Đầy đủ' : '▤ Thu gọn'}
         </Button>
-        {(search || filterType || owner || dueOnly || dateRange !== 'all') && (
+        {(search || filterType || owner || dueOnly || tierFilter || dateRange !== 'all') && (
           <Button
             size="small"
             color="error"
             variant="outlined"
-            onClick={() => { setSearch(''); setFilterType(''); setOwner(''); setDueOnly(false); setDateRange('all'); }}
+            onClick={() => { setSearch(''); setFilterType(''); setOwner(''); setDueOnly(false); setTierFilter(''); setDateRange('all'); }}
           >
             ✕ Xoá lọc
           </Button>
@@ -304,6 +325,7 @@ export function CustomerView() {
             <CustomerCard
               key={c.id}
               customer={c}
+              health={healthById.get(c.id)}
               canEdit={canEdit}
               canConvert={canConvert}
               compact={compact}
@@ -417,6 +439,7 @@ export function CustomerView() {
 
 function CustomerCard({
   customer: c,
+  health,
   canEdit,
   canConvert,
   compact,
@@ -431,6 +454,7 @@ function CustomerCard({
   onClick,
 }: {
   customer: Customer;
+  health?: HealthResult;
   canEdit: boolean;
   canConvert: boolean;
   compact?: boolean;
@@ -503,6 +527,12 @@ function CustomerCard({
       {/* Type badge + nguồn + tags */}
       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
         <Chip size="small" label={isCompany ? '🏢 Công ty' : '👤 Cá nhân'} color={isCompany ? 'primary' : 'success'} variant="outlined" sx={{ fontSize: 11 }} />
+        {health && (health.tier === 'vip' || health.tier === 'loyal' || health.tier === 'dormant') && (
+          <Tooltip title={`Điểm sức khoẻ ${health.score}/100`}>
+            <Chip size="small" label={`${health.tier === 'vip' ? '⭐ ' : ''}${health.label}`}
+              sx={{ fontSize: 11, fontWeight: 800, bgcolor: `${health.color}1a`, color: health.color }} />
+          </Tooltip>
+        )}
         {c.nextFollowUp?.date && (
           <Chip size="small" color={followUpOverdue(c) ? 'error' : 'warning'} variant={followUpOverdue(c) ? 'filled' : 'outlined'}
             label={`📅 ${new Date(c.nextFollowUp.date).toLocaleDateString('vi-VN')}${followUpOverdue(c) ? ' · quá hạn' : ''}`}
