@@ -338,7 +338,7 @@ export function DealCockpit() {
           )}
         </CockpitCard>
 
-        <CockpitCard title="🗂️ Vận hành" onOpen={() => go('workflow')}>
+        <CockpitCard title="🚦 Vận hành" onOpen={() => go('workflow')}>
           <Stack direction="row" alignItems="center" spacing={1}>
             <Box sx={{ flex: 1 }}><LinearProgress variant="determinate" value={prog.pct} sx={{ height: 8, borderRadius: 4 }} /></Box>
             <Typography variant="caption" fontWeight={700}>{prog.pct}%</Typography>

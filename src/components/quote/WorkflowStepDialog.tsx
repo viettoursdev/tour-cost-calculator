@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
   ListSubheader, MenuItem, Stack, TextField, Typography,
@@ -11,6 +11,7 @@ import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs } 
 import { ROLE_RANK, canViewStaffRole } from '@/auth/ROLES';
 import { useAuthStore } from '@/stores/authStore';
 import { uploadFileToWorker } from '@/lib/aiWorker';
+import { pickFiles } from '@/lib/pickFiles';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
@@ -27,9 +28,8 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
   const me = useAuthStore((st) => st.currentUser);
   const [uploading, setUploading] = useState(false);
 
-  const onPickFiles = async (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = '';
+  const onPickFiles = async () => {
+    const files = await pickFiles({ multiple: true });
     if (!files.length) return;
     setUploading(true);
     try {
@@ -116,9 +116,8 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
                 </Stack>
               ))}
             </Stack>
-            <Button component="label" size="small" startIcon={<AttachFileIcon />} disabled={uploading} sx={{ mt: 0.5, color: '#0d7a6a' }}>
+            <Button size="small" startIcon={<AttachFileIcon />} disabled={uploading} onClick={() => void onPickFiles()} sx={{ mt: 0.5, color: '#0d7a6a' }}>
               {uploading ? 'Đang tải lên…' : 'Đính kèm file (PDF/Word/ảnh…)'}
-              <input type="file" hidden multiple onChange={onPickFiles} />
             </Button>
           </Box>
 

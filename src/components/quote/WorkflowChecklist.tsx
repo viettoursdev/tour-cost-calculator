@@ -20,7 +20,10 @@ export function WorkflowChecklist({ steps, users, suggestions = {}, onSetStatus 
         const dl = s.dueDate ? deadlineMeta(s.dueDate, done) : null;
         return (
           <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
-            <Checkbox size="small" checked={done} onChange={(e) => onSetStatus(s.id, e.target.checked ? 'done' : 'todo')} color="success" />
+            <Tooltip title={done ? 'Bỏ đánh dấu hoàn tất' : s.status === 'blocked' ? 'Đang tạm hoãn — đánh dấu hoàn tất' : s.status === 'doing' ? 'Đang làm — đánh dấu hoàn tất' : 'Đánh dấu hoàn tất'}>
+              <Checkbox size="small" checked={done} indeterminate={!done && (s.status === 'doing' || s.status === 'blocked')}
+                onChange={(e) => onSetStatus(s.id, e.target.checked ? 'done' : 'todo')} color="success" />
+            </Tooltip>
             <Typography variant="caption" color="text.disabled" sx={{ width: 22 }}>{i + 1}</Typography>
             <Typography sx={{ flex: 1, fontWeight: 600, textDecoration: done ? 'line-through' : 'none', color: done ? 'text.disabled' : 'text.primary' }}>
               {s.label}
