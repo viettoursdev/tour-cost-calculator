@@ -33,6 +33,11 @@ import SwapVertOutlinedIcon from '@mui/icons-material/SwapVertOutlined';
 type FilterType = '' | 'company' | 'individual';
 type ModalState = { customer: Customer | null } | null;
 
+const todayStr = () => new Date().toISOString().slice(0, 10);
+/** Khách có lịch hẹn liên hệ lại đến hạn (hôm nay hoặc đã quá). */
+const followUpDue = (c: Customer) => !!c.nextFollowUp?.date && c.nextFollowUp.date <= todayStr();
+const followUpOverdue = (c: Customer) => !!c.nextFollowUp?.date && c.nextFollowUp.date < todayStr();
+
 export function CustomerView() {
   const customers = useCustomerStore((s) => s.customers);
   const loading = useCustomerStore((s) => s.loading);
@@ -54,6 +59,8 @@ export function CustomerView() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [owner, setOwner] = useState('');
+  const [dueOnly, setDueOnly] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
   const [view360, setView360] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -94,6 +101,7 @@ export function CustomerView() {
     const base = visible.filter((c) => {
       if (filterType && c.type !== filterType) return false;
       if (owner && c.createdBy !== owner) return false;
+      if (dueOnly && !followUpDue(c)) return false;
       if (!inDateRange(c.updatedAt ?? c.createdAt, dateRange, dateFrom, dateTo)) return false;
       return true;
     });
@@ -104,7 +112,23 @@ export function CustomerView() {
     // Khớp CHÍNH XÁC theo ký tự tên/contact (không fuzzy) — gõ một phần tên
     // công ty vẫn ra, nhưng các ký tự phải liền mạch, tránh kết quả lệch.
     return sortList(filterRank(base, search, text, { fuzzy: false }), sort);
-  }, [visible, search, filterType, sort, owner, dateRange, dateFrom, dateTo]);
+  }, [visible, search, filterType, sort, owner, dueOnly, dateRange, dateFrom, dateTo]);
+
+  const dueCount = useMemo(() => visible.filter(followUpDue).length, [visible]);
+
+  const handleExport = async () => {
+    if (!filtered.length) { toast('Không có khách hàng để xuất.', 'warning'); return; }
+    setExporting(true);
+    try {
+      const m = await import('@/lib/exports/exportCustomersExcel');
+      await m.exportCustomersExcel(filtered);
+      toast(`✅ Đã xuất ${filtered.length} khách hàng ra Excel.`);
+    } catch (e) {
+      window.alert('❌ Lỗi xuất Excel: ' + (e as Error).message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleSave = async (form: Customer) => {
     const norm = normalizeVN(form.name);
@@ -208,16 +232,25 @@ export function CustomerView() {
           from={dateFrom} to={dateTo} onFrom={setDateFrom} onTo={setDateTo}
           owners={owners} owner={owner} onOwner={setOwner}
         />
+        <Tooltip title="Chỉ hiện khách có lịch hẹn liên hệ lại đến hạn (hôm nay hoặc đã quá)">
+          <Button size="small" variant={dueOnly ? 'contained' : 'outlined'} color={dueOnly ? 'warning' : 'primary'}
+            onClick={() => setDueOnly((v) => !v)}>
+            ⏰ Đến hạn liên hệ{dueCount ? ` (${dueCount})` : ''}
+          </Button>
+        </Tooltip>
+        <Button size="small" variant="outlined" disabled={exporting || filtered.length === 0} onClick={() => void handleExport()}>
+          {exporting ? 'Đang xuất…' : '⬇️ Xuất Excel'}
+        </Button>
         <Button size="small" variant={compact ? 'contained' : 'outlined'} onClick={toggleCompact}
           title={compact ? 'Hiện đầy đủ (kèm contact)' : 'Thu gọn (ẩn contact)'}>
           {compact ? '▦ Đầy đủ' : '▤ Thu gọn'}
         </Button>
-        {(search || filterType || owner || dateRange !== 'all') && (
+        {(search || filterType || owner || dueOnly || dateRange !== 'all') && (
           <Button
             size="small"
             color="error"
             variant="outlined"
-            onClick={() => { setSearch(''); setFilterType(''); setOwner(''); setDateRange('all'); }}
+            onClick={() => { setSearch(''); setFilterType(''); setOwner(''); setDueOnly(false); setDateRange('all'); }}
           >
             ✕ Xoá lọc
           </Button>
@@ -470,6 +503,11 @@ function CustomerCard({
       {/* Type badge + nguồn + tags */}
       <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1.5 }}>
         <Chip size="small" label={isCompany ? '🏢 Công ty' : '👤 Cá nhân'} color={isCompany ? 'primary' : 'success'} variant="outlined" sx={{ fontSize: 11 }} />
+        {c.nextFollowUp?.date && (
+          <Chip size="small" color={followUpOverdue(c) ? 'error' : 'warning'} variant={followUpOverdue(c) ? 'filled' : 'outlined'}
+            label={`📅 ${new Date(c.nextFollowUp.date).toLocaleDateString('vi-VN')}${followUpOverdue(c) ? ' · quá hạn' : ''}`}
+            sx={{ fontSize: 11, fontWeight: 700 }} />
+        )}
         {c.source && <Chip size="small" label={`📥 ${c.source}`} variant="outlined" sx={{ fontSize: 11, color: 'text.secondary' }} />}
         {!!c.collaborators?.length && <Chip size="small" label={`👥 Chia sẻ ${c.collaborators.length}`} variant="outlined" sx={{ fontSize: 11, color: 'primary.main' }} />}
         {(c.tags ?? []).map((t) => <Chip key={t} size="small" label={t} sx={{ fontSize: 11, bgcolor: 'rgba(20,150,140,0.12)', color: '#0d7a6a', fontWeight: 700 }} />)}
