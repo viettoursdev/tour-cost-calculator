@@ -35,8 +35,12 @@ type State = {
 
 export const useGuideScheduleStore = create<State>()(
   subscribeWithSelector((set, get) => {
-    /** Ghi cả doc lên cloud (optimistic: đã set local trước đó). */
-    const push = async () => {
+    type Snap = { freelancers: FreelanceGuide[]; assignments: Record<string, TourGuideAssignment> };
+    /** Ghi cả doc lên cloud (optimistic: đã set local trước đó).
+     *  `rollback` = ảnh chụp TRƯỚC khi sửa; khi push lỗi thì hoàn tác local để không
+     *  hiển thị thay đổi CHƯA lưu như đã lưu (realtime không tự sửa vì server không
+     *  đổi). Như rollback ở customerStore/visaProjectStore. */
+    const push = async (rollback?: Snap) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
       set({ syncing: true });
@@ -46,15 +50,18 @@ export const useGuideScheduleStore = create<State>()(
           { name: u.name, role: u.role },
         );
       } catch (e) {
-        window.alert('❌ Lỗi đồng bộ lịch HDV: ' + (e as Error).message);
+        if (rollback) set({ freelancers: rollback.freelancers, assignments: rollback.assignments });
+        window.alert('❌ Lỗi đồng bộ lịch HDV: ' + (e as Error).message + (rollback ? '\n\n↩️ Đã hoàn tác thay đổi chưa lưu.' : ''));
       } finally {
         set({ syncing: false });
       }
     };
+    const snapshot = (): Snap => ({ freelancers: get().freelancers, assignments: get().assignments });
 
     /** Cập nhật một assignment (merge) + đóng dấu người sửa, rồi đẩy cloud. */
     const writeAssignment = async (tourCloudId: string, patch: Partial<TourGuideAssignment>) => {
       const u = useAuthStore.getState().currentUser;
+      const snap = snapshot();
       const prev = get().assignments[tourCloudId];
       const next: TourGuideAssignment = {
         tourCloudId,
@@ -66,7 +73,7 @@ export const useGuideScheduleStore = create<State>()(
         updatedBy: u?.name,
       };
       set((s) => ({ assignments: { ...s.assignments, [tourCloudId]: next } }));
-      await push();
+      await push(snap);
     };
 
     return {
@@ -93,14 +100,16 @@ export const useGuideScheduleStore = create<State>()(
           id: newId('fg'), name: nm, phone: extra?.phone, note: extra?.note,
           createdAt: new Date().toISOString(), createdBy: u.name,
         };
+        const snap = snapshot();
         set((s) => ({ freelancers: [...s.freelancers, f] }));
-        await push();
+        await push(snap);
         return f;
       },
 
       removeFreelancer: async (id) => {
+        const snap = snapshot();
         set((s) => ({ freelancers: s.freelancers.filter((f) => f.id !== id) }));
-        await push();
+        await push(snap);
       },
 
       setGuides: (tourCloudId, meta, guides) => writeAssignment(tourCloudId, { ...meta, guides }),
@@ -108,12 +117,13 @@ export const useGuideScheduleStore = create<State>()(
       setLegs: (tourCloudId, legs) => writeAssignment(tourCloudId, { legs }),
 
       removeAssignment: async (tourCloudId) => {
+        const snap = snapshot();
         set((s) => {
           const next = { ...s.assignments };
           delete next[tourCloudId];
           return { assignments: next };
         });
-        await push();
+        await push(snap);
       },
 
       seedLegsFromQuote: async (tourCloudId, guideIds, meta) => {
