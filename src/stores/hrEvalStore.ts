@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { sbSubscribeHrEvaluations, sbPushHrEvaluations } from '@/lib/supabase';
+import { sbSubscribeHrEvaluations, sbUpsertHrEvaluation, sbDeleteHrEvaluation } from '@/lib/supabase';
 import { useAuthStore } from './authStore';
 import type { HrEvaluation } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
@@ -33,12 +33,14 @@ export const useHrEvalStore = create<HrEvalState>()(
       const { evaluations } = get();
       const isNew = !form.id || !evaluations.find((e) => e.id === form.id);
       const now = new Date().toISOString();
-      const next = isNew
-        ? [{ ...form, id: form.id || newId(), createdAt: now, createdBy: u.name }, ...evaluations]
-        : evaluations.map((e) => (e.id === form.id ? { ...form, updatedAt: now, updatedBy: u.name } : e));
+      const saved: HrEvaluation = isNew
+        ? { ...form, id: form.id || newId(), createdAt: now, createdBy: u.name }
+        : { ...form, updatedAt: now, updatedBy: u.name };
+      const next = isNew ? [saved, ...evaluations] : evaluations.map((e) => (e.id === saved.id ? saved : e));
       set({ evaluations: next, syncing: true });
       try {
-        await sbPushHrEvaluations(next, { name: u.name, role: u.role });
+        // Per-row — CHỈ ghi đánh giá vừa sửa (chống wipe khi 2 người chấm song song).
+        await sbUpsertHrEvaluation(saved, { name: u.name, role: u.role });
       } catch (e) {
         window.alert('❌ Lỗi đồng bộ đánh giá: ' + (e as Error).message);
       } finally {
@@ -52,7 +54,7 @@ export const useHrEvalStore = create<HrEvalState>()(
       const next = get().evaluations.filter((e) => e.id !== id);
       set({ evaluations: next, syncing: true });
       try {
-        await sbPushHrEvaluations(next, { name: u.name, role: u.role });
+        await sbDeleteHrEvaluation(id); // targeted — KHÔNG full-overwrite
       } catch (e) {
         window.alert('❌ Lỗi xoá đánh giá: ' + (e as Error).message);
       } finally {
