@@ -222,6 +222,10 @@ export type Passenger = {
   failReason?: string;        // Lý do rớt (khi result = failed)
   docs?: ApplicantDoc[];      // Checklist hồ sơ visa
   passportHistory?: PassportRecord[]; // Hộ chiếu cũ đã thay
+  // ── Liên kết hồ sơ khách hàng (CRM) — gắn khách visa vào Customer/TravelerDoc ──
+  customerId?: string;        // legacy id của Customer đã gắn
+  customerName?: string;      // tên KH (hiển thị nhanh)
+  travelerId?: string;        // id TravelerDoc trong customer (nguồn danh tính)
 };
 
 /** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */

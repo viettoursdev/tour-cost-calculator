@@ -20,6 +20,9 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
 import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck';
 import HistoryIcon from '@mui/icons-material/History';
+import LinkIcon from '@mui/icons-material/Link';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
+import SyncIcon from '@mui/icons-material/Sync';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import SaveIcon from '@mui/icons-material/Save';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
@@ -42,6 +45,9 @@ import { VisaExportDialog } from './VisaExportDialog';
 import { VisaShareListDialog } from './VisaShareListDialog';
 import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, passengersToApplicants } from './guestAdapters';
 import { VisaGuestHistory } from './VisaGuestHistory';
+import { CustomerLinkDialog } from './CustomerLinkDialog';
+import { identityFromTraveler, unlinkPatch } from './customerLink';
+import { useCustomerStore } from '@/stores/customerStore';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
 // importVisaApplicants nạp động khi bấm (thư viện Excel nặng).
 import type { ApplicantDoc, Passenger, VisaApplicantMilestone, VisaProjectDoc } from '@/types';
@@ -173,6 +179,18 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [costOpen, setCostOpen] = useState(false);
   const [exportListOpen, setExportListOpen] = useState(false);
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
+  // Khách đang mở hộp thoại gắn hồ sơ KH + hàm patch của dòng đó.
+  const [linkTarget, setLinkTarget] = useState<{ p: Passenger; apply: (patch: Partial<Passenger>) => void } | null>(null);
+
+  // Đồng bộ danh tính/hộ chiếu của applicant từ hồ sơ giấy tờ khách đã gắn (nguồn sự thật).
+  const syncFromCustomer = (p: Passenger, patch: (x: Partial<Passenger>) => void) => {
+    const c = useCustomerStore.getState().customers.find((x) => x.id === p.customerId);
+    if (!c) { toast('Không tìm thấy hồ sơ khách hàng đã gắn (có thể đã bị xoá).', 'warning'); return; }
+    const t = (c.travelers ?? []).find((x) => x.id === p.travelerId);
+    if (!t) { toast('Hồ sơ giấy tờ đã gắn không còn — hãy gắn lại.', 'warning'); return; }
+    patch({ ...identityFromTraveler(t), customerName: c.name });
+    toast('✅ Đã đồng bộ danh tính/hộ chiếu từ hồ sơ khách.');
+  };
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -566,6 +584,35 @@ export function VisaApplicantManager({ project, onClose }: Props) {
                     <TextField size="small" fullWidth multiline minRows={2} label="Lưu ý khác" value={p.note ?? ''}
                       onChange={(e) => patch({ note: e.target.value })} />
 
+                    {/* Liên kết hồ sơ khách hàng (CRM) — nguồn danh tính chung */}
+                    <Box>
+                      <Typography variant="caption" fontWeight={800} color="text.secondary"
+                        sx={{ display: 'block', mb: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Khách hàng (CRM)
+                      </Typography>
+                      {p.customerId ? (
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Chip size="small" color="success" variant="outlined" icon={<LinkIcon fontSize="small" />}
+                            label={p.customerName || 'Đã gắn khách hàng'} sx={{ fontWeight: 700 }} />
+                          <Tooltip title="Cập nhật tên/ngày sinh/hộ chiếu của khách này theo hồ sơ khách hàng đã gắn">
+                            <Button size="small" startIcon={<SyncIcon />} sx={{ color: '#0369a1' }}
+                              onClick={() => syncFromCustomer(p, patch)}>
+                              Đồng bộ từ hồ sơ khách
+                            </Button>
+                          </Tooltip>
+                          <Button size="small" color="inherit" startIcon={<LinkOffIcon />}
+                            onClick={() => patch(unlinkPatch())}>
+                            Gỡ liên kết
+                          </Button>
+                        </Stack>
+                      ) : (
+                        <Button size="small" variant="outlined" startIcon={<LinkIcon />} sx={{ color: '#0d7a6a', borderColor: '#0d7a6a' }}
+                          onClick={() => setLinkTarget({ p, apply: patch })}>
+                          Gắn vào khách hàng
+                        </Button>
+                      )}
+                    </Box>
+
                     <Stack direction="row" spacing={1} justifyContent="flex-end">
                       <Tooltip title="Xem lịch sử visa của khách này (các dự án & báo giá liên quan)">
                         <Button size="small" color="inherit" startIcon={<HistoryIcon />}
@@ -587,6 +634,13 @@ export function VisaApplicantManager({ project, onClose }: Props) {
       {costOpen && <VisaCostDialog project={project} count={list.length} onClose={() => setCostOpen(false)} />}
       {exportListOpen && <VisaExportDialog project={project} applicants={list} onClose={() => setExportListOpen(false)} />}
       {shareLinkOpen && <VisaShareListDialog project={project} applicants={list} onClose={() => setShareLinkOpen(false)} />}
+      {linkTarget && (
+        <CustomerLinkDialog
+          applicant={linkTarget.p}
+          onLink={(patch) => linkTarget.apply(patch)}
+          onClose={() => setLinkTarget(null)}
+        />
+      )}
 
       <Dialog open={!!guestSeed} onClose={() => setGuestSeed(null)} fullWidth maxWidth="md">
         <DialogTitle sx={{ pr: 6 }}>

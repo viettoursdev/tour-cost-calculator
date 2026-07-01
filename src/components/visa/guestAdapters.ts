@@ -35,6 +35,9 @@ export function applicantToPassenger(a: VisaApplicant): Passenger {
     otherFlight: a.otherFlight,
     roomType: a.roomType ?? '',
     roomNo: a.roomNo,
+    customerId: a.customerId,
+    customerName: a.customerName,
+    travelerId: a.travelerId,
   };
 }
 
@@ -65,6 +68,9 @@ export function passengerToApplicant(p: Passenger): VisaApplicant {
     otherFlight: p.otherFlight,
     roomType: p.roomType ?? '',
     roomNo: p.roomNo,
+    customerId: p.customerId,
+    customerName: p.customerName,
+    travelerId: p.travelerId,
   };
 }
 

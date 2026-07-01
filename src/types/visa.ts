@@ -187,6 +187,13 @@ export interface VisaApplicant {
   // Sắp xếp phòng (đồng bộ với báo giá)
   roomType?: 'single' | 'double' | 'twin' | 'triple' | 'vip' | 'upgrade' | '';
   roomNo?: string;              // Nhãn/số phòng để ghép khách ở chung
+  // ── Liên kết hồ sơ khách hàng (CRM) ──
+  // Gắn applicant vào MỘT khách hàng + hồ sơ giấy tờ (TravelerDoc) của khách đó
+  // để tái dùng danh tính/hộ chiếu và đồng bộ. `customerId` = legacy id (như quote).
+  // TravelerDoc trong customer là NGUỒN SỰ THẬT cho danh tính khi đã gắn.
+  customerId?: string;
+  customerName?: string;        // tên KH — hiển thị nhanh, không phải nguồn sự thật
+  travelerId?: string;          // id TravelerDoc trong customer đã gắn
 }
 
 /** Chi phí visa của một dự án: dự toán (theo bảng giá) + thực chi → biên lợi. */
