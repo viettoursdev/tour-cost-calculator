@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from 'react';
 import {
-  AppBar, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogTitle, Divider, FormControlLabel,
+  Alert, AppBar, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogTitle, Divider, FormControlLabel,
   IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack, TextField,
   ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography,
 } from '@mui/material';
@@ -47,6 +47,9 @@ import { applicantToPassenger, applicantsToPassengers, passengerToApplicant, pas
 import { VisaGuestHistory } from './VisaGuestHistory';
 import { CustomerLinkDialog } from './CustomerLinkDialog';
 import { identityFromTraveler, unlinkPatch } from './customerLink';
+import { hasPassportIssue, passportIssues } from './passportChecks';
+import { GuestRelationsPanel } from './GuestRelationsPanel';
+import { addRelation, minorGuardianStatus, removeRelation } from './guestRelations';
 import { useCustomerStore } from '@/stores/customerStore';
 import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
 // importVisaApplicants nạp động khi bấm (thư viện Excel nặng).
@@ -103,12 +106,16 @@ function ApplicantTimelineEditor({ timeline, departureDate, onChange }: {
   );
 }
 
-/** Dải tổng hợp tình trạng visa của đoàn: đếm theo 8 trạng thái + số quá hạn. */
-function StatusSummaryStrip({ rows }: { rows: Passenger[] }) {
+/** Dải tổng hợp tình trạng visa của đoàn: đếm theo 8 trạng thái + số quá hạn + hộ chiếu. */
+function StatusSummaryStrip({ rows, departureDate }: { rows: Passenger[]; departureDate?: string | null }) {
   const counts = VISA_APPLICANT_STATUS_ORDER
     .map((s) => ({ s, n: rows.filter((p) => deriveVisaStatus(p) === s).length }))
     .filter((x) => x.n > 0);
   const overdue = rows.filter((p) => isApplicantOverdue(p)).length;
+  const passportWarn = rows.filter((p) =>
+    hasPassportIssue({ passport: p.idNo, passportIssue: p.passportIssue, passportExpiry: p.passportExpiry }, departureDate)).length;
+  const relatables = rows.map((g) => ({ id: g.id, dob: g.dob, relations: g.relations, guardianAuthReady: g.guardianAuthReady }));
+  const minorAuth = rows.filter((_, i) => minorGuardianStatus(relatables[i], relatables, departureDate).needsAuth).length;
   return (
     <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 1.5 }}>
       <Chip size="small" label={`${rows.length} khách`} sx={{ fontWeight: 800 }} />
@@ -121,6 +128,16 @@ function StatusSummaryStrip({ rows }: { rows: Passenger[] }) {
       })}
       {overdue > 0 && (
         <Chip size="small" color="error" variant="outlined" label={`⚠ Quá hạn: ${overdue}`} sx={{ fontWeight: 800 }} />
+      )}
+      {passportWarn > 0 && (
+        <Tooltip title="Số khách có vấn đề hộ chiếu (hết hạn, sắp hết hạn <6 tháng, hoặc thiếu thông tin)">
+          <Chip size="small" color="warning" variant="outlined" label={`🛂 Hộ chiếu: ${passportWarn}`} sx={{ fontWeight: 800 }} />
+        </Tooltip>
+      )}
+      {minorAuth > 0 && (
+        <Tooltip title="Trẻ <14 tuổi (theo ngày khởi hành) chưa đi cùng cha/mẹ và chưa có giấy uỷ quyền cho người thân đưa đi">
+          <Chip size="small" color="error" label={`👶 Trẻ <14 cần giấy uỷ quyền: ${minorAuth}`} sx={{ fontWeight: 800 }} />
+        </Tooltip>
       )}
     </Stack>
   );
@@ -191,6 +208,11 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     patch({ ...identityFromTraveler(t), customerName: c.name });
     toast('✅ Đã đồng bộ danh tính/hộ chiếu từ hồ sơ khách.');
   };
+
+  // Quan hệ giữa các khách — cập nhật cả hai chiều trong danh sách.
+  const addRel = (fromId: string, toId: string, type: Parameters<typeof addRelation>[3]) =>
+    setList((prev) => addRelation(prev, fromId, toId, type));
+  const removeRel = (aId: string, bId: string) => setList((prev) => removeRelation(prev, aId, bId));
 
   const add = () => setList((prev) => [...prev, applicantToPassenger(newVisaApplicant())]);
 
@@ -494,12 +516,12 @@ export function VisaApplicantManager({ project, onClose }: Props) {
           </Box>
         ) : view === 'timeline' ? (
           <>
-            <StatusSummaryStrip rows={list} />
+            <StatusSummaryStrip rows={list} departureDate={project.departureDate} />
             <VisaApplicantTimeline rows={list} onChange={setList} departureDate={project.departureDate} />
           </>
         ) : (
           <>
-            <StatusSummaryStrip rows={list} />
+            <StatusSummaryStrip rows={list} departureDate={project.departureDate} />
             <Box sx={{ mb: 1.5 }}><GuestDashboard pax={list} /></Box>
             <RoomingPanel rows={list} onChange={setList} />
             <GuestListTable
@@ -536,6 +558,16 @@ export function VisaApplicantManager({ project, onClose }: Props) {
                           🔄 Đổi hộ chiếu mới
                         </Button>
                       </Stack>
+                      {(() => {
+                        const issues = passportIssues({ passport: p.idNo, passportIssue: p.passportIssue, passportExpiry: p.passportExpiry }, project.departureDate);
+                        if (!issues.length) return null;
+                        const hasErr = issues.some((x) => x.level === 'error');
+                        return (
+                          <Alert severity={hasErr ? 'error' : 'warning'} sx={{ mb: 0.75, py: 0, '& .MuiAlert-message': { py: 0.5 } }}>
+                            {issues.map((x, k) => <Typography key={k} variant="caption" sx={{ display: 'block' }}>• {x.text}</Typography>)}
+                          </Alert>
+                        );
+                      })()}
                       {histN > 0 ? (
                         <Stack spacing={0.25}>
                           {p.passportHistory!.map((h, k) => (
@@ -612,6 +644,13 @@ export function VisaApplicantManager({ project, onClose }: Props) {
                         </Button>
                       )}
                     </Box>
+
+                    <GuestRelationsPanel
+                      guest={p} all={list} departureDate={project.departureDate}
+                      onAdd={(toId, type) => addRel(p.id, toId, type)}
+                      onRemove={(toId) => removeRel(p.id, toId)}
+                      onSetAuth={(v) => patch({ guardianAuthReady: v })}
+                    />
 
                     <Stack direction="row" spacing={1} justifyContent="flex-end">
                       <Tooltip title="Xem lịch sử visa của khách này (các dự án & báo giá liên quan)">

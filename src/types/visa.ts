@@ -194,6 +194,18 @@ export interface VisaApplicant {
   customerId?: string;
   customerName?: string;        // tên KH — hiển thị nhanh, không phải nguồn sự thật
   travelerId?: string;          // id TravelerDoc trong customer đã gắn
+  // ── Quan hệ với các khách khác trong đoàn + quy tắc trẻ vị thành niên ──
+  relations?: GuestRelation[];
+  // Đã chuẩn bị GIẤY UỶ QUYỀN cho người thân đưa trẻ (<14, không đi cùng cha/mẹ) đi du lịch.
+  guardianAuthReady?: boolean;
+}
+
+/** Loại quan hệ giữa hai khách trong đoàn. `type` mô tả "người kia là <type> của
+ *  mình" — vd trên bé: {toId: cha, type:'parent'} nghĩa là toId LÀ cha/mẹ của bé. */
+export type GuestRelationType = 'spouse' | 'parent' | 'child' | 'grandparent' | 'grandchild' | 'sibling' | 'relative';
+export interface GuestRelation {
+  toId: string;
+  type: GuestRelationType;
 }
 
 /** Chi phí visa của một dự án: dự toán (theo bảng giá) + thực chi → biên lợi. */

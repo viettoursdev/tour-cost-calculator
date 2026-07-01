@@ -1,5 +1,5 @@
 import type { Department } from './user';
-import type { ApplicantDoc, PassportRecord, VisaApplicantMilestone, VisaApplicantStatus } from './visa';
+import type { ApplicantDoc, GuestRelation, PassportRecord, VisaApplicantMilestone, VisaApplicantStatus } from './visa';
 import type { ContractCancel } from './contract';
 
 export type CategoryId =
@@ -226,6 +226,8 @@ export type Passenger = {
   customerId?: string;        // legacy id của Customer đã gắn
   customerName?: string;      // tên KH (hiển thị nhanh)
   travelerId?: string;        // id TravelerDoc trong customer (nguồn danh tính)
+  relations?: GuestRelation[]; // quan hệ với khách khác trong đoàn
+  guardianAuthReady?: boolean; // đã có giấy uỷ quyền đưa trẻ <14 đi (khi không đi cùng cha/mẹ)
 };
 
 /** Trạng thái một bước trong quy trình vận hành (4 cột Kanban). */

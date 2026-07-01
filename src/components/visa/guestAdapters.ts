@@ -38,6 +38,8 @@ export function applicantToPassenger(a: VisaApplicant): Passenger {
     customerId: a.customerId,
     customerName: a.customerName,
     travelerId: a.travelerId,
+    relations: a.relations,
+    guardianAuthReady: a.guardianAuthReady,
   };
 }
 
@@ -71,6 +73,8 @@ export function passengerToApplicant(p: Passenger): VisaApplicant {
     customerId: p.customerId,
     customerName: p.customerName,
     travelerId: p.travelerId,
+    relations: p.relations,
+    guardianAuthReady: p.guardianAuthReady,
   };
 }
 
