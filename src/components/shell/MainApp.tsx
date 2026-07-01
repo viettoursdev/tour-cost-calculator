@@ -38,6 +38,7 @@ import { useInventoryStore } from '@/stores/inventoryStore';
 import { useTrainingStore } from '@/stores/trainingStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers, checkTrainingDeadlines } from '@/lib/notifications';
 import { checkHrExpiry } from '@/lib/hrNotifications';
+import { autoBackfillWorkflowIndex } from '@/lib/workflowBackfill';
 import { checkAttendanceConfirm } from '@/lib/attendanceNotify';
 import { checkLowStock } from '@/lib/inventoryNotifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
@@ -140,6 +141,8 @@ export function MainApp() {
     setTimeout(() => { void checkLowStock(currentUser); }, 9400);
     setTimeout(() => { void checkTourProfileFollowers(currentUser); }, 9200);
     setTimeout(() => { void checkTrainingDeadlines(currentUser); }, 9600);
+    // Backfill nền chỉ số quy trình cho báo giá cũ → Bảng điều phối & SLA hết trống.
+    setTimeout(() => { void autoBackfillWorkflowIndex(); }, 10000);
     // Nhắc lại lặp lại: kiểm tra ngay + mỗi 5 phút khi app mở (gồm cả nhắc việc To-Do).
     const remindOnce = () => {
       checkNotifReminders(useNotificationStore.getState().notifications, currentUser.u);
