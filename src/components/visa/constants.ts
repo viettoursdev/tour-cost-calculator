@@ -359,12 +359,17 @@ export function newVisaApplicant(): VisaApplicant {
 export function countsFromApplicants(applicants: VisaApplicant[]): Pick<
   VisaProjectDoc, 'applyCount' | 'passedCount' | 'failedCount' | 'haveVisaCount' | 'pendingCount'
 > {
+  // Đếm theo tình trạng HỢP NHẤT (deriveVisaStatus) để tôn trọng `visaStatus` mới:
+  // khách 'cancelled' (huỷ) KHÔNG còn bị tính nhầm vào "chờ kết quả".
+  const st = applicants.map((a) => deriveVisaStatus(a));
+  const n = (s: VisaApplicantStatus) => st.filter((x) => x === s).length;
   return {
     applyCount: applicants.length,
-    passedCount: applicants.filter((a) => a.result === 'passed').length,
-    failedCount: applicants.filter((a) => a.result === 'failed').length,
-    haveVisaCount: applicants.filter((a) => a.result === 'have_visa').length,
-    pendingCount: applicants.filter((a) => a.result === 'pending').length,
+    passedCount: n('passed'),
+    failedCount: n('failed'),
+    haveVisaCount: n('have_visa'),
+    // "Chờ kết quả" = đang xử lý (deployed/collecting/collected/biometrics), KHÔNG gồm huỷ.
+    pendingCount: st.filter((x) => x === 'deployed' || x === 'collecting' || x === 'collected' || x === 'biometrics').length,
   };
 }
 

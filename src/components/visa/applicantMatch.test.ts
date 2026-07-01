@@ -34,6 +34,13 @@ describe('sameGuest', () => {
     )).toBe(true);
   });
 
+  it('matches name + dob across date formats (dd/mm/yyyy vs ISO)', () => {
+    expect(sameGuest(
+      { name: 'Nguyễn Văn A', dob: '01/01/1990' },
+      { name: 'Nguyen Van A', dob: '1990-01-01' },
+    )).toBe(true);
+  });
+
   it('requires dob to match when relying on name', () => {
     expect(sameGuest(
       { name: 'Nguyễn Văn A', dob: '1990-01-01' },

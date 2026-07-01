@@ -8,24 +8,15 @@
  * vẫn RIÊNG của applicant (không đẩy ngược lên khách).
  */
 import { normalizeVN } from '@/lib/search';
-import { normPassport } from './applicantMatch';
+import { normDob, normPassport } from './applicantMatch';
 import type { Customer, Passenger, TravelerDoc, User } from '@/types';
+
+// Chuẩn hoá ngày dùng chung với applicantMatch (giữ 1 nguồn) — re-export cho nơi
+// đang import từ customerLink.
+export { normDob };
 
 const newLegacyId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const newTravelerId = () => 'trv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-/** Chuẩn hoá ngày sinh về yyyy-mm-dd để so khớp ổn định (nhận cả dd/mm/yyyy). */
-export function normDob(s: string | null | undefined): string {
-  const v = (s ?? '').trim();
-  if (!v) return '';
-  // yyyy-mm-dd (đã chuẩn)
-  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v);
-  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  // dd/mm/yyyy hoặc dd-mm-yyyy
-  m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v);
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  return v;
-}
 
 /** Danh tính rút từ một TravelerDoc — các trường sẽ chiếu xuống applicant. */
 export function identityFromTraveler(t: TravelerDoc): Partial<Passenger> {

@@ -13,6 +13,17 @@ export function normPassport(s: string | null | undefined): string {
   return (s ?? '').replace(/\s+/g, '').toUpperCase().trim();
 }
 
+/** Chuẩn hoá ngày về yyyy-mm-dd để so khớp ổn định (nhận cả dd/mm/yyyy). */
+export function normDob(s: string | null | undefined): string {
+  const v = (s ?? '').trim();
+  if (!v) return '';
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return v;
+}
+
 /**
  * Hai mục có phải cùng một người không.
  * Quy tắc: trùng số hộ chiếu (khi cả hai có) ⇒ cùng người; hoặc trùng tên (không
@@ -26,8 +37,8 @@ export function sameGuest(a: GuestKey, b: GuestKey): boolean {
   const na = normalizeVN(a.name);
   const nb = normalizeVN(b.name);
   if (!na || na !== nb) return false;
-  const da = (a.dob ?? '').trim();
-  const db = (b.dob ?? '').trim();
+  const da = normDob(a.dob);
+  const db = normDob(b.dob);
   return !!da && da === db;
 }
 

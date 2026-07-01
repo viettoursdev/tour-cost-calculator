@@ -18,6 +18,15 @@ describe('countsFromApplicants', () => {
       applyCount: 0, passedCount: 0, failedCount: 0, haveVisaCount: 0, pendingCount: 0,
     });
   });
+  it('does not count a cancelled applicant (visaStatus) as pending', () => {
+    const list: VisaApplicant[] = [
+      { id: '1', name: 'A', docStatus: 'missing', result: 'pending', visaStatus: 'cancelled' },
+      { id: '2', name: 'B', docStatus: 'submitted', result: 'pending', visaStatus: 'collecting' },
+    ];
+    expect(countsFromApplicants(list)).toEqual({
+      applyCount: 2, passedCount: 0, failedCount: 0, haveVisaCount: 0, pendingCount: 1,
+    });
+  });
 });
 
 describe('visaPresetKeyForCountry', () => {
