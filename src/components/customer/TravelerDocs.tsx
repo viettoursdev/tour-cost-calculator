@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -17,6 +18,7 @@ import { scanTravelerDoc } from '@/lib/passportScan';
 import { openFilePreview } from '@/stores/filePreviewStore';
 import { daysUntil } from '@/lib/dateUtils';
 import { toast } from '@/stores/toastStore';
+import { AddToVisaProjectDialog } from '@/components/visa/AddToVisaProjectDialog';
 import type { Customer, FileAttachment, TravelerDoc } from '@/types';
 
 const newId = () => 'trv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -35,6 +37,7 @@ function ExpiryChip({ label, iso }: { label: string; iso?: string }) {
 export function TravelerDocsPanel({ customer, canEdit }: { customer: Customer; canEdit: boolean }) {
   const saveCustomer = useCustomerStore((s) => s.save);
   const [edit, setEdit] = useState<{ traveler: TravelerDoc | null } | null>(null);
+  const [addVisa, setAddVisa] = useState<TravelerDoc | null>(null);
 
   const travelers = customer.travelers ?? [];
 
@@ -83,6 +86,9 @@ export function TravelerDocsPanel({ customer, canEdit }: { customer: Customer; c
                 </Box>
                 {canEdit && (
                   <>
+                    <Tooltip title="Thêm người này vào một bộ hồ sơ visa">
+                      <IconButton size="small" sx={{ color: '#0d7a6a' }} onClick={() => setAddVisa(t)}><FlightTakeoffIcon sx={{ fontSize: 16 }} /></IconButton>
+                    </Tooltip>
                     <IconButton size="small" onClick={() => setEdit({ traveler: t })}><EditIcon sx={{ fontSize: 16 }} /></IconButton>
                     <IconButton size="small" color="error" onClick={() => void removeTraveler(t.id)}><DeleteOutlineIcon sx={{ fontSize: 16 }} /></IconButton>
                   </>
@@ -94,6 +100,7 @@ export function TravelerDocsPanel({ customer, canEdit }: { customer: Customer; c
       )}
 
       {edit && <TravelerDocModal customer={customer} traveler={edit.traveler} onClose={() => setEdit(null)} />}
+      {addVisa && <AddToVisaProjectDialog customer={customer} traveler={addVisa} onClose={() => setAddVisa(null)} />}
     </Box>
   );
 }

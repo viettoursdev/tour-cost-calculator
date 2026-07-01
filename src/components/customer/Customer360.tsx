@@ -78,7 +78,16 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
   }, [quotes, dmcQuotes, customer]);
 
   const linkedContracts = useMemo(() => contracts.filter((c) => c.linkedQuoteId && cloudIds.has(c.linkedQuoteId)), [contracts, cloudIds]);
-  const linkedVisa = useMemo(() => visaProjects.filter((p) => p.linkedQuoteId && cloudIds.has(p.linkedQuoteId)), [visaProjects, cloudIds]);
+  // Dự án visa gắn khách: TRỰC TIẾP (applicant có customerId) hoặc gián tiếp qua báo giá.
+  const linkedVisa = useMemo(() => {
+    const out: { proj: typeof visaProjects[number]; directCount: number }[] = [];
+    for (const p of visaProjects) {
+      const directCount = (p.applicants ?? []).filter((a) => a.customerId === cust.id).length;
+      const viaQuote = !!p.linkedQuoteId && cloudIds.has(p.linkedQuoteId);
+      if (directCount > 0 || viaQuote) out.push({ proj: p, directCount });
+    }
+    return out;
+  }, [visaProjects, cloudIds, cust.id]);
 
   const contact = customer.contacts?.[0];
 
@@ -156,7 +165,11 @@ export function Customer360({ customer, onClose }: { customer: Customer; onClose
           <Box>
             <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase' }}>Dự án visa ({linkedVisa.length})</Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-              {linkedVisa.map((p) => <Chip key={p.id} size="small" variant="outlined" label={`🛂 ${p.name || p.code || p.id}`} />)}
+              {linkedVisa.map(({ proj: p, directCount }) => (
+                <Chip key={p.id} size="small" variant="outlined"
+                  color={directCount > 0 ? 'success' : 'default'}
+                  label={`🛂 ${p.name || p.code || p.id}${directCount > 0 ? ` · 🔗 ${directCount} khách` : ''}`} />
+              ))}
             </Stack>
           </Box>
         )}
