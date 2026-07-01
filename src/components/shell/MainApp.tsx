@@ -32,11 +32,13 @@ import { useHrEvalStore } from '@/stores/hrEvalStore';
 import { useHrRecruitStore } from '@/stores/hrRecruitStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { useAttendanceStore } from '@/stores/attendanceStore';
+import { useAttendanceConfigStore } from '@/stores/attendanceConfigStore';
 import { usePoiStore } from '@/stores/poiStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useTrainingStore } from '@/stores/trainingStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers, checkTrainingDeadlines } from '@/lib/notifications';
 import { checkHrExpiry } from '@/lib/hrNotifications';
+import { checkAttendanceConfirm } from '@/lib/attendanceNotify';
 import { checkLowStock } from '@/lib/inventoryNotifications';
 import { checkNotifReminders } from '@/lib/notifReminders';
 import { AppShell } from './AppShell';
@@ -106,6 +108,7 @@ export function MainApp() {
     const hrRecruitUnsub = useHrRecruitStore.getState().init();
     const hrLeaveUnsub = useHrLeaveStore.getState().init();
     const hrAttendanceUnsub = useAttendanceStore.getState().init();
+    const hrAttConfigUnsub = useAttendanceConfigStore.getState().init();
     const invUnsub = useInventoryStore.getState().init();
     const trainingUnsub = useTrainingStore.getState().init();
     const exportReqUnsub = useExportRequestStore.getState().init();
@@ -133,6 +136,7 @@ export function MainApp() {
     setTimeout(() => { void checkDormantCustomers(currentUser); }, 8000);
     setTimeout(() => { void checkDocExpiry(currentUser); }, 8500);
     setTimeout(() => { void checkHrExpiry(currentUser); }, 8800);
+    setTimeout(() => { void checkAttendanceConfirm(currentUser); }, 9600);
     setTimeout(() => { void checkLowStock(currentUser); }, 9400);
     setTimeout(() => { void checkTourProfileFollowers(currentUser); }, 9200);
     setTimeout(() => { void checkTrainingDeadlines(currentUser); }, 9600);
@@ -174,6 +178,7 @@ export function MainApp() {
       hrRecruitUnsub?.();
       hrLeaveUnsub?.();
       hrAttendanceUnsub?.();
+      hrAttConfigUnsub?.();
       invUnsub?.();
       trainingUnsub?.();
       exportReqUnsub?.();

@@ -5330,7 +5330,8 @@ export async function sbPushHrGuides(
 
 import type {
   HrAttendance, AttendanceDays, AttendanceSummary, AttendanceStatus,
-  AttendanceConfirmation, AttendanceFeedback, AttendanceSource,
+  AttendanceConfirmation, AttendanceFeedback, AttendanceSource, AttendanceHistoryEntry,
+  AttendanceCodeDef,
 } from '@/types/attendance';
 
 const rowToHrAttendance = (r: Record<string, unknown>): HrAttendance => ({
@@ -5346,6 +5347,7 @@ const rowToHrAttendance = (r: Record<string, unknown>): HrAttendance => ({
   confirmation: (r.confirmation as AttendanceConfirmation) ?? { status: 'pending' },
   feedback: (r.feedback as AttendanceFeedback[]) ?? [],
   source: (r.source as AttendanceSource) ?? 'manual',
+  history: (r.history as AttendanceHistoryEntry[]) ?? [],
   createdAt: (r.created_at as string) ?? new Date().toISOString(),
   createdBy: (r.created_by_name as string) ?? '',
   updatedAt: (r.updated_at as string) ?? undefined,
@@ -5365,6 +5367,7 @@ const hrAttendanceToRow = (a: HrAttendance): Record<string, unknown> => ({
   confirmation: a.confirmation ?? { status: 'pending' },
   feedback: a.feedback ?? [],
   source: a.source,
+  history: a.history ?? [],
   created_by_name: a.createdBy,
   created_at: a.createdAt,
   updated_at: a.updatedAt ?? null,
@@ -5396,6 +5399,30 @@ export async function sbUpsertHrAttendances(list: HrAttendance[], client: Supaba
   if (!list.length) return;
   const { error } = await client.from('hr_attendance').upsert(list.map(hrAttendanceToRow), { onConflict: 'legacy_id' });
   if (error) throw new Error('sbUpsertHrAttendances: ' + error.message);
+}
+
+/** Từ điển mã công tự quản (single-row). Realtime để đồng bộ khi HR sửa. */
+export function sbSubscribeAttendanceConfig(
+  cb: (codes: AttendanceCodeDef[]) => void,
+  client: SupabaseClient = sb,
+): () => void {
+  return subscribeTable(client, 'attendance_config', async (cl) => {
+    const { data, error } = await cl.from('attendance_config').select('codes').eq('one_row', true).maybeSingle();
+    if (error) throw new Error('sbSubscribeAttendanceConfig: ' + error.message);
+    return (data?.codes as AttendanceCodeDef[]) ?? [];
+  }, cb);
+}
+
+export async function sbSaveAttendanceConfig(
+  codes: AttendanceCodeDef[],
+  savedBy: string,
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('attendance_config').upsert(
+    { one_row: true, codes, updated_at: new Date().toISOString(), updated_by: savedBy },
+    { onConflict: 'one_row' },
+  );
+  if (error) throw new Error('sbSaveAttendanceConfig: ' + error.message);
 }
 
 export async function sbDeleteHrAttendance(id: string, client: SupabaseClient = sb): Promise<void> {
@@ -5435,35 +5462,39 @@ export function sbSubscribeHrEvaluations(cb: (list: HrEvaluation[]) => void, cli
   }, cb);
 }
 
+const hrEvalRow = (e: HrEvaluation, pushedBy: { name: string; role: string }): Record<string, unknown> => ({
+  legacy_id: e.id, employee_legacy_id: e.employeeId, period: e.period,
+  review_date: e.reviewDate || null, reviewer_name: e.reviewerName,
+  competencies: e.competencies ?? [], kpis: e.kpis ?? [],
+  overall_score: e.overallScore ?? null, strengths: e.strengths ?? '',
+  improvements: e.improvements ?? '', next_goals: e.nextGoals ?? '',
+  promotion: e.promotion ?? '', status: e.status ?? 'draft',
+  created_by_name: e.createdBy, created_at: e.createdAt,
+  updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})`,
+});
+
+/** Upsert 1 đánh giá (per-row) — KHÔNG đụng dòng khác. Ưu tiên dùng hàm này. */
+export async function sbUpsertHrEvaluation(
+  e: HrEvaluation, pushedBy: { name: string; role: string }, client: SupabaseClient = sb,
+): Promise<void> {
+  const { error } = await client.from('hr_evaluations').upsert(hrEvalRow(e, pushedBy), { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbUpsertHrEvaluation: ' + error.message);
+}
+
+/** Xoá hẳn 1 đánh giá theo legacy_id (targeted). */
+export async function sbDeleteHrEvaluation(id: string, client: SupabaseClient = sb): Promise<void> {
+  const del = await client.from('hr_evaluations').delete().eq('legacy_id', id);
+  if (del.error) throw new Error('sbDeleteHrEvaluation: ' + del.error.message);
+}
+
+/** Bulk-import/restore. UPSERT-ONLY — không xoá-diff (chống wipe khi chấm song song).
+ *  Xoá đi qua sbDeleteHrEvaluation. Xem [[tcc-full-overwrite-upsert-only]]. */
 export async function sbPushHrEvaluations(
   list: HrEvaluation[], pushedBy: { name: string; role: string }, client: SupabaseClient = sb,
 ): Promise<void> {
-  const stamp = { updated_at: new Date().toISOString(), updated_by_name: `${pushedBy.name} (${pushedBy.role})` };
-  for (const e of list) {
-    const { error } = await client.from('hr_evaluations').upsert({
-      legacy_id: e.id, employee_legacy_id: e.employeeId, period: e.period,
-      review_date: e.reviewDate || null, reviewer_name: e.reviewerName,
-      competencies: e.competencies ?? [], kpis: e.kpis ?? [],
-      overall_score: e.overallScore ?? null, strengths: e.strengths ?? '',
-      improvements: e.improvements ?? '', next_goals: e.nextGoals ?? '',
-      promotion: e.promotion ?? '', status: e.status ?? 'draft',
-      created_by_name: e.createdBy, created_at: e.createdAt, ...stamp,
-    }, { onConflict: 'legacy_id' });
-    if (error) throw new Error('sbPushHrEvaluations upsert: ' + error.message);
-  }
-  const keepIds = list.map((e) => e.id);
-  if (keepIds.length > 0) {
-    const { data: existing, error: fetchErr } = await client.from('hr_evaluations').select('legacy_id');
-    if (fetchErr) throw new Error('sbPushHrEvaluations fetch: ' + fetchErr.message);
-    const toDelete = (existing ?? []).map((r) => r.legacy_id as string).filter((lid) => lid && !keepIds.includes(lid));
-    if (toDelete.length > 0) {
-      const del = await client.from('hr_evaluations').delete().in('legacy_id', toDelete);
-      if (del.error) throw new Error('sbPushHrEvaluations delete: ' + del.error.message);
-    }
-  } else {
-    const del = await client.from('hr_evaluations').delete().not('legacy_id', 'is', null);
-    if (del.error) throw new Error('sbPushHrEvaluations delete all: ' + del.error.message);
-  }
+  if (!list.length) return;
+  const { error } = await client.from('hr_evaluations').upsert(list.map((e) => hrEvalRow(e, pushedBy)), { onConflict: 'legacy_id' });
+  if (error) throw new Error('sbPushHrEvaluations upsert: ' + error.message);
 }
 
 // ── HR Recruitment (ATS: tin tuyển dụng + ứng viên) ───────────────────────────

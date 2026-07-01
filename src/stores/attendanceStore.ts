@@ -4,6 +4,7 @@ import {
   sbSubscribeHrAttendance, sbUpsertHrAttendance, sbUpsertHrAttendances, sbDeleteHrAttendance,
 } from '@/lib/supabase';
 import { summarizeAttendance } from '@/lib/attendance/attendanceCalc';
+import { effectiveCodes } from './attendanceConfigStore';
 import { useAuthStore } from './authStore';
 import type {
   HrAttendance, HrEmployee, AttendanceCell, AttendanceDays, AttendanceStatus, AttendanceFeedback,
@@ -27,10 +28,11 @@ type State = {
   /** Quản lý sửa 1 ô (chủ động điều chỉnh Gantt). `cell=null` = xoá ô. Tự tính lại tổng. */
   setCell: (emp: HrEmployee, period: string, isoDate: string, cell: AttendanceCell | null) => Promise<void>;
   /**
-   * Trộn thêm mã vào nhiều bảng công của một kỳ — CHỈ điền ô đang TRỐNG (không đè mã
-   * đã có). Dùng cho "điền từ đơn nghỉ phép đã duyệt". Trả về tổng số ô đã điền.
+   * Trộn thêm mã vào nhiều bảng công của một kỳ. Mặc định CHỈ điền ô đang TRỐNG (không
+   * đè mã đã có) — dùng cho "điền nghỉ phép" / "tạo khung tháng". `opts.overwrite=true`
+   * thì ghi đè mọi ô (dùng cho điền hàng loạt đi tour). Trả về tổng số ô đã điền/đổi.
    */
-  mergeDays: (period: string, entries: { emp: HrEmployee; add: AttendanceDays }[]) => Promise<number>;
+  mergeDays: (period: string, entries: { emp: HrEmployee; add: AttendanceDays }[], opts?: { overwrite?: boolean }) => Promise<number>;
   /** Đổi trạng thái kỳ công (draft→published→locked). */
   setStatus: (id: string, status: AttendanceStatus) => Promise<void>;
   /** Nhân viên xác nhận / báo sai sót bảng công của mình. */
@@ -71,9 +73,15 @@ export const useAttendanceStore = create<State>()(
       const prev = get().attendances;
       const existing = prev.find((x) => x.id === id);
       const now = new Date().toISOString();
+      const oldCode = existing?.days[isoDate]?.code ?? '';
+      const newCode = cell && cell.code.trim() ? cell.code : '';
       const days = { ...(existing?.days ?? {}) };
-      if (cell && cell.code.trim()) days[isoDate] = cell;
+      if (newCode) days[isoDate] = cell!;
       else delete days[isoDate];
+      // Nhật ký thay đổi ô (audit log) — chỉ ghi khi mã thực sự đổi. Giới hạn 300 mục.
+      const history = oldCode !== newCode
+        ? [...(existing?.history ?? []), { at: now, by: u.name, date: isoDate, from: oldCode, to: newCode }].slice(-300)
+        : (existing?.history ?? []);
       const base: HrAttendance = existing ?? {
         id,
         employeeLegacyId: emp.id,
@@ -102,9 +110,10 @@ export const useAttendanceStore = create<State>()(
       const updated: HrAttendance = {
         ...base,
         days,
-        summary: summarizeAttendance(days),
+        summary: summarizeAttendance(days, effectiveCodes()),
         confirmation: resetConfirm ? { status: 'pending' } : base.confirmation,
         feedback,
+        history,
         updatedAt: now,
         updatedBy: u.name,
       };
@@ -113,9 +122,10 @@ export const useAttendanceStore = create<State>()(
       await save(() => sbUpsertHrAttendance(updated), prev);
     },
 
-    mergeDays: async (period, entries) => {
+    mergeDays: async (period, entries, opts) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return 0;
+      const overwrite = opts?.overwrite ?? false;
       const prev = get().attendances;
       const now = new Date().toISOString();
       const toUpsert: HrAttendance[] = [];
@@ -125,9 +135,15 @@ export const useAttendanceStore = create<State>()(
         const id = attendanceId(emp.id, period);
         const existing = prev.find((x) => x.id === id);
         const days = { ...(existing?.days ?? {}) };
+        const histAdd: HrAttendance['history'] = [];
         let changed = false;
         for (const [iso, cell] of Object.entries(add)) {
-          if (!days[iso] || !days[iso].code?.trim()) { days[iso] = cell; changed = true; filled++; }
+          const old = days[iso]?.code ?? '';
+          const isEmpty = !old.trim();
+          if ((isEmpty || overwrite) && old !== cell.code) {
+            days[iso] = cell; changed = true; filled++;
+            histAdd!.push({ at: now, by: u.name, date: iso, from: old, to: cell.code });
+          }
         }
         if (!changed) continue;
         const base: HrAttendance = existing ?? {
@@ -145,9 +161,10 @@ export const useAttendanceStore = create<State>()(
             }]
           : (existing?.feedback ?? []);
         toUpsert.push({
-          ...base, days, summary: summarizeAttendance(days),
+          ...base, days, summary: summarizeAttendance(days, effectiveCodes()),
           confirmation: resetConfirm ? { status: 'pending' } : base.confirmation,
-          feedback, updatedAt: now, updatedBy: u.name,
+          feedback, history: [...(existing?.history ?? []), ...histAdd!].slice(-300),
+          updatedAt: now, updatedBy: u.name,
         });
       }
       if (!toUpsert.length) return 0;

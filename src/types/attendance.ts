@@ -80,6 +80,15 @@ export type AttendanceFeedback = {
   note: string;
 };
 
+/** Một mục nhật ký thay đổi ô (audit log). */
+export type AttendanceHistoryEntry = {
+  at: string;                 // ISO
+  by: string;                 // tên người sửa
+  date: string;               // ngày ISO của ô bị đổi
+  from: string;               // mã cũ ('' nếu trống)
+  to: string;                 // mã mới ('' nếu xoá)
+};
+
 /** Nguồn nhập một bản ghi công. */
 export type AttendanceSource = 'excel' | 'manual' | 'self';
 
@@ -97,6 +106,7 @@ export type HrAttendance = {
   confirmation: AttendanceConfirmation;
   feedback: AttendanceFeedback[];
   source: AttendanceSource;
+  history?: AttendanceHistoryEntry[]; // nhật ký thay đổi ô (audit log)
   createdAt: string;
   createdBy: string;
   updatedAt?: string;
