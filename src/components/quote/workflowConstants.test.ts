@@ -4,7 +4,7 @@ import {
   workflowSignals, applySignals, fillDueDates, parseDueRuleOffset, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
   appendLog, roleOfStep, workflowBoardSummary, cycleTimeMs,
   isGate, gateStatus, approvalOf, unmetDeps, APPROVE_ACTION,
-  nextActionableStep, playbookNotices, subtaskProgress,
+  nextActionableStep, playbookNotices, subtaskProgress, stepLabel, stepLabelEn,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -192,6 +192,22 @@ describe('dependencies + approval gate', () => {
     expect(labels.length).toBeGreaterThan(0);
     // bước tự thêm (không khoá) → không ràng buộc
     expect(unmetDeps({ id: 'x', label: 'Tự thêm', status: 'todo' }, dom)).toEqual([]);
+  });
+});
+
+describe('song ngữ nhãn bước', () => {
+  it('stepLabelEn: labelEn tự nhập > mặc định theo khoá > nhãn VI', () => {
+    const std = defaultWorkflow('standard');
+    const contract = std.find((s) => s.key === 'contract')!;
+    expect(stepLabelEn(contract)).toBe('Sign contract');           // mặc định theo khoá
+    expect(stepLabelEn({ ...contract, labelEn: 'Contract signing' })).toBe('Contract signing'); // tự nhập
+    expect(stepLabelEn({ id: 'x', label: 'Việc tự thêm', status: 'todo' })).toBe('Việc tự thêm'); // không khoá → VI
+  });
+  it('stepLabel chọn theo ngôn ngữ', () => {
+    const std = defaultWorkflow('standard');
+    const quote = std.find((s) => s.key === 'quote')!;
+    expect(stepLabel(quote, 'vi')).toBe('Triển khai báo giá');
+    expect(stepLabel(quote, 'en')).toBe('Prepare quotation');
   });
 });
 

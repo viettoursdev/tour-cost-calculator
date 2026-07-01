@@ -56,6 +56,7 @@ export function WorkflowView() {
   const [mode, setMode] = useState<Mode>(() => (localStorage.getItem(MODE_KEY) as Mode) || 'kanban');
   const [editing, setEditing] = useState<WorkflowStep | null>(null);
   const [presetEl, setPresetEl] = useState<null | HTMLElement>(null);
+  const [pdfEl, setPdfEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
     // Seed lần đầu: nội địa bỏ visa, còn lại dùng mẫu tiêu chuẩn.
@@ -169,9 +170,10 @@ export function WorkflowView() {
   };
   const reorder = (from: number, to: number) => { const a = [...steps]; const [m] = a.splice(from, 1); a.splice(to, 0, m); setWorkflow(a); };
   const syncNow = () => setWorkflow(applySignals(steps, signals));
-  const exportPdf = () => {
+  const exportPdf = (lang: 'vi' | 'en') => {
+    setPdfEl(null);
     if (!steps.length) { window.alert('Chưa có bước quy trình để xuất.'); return; }
-    void import('@/lib/exports/exportWorkflowPDF').then((m) => m.exportWorkflowPDF(draft.info, steps, nameOf));
+    void import('@/lib/exports/exportWorkflowPDF').then((m) => m.exportWorkflowPDF(draft.info, steps, nameOf, lang));
   };
   const fillDue = () => {
     if (!draft.info.startDate) { window.alert('Báo giá chưa có ngày khởi hành — đặt ở phần thông tin tour trước.'); return; }
@@ -216,9 +218,13 @@ export function WorkflowView() {
               <ToggleButton value="checklist"><ChecklistIcon fontSize="small" sx={{ mr: 0.5 }} />Checklist</ToggleButton>
               <ToggleButton value="gantt"><ViewTimelineIcon fontSize="small" sx={{ mr: 0.5 }} />Gantt</ToggleButton>
             </ToggleButtonGroup>
-            <Tooltip title="Xuất checklist quy trình ra PDF để in / bàn giao">
-              <Button variant="outlined" size="small" startIcon={<PictureAsPdfIcon />} onClick={exportPdf} sx={{ whiteSpace: 'nowrap' }}>Xuất PDF</Button>
+            <Tooltip title="Xuất checklist quy trình ra PDF để in / bàn giao (chọn ngôn ngữ)">
+              <Button variant="outlined" size="small" startIcon={<PictureAsPdfIcon />} onClick={(e) => setPdfEl(e.currentTarget)} sx={{ whiteSpace: 'nowrap' }}>Xuất PDF</Button>
             </Tooltip>
+            <Menu anchorEl={pdfEl} open={!!pdfEl} onClose={() => setPdfEl(null)}>
+              <MenuItem onClick={() => exportPdf('vi')}>🇻🇳 Tiếng Việt</MenuItem>
+              <MenuItem onClick={() => exportPdf('en')}>🇬🇧 English (bàn giao đối tác)</MenuItem>
+            </Menu>
             <Tooltip title="Áp một mẫu quy trình theo loại tour (thay toàn bộ bước hiện tại)">
               <Button variant="outlined" size="small" color="warning" startIcon={<RestartAltIcon />} onClick={(e) => setPresetEl(e.currentTarget)} sx={{ whiteSpace: 'nowrap' }}>Mẫu quy trình</Button>
             </Tooltip>

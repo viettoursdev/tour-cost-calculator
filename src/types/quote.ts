@@ -247,6 +247,7 @@ export type WorkflowSubtask = { id: string; label: string; done: boolean };
 export type WorkflowStep = {
   id: string;
   label: string;
+  labelEn?: string;           // nhãn tiếng Anh (bản bàn giao đối tác nước ngoài)
   status: WorkflowStatus;
   key?: string;               // khoá ổn định (đổi tên vẫn nhận tín hiệu auto) — bước mặc định
   dueOffset?: number;         // hạn = N ngày TRƯỚC khởi hành (âm = sau khởi hành)

@@ -147,6 +147,27 @@ export function unmetDeps(step: WorkflowStep, steps: WorkflowStep[]): string[] {
   return out;
 }
 
+// ── Song ngữ: nhãn bước & trạng thái tiếng Anh (cho bản bàn giao đối tác nước ngoài) ──
+export type WorkflowLang = 'vi' | 'en';
+export const WORKFLOW_STEP_LABEL_EN: Record<WorkflowStepKey, string> = {
+  receive: 'Receive request', quote: 'Prepare quotation', confirm_service: 'Confirm services',
+  visa: 'Process visa & documents', contract: 'Sign contract',
+  deposit_ncc: 'Collect deposit & pay suppliers', final_service: 'Final service confirmation',
+  comms: 'Pre-trip communications', deposit_pretrip: 'Collect deposit & pre-trip payment',
+  departure: 'Departure', acceptance: 'Acceptance with client & suppliers',
+  final_payment: 'Collect final payment', close: 'Close & archive',
+};
+export const WORKFLOW_STATUS_LABEL_EN: Record<WorkflowStatus, string> = {
+  todo: 'To do', doing: 'In progress', done: 'Completed', blocked: 'On hold', skipped: 'Not applicable',
+};
+/** Nhãn EN của bước: labelEn tự nhập > mặc định theo khoá > nhãn VI. */
+export const stepLabelEn = (s: WorkflowStep): string => {
+  const k = keyOf(s);
+  return s.labelEn?.trim() || (k ? WORKFLOW_STEP_LABEL_EN[k] : undefined) || s.label;
+};
+/** Nhãn bước theo ngôn ngữ hiển thị. */
+export const stepLabel = (s: WorkflowStep, lang: WorkflowLang): string => (lang === 'en' ? stepLabelEn(s) : s.label);
+
 /** Mẫu quy trình theo loại tour. */
 export type WorkflowPreset = 'standard' | 'domestic' | 'mice';
 export const WORKFLOW_PRESET_META: Record<WorkflowPreset, { label: string; desc: string }> = {

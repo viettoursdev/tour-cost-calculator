@@ -8,7 +8,7 @@ import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import HistoryIcon from '@mui/icons-material/History';
-import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs, isGate, approvalOf, APPROVE_ACTION } from './workflowConstants';
+import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, cycleTimeMs, isGate, approvalOf, APPROVE_ACTION, stepLabelEn } from './workflowConstants';
 import { ROLE_RANK, canViewStaffRole, isApprover } from '@/auth/ROLES';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import { useAuthStore } from '@/stores/authStore';
@@ -95,6 +95,10 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <TextField label="Tên bước" value={s.label} onChange={(e) => set({ label: e.target.value })} fullWidth />
+          <TextField label="Nhãn tiếng Anh (EN)" value={s.labelEn ?? ''} onChange={(e) => set({ labelEn: e.target.value || undefined })}
+            placeholder={stepLabelEn({ ...s, labelEn: undefined })} fullWidth
+            slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
+            helperText="Dùng khi xuất PDF bản English để bàn giao đối tác nước ngoài (để trống = tự dùng nhãn chuẩn)." />
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
             <TextField select label="Trạng thái" value={s.status} onChange={(e) => set({ status: e.target.value as WorkflowStatus })}>
               {WORKFLOW_STATUS_ORDER.map((k) => (

@@ -6,7 +6,7 @@ import { jsPDF } from 'jspdf';
 import { loadVNFont } from './vnFont';
 import { BRAND_TEAL, BRAND_HOTLINE, drawLogo, LOGO_W_MM } from './brand';
 import { fmtDate } from '@/lib/dateUtils';
-import { workflowProgress, WORKFLOW_STATUS_META } from '@/components/quote/workflowConstants';
+import { workflowProgress, WORKFLOW_STATUS_META, WORKFLOW_STATUS_LABEL_EN, stepLabel, type WorkflowLang } from '@/components/quote/workflowConstants';
 import type { QuoteInfo, WorkflowStep } from '@/types';
 
 type RGB = [number, number, number];
@@ -22,7 +22,8 @@ const STATUS_RGB: Record<string, RGB> = {
   todo: [100, 116, 139], doing: [37, 99, 235], done: [39, 174, 96], blocked: [220, 50, 80],
 };
 
-export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf: (u?: string) => string): void {
+export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf: (u?: string) => string, lang: WorkflowLang = 'vi'): void {
+  const t = (vi: string, en: string) => (lang === 'en' ? en : vi);
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const hasFont = loadVNFont(pdf);
   const FONT = hasFont ? 'DejaVu' : 'helvetica';
@@ -38,25 +39,25 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
   pdf.text('VIETTOURS INCENTIVES & EVENTS', M + LOGO_W_MM + 5, y + 7);
   const prog = workflowProgress(steps);
   setF('bold'); pdf.setFontSize(9); pdf.setTextColor(...MUTE);
-  pdf.text('TIẾN ĐỘ', PW - M, y + 5, { align: 'right' });
+  pdf.text(t('TIẾN ĐỘ', 'PROGRESS'), PW - M, y + 5, { align: 'right' });
   pdf.setFontSize(13); pdf.setTextColor(...NAVY);
   pdf.text(`${prog.pct}%  ·  ${prog.done}/${prog.total}`, PW - M, y + 11, { align: 'right' });
   y = logoBottom + 6;
 
   setF('normal'); pdf.setFontSize(9.5); pdf.setTextColor(...MUTE);
-  pdf.text('QUY TRÌNH ĐIỀU HÀNH', PW / 2, y, { align: 'center' });
+  pdf.text(t('QUY TRÌNH ĐIỀU HÀNH', 'OPERATIONS WORKFLOW'), PW / 2, y, { align: 'center' });
   y += 7;
   setF('bold'); pdf.setFontSize(18); pdf.setTextColor(...NAVY);
-  pdf.text(pdf.splitTextToSize((info.name || 'Báo giá').toUpperCase(), CW), PW / 2, y, { align: 'center' });
+  pdf.text(pdf.splitTextToSize((info.name || t('Báo giá', 'Quotation')).toUpperCase(), CW), PW / 2, y, { align: 'center' });
   y += 8;
   pdf.setDrawColor(...TEAL); pdf.setLineWidth(0.5); pdf.line(M, y, PW - M, y);
   y += 6;
 
   const meta: [string, string][] = [
-    ['Điểm đến', info.dest || '—'],
-    ['Thời lượng', info.days ? `${info.days} ngày ${info.nights} đêm` : '—'],
-    ['Ngày khởi hành', fmtDate(info.startDate) || '—'],
-    ['Ngày in', fmtDate(new Date().toISOString()) || ''],
+    [t('Điểm đến', 'Destination'), info.dest || '—'],
+    [t('Thời lượng', 'Duration'), info.days ? t(`${info.days} ngày ${info.nights} đêm`, `${info.days} days ${info.nights} nights`) : '—'],
+    [t('Ngày khởi hành', 'Departure'), fmtDate(info.startDate) || '—'],
+    [t('Ngày in', 'Printed'), fmtDate(new Date().toISOString()) || ''],
   ];
   const labW = CW * 0.32;
   meta.forEach(([k, v]) => {
@@ -88,11 +89,13 @@ export function exportWorkflowPDF(info: QuoteInfo, steps: WorkflowStep[], nameOf
 
   const w = [9, CW * 0.40, CW * 0.16, CW * 0.18, CW * 0.16];
   w.push(CW - w.reduce((a, b) => a + b, 0)); // cột "✔ Hạn/HT" còn lại
-  drawRow(['#', 'Bước', 'Trạng thái', 'Phụ trách', 'Hạn', 'Hoàn tất'], w, { head: true, fill: TEAL });
+  drawRow([t('#', '#'), t('Bước', 'Step'), t('Trạng thái', 'Status'), t('Phụ trách', 'Owner'), t('Hạn', 'Due'), t('Hoàn tất', 'Done')], w, { head: true, fill: TEAL });
   steps.forEach((s, i) => {
-    const label = s.note?.trim() ? `${s.label}\n— ${s.note.trim()}` : s.label;
+    const base = stepLabel(s, lang);
+    const label = s.note?.trim() ? `${base}\n— ${s.note.trim()}` : base;
+    const statusLabel = lang === 'en' ? WORKFLOW_STATUS_LABEL_EN[s.status] : WORKFLOW_STATUS_META[s.status].label;
     drawRow(
-      [String(i + 1), label, WORKFLOW_STATUS_META[s.status].label, nameOf(s.assignee) || '—',
+      [String(i + 1), label, statusLabel, nameOf(s.assignee) || '—',
         fmtDate(s.dueDate ?? null) || '—', fmtDate(s.doneDate ?? null) || (s.status === 'done' ? '✔' : '')],
       w, { fill: i % 2 ? ZEBRA : WHITE, statusKey: s.status });
   });
