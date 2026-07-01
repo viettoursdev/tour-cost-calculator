@@ -1,4 +1,4 @@
-import { useCallback, useState, type ChangeEvent } from 'react';
+import { useCallback, useMemo, useState, type ChangeEvent } from 'react';
 import {
   Alert, AppBar, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogTitle, Divider, FormControlLabel,
   IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack, TextField,
@@ -23,6 +23,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import LinkIcon from '@mui/icons-material/Link';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
 import SyncIcon from '@mui/icons-material/Sync';
+import SearchIcon from '@mui/icons-material/Search';
 import PlaylistRemoveIcon from '@mui/icons-material/PlaylistRemove';
 import SaveIcon from '@mui/icons-material/Save';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
@@ -51,9 +52,11 @@ import { hasPassportIssue, passportIssues } from './passportChecks';
 import { GuestRelationsPanel } from './GuestRelationsPanel';
 import { addRelation, minorGuardianStatus, removeRelation } from './guestRelations';
 import { useCustomerStore } from '@/stores/customerStore';
-import { dedupeApplicants, guestKeyOf, mergeIncoming, withConcurrentAdditions, type GuestKey } from './applicantMatch';
+import { dedupeApplicants, guestKeyOf, mergeIncoming, normDob, normPassport, withConcurrentAdditions, type GuestKey } from './applicantMatch';
+import { reconcileVisibleEdits } from './applicantFilter';
+import { normalizeVN } from '@/lib/search';
 // importVisaApplicants nạp động khi bấm (thư viện Excel nặng).
-import type { ApplicantDoc, Passenger, VisaApplicantMilestone, VisaProjectDoc } from '@/types';
+import type { ApplicantDoc, Passenger, VisaApplicantMilestone, VisaApplicantStatus, VisaProjectDoc } from '@/types';
 
 /** Bộ sửa timeline RIÊNG của một khách (5 mốc chuẩn + thêm mốc tuỳ biến). */
 function ApplicantTimelineEditor({ timeline, departureDate, onChange }: {
@@ -106,8 +109,12 @@ function ApplicantTimelineEditor({ timeline, departureDate, onChange }: {
   );
 }
 
-/** Dải tổng hợp tình trạng visa của đoàn: đếm theo 8 trạng thái + số quá hạn + hộ chiếu. */
-function StatusSummaryStrip({ rows, departureDate }: { rows: Passenger[]; departureDate?: string | null }) {
+/** Dải tổng hợp tình trạng visa của đoàn: đếm theo 8 trạng thái + số quá hạn + hộ chiếu.
+ *  Bấm chip tình trạng → lọc theo trạng thái đó; bấm chip hộ chiếu → lọc "cần lưu ý". */
+function StatusSummaryStrip({ rows, departureDate, onPickStatus, onPickIssues }: {
+  rows: Passenger[]; departureDate?: string | null;
+  onPickStatus?: (s: VisaApplicantStatus) => void; onPickIssues?: () => void;
+}) {
   const counts = VISA_APPLICANT_STATUS_ORDER
     .map((s) => ({ s, n: rows.filter((p) => deriveVisaStatus(p) === s).length }))
     .filter((x) => x.n > 0);
@@ -122,21 +129,24 @@ function StatusSummaryStrip({ rows, departureDate }: { rows: Passenger[]; depart
       {counts.map(({ s, n }) => {
         const meta = VISA_APPLICANT_STATUS_META[s];
         return (
-          <Chip key={s} size="small" label={`${meta.label}: ${n}`}
-            sx={{ bgcolor: `${meta.color}1a`, color: meta.color, fontWeight: 700 }} />
+          <Chip key={s} size="small" label={`${meta.label}: ${n}`} onClick={onPickStatus ? () => onPickStatus(s) : undefined}
+            sx={{ bgcolor: `${meta.color}1a`, color: meta.color, fontWeight: 700, cursor: onPickStatus ? 'pointer' : 'default' }} />
         );
       })}
       {overdue > 0 && (
-        <Chip size="small" color="error" variant="outlined" label={`⚠ Quá hạn: ${overdue}`} sx={{ fontWeight: 800 }} />
+        <Chip size="small" color="error" variant="outlined" label={`⚠ Quá hạn: ${overdue}`} onClick={onPickIssues}
+          sx={{ fontWeight: 800, cursor: onPickIssues ? 'pointer' : 'default' }} />
       )}
       {passportWarn > 0 && (
-        <Tooltip title="Số khách có vấn đề hộ chiếu (hết hạn, sắp hết hạn <6 tháng, hoặc thiếu thông tin)">
-          <Chip size="small" color="warning" variant="outlined" label={`🛂 Hộ chiếu: ${passportWarn}`} sx={{ fontWeight: 800 }} />
+        <Tooltip title="Số khách có vấn đề hộ chiếu (hết hạn, sắp hết hạn <6 tháng, hoặc thiếu thông tin) — bấm để lọc">
+          <Chip size="small" color="warning" variant="outlined" label={`🛂 Hộ chiếu: ${passportWarn}`} onClick={onPickIssues}
+            sx={{ fontWeight: 800, cursor: onPickIssues ? 'pointer' : 'default' }} />
         </Tooltip>
       )}
       {minorAuth > 0 && (
-        <Tooltip title="Trẻ <14 tuổi (theo ngày khởi hành) chưa đi cùng cha/mẹ và chưa có giấy uỷ quyền cho người thân đưa đi">
-          <Chip size="small" color="error" label={`👶 Trẻ <14 cần giấy uỷ quyền: ${minorAuth}`} sx={{ fontWeight: 800 }} />
+        <Tooltip title="Trẻ <14 tuổi (theo ngày khởi hành) chưa đi cùng cha/mẹ và chưa có giấy uỷ quyền — bấm để lọc">
+          <Chip size="small" color="error" label={`👶 Trẻ <14 cần giấy uỷ quyền: ${minorAuth}`} onClick={onPickIssues}
+            sx={{ fontWeight: 800, cursor: onPickIssues ? 'pointer' : 'default' }} />
         </Tooltip>
       )}
     </Stack>
@@ -199,6 +209,40 @@ export function VisaApplicantManager({ project, onClose }: Props) {
   const [costOpen, setCostOpen] = useState(false);
   const [exportListOpen, setExportListOpen] = useState(false);
   const [shareLinkOpen, setShareLinkOpen] = useState(false);
+  // Bộ lọc/sắp xếp danh sách khách (chỉ ảnh hưởng HIỂN THỊ; lưu vẫn theo full list).
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<VisaApplicantStatus | 'all'>('all');
+  const [onlyIssues, setOnlyIssues] = useState(false);
+  const [sortBy, setSortBy] = useState<'index' | 'name' | 'expiry' | 'status'>('index');
+  const filterActive = q.trim() !== '' || statusFilter !== 'all' || onlyIssues || sortBy !== 'index';
+
+  const hasIssue = (p: Passenger) =>
+    hasPassportIssue({ passport: p.idNo, passportIssue: p.passportIssue, passportExpiry: p.passportExpiry }, project.departureDate)
+    || isApplicantOverdue(p)
+    || minorGuardianStatus({ id: p.id, dob: p.dob, relations: p.relations, guardianAuthReady: p.guardianAuthReady }, list, project.departureDate).needsAuth;
+
+  // Danh sách HIỂN THỊ sau lọc/sắp xếp.
+  const visible = useMemo(() => {
+    const nq = normalizeVN(q); const pq = normPassport(q); const raw = q.trim();
+    let r = list.filter((p) => {
+      if (raw && !(normalizeVN(p.name).includes(nq) || (pq && normPassport(p.idNo).includes(pq)) || (p.phone ?? '').includes(raw))) return false;
+      if (statusFilter !== 'all' && deriveVisaStatus(p) !== statusFilter) return false;
+      if (onlyIssues && !hasIssue(p)) return false;
+      return true;
+    });
+    if (sortBy === 'name') r = [...r].sort((a, b) => normalizeVN(a.name).localeCompare(normalizeVN(b.name)));
+    else if (sortBy === 'expiry') r = [...r].sort((a, b) => (normDob(a.passportExpiry) || '9999').localeCompare(normDob(b.passportExpiry) || '9999'));
+    else if (sortBy === 'status') r = [...r].sort((a, b) => VISA_APPLICANT_STATUS_ORDER.indexOf(deriveVisaStatus(a)) - VISA_APPLICANT_STATUS_ORDER.indexOf(deriveVisaStatus(b)));
+    return r;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list, q, statusFilter, onlyIssues, sortBy, project.departureDate]);
+
+  // Áp thay đổi/xoá từ bảng (thao tác trên tập ĐANG HIỂN THỊ) trở lại FULL list theo id.
+  const applyTableChange = (after: Passenger[]) => {
+    const visibleIds = new Set(visible.map((p) => p.id));
+    setList((full) => reconcileVisibleEdits(full, visibleIds, after));
+  };
+  const clearFilters = () => { setQ(''); setStatusFilter('all'); setOnlyIssues(false); setSortBy('index'); };
   // Khách đang mở hộp thoại gắn hồ sơ KH + hàm patch của dòng đó.
   const [linkTarget, setLinkTarget] = useState<{ p: Passenger; apply: (patch: Partial<Passenger>) => void } | null>(null);
 
@@ -533,12 +577,47 @@ export function VisaApplicantManager({ project, onClose }: Props) {
           </>
         ) : (
           <>
-            <StatusSummaryStrip rows={list} departureDate={project.departureDate} />
+            <StatusSummaryStrip rows={list} departureDate={project.departureDate}
+              onPickStatus={(s) => setStatusFilter((cur) => (cur === s ? 'all' : s))}
+              onPickIssues={() => setOnlyIssues((v) => !v)} />
             <Box sx={{ mb: 1.5 }}><GuestDashboard pax={list} /></Box>
             <RoomingPanel rows={list} onChange={setList} />
+
+            {/* Thanh tìm / lọc / sắp xếp danh sách khách */}
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              <TextField size="small" placeholder="Tìm tên / hộ chiếu / SĐT…" value={q} onChange={(e) => setQ(e.target.value)}
+                sx={{ minWidth: 220 }} InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 0.5, color: 'text.disabled' }} /> }} />
+              <TextField select size="small" label="Tình trạng" value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as VisaApplicantStatus | 'all')} sx={{ minWidth: 150 }}>
+                <MenuItem value="all">Tất cả</MenuItem>
+                {VISA_APPLICANT_STATUS_ORDER.map((s) => <MenuItem key={s} value={s}>{VISA_APPLICANT_STATUS_META[s].label}</MenuItem>)}
+              </TextField>
+              <TextField select size="small" label="Sắp xếp" value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)} sx={{ minWidth: 140 }}>
+                <MenuItem value="index">Thứ tự nhập</MenuItem>
+                <MenuItem value="name">Tên A→Z</MenuItem>
+                <MenuItem value="expiry">Hạn hộ chiếu</MenuItem>
+                <MenuItem value="status">Tình trạng</MenuItem>
+              </TextField>
+              <FormControlLabel control={<Checkbox size="small" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} />}
+                label={<Typography variant="body2">Chỉ hiện cần lưu ý</Typography>} />
+              {filterActive && (
+                <>
+                  <Chip size="small" label={`Hiện ${visible.length}/${list.length}`} sx={{ fontWeight: 700 }} />
+                  <Button size="small" color="inherit" onClick={clearFilters}>Xoá lọc</Button>
+                </>
+              )}
+            </Stack>
+
+            {visible.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 5, color: 'text.disabled' }}>
+                <Typography variant="body2">Không có khách khớp bộ lọc. <Box component="span" role="button" tabIndex={0} onClick={clearFilters}
+                  sx={{ color: '#0d7a6a', fontWeight: 700, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}>Xoá lọc</Box></Typography>
+              </Box>
+            ) : (
             <GuestListTable
-              rows={list}
-              onChange={setList}
+              rows={visible}
+              onChange={applyTableChange}
               mode="visa"
               renderExpanded={(p, patch) => {
                 const docs = p.docs ?? [];
@@ -676,6 +755,7 @@ export function VisaApplicantManager({ project, onClose }: Props) {
                 );
               }}
             />
+            )}
           </>
         )}
       </Box>
