@@ -9,6 +9,12 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-01g', date: '01/07/2026', title: 'Link tiến độ tour cho khách',
+    items: [
+      { icon: '🔗', title: 'Chia sẻ tiến độ tour cho khách (cần duyệt)', desc: 'Trong Quy trình điều hành, nút "Chia sẻ khách" tạo link công khai để khách theo dõi tiến độ tour theo thời gian thực — chỉ hiện mốc + trạng thái + % + ngày, ẩn hết thông tin nội bộ. Link chỉ hoạt động sau khi CEO/BGĐ/Trưởng Phòng duyệt; khách có nút VI/EN.' },
+    ],
+  },
+  {
     id: '2026-07-01f', date: '01/07/2026', title: 'Bản bàn giao quy trình song ngữ (EN)',
     items: [
       { icon: '🌐', title: 'Xuất PDF quy trình tiếng Anh', desc: 'Nút "Xuất PDF" trong Quy trình điều hành giờ cho chọn Tiếng Việt hoặc English — bản EN dùng nhãn bước tiếng Anh chuẩn, tiện bàn giao cho đối tác/DMC nước ngoài. Mỗi bước còn nhập được nhãn EN riêng.' },

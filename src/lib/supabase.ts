@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, PublicVisaListDoc, PublicVisaListRecord, PublicVisaListStatus, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus, TrainingProgram, TrainingEnrollment, TrainingModule, ModuleProgress, GateState, TrainingPhase, EnrollmentStatus } from '@/types';
+import type { FileAttachment, User, Role, Customer, CustomerInteraction, Ncc, GuideScheduleDoc, EmailLink, PublicQuoteDoc, PublicVisaListDoc, PublicVisaListRecord, PublicVisaListStatus, PublicWorkflowDoc, PublicWorkflowRecord, PublicWorkflowStatus, Todo, Department, ProcessTemplate, ProcessRun, ProcessRefKind, ProcessRunStatus, TrainingProgram, TrainingEnrollment, TrainingModule, ModuleProgress, GateState, TrainingPhase, EnrollmentStatus } from '@/types';
 import type { WorkflowStep, QuoteValueRole } from '@/types/quote';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
@@ -5160,6 +5160,87 @@ export async function sbGetPublicVisaList(token: string, client: SupabaseClient 
   if (error) throw new Error('sbGetPublicVisaList: ' + error.message);
   const row = (data as { payload: unknown }[] | null)?.[0];
   return row ? (row.payload as PublicVisaListDoc) : null;
+}
+
+// ── public_workflow_links (Link tiến độ vận hành cho khách) ────────────────────
+
+function rowToWorkflowLinkRecord(r: Record<string, unknown>): PublicWorkflowRecord {
+  return {
+    token: r.token as string,
+    quoteId: r.quote_id as string,
+    payload: r.payload as PublicWorkflowDoc,
+    note: (r.note as string) ?? undefined,
+    status: r.status as PublicWorkflowStatus,
+    requestedByUsername: (r.requested_by_username as string) ?? undefined,
+    requestedByName: (r.requested_by_name as string) ?? undefined,
+    requestedAt: (r.requested_at as string) ?? undefined,
+    approvedByName: (r.approved_by_name as string) ?? undefined,
+    approvedAt: (r.approved_at as string) ?? undefined,
+    rejectReason: (r.reject_reason as string) ?? undefined,
+  };
+}
+
+/** Lấy link tiến độ (kèm trạng thái) của một báo giá — null nếu chưa từng tạo. */
+export async function sbGetWorkflowLinkForQuote(quoteId: string, client: SupabaseClient = sb): Promise<PublicWorkflowRecord | null> {
+  const { data, error } = await client.from('public_workflow_links').select('*').eq('quote_id', quoteId).maybeSingle();
+  if (error) throw new Error('sbGetWorkflowLinkForQuote: ' + error.message);
+  return data ? rowToWorkflowLinkRecord(data as Record<string, unknown>) : null;
+}
+
+/** Gửi/cập nhật YÊU CẦU tạo link tiến độ (đưa về 'pending', xoá dấu duyệt cũ). */
+export async function sbRequestWorkflowLink(
+  opts: { token: string; doc: PublicWorkflowDoc; note?: string; requestedByUsername: string; requestedByName: string },
+  client: SupabaseClient = sb,
+): Promise<void> {
+  const { data: me } = await client.auth.getUser();
+  const { error } = await client.from('public_workflow_links').upsert({
+    token: opts.token,
+    quote_id: opts.doc.quoteId,
+    payload: opts.doc,
+    note: opts.note ?? null,
+    status: 'pending',
+    requested_by: me.user?.id ?? null,
+    requested_by_username: opts.requestedByUsername,
+    requested_by_name: opts.requestedByName,
+    requested_at: new Date().toISOString(),
+    approved_by: null,
+    approved_by_name: null,
+    approved_at: null,
+    reject_reason: null,
+  }, { onConflict: 'quote_id' });
+  if (error) throw new Error('sbRequestWorkflowLink: ' + error.message);
+}
+
+/** Duyệt link (chỉ CEO/BGĐ/Trợ lý GĐ/Trưởng Phòng — server kiểm). */
+export async function sbApproveWorkflowLink(token: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('approve_workflow_link', { p_token: token });
+  if (error) throw new Error('sbApproveWorkflowLink: ' + error.message);
+}
+
+/** Từ chối link (chỉ người duyệt hợp lệ — server kiểm). */
+export async function sbRejectWorkflowLink(token: string, reason: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.rpc('reject_workflow_link', { p_token: token, p_reason: reason });
+  if (error) throw new Error('sbRejectWorkflowLink: ' + error.message);
+}
+
+/** Làm mới SỐ LIỆU của link đã duyệt (không đổi trạng thái, không lộ trường mới). */
+export async function sbRefreshWorkflowPayload(token: string, doc: PublicWorkflowDoc, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('public_workflow_links').update({ payload: doc }).eq('token', token);
+  if (error) throw new Error('sbRefreshWorkflowPayload: ' + error.message);
+}
+
+/** Gỡ link đang chia sẻ (đưa về 'revoked' — khách không xem được nữa). */
+export async function sbRevokeWorkflowLink(token: string, client: SupabaseClient = sb): Promise<void> {
+  const { error } = await client.from('public_workflow_links').update({ status: 'revoked' }).eq('token', token);
+  if (error) throw new Error('sbRevokeWorkflowLink: ' + error.message);
+}
+
+/** Anon đọc tiến độ qua token — CHỈ khi đã được duyệt. */
+export async function sbGetPublicWorkflow(token: string, client: SupabaseClient = sb): Promise<PublicWorkflowDoc | null> {
+  const { data, error } = await client.rpc('get_public_workflow', { p_token: token });
+  if (error) throw new Error('sbGetPublicWorkflow: ' + error.message);
+  const row = (data as { payload: unknown }[] | null)?.[0];
+  return row ? (row.payload as PublicWorkflowDoc) : null;
 }
 
 // ── HR (Nhân sự) ──────────────────────────────────────────────────────────────

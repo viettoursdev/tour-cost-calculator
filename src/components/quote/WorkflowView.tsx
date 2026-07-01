@@ -6,6 +6,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import SyncIcon from '@mui/icons-material/Sync';
 // exportWorkflowPDF nạp động khi bấm.
 import EventIcon from '@mui/icons-material/Event';
@@ -32,6 +33,7 @@ import { WorkflowList } from './WorkflowList';
 import { WorkflowChecklist } from './WorkflowChecklist';
 import { WorkflowGantt } from './WorkflowGantt';
 import { WorkflowStepDialog } from './WorkflowStepDialog';
+import { WorkflowShareDialog } from './WorkflowShareDialog';
 import type { WorkflowStatus, WorkflowStep } from '@/types';
 
 type Mode = 'kanban' | 'list' | 'checklist' | 'gantt';
@@ -57,6 +59,7 @@ export function WorkflowView() {
   const [editing, setEditing] = useState<WorkflowStep | null>(null);
   const [presetEl, setPresetEl] = useState<null | HTMLElement>(null);
   const [pdfEl, setPdfEl] = useState<null | HTMLElement>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     // Seed lần đầu: nội địa bỏ visa, còn lại dùng mẫu tiêu chuẩn.
@@ -225,6 +228,9 @@ export function WorkflowView() {
               <MenuItem onClick={() => exportPdf('vi')}>🇻🇳 Tiếng Việt</MenuItem>
               <MenuItem onClick={() => exportPdf('en')}>🇬🇧 English (bàn giao đối tác)</MenuItem>
             </Menu>
+            <Tooltip title="Chia sẻ tiến độ cho khách xem qua link (cần duyệt)">
+              <Button variant="outlined" size="small" startIcon={<ShareOutlinedIcon />} onClick={() => setShareOpen(true)} sx={{ whiteSpace: 'nowrap' }}>Chia sẻ khách</Button>
+            </Tooltip>
             <Tooltip title="Áp một mẫu quy trình theo loại tour (thay toàn bộ bước hiện tại)">
               <Button variant="outlined" size="small" color="warning" startIcon={<RestartAltIcon />} onClick={(e) => setPresetEl(e.currentTarget)} sx={{ whiteSpace: 'nowrap' }}>Mẫu quy trình</Button>
             </Tooltip>
@@ -248,6 +254,9 @@ export function WorkflowView() {
 
       {editing && (
         <WorkflowStepDialog step={editing} users={users} onClose={() => setEditing(null)} onSave={(patch) => { update(editing.id, patch); setEditing(null); }} />
+      )}
+      {shareOpen && (
+        <WorkflowShareDialog quoteId={draft.currentQuoteId ?? undefined} info={draft.info} steps={steps} onClose={() => setShareOpen(false)} />
       )}
     </Box>
   );
