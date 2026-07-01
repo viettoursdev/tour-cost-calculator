@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider,
-  Stack, TextField, Tooltip, Typography,
+  Stack, TextField, Tooltip, Typography, useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import LoginIcon from '@mui/icons-material/Login';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useAttendanceStore } from '@/stores/attendanceStore';
 import { useAttendanceConfigStore } from '@/stores/attendanceConfigStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,6 +17,7 @@ import {
   periodDays, weekdayLabelVN, isWeekend, periodLabelVN,
 } from '@/lib/attendance/attendanceCalc';
 import { annualLeaveUsedInYear, leaveBalance } from '@/lib/attendance/leaveIntegration';
+import { sumPeriodHours } from '@/lib/attendance/attendanceHours';
 import { lookupCode, EMPTY_CELL_COLOR, UNKNOWN_CODE_COLOR } from '@/lib/attendance/attendanceCodes';
 import {
   ATTENDANCE_STATUS_LABEL, ATTENDANCE_CONFIRM_LABEL,
@@ -32,7 +36,25 @@ export function AttendanceSelfDialog({
   const currentUser = useAuthStore((s) => s.currentUser);
   const attendances = useAttendanceStore((s) => s.attendances);
   const confirm = useAttendanceStore((s) => s.confirm);
+  const clockSelf = useAttendanceStore((s) => s.clockSelf);
   const codes = useAttendanceConfigStore((s) => s.codes);
+  const settings = useAttendanceConfigStore((s) => s.settings);
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Chấm giờ hôm nay (chỉ khi bật theo-giờ).
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const curPeriod = todayIso.slice(0, 7);
+  const todayRow = attendances.find((a) => a.employeeLegacyId === employee.id && a.period === curPeriod);
+  const todayCell = todayRow?.days[todayIso];
+  const [clocking, setClocking] = useState(false);
+  const clock = async (kind: 'in' | 'out') => {
+    setClocking(true);
+    await clockSelf(employee, curPeriod, todayIso, kind);
+    setClocking(false);
+    toast(kind === 'in' ? '✅ Đã chấm giờ vào.' : '✅ Đã chấm giờ ra.', 'success');
+  };
 
   // Bảng công đã CÔNG BỐ (hoặc đã khoá) của nhân viên này, mới nhất trước.
   const myRows = useMemo(
@@ -70,9 +92,22 @@ export function AttendanceSelfDialog({
   };
 
   return (
-    <Dialog open onClose={busy ? undefined : onClose} maxWidth="md" fullWidth>
+    <Dialog open onClose={busy ? undefined : onClose} maxWidth="md" fullWidth fullScreen={fullScreen}>
       <DialogTitle>📋 Bảng công của tôi — {employee.fullName}</DialogTitle>
       <DialogContent dividers>
+        {settings.hourTracking && (
+          <Box sx={{ mb: 2, p: 1.5, borderRadius: 2, bgcolor: 'action.hover' }}>
+            <Typography variant="subtitle2" fontWeight={800} gutterBottom>⏱️ Chấm giờ hôm nay ({todayIso.slice(8)}/{todayIso.slice(5, 7)})</Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Chip label={`Vào: ${todayCell?.in ?? '—'}`} color={todayCell?.in ? 'success' : 'default'} variant="outlined" />
+              <Chip label={`Ra: ${todayCell?.out ?? '—'}`} color={todayCell?.out ? 'success' : 'default'} variant="outlined" />
+              {todayCell?.hours ? <Chip label={`${todayCell.hours} giờ`} color="primary" /> : null}
+              <Box flex={1} />
+              <Button size="small" variant="contained" startIcon={<LoginIcon />} disabled={clocking} onClick={() => clock('in')}>Chấm vào</Button>
+              <Button size="small" variant="outlined" startIcon={<LogoutIcon />} disabled={clocking} onClick={() => clock('out')}>Chấm ra</Button>
+            </Stack>
+          </Box>
+        )}
         {myRows.length === 0 ? (
           <Typography color="text.secondary">Chưa có bảng công nào được công bố cho bạn.</Typography>
         ) : (
@@ -104,6 +139,9 @@ export function AttendanceSelfDialog({
                         label={`Phép năm còn: ${balance.remaining}/${balance.quota}`} />
                     </Tooltip>
                   )}
+                  {settings.hourTracking && sumPeriodHours(row.days) > 0 && (
+                    <Chip size="small" color="primary" variant="outlined" label={`Tổng giờ: ${sumPeriodHours(row.days)}`} />
+                  )}
                 </Stack>
 
                 {/* Timeline tháng */}
@@ -114,7 +152,7 @@ export function AttendanceSelfDialog({
                     const bg = cell ? (def?.color ?? UNKNOWN_CODE_COLOR) : (isWeekend(iso) ? '#fafafa' : EMPTY_CELL_COLOR);
                     const fg = def && def.category !== 'other' ? '#fff' : '#555';
                     return (
-                      <Tooltip key={iso} title={cell ? `${iso.slice(8)}/${iso.slice(5, 7)} · ${cell.code}${def ? ' · ' + def.label : ' · (mã lạ)'}` : `${iso.slice(8)}/${iso.slice(5, 7)}`} disableInteractive>
+                      <Tooltip key={iso} title={cell ? `${iso.slice(8)}/${iso.slice(5, 7)} · ${cell.code}${def ? ' · ' + def.label : ' · (mã lạ)'}${cell.in || cell.out ? ` · ${cell.in ?? '?'}–${cell.out ?? '?'}${cell.hours ? ` (${cell.hours}h)` : ''}` : ''}` : `${iso.slice(8)}/${iso.slice(5, 7)}`} disableInteractive>
                         <Box sx={{ width: CELL, height: CELL, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: bg, color: fg, borderRadius: 0.5 }}>
                           <Typography sx={{ fontSize: 9, fontWeight: 700, lineHeight: 1 }}>{Number(iso.slice(8))}</Typography>
                           <Typography sx={{ fontSize: 8, lineHeight: 1 }}>{cell?.code ?? weekdayLabelVN(iso)}</Typography>

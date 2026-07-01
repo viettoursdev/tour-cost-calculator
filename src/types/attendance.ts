@@ -29,6 +29,18 @@ export type AttendanceCodeDef = {
 export type AttendanceCell = {
   code: string;               // mã công (khoá vào AttendanceCodeDef.code)
   note?: string;              // ghi chú riêng cho ngày (vd "Quên chấm công có báo")
+  in?: string;                // giờ vào "HH:mm" (tùy chọn — chấm công theo giờ)
+  out?: string;               // giờ ra "HH:mm"
+  hours?: number;             // số giờ làm thực (tính từ in/out − nghỉ trưa)
+};
+
+/** Cài đặt chấm công theo GIỜ (tùy chọn, bật cho phòng cần). */
+export type AttendanceSettings = {
+  hourTracking: boolean;      // bật chấm công theo giờ vào/ra
+  standardStart: string;      // giờ vào chuẩn "HH:mm" (để tính đi muộn)
+  standardEnd: string;        // giờ ra chuẩn "HH:mm"
+  breakMins: number;          // phút nghỉ trưa (trừ khỏi giờ làm)
+  graceMins: number;          // phút dung sai trước khi tính đi muộn
 };
 
 /** Bản đồ ngày → ô. Khoá là ISO `YYYY-MM-DD`. Ngày trống = không có khoá. */

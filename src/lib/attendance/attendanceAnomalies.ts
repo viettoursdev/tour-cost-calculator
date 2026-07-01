@@ -2,9 +2,10 @@
  * #6 Phát hiện bất thường chấm công bằng LUẬT THUẦN (tất định, có test) — bổ trợ cho
  * "Nhận xét AI". Không phụ thuộc thời gian hệ thống (nhận `today` qua tham số).
  */
-import type { AttendanceCodeDef, HrAttendance, HrEmployee } from '@/types';
+import type { AttendanceCodeDef, AttendanceSettings, HrAttendance, HrEmployee } from '@/types';
 import { periodDays, isWeekend } from './attendanceCalc';
 import { lookupCode, normalizeCode, ATTENDANCE_CODES } from './attendanceCodes';
+import { isLate } from './attendanceHours';
 
 export type AnomalySeverity = 'high' | 'medium' | 'low';
 
@@ -21,6 +22,8 @@ export type AnomalyOptions = {
   today?: string;         // ISO "YYYY-MM-DD" — mốc "quá khứ" để soi ô trống ngày thường
   minWorkDays?: number;   // ngưỡng công tối thiểu (nếu đặt) → cảnh báo công thấp
   maxConsecutiveUnpaid?: number; // số ngày nghỉ-không-phép liên tiếp báo động (mặc định 3)
+  settings?: AttendanceSettings; // bật → soi đi muộn theo giờ vào
+  maxLateDays?: number;   // số ngày đi muộn/kỳ báo động (mặc định 3)
 };
 
 /** Số chuỗi liên tiếp dài nhất mà mã thuộc `codeSet` xuất hiện trong các ngày ISO. */
@@ -80,6 +83,14 @@ export function detectAnomalies(
     // Công thấp hơn ngưỡng.
     if (opts.minWorkDays != null && (r.summary.totalHC ?? 0) < opts.minWorkDays) {
       out.push({ empId: e.id, empName: e.fullName, severity: 'medium', type: 'low_work', message: `Số công ${r.summary.totalHC} thấp hơn ngưỡng ${opts.minWorkDays}.` });
+    }
+
+    // Đi muộn nhiều (khi bật chấm công theo giờ).
+    if (opts.settings?.hourTracking) {
+      const late = allDays.filter((iso) => isLate(r.days[iso]?.in, opts.settings!.standardStart, opts.settings!.graceMins));
+      if (late.length >= (opts.maxLateDays ?? 3)) {
+        out.push({ empId: e.id, empName: e.fullName, severity: 'medium', type: 'late', message: `Đi muộn ${late.length} ngày trong kỳ.` });
+      }
     }
 
     // Nhân viên báo sai sót.

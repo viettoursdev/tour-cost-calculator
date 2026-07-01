@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton,
-  MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
+  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel,
+  IconButton, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import { useAttendanceConfigStore } from '@/stores/attendanceConfigStore';
 import { toast } from '@/stores/toastStore';
-import type { AttendanceCategory, AttendanceCodeDef } from '@/types';
+import type { AttendanceCategory, AttendanceCodeDef, AttendanceSettings } from '@/types';
 
 const CATEGORIES: { value: AttendanceCategory; label: string }[] = [
   { value: 'work', label: 'Đi làm' },
@@ -24,11 +24,14 @@ const CATEGORIES: { value: AttendanceCategory; label: string }[] = [
 export function AttendanceCodesEditor({ onClose }: { onClose: () => void }) {
   const codes = useAttendanceConfigStore((s) => s.codes);
   const custom = useAttendanceConfigStore((s) => s.custom);
+  const settings = useAttendanceConfigStore((s) => s.settings);
   const save = useAttendanceConfigStore((s) => s.save);
   const resetToDefault = useAttendanceConfigStore((s) => s.resetToDefault);
 
   const [rows, setRows] = useState<AttendanceCodeDef[]>(() => codes.map((c) => ({ ...c })));
+  const [st, setSt] = useState<AttendanceSettings>(() => ({ ...settings }));
   const [busy, setBusy] = useState(false);
+  const patchSt = (p: Partial<AttendanceSettings>) => setSt((prev) => ({ ...prev, ...p }));
 
   const patch = (i: number, p: Partial<AttendanceCodeDef>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...p } : r)));
@@ -44,9 +47,9 @@ export function AttendanceCodesEditor({ onClose }: { onClose: () => void }) {
       seen.add(k);
     }
     setBusy(true);
-    const ok = await save(clean);
+    const ok = await save(clean, st);
     setBusy(false);
-    if (ok) { toast('✅ Đã lưu từ điển mã công.', 'success'); onClose(); }
+    if (ok) { toast('✅ Đã lưu cấu hình chấm công.', 'success'); onClose(); }
   };
 
   const doReset = async () => {
@@ -65,6 +68,24 @@ export function AttendanceCodesEditor({ onClose }: { onClose: () => void }) {
           <b>Số công</b> = ngày tính vào tổng công (SỐ NGÀY HC). <b>Đi làm thật</b> = phần vào dải "đi làm".
           Đổi ở đây áp dụng cho toàn công ty. Để trống danh sách rồi Lưu = quay về mặc định.
         </Alert>
+
+        {/* Cài đặt chấm công theo GIỜ (tùy chọn) */}
+        <Box sx={{ mb: 1.5, p: 1.5, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <FormControlLabel
+            control={<Switch checked={st.hourTracking} onChange={(e) => patchSt({ hourTracking: e.target.checked })} />}
+            label={<Typography fontWeight={700}>⏱️ Bật chấm công theo GIỜ vào/ra</Typography>}
+          />
+          {st.hourTracking && (
+            <Stack direction="row" spacing={1.5} mt={1} flexWrap="wrap" useFlexGap>
+              <TextField size="small" label="Giờ vào chuẩn" type="time" value={st.standardStart} onChange={(e) => patchSt({ standardStart: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ width: 140 }} />
+              <TextField size="small" label="Giờ ra chuẩn" type="time" value={st.standardEnd} onChange={(e) => patchSt({ standardEnd: e.target.value })} InputLabelProps={{ shrink: true }} sx={{ width: 140 }} />
+              <TextField size="small" label="Nghỉ trưa (phút)" type="number" value={st.breakMins} onChange={(e) => patchSt({ breakMins: Number(e.target.value) })} sx={{ width: 130 }} />
+              <TextField size="small" label="Dung sai muộn (phút)" type="number" value={st.graceMins} onChange={(e) => patchSt({ graceMins: Number(e.target.value) })} sx={{ width: 150 }} />
+            </Stack>
+          )}
+        </Box>
+        <Divider sx={{ mb: 1.5 }} />
+        <Typography variant="subtitle2" fontWeight={800} gutterBottom>🏷️ Bộ mã công</Typography>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ '& th': { bgcolor: '#f3faf8', fontWeight: 700 } }}>

@@ -5331,7 +5331,7 @@ export async function sbPushHrGuides(
 import type {
   HrAttendance, AttendanceDays, AttendanceSummary, AttendanceStatus,
   AttendanceConfirmation, AttendanceFeedback, AttendanceSource, AttendanceHistoryEntry,
-  AttendanceCodeDef,
+  AttendanceCodeDef, AttendanceSettings,
 } from '@/types/attendance';
 
 const rowToHrAttendance = (r: Record<string, unknown>): HrAttendance => ({
@@ -5401,25 +5401,31 @@ export async function sbUpsertHrAttendances(list: HrAttendance[], client: Supaba
   if (error) throw new Error('sbUpsertHrAttendances: ' + error.message);
 }
 
-/** Từ điển mã công tự quản (single-row). Realtime để đồng bộ khi HR sửa. */
+export type AttendanceConfigPayload = { codes: AttendanceCodeDef[]; settings: Partial<AttendanceSettings> };
+
+/** Từ điển mã công + cài đặt giờ tự quản (single-row). Realtime khi HR sửa. */
 export function sbSubscribeAttendanceConfig(
-  cb: (codes: AttendanceCodeDef[]) => void,
+  cb: (payload: AttendanceConfigPayload) => void,
   client: SupabaseClient = sb,
 ): () => void {
   return subscribeTable(client, 'attendance_config', async (cl) => {
-    const { data, error } = await cl.from('attendance_config').select('codes').eq('one_row', true).maybeSingle();
+    const { data, error } = await cl.from('attendance_config').select('codes, settings').eq('one_row', true).maybeSingle();
     if (error) throw new Error('sbSubscribeAttendanceConfig: ' + error.message);
-    return (data?.codes as AttendanceCodeDef[]) ?? [];
+    return {
+      codes: (data?.codes as AttendanceCodeDef[]) ?? [],
+      settings: (data?.settings as Partial<AttendanceSettings>) ?? {},
+    };
   }, cb);
 }
 
 export async function sbSaveAttendanceConfig(
   codes: AttendanceCodeDef[],
+  settings: Partial<AttendanceSettings>,
   savedBy: string,
   client: SupabaseClient = sb,
 ): Promise<void> {
   const { error } = await client.from('attendance_config').upsert(
-    { one_row: true, codes, updated_at: new Date().toISOString(), updated_by: savedBy },
+    { one_row: true, codes, settings, updated_at: new Date().toISOString(), updated_by: savedBy },
     { onConflict: 'one_row' },
   );
   if (error) throw new Error('sbSaveAttendanceConfig: ' + error.message);

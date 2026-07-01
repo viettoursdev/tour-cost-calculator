@@ -4,7 +4,8 @@ import {
   sbSubscribeHrAttendance, sbUpsertHrAttendance, sbUpsertHrAttendances, sbDeleteHrAttendance,
 } from '@/lib/supabase';
 import { summarizeAttendance } from '@/lib/attendance/attendanceCalc';
-import { effectiveCodes } from './attendanceConfigStore';
+import { computeHours } from '@/lib/attendance/attendanceHours';
+import { effectiveCodes, effectiveSettings } from './attendanceConfigStore';
 import { useAuthStore } from './authStore';
 import type {
   HrAttendance, HrEmployee, AttendanceCell, AttendanceDays, AttendanceStatus, AttendanceFeedback,
@@ -33,6 +34,10 @@ type State = {
    * thì ghi đè mọi ô (dùng cho điền hàng loạt đi tour). Trả về tổng số ô đã điền/đổi.
    */
   mergeDays: (period: string, entries: { emp: HrEmployee; add: AttendanceDays }[], opts?: { overwrite?: boolean }) => Promise<number>;
+  /** Quản lý sửa GIỜ vào/ra một ô (chấm công theo giờ). Tự tính lại `hours`. */
+  setCellTimes: (emp: HrEmployee, period: string, isoDate: string, times: { in?: string; out?: string }) => Promise<void>;
+  /** Nhân viên TỰ chấm giờ (vào/ra) cho ngày của mình — ghi giờ hiện tại. */
+  clockSelf: (emp: HrEmployee, period: string, isoDate: string, kind: 'in' | 'out') => Promise<void>;
   /** Đổi trạng thái kỳ công (draft→published→locked). */
   setStatus: (id: string, status: AttendanceStatus) => Promise<void>;
   /** Nhân viên xác nhận / báo sai sót bảng công của mình. */
@@ -120,6 +125,16 @@ export const useAttendanceStore = create<State>()(
       const next = existing ? prev.map((x) => (x.id === id ? updated : x)) : [updated, ...prev];
       set({ attendances: next });
       await save(() => sbUpsertHrAttendance(updated), prev);
+    },
+
+    setCellTimes: async (emp, period, isoDate, times) => {
+      await applyTimes(emp, period, isoDate, times, false);
+    },
+
+    clockSelf: async (emp, period, isoDate, kind) => {
+      const d = new Date();
+      const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      await applyTimes(emp, period, isoDate, kind === 'in' ? { in: hm } : { out: hm }, true);
     },
 
     mergeDays: async (period, entries, opts) => {
@@ -214,6 +229,47 @@ export const useAttendanceStore = create<State>()(
     },
   })),
 );
+
+/**
+ * Ghi giờ vào/ra cho một ô (dùng chung cho HR sửa giờ & NV tự chấm). Ô chưa có mã →
+ * mặc định 'X'. Tự tính lại `hours` (trừ nghỉ trưa) và tổng công.
+ */
+async function applyTimes(
+  emp: HrEmployee, period: string, isoDate: string,
+  times: { in?: string; out?: string }, isSelf: boolean,
+): Promise<void> {
+  const u = useAuthStore.getState().currentUser;
+  if (!u) return;
+  const settings = effectiveSettings();
+  const id = attendanceId(emp.id, period);
+  const prev = useAttendanceStore.getState().attendances;
+  const existing = prev.find((x) => x.id === id);
+  const now = new Date().toISOString();
+  const prevCell = existing?.days[isoDate];
+  const cell: HrAttendance['days'][string] = { ...(prevCell ?? { code: 'X' }) };
+  if (!cell.code?.trim()) cell.code = 'X';
+  if (times.in !== undefined) cell.in = times.in;
+  if (times.out !== undefined) cell.out = times.out;
+  cell.hours = computeHours(cell.in, cell.out, settings.breakMins);
+  const days = { ...(existing?.days ?? {}), [isoDate]: cell };
+  const base: HrAttendance = existing ?? {
+    id, employeeLegacyId: emp.id, employeeCode: emp.employeeCode, fullName: emp.fullName,
+    department: emp.department || '', period, days: {}, summary: summarizeAttendance({}),
+    status: 'draft', confirmation: { status: 'pending' }, feedback: [], source: isSelf ? 'self' : 'manual',
+    createdAt: now, createdBy: u.name,
+  };
+  const codeAdded = !prevCell?.code?.trim();
+  const history = codeAdded
+    ? [...(existing?.history ?? []), { at: now, by: u.name, date: isoDate, from: '', to: cell.code }].slice(-300)
+    : (existing?.history ?? []);
+  const updated: HrAttendance = {
+    ...base, days, summary: summarizeAttendance(days, effectiveCodes()),
+    history, updatedAt: now, updatedBy: u.name,
+  };
+  const next = existing ? prev.map((x) => (x.id === id ? updated : x)) : [updated, ...prev];
+  useAttendanceStore.setState({ attendances: next });
+  await save(() => sbUpsertHrAttendance(updated), prev);
+}
 
 /** Ghi Supabase; lỗi thì khôi phục state (rollback lạc quan) + báo lỗi. true nếu OK. */
 async function save(op: () => Promise<void>, prev: HrAttendance[]): Promise<boolean> {

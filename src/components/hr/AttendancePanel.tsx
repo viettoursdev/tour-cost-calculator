@@ -41,6 +41,7 @@ import { AttendanceCodesEditor } from './AttendanceCodesEditor';
 import { AttendanceBulkFillDialog } from './AttendanceBulkFillDialog';
 import { AttendanceHistoryDialog } from './AttendanceHistoryDialog';
 import { AttendanceDashboard } from './AttendanceDashboard';
+import { AttendanceTimeDialog } from './AttendanceTimeDialog';
 
 /** Hôm nay ISO (client). */
 function todayISO(): string {
@@ -70,6 +71,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
   const mergeDays = useAttendanceStore((s) => s.mergeDays);
   const leaves = useHrLeaveStore((s) => s.leaves);
   const codes = useAttendanceConfigStore((s) => s.codes);
+  const settings = useAttendanceConfigStore((s) => s.settings);
 
   const empIds = useMemo(() => new Set(employees.map((e) => e.id)), [employees]);
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
@@ -86,6 +88,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
   const [codesOpen, setCodesOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [histRow, setHistRow] = useState<HrAttendance | null>(null);
+  const [timeEdit, setTimeEdit] = useState<{ empId: string; iso: string } | null>(null);
   const [tab, setTab] = useState<'grid' | 'dashboard'>('grid');
   const [showAnomalies, setShowAnomalies] = useState(false);
   const [editAnchor, setEditAnchor] = useState<{ el: HTMLElement; empId: string; iso: string } | null>(null);
@@ -198,8 +201,8 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
 
   // #6 Cảnh báo bất thường (luật thuần).
   const anomalies = useMemo(
-    () => detectAnomalies(periodRows, employees, period, { codes, today: todayISO() }),
-    [periodRows, employees, period, codes],
+    () => detectAnomalies(periodRows, employees, period, { codes, settings, today: todayISO() }),
+    [periodRows, employees, period, codes, settings],
   );
 
   const runAI = async () => {
@@ -363,7 +366,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
                     const bg = cell ? (def?.color ?? UNKNOWN_CODE_COLOR) : (isWeekend(iso) ? '#fafafa' : EMPTY_CELL_COLOR);
                     const fg = def && def.category !== 'other' ? '#fff' : '#444';
                     return (
-                      <Tooltip key={iso} title={cell ? `${cell.code}${def ? ' · ' + def.label : ' · (mã lạ)'}${cell.note ? ' · ' + cell.note : ''}` : ''} disableInteractive>
+                      <Tooltip key={iso} title={cell ? `${cell.code}${def ? ' · ' + def.label : ' · (mã lạ)'}${cell.in || cell.out ? ` · ${cell.in ?? '?'}–${cell.out ?? '?'}${cell.hours ? ` (${cell.hours}h)` : ''}` : ''}${cell.note ? ' · ' + cell.note : ''}` : ''} disableInteractive>
                         <Box
                           onClick={rowEditable ? (ev) => setEditAnchor({ el: ev.currentTarget, empId: e.id, iso }) : undefined}
                           sx={{
@@ -421,6 +424,12 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
 
       {/* Menu chọn mã khi sửa ô */}
       <Menu anchorEl={editAnchor?.el ?? null} open={!!editAnchor} onClose={() => setEditAnchor(null)}>
+        {settings.hourTracking && (
+          <MenuItem onClick={() => { if (editAnchor) setTimeEdit({ empId: editAnchor.empId, iso: editAnchor.iso }); setEditAnchor(null); }}>
+            <HistoryIcon fontSize="small" sx={{ mr: 1, opacity: 0 }} />⏱️ Sửa giờ vào/ra…
+          </MenuItem>
+        )}
+        {settings.hourTracking && <Divider />}
         <MenuItem onClick={() => pickCode(null)}><em>— Xoá ô —</em></MenuItem>
         <Divider />
         {codes.map((d) => (
@@ -441,6 +450,12 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
       {codesOpen && <AttendanceCodesEditor onClose={() => setCodesOpen(false)} />}
       {bulkOpen && <AttendanceBulkFillDialog period={period} employees={employees} onClose={() => setBulkOpen(false)} />}
       {histRow && <AttendanceHistoryDialog row={histRow} empName={empById.get(histRow.employeeLegacyId)?.fullName ?? histRow.fullName} onClose={() => setHistRow(null)} />}
+      {timeEdit && empById.get(timeEdit.empId) && (
+        <AttendanceTimeDialog
+          emp={empById.get(timeEdit.empId)!} period={period} isoDate={timeEdit.iso}
+          row={rowByEmp.get(timeEdit.empId)} onClose={() => setTimeEdit(null)}
+        />
+      )}
     </Box>
   );
 }
