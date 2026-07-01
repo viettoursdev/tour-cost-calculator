@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Divider, IconButton, Menu, MenuItem, Stack, TextField, Tooltip, Typography,
+  Alert, Box, Button, Chip, Divider, IconButton, Menu, MenuItem, Stack, TextField, ToggleButton,
+  ToggleButtonGroup, Tooltip, Typography,
 } from '@mui/material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -8,25 +9,44 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import LockIcon from '@mui/icons-material/Lock';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
+import TuneIcon from '@mui/icons-material/Tune';
+import SummarizeIcon from '@mui/icons-material/Summarize';
+import HistoryIcon from '@mui/icons-material/History';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useAttendanceStore } from '@/stores/attendanceStore';
+import { useAttendanceConfigStore } from '@/stores/attendanceConfigStore';
 import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { callAIWorker } from '@/lib/aiWorker';
 import { notifyAttendancePublished } from '@/lib/attendanceNotify';
 import { daysFromApprovedLeaves, annualLeaveUsedInYear, leaveBalance } from '@/lib/attendance/leaveIntegration';
+import { scaffoldMonth } from '@/lib/attendance/attendanceScaffold';
+import { detectAnomalies } from '@/lib/attendance/attendanceAnomalies';
 import { toast } from '@/stores/toastStore';
 import {
   periodDays, weekdayLabelVN, isWeekend, periodLabelVN, isValidPeriod,
 } from '@/lib/attendance/attendanceCalc';
 import {
-  ATTENDANCE_CODES, lookupCode, EMPTY_CELL_COLOR, UNKNOWN_CODE_COLOR,
+  lookupCode, EMPTY_CELL_COLOR, UNKNOWN_CODE_COLOR,
 } from '@/lib/attendance/attendanceCodes';
 import {
   ATTENDANCE_STATUS_LABEL, ATTENDANCE_CONFIRM_LABEL,
   type HrAttendance, type HrEmployee, type AttendanceStatus,
 } from '@/types';
 import { AttendanceImportDialog } from './AttendanceImportDialog';
+import { AttendanceCodesEditor } from './AttendanceCodesEditor';
+import { AttendanceBulkFillDialog } from './AttendanceBulkFillDialog';
+import { AttendanceHistoryDialog } from './AttendanceHistoryDialog';
+import { AttendanceDashboard } from './AttendanceDashboard';
+
+/** Hôm nay ISO (client). */
+function todayISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const CELL_W = 26;
 const NAME_W = 180;
@@ -49,6 +69,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
   const setStatus = useAttendanceStore((s) => s.setStatus);
   const mergeDays = useAttendanceStore((s) => s.mergeDays);
   const leaves = useHrLeaveStore((s) => s.leaves);
+  const codes = useAttendanceConfigStore((s) => s.codes);
 
   const empIds = useMemo(() => new Set(employees.map((e) => e.id)), [employees]);
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
@@ -62,6 +83,11 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
 
   const [period, setPeriod] = useState(() => availablePeriods[0] ?? currentPeriod());
   const [importOpen, setImportOpen] = useState(false);
+  const [codesOpen, setCodesOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [histRow, setHistRow] = useState<HrAttendance | null>(null);
+  const [tab, setTab] = useState<'grid' | 'dashboard'>('grid');
+  const [showAnomalies, setShowAnomalies] = useState(false);
   const [editAnchor, setEditAnchor] = useState<{ el: HTMLElement; empId: string; iso: string } | null>(null);
   const [ai, setAi] = useState<{ loading: boolean; text: string; error: string }>({ loading: false, text: '', error: '' });
 
@@ -148,11 +174,33 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
     toast(filled ? `✅ Đã điền ${filled} ngày nghỉ phép vào bảng công.` : 'Các ngày nghỉ phép đã có mã sẵn — không thay đổi.', filled ? 'success' : 'info');
   };
 
+  const scaffold = async () => {
+    if (!window.confirm(
+      `Tạo khung tháng ${periodLabelVN(period)} cho ${employees.length} nhân viên?\n`
+      + `Điền X cho ngày thường, đánh dấu lễ dương lịch, bỏ trống cuối tuần. CHỈ điền vào ô đang trống.`,
+    )) return;
+    const add = scaffoldMonth(period);
+    const filled = await mergeDays(period, employees.map((emp) => ({ emp, add })));
+    toast(filled ? `✅ Đã tạo khung ${filled} ô.` : 'Các ô đã có mã sẵn — không thay đổi.', filled ? 'success' : 'info');
+  };
+
   const exportXlsx = async () => {
     if (!periodRows.length) { toast('Chưa có bảng công nào trong kỳ để xuất.', 'warning'); return; }
     const { exportAttendanceExcel } = await import('@/lib/exports/exportAttendanceExcel');
     await exportAttendanceExcel({ period, employees, attendances });
   };
+
+  const exportPayroll = async () => {
+    if (!periodRows.length) { toast('Chưa có bảng công nào trong kỳ để xuất.', 'warning'); return; }
+    const { exportPayrollSummary } = await import('@/lib/exports/exportPayrollSummary');
+    await exportPayrollSummary({ period, employees, attendances });
+  };
+
+  // #6 Cảnh báo bất thường (luật thuần).
+  const anomalies = useMemo(
+    () => detectAnomalies(periodRows, employees, period, { codes, today: todayISO() }),
+    [periodRows, employees, period, codes],
+  );
 
   const runAI = async () => {
     setAi({ loading: true, text: '', error: '' });
@@ -189,13 +237,21 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
             ))}
           </Stack>
         )}
+        <ToggleButtonGroup size="small" exclusive value={tab} onChange={(_, v) => v && setTab(v)}>
+          <ToggleButton value="grid">Bảng công</ToggleButton>
+          <ToggleButton value="dashboard">Dashboard</ToggleButton>
+        </ToggleButtonGroup>
         <Box flex={1} />
         <Button size="small" startIcon={<AutoAwesomeIcon />} onClick={runAI} disabled={ai.loading || !periodRows.length}>
           {ai.loading ? 'Đang phân tích…' : 'Nhận xét AI'}
         </Button>
-        <Button size="small" startIcon={<DownloadIcon />} onClick={exportXlsx} disabled={!periodRows.length}>Xuất Excel</Button>
+        <Tooltip title="Xuất bảng công (ma trận NV × ngày)"><Button size="small" startIcon={<DownloadIcon />} onClick={exportXlsx} disabled={!periodRows.length}>Xuất Excel</Button></Tooltip>
+        <Tooltip title="Xuất bảng TỔNG HỢP công cho kế toán/tính lương"><Button size="small" startIcon={<SummarizeIcon />} onClick={exportPayroll} disabled={!periodRows.length}>Tổng hợp</Button></Tooltip>
+        {canEdit && <Tooltip title="Điền X ngày thường + lễ dương lịch, bỏ trống cuối tuần (chỉ ô trống)"><Button size="small" startIcon={<AutoFixHighIcon />} onClick={scaffold}>Tạo khung</Button></Tooltip>}
+        {canEdit && <Tooltip title="Điền một mã cho nhiều NV theo khoảng ngày (đi tour…)"><Button size="small" startIcon={<PlaylistAddIcon />} onClick={() => setBulkOpen(true)}>Điền hàng loạt</Button></Tooltip>}
         {canEdit && <Tooltip title="Điền các ngày nghỉ phép ĐÃ DUYỆT vào ô trống của kỳ này"><Button size="small" startIcon={<EventAvailableIcon />} onClick={fillFromLeaves}>Điền nghỉ phép</Button></Tooltip>}
         {canEdit && <Button size="small" variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)}>Nhập Excel</Button>}
+        {canEdit && <Tooltip title="Sửa từ điển mã công"><IconButton size="small" onClick={() => setCodesOpen(true)}><TuneIcon fontSize="small" /></IconButton></Tooltip>}
         {canEdit && <Button size="small" variant="contained" startIcon={<CampaignIcon />} onClick={publish}>Công bố</Button>}
         {canEdit && <Tooltip title="Khoá kỳ"><span><IconButton size="small" onClick={lockPeriod} disabled={!periodRows.length}><LockIcon fontSize="small" /></IconButton></span></Tooltip>}
       </Stack>
@@ -235,10 +291,33 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
         </Alert>
       )}
 
+      {/* #6 Cảnh báo bất thường (luật thuần) */}
+      {tab === 'grid' && anomalies.length > 0 && (
+        <Alert
+          severity={anomalies.some((x) => x.severity === 'high') ? 'warning' : 'info'}
+          icon={<WarningAmberIcon />} sx={{ mb: 1.5 }}
+          action={<Button color="inherit" size="small" onClick={() => setShowAnomalies((v) => !v)}>{showAnomalies ? 'Ẩn' : `Xem ${anomalies.length}`}</Button>}
+        >
+          Phát hiện <b>{anomalies.length}</b> điểm cần chú ý trong kỳ.
+          {showAnomalies && (
+            <Stack spacing={0.25} mt={0.75}>
+              {anomalies.slice(0, 30).map((x, i) => (
+                <Typography key={i} variant="caption" color={x.severity === 'high' ? 'error' : 'text.secondary'}>
+                  {x.severity === 'high' ? '🔴' : x.severity === 'medium' ? '🟠' : '🟡'} <b>{x.empName}</b>: {x.message}
+                </Typography>
+              ))}
+              {anomalies.length > 30 && <Typography variant="caption" color="text.disabled">… và {anomalies.length - 30} mục khác</Typography>}
+            </Stack>
+          )}
+        </Alert>
+      )}
+
       {!isValidPeriod(period) ? (
         <Typography color="text.secondary">Chọn kỳ công hợp lệ.</Typography>
       ) : employees.length === 0 ? (
         <Typography color="text.secondary">Không có nhân viên trong phạm vi xem.</Typography>
+      ) : tab === 'dashboard' ? (
+        <AttendanceDashboard employees={employees} attendances={attendances} period={period} />
       ) : (
         <Box sx={{ overflowX: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
           <Box sx={{ minWidth: NAME_W + days.length * CELL_W + 120 }}>
@@ -280,7 +359,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
                   </Tooltip>
                   {days.map((iso) => {
                     const cell = a?.days[iso];
-                    const def = cell ? lookupCode(cell.code) : undefined;
+                    const def = cell ? lookupCode(cell.code, codes) : undefined;
                     const bg = cell ? (def?.color ?? UNKNOWN_CODE_COLOR) : (isWeekend(iso) ? '#fafafa' : EMPTY_CELL_COLOR);
                     const fg = def && def.category !== 'other' ? '#fff' : '#444';
                     return (
@@ -306,6 +385,11 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
                         <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: a.confirmation.status === 'confirmed' ? 'success.main' : 'warning.main' }} />
                       </Tooltip>
                     )}
+                    {a && (a.history?.length ?? 0) > 0 && (
+                      <Tooltip title="Nhật ký thay đổi">
+                        <IconButton size="small" sx={{ p: 0.25 }} onClick={() => setHistRow(a)}><HistoryIcon sx={{ fontSize: 14 }} /></IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                 </Box>
               );
@@ -318,7 +402,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
       <Box mt={1.5}>
         <Typography variant="caption" color="text.secondary" fontWeight={700}>Chú giải mã:</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mt={0.5}>
-          {ATTENDANCE_CODES.map((d) => (
+          {codes.map((d) => (
             <Tooltip key={d.code} title={d.label}>
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <Box sx={{ width: 16, height: 16, borderRadius: 0.5, bgcolor: d.color, color: '#fff', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{d.code}</Box>
@@ -339,7 +423,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
       <Menu anchorEl={editAnchor?.el ?? null} open={!!editAnchor} onClose={() => setEditAnchor(null)}>
         <MenuItem onClick={() => pickCode(null)}><em>— Xoá ô —</em></MenuItem>
         <Divider />
-        {ATTENDANCE_CODES.map((d) => (
+        {codes.map((d) => (
           <MenuItem key={d.code} onClick={() => pickCode(d.code)}>
             <Box sx={{ width: 18, height: 18, borderRadius: 0.5, bgcolor: d.color, color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 1 }}>{d.code}</Box>
             {d.label}
@@ -354,6 +438,9 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
           onImported={(p) => setPeriod(p)}
         />
       )}
+      {codesOpen && <AttendanceCodesEditor onClose={() => setCodesOpen(false)} />}
+      {bulkOpen && <AttendanceBulkFillDialog period={period} employees={employees} onClose={() => setBulkOpen(false)} />}
+      {histRow && <AttendanceHistoryDialog row={histRow} empName={empById.get(histRow.employeeLegacyId)?.fullName ?? histRow.fullName} onClose={() => setHistRow(null)} />}
     </Box>
   );
 }

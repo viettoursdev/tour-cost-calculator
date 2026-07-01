@@ -6,6 +6,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import { useAttendanceStore } from '@/stores/attendanceStore';
+import { useAttendanceConfigStore } from '@/stores/attendanceConfigStore';
 import { useAuthStore } from '@/stores/authStore';
 import { notifyAttendanceDisputed } from '@/lib/attendanceNotify';
 import { toast } from '@/stores/toastStore';
@@ -31,6 +32,7 @@ export function AttendanceSelfDialog({
   const currentUser = useAuthStore((s) => s.currentUser);
   const attendances = useAttendanceStore((s) => s.attendances);
   const confirm = useAttendanceStore((s) => s.confirm);
+  const codes = useAttendanceConfigStore((s) => s.codes);
 
   // Bảng công đã CÔNG BỐ (hoặc đã khoá) của nhân viên này, mới nhất trước.
   const myRows = useMemo(
@@ -108,7 +110,7 @@ export function AttendanceSelfDialog({
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
                   {days.map((iso) => {
                     const cell = row.days[iso];
-                    const def = cell ? lookupCode(cell.code) : undefined;
+                    const def = cell ? lookupCode(cell.code, codes) : undefined;
                     const bg = cell ? (def?.color ?? UNKNOWN_CODE_COLOR) : (isWeekend(iso) ? '#fafafa' : EMPTY_CELL_COLOR);
                     const fg = def && def.category !== 'other' ? '#fff' : '#555';
                     return (

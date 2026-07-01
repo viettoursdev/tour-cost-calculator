@@ -10,6 +10,7 @@ import { pickFiles } from '@/lib/pickFiles';
 import { toast } from '@/stores/toastStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useAttendanceStore, attendanceId } from '@/stores/attendanceStore';
+import { useAttendanceConfigStore } from '@/stores/attendanceConfigStore';
 import { summarizeAttendance, periodLabelVN } from '@/lib/attendance/attendanceCalc';
 import {
   parseAttendanceExcel, type AttendanceImportResult, type ParsedAttendanceRow,
@@ -27,6 +28,7 @@ export function AttendanceImportDialog({
   const currentUser = useAuthStore((s) => s.currentUser);
   const upsertMany = useAttendanceStore((s) => s.upsertMany);
   const allAttendances = useAttendanceStore((s) => s.attendances);
+  const codes = useAttendanceConfigStore((s) => s.codes);
 
   const [fileName, setFileName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,9 +58,9 @@ export function AttendanceImportDialog({
   const unknownCodes = useMemo(() => {
     if (!result) return [] as string[];
     const set = new Set<string>();
-    for (const r of result.rows) summarizeAttendance(r.days).unknownCodes.forEach((c) => set.add(c));
+    for (const r of result.rows) summarizeAttendance(r.days, codes).unknownCodes.forEach((c) => set.add(c));
     return [...set].sort();
-  }, [result]);
+  }, [result, codes]);
 
   const matchedRows = useMemo(
     () => (result ? result.rows.filter((r) => r.matchedEmployeeId) : []),
@@ -99,7 +101,7 @@ export function AttendanceImportDialog({
         department: emp?.department || '',
         period: result.period,
         days: r.days,
-        summary: summarizeAttendance(r.days),
+        summary: summarizeAttendance(r.days, codes),
         status: 'draft',
         confirmation: { status: 'pending' },
         feedback: prior?.feedback ?? [], // GIỮ lịch sử phản hồi cũ (chống mất vết kiểm)
@@ -181,7 +183,7 @@ export function AttendanceImportDialog({
                   </TableHead>
                   <TableBody>
                     {result.rows.map((r: ParsedAttendanceRow) => {
-                      const s = summarizeAttendance(r.days);
+                      const s = summarizeAttendance(r.days, codes);
                       return (
                         <TableRow key={r.rowIndex} hover sx={{ opacity: r.matchedEmployeeId ? 1 : 0.5 }}>
                           <TableCell>{r.employeeCode || '—'}</TableCell>
