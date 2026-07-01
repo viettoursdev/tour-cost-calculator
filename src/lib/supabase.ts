@@ -3693,7 +3693,7 @@ export async function sbDeleteExportRequest(id: string, client: SupabaseClient =
 // Functions: sbSaveQuoteState/sbSaveDMCQuoteState, sbGetQuoteProject/sbGetDMCQuoteProject
 
 import type { QuoteDraft, QuoteVersion, CloudQuoteProject, QuoteFlight } from '@/types/quote';
-import { decomposeQuote, assembleQuote, assembleFlights } from './supabase/quoteMap';
+import { decomposeQuote, assembleQuote, assembleFlights, mergeWorkflowExtras } from './supabase/quoteMap';
 
 // ── shared save implementation ────────────────────────────────────────────────
 
@@ -3911,6 +3911,9 @@ async function getQuoteProjectImpl(
   // index-owned (status/valueRole/rates/tourProfileId) được loadCloud override tiếp.
   const latestState = mappedVersions[0]?.state as QuoteDraft | undefined;
   const currentState: QuoteDraft = latestState ? { ...latestState, ...assembled } : assembled;
+  // Giữ field bước KHÔNG shred ra cột (subtasks/output/risk/ownerDept) từ ảnh chụp
+  // JSON cùng phiên bản — bản dựng từ cột vẫn thắng ở field nó có.
+  if (currentState.workflow) currentState.workflow = mergeWorkflowExtras(latestState?.workflow, currentState.workflow);
 
   // 6. Map collaborators (username → Collaborator)
   const collaborators: Collaborator[] = (collabRows ?? []).map((r) => {

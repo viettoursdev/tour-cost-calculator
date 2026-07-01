@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Box, Chip, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import Sortable from 'sortablejs';
 import { deadlineMeta } from '@/components/visa/constants';
-import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, gateStatus, unmetDeps } from './workflowConstants';
+import { WORKFLOW_STATUS_META, WORKFLOW_STATUS_ORDER, roleOfStep, gateStatus, unmetDeps, subtaskProgress } from './workflowConstants';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
 type Props = {
@@ -70,6 +70,7 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
                     <Stack direction="row" spacing={0.75} alignItems="flex-start">
                       <Chip size="small" label={numOf(s.id)} sx={{ height: 20, fontWeight: 800, bgcolor: meta.color + '22', color: meta.color }} />
                       <Typography fontSize={13.5} fontWeight={600} sx={{ flex: 1 }}>{s.label}</Typography>
+                      {(() => { const sp = subtaskProgress(s); return sp.total > 0 ? <Typography variant="caption" sx={{ color: sp.done === sp.total ? '#1b7a43' : 'text.secondary', whiteSpace: 'nowrap', fontWeight: 700 }}>☑ {sp.done}/{sp.total}</Typography> : null; })()}
                       {(s.attachments?.length ?? 0) > 0 && <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>📎 {s.attachments!.length}</Typography>}
                     </Stack>
                     {suggestions[s.id] && (

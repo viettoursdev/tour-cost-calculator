@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
-  ListSubheader, MenuItem, Stack, TextField, Typography,
+  Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
+  LinearProgress, ListSubheader, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
@@ -45,6 +46,18 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
     }
   };
   const removeAtt = (i: number) => setS((p) => ({ ...p, attachments: (p.attachments ?? []).filter((_, j) => j !== i) }));
+  // ── Việc con (checklist trong bước) ──
+  const subs = s.subtasks ?? [];
+  const subDone = subs.filter((t) => t.done).length;
+  const newSubId = () => 'st' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const addSub = () => setS((p) => ({ ...p, subtasks: [...(p.subtasks ?? []), { id: newSubId(), label: '', done: false }] }));
+  const patchSub = (id: string, patch: Partial<{ label: string; done: boolean }>) =>
+    setS((p) => ({ ...p, subtasks: (p.subtasks ?? []).map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+  const delSub = (id: string) => setS((p) => ({ ...p, subtasks: (p.subtasks ?? []).filter((t) => t.id !== id) }));
+  const handleSave = () => {
+    const clean = (s.subtasks ?? []).filter((t) => t.label.trim());
+    onSave({ ...s, subtasks: clean.length ? clean : undefined });
+  };
   const logDesc = [...(s.log ?? [])].reverse(); // mới nhất lên đầu
   const blockedNoReason = s.status === 'blocked' && !(s.note ?? '').trim();
   // Cổng phê duyệt: bước cọc/HĐ/nghiệm thu cần người có quyền duyệt trước khi Hoàn tất.
@@ -135,6 +148,31 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
             error={blockedNoReason} helperText={blockedNoReason ? 'Cần nhập lý do khi để trạng thái Tạm hoãn.' : ' '} />
 
           <Box>
+            <Stack direction="row" alignItems="center" sx={{ mb: 0.25 }}>
+              <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5, flex: 1 }}>
+                ☑ Việc con{subs.length > 0 ? ` · ${subDone}/${subs.length}` : ''}
+              </Typography>
+              <Button size="small" startIcon={<AddIcon />} onClick={addSub} sx={{ color: '#0d7a6a' }}>Thêm việc con</Button>
+            </Stack>
+            {subs.length > 0 && (
+              <LinearProgress variant="determinate" value={(subDone / subs.length) * 100}
+                sx={{ height: 5, borderRadius: 3, mb: 0.5, '& .MuiLinearProgress-bar': { bgcolor: subDone === subs.length ? '#27ae60' : '#14a08c' } }} />
+            )}
+            <Stack spacing={0}>
+              {subs.map((t) => (
+                <Stack key={t.id} direction="row" alignItems="center" spacing={0.25}>
+                  <Checkbox size="small" checked={t.done} color="success" sx={{ p: 0.5 }}
+                    onChange={(e) => patchSub(t.id, { done: e.target.checked })} />
+                  <TextField variant="standard" fullWidth placeholder="Nội dung việc con" value={t.label}
+                    onChange={(e) => patchSub(t.id, { label: e.target.value })}
+                    sx={{ '& .MuiInputBase-input': { fontSize: 13, py: 0.25, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'text.disabled' : 'text.primary' } }} />
+                  <IconButton size="small" color="error" onClick={() => delSub(t.id)}><DeleteOutlineIcon fontSize="small" /></IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box>
             <Typography variant="caption" fontWeight={800} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>📎 File đính kèm</Typography>
             <Stack spacing={0.75} sx={{ mt: 0.75 }}>
               {(s.attachments ?? []).map((att, i) => (
@@ -178,7 +216,7 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">Huỷ</Button>
-        <Button variant="contained" disabled={uploading || blockedNoReason || (gate && s.status === 'done' && !approval)} onClick={() => onSave(s)} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
+        <Button variant="contained" disabled={uploading || blockedNoReason || (gate && s.status === 'done' && !approval)} onClick={handleSave} sx={{ background: 'linear-gradient(135deg,#0d7a6a,#14a08c)' }}>Lưu</Button>
       </DialogActions>
     </Dialog>
   );

@@ -4,7 +4,7 @@ import {
   workflowSignals, applySignals, fillDueDates, parseDueRuleOffset, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
   appendLog, roleOfStep, workflowBoardSummary, cycleTimeMs,
   isGate, gateStatus, approvalOf, unmetDeps, APPROVE_ACTION,
-  nextActionableStep, playbookNotices,
+  nextActionableStep, playbookNotices, subtaskProgress,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -192,6 +192,15 @@ describe('dependencies + approval gate', () => {
     expect(labels.length).toBeGreaterThan(0);
     // bước tự thêm (không khoá) → không ràng buộc
     expect(unmetDeps({ id: 'x', label: 'Tự thêm', status: 'todo' }, dom)).toEqual([]);
+  });
+});
+
+describe('subtaskProgress', () => {
+  it('đếm việc con đã xong / tổng', () => {
+    expect(subtaskProgress({ id: 'a', label: 'A', status: 'todo' })).toEqual({ done: 0, total: 0 });
+    expect(subtaskProgress({ id: 'a', label: 'A', status: 'todo', subtasks: [
+      { id: '1', label: 'x', done: true }, { id: '2', label: 'y', done: false },
+    ] })).toEqual({ done: 1, total: 2 });
   });
 });
 

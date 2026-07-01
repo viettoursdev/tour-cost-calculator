@@ -1,6 +1,6 @@
 import { Box, Checkbox, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { deadlineMeta } from '@/components/visa/constants';
-import { WORKFLOW_STATUS_META, gateStatus, unmetDeps } from './workflowConstants';
+import { WORKFLOW_STATUS_META, gateStatus, unmetDeps, subtaskProgress } from './workflowConstants';
 import type { User, WorkflowStatus, WorkflowStep } from '@/types';
 
 type Props = {
@@ -20,6 +20,7 @@ export function WorkflowChecklist({ steps, users, suggestions = {}, onSetStatus 
         const dl = s.dueDate ? deadlineMeta(s.dueDate, done) : null;
         const gate = gateStatus(s);
         const deps = done || s.status === 'skipped' ? [] : unmetDeps(s, steps);
+        const sp = subtaskProgress(s);
         return (
           <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
             <Tooltip title={done ? 'Bỏ đánh dấu hoàn tất' : s.status === 'blocked' ? 'Đang tạm hoãn — đánh dấu hoàn tất' : s.status === 'doing' ? 'Đang làm — đánh dấu hoàn tất' : 'Đánh dấu hoàn tất'}>
@@ -36,6 +37,7 @@ export function WorkflowChecklist({ steps, users, suggestions = {}, onSetStatus 
                   sx={{ height: 18, fontWeight: 700, bgcolor: WORKFLOW_STATUS_META[suggestions[s.id]].color, color: '#fff', cursor: 'pointer' }} />
               </Tooltip>
             )}
+            {sp.total > 0 && <Chip size="small" label={`☑ ${sp.done}/${sp.total}`} sx={{ height: 20, fontWeight: 700, bgcolor: sp.done === sp.total ? '#27ae6022' : 'rgba(0,0,0,0.05)', color: sp.done === sp.total ? '#1b7a43' : 'text.secondary' }} />}
             {gate === 'pending' && <Chip size="small" label="🛡️" title="Cổng phê duyệt — chờ duyệt" sx={{ height: 20, bgcolor: '#f5a62322', color: '#b45309' }} />}
             {gate === 'approved' && <Chip size="small" label="🛡️✓" title="Đã phê duyệt" sx={{ height: 20, bgcolor: '#27ae6022', color: '#1b7a43' }} />}
             {deps.length > 0 && (

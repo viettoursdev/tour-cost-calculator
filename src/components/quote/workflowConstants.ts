@@ -280,6 +280,12 @@ export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null
   });
 }
 
+/** Tiến độ việc con (checklist) của 1 bước. */
+export function subtaskProgress(step: WorkflowStep): { done: number; total: number } {
+  const subs = step.subtasks ?? [];
+  return { done: subs.filter((s) => s.done).length, total: subs.length };
+}
+
 /** Tiến độ: số bước hoàn tất / tổng (đếm) + phần trăm CÓ TRỌNG SỐ. */
 export function workflowProgress(steps: WorkflowStep[]): { done: number; total: number; pct: number } {
   return {

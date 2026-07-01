@@ -240,6 +240,9 @@ export type WorkflowLogEntry = {
   action: string; // mô tả ngắn (vd "Trạng thái → Hoàn tất")
 };
 
+/** Việc con (checklist) trong 1 bước quy trình. */
+export type WorkflowSubtask = { id: string; label: string; done: boolean };
+
 /** Một bước trong quy trình vận hành của báo giá. */
 export type WorkflowStep = {
   id: string;
@@ -260,6 +263,7 @@ export type WorkflowStep = {
   risk?: string;              // Điểm kiểm soát rủi ro thường gặp
   ownerDept?: Department;     // Phòng/bộ phận phụ trách bước
   dueRule?: string;           // Hạn dạng chữ: "T-7", "T+3 sau tour", "trong 24h"
+  subtasks?: WorkflowSubtask[]; // checklist con trong bước (lưu qua ảnh chụp JSON phiên bản)
 };
 
 export type QuoteDraft = {

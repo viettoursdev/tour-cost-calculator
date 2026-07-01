@@ -2,6 +2,21 @@ import type {
   QuoteDraft, Item, CategoryId, QuoteFlight, WorkflowStep, QuoteGroup, QuotePayment, Passenger,
 } from '@/types/quote';
 
+/**
+ * Ghép lại các field của BƯỚC quy trình KHÔNG được shred ra cột (subtasks/output/
+ * risk/ownerDept…) từ ảnh chụp JSON CÙNG phiên bản (`quote_versions.state`) vào bản
+ * `assembled` dựng từ cột. `assembled` (cột) THẮNG ở mọi field nó có — chỉ những
+ * field mà bộ shred bỏ qua mới được lấy lại từ JSON. Nhờ vậy thêm field bước mới
+ * (vd subtasks) round-trip được mà KHÔNG cần cột/migration.
+ */
+export function mergeWorkflowExtras(
+  prev: WorkflowStep[] | undefined, assembled: WorkflowStep[] | undefined,
+): WorkflowStep[] | undefined {
+  if (!assembled || !prev?.length) return assembled;
+  const byId = new Map(prev.map((s) => [s.id, s]));
+  return assembled.map((a) => { const p = byId.get(a.id); return p ? { ...p, ...a } : a; });
+}
+
 const itemRow = (it: Item, category: string, i: number) => ({
   category, legacy_item_id: it.id, name: it.name, note: it.note, cur: it.cur,
   price: it.price, times: it.times, qty_mode: it.qtyMode, custom_qty: it.customQty,
