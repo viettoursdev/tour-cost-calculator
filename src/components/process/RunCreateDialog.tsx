@@ -9,6 +9,7 @@ import { useVisaProjectStore } from '@/stores/visaProjectStore';
 import { useProcessStore } from '@/stores/processStore';
 import { toast } from '@/stores/toastStore';
 import { createRunFromTemplate } from './processRun';
+import { fillDueDates } from '@/components/quote/workflowConstants';
 import type { ProcessRef, ProcessRefKind, ProcessTemplate } from '@/types';
 
 type Props = { template: ProcessTemplate; onClose: () => void };
@@ -33,6 +34,9 @@ export function RunCreateDialog({ template, onClose }: Props) {
   const [assignee, setAssignee] = useState(me?.u ?? '');
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [anchor, setAnchor] = useState('');
+  // Số bước sẽ được tự tính Hạn nếu nhập ngày mốc (có quy tắc T-7, T+3…).
+  const datedSteps = template.steps.filter((s) => s.dueOffset != null).length;
 
   // Danh sách đối tượng để gắn theo loại đã chọn.
   const refOptions = useMemo<{ id: string; label: string }[]>(() => {
@@ -50,6 +54,9 @@ export function RunCreateDialog({ template, onClose }: Props) {
       ref = { kind: refKind, id: refId, label: found?.label ?? '' };
     }
     const run = createRunFromTemplate(template, { title, ref, assignee, startDate, dueDate }, me);
+    // Nhập ngày mốc T0 → vật chất hoá Hạn từng bước (khởi hành − dueOffset) để hệ
+    // thống nhắc bước sắp/đã đến hạn (checkProcessDeadlines đọc dueDate thật).
+    if (anchor) run.steps = fillDueDates(run.steps, anchor);
     await saveRun(run, me.name);
     toast(`Đã tạo phiên chạy "${run.title}"`, 'success');
     setOpenRun(run.id);
@@ -92,6 +99,13 @@ export function RunCreateDialog({ template, onClose }: Props) {
             <TextField type="date" label="Hạn hoàn thành" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
               fullWidth slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }} />
           </Stack>
+
+          {datedSteps > 0 && (
+            <TextField type="date" label="Ngày mốc T0 (khởi hành / nộp hồ sơ / kết tour)" value={anchor}
+              onChange={(e) => setAnchor(e.target.value)} fullWidth
+              slotProps={{ inputLabel: { shrink: true }, input: { notched: true } }}
+              helperText={`Tự tính Hạn cho ${datedSteps}/${template.steps.length} bước theo quy tắc T-7, T+3… (bước không có quy tắc số sẽ để trống, chỉnh tay sau).`} />
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

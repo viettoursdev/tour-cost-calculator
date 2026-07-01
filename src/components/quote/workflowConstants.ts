@@ -204,6 +204,17 @@ export function workflowBoardSummary(steps: WorkflowStep[], todayISO?: string): 
   };
 }
 
+/** Suy `dueOffset` (số ngày TRƯỚC mốc T0) từ quy tắc hạn dạng chữ của SOP.
+ *  "T-7" → 7 (trước) · "T+3 sau tour" → -3 (sau) · "Ngày khởi hành" → 0 ·
+ *  không rõ ("T-X", "trong 24h", "Theo deadline NCC"…) → undefined. */
+export function parseDueRuleOffset(rule?: string): number | undefined {
+  if (!rule) return undefined;
+  const m = rule.match(/T\s*([+-])\s*(\d+)/i);
+  if (m) { const n = parseInt(m[2], 10); return m[1] === '-' ? n : -n; }
+  if (/ngày\s+khởi\s+hành/i.test(rule)) return 0;
+  return undefined;
+}
+
 /** Tự điền Hạn cho bước có dueOffset & dueDate đang TRỐNG (= khởi hành − dueOffset ngày). */
 export function fillDueDates(steps: WorkflowStep[], departureISO?: string | null): WorkflowStep[] {
   if (!departureISO) return steps;

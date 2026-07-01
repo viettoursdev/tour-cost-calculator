@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useProcessStore, newProcessId } from '@/stores/processStore';
 import { toast } from '@/stores/toastStore';
 import { suggestProcessSteps } from '@/lib/processStepSuggest';
+import { parseDueRuleOffset } from '@/components/quote/workflowConstants';
 import { DEPARTMENTS } from '@/auth/departments';
 import { DEPT_COLOR, DEPT_ICON } from './processSeed';
 import type { Department, ProcessTemplate, WorkflowStep } from '@/types';
@@ -88,8 +89,9 @@ export function ProcessTemplateEditor({ initial, department, onClose }: Props) {
       description: description.trim() || undefined,
       icon: icon || DEPT_ICON[dept],
       color: color || DEPT_COLOR[dept],
-      // Bước rỗng (chưa nhập tên) bị loại; gán phòng phụ trách mặc định nếu trống.
-      steps: cleanSteps.map((s) => ({ ...s, ownerDept: s.ownerDept ?? dept })),
+      // Bước rỗng (chưa nhập tên) bị loại; gán phòng phụ trách mặc định nếu trống;
+      // suy dueOffset từ quy tắc hạn ("T-7"…) để tự tính Hạn được khi chạy phiên.
+      steps: cleanSteps.map((s) => ({ ...s, ownerDept: s.ownerDept ?? dept, dueOffset: s.dueOffset ?? parseDueRuleOffset(s.dueRule) })),
       version: (initial?.version ?? 0) + 1,
       isPublished: true,
       isSeed: false,

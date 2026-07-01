@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   defaultWorkflow, workflowProgress, setStepStatus, newWorkflowStep, ganttBounds,
-  workflowSignals, applySignals, fillDueDates, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
+  workflowSignals, applySignals, fillDueDates, parseDueRuleOffset, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
   appendLog, roleOfStep, workflowBoardSummary, cycleTimeMs,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
@@ -149,6 +149,26 @@ describe('fillDueDates', () => {
   it('no-op without departure', () => {
     const w: WorkflowStep[] = [{ id: 'a', label: 'A', status: 'todo', dueOffset: 7 }];
     expect(fillDueDates(w, null)).toBe(w);
+  });
+});
+
+describe('parseDueRuleOffset', () => {
+  it('parses T-N (trước) and T+N (sau) — kể cả có khoảng trắng / hậu tố', () => {
+    expect(parseDueRuleOffset('T-7')).toBe(7);
+    expect(parseDueRuleOffset('T-30 trước khởi hành')).toBe(30);
+    expect(parseDueRuleOffset('T+7 sau tour')).toBe(-7);
+    expect(parseDueRuleOffset('T + 3')).toBe(-3);
+  });
+  it('maps "Ngày khởi hành" → 0', () => {
+    expect(parseDueRuleOffset('Ngày khởi hành')).toBe(0);
+  });
+  it('returns undefined for non-numeric / non-anchored rules', () => {
+    expect(parseDueRuleOffset('T-X trước khởi hành')).toBeUndefined();
+    expect(parseDueRuleOffset('Trong 24h nhận booking')).toBeUndefined();
+    expect(parseDueRuleOffset('Theo deadline NCC')).toBeUndefined();
+    expect(parseDueRuleOffset('Suốt tour')).toBeUndefined();
+    expect(parseDueRuleOffset(undefined)).toBeUndefined();
+    expect(parseDueRuleOffset('')).toBeUndefined();
   });
 });
 

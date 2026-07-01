@@ -1,4 +1,5 @@
 import type { Department, ProcessTemplate, WorkflowStep } from '@/types';
+import { parseDueRuleOffset } from '@/components/quote/workflowConstants';
 
 // Bộ quy trình (SOP) DỰNG SẴN trong code cho 5 phòng ban. `isSeed = true` → chỉ
 // đọc cho tới khi người dùng bấm "Dùng mẫu" để clone vào DB (process_templates).
@@ -44,6 +45,7 @@ function tpl(
       output: s.output,
       risk: s.risk,
       dueRule: s.dueRule,
+      dueOffset: parseDueRuleOffset(s.dueRule),
     })),
   };
 }
