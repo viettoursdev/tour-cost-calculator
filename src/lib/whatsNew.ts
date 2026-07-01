@@ -9,6 +9,13 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-01h', date: '01/07/2026', title: 'Nhắc quá hạn leo thang & lặp lại',
+    items: [
+      { icon: '⛔', title: 'Escalation đa cấp', desc: 'Bước quy trình quá hạn được đốc thúc theo cấp: quá 3 ngày báo Trưởng Phòng, quá 7 ngày leo thẳng lên Ban Giám Đốc.' },
+      { icon: '🔁', title: 'Nhắc lại định kỳ', desc: 'Bước còn quá hạn được nhắc lại mỗi 3 ngày (thay vì chỉ 1 lần) cho tới khi xử lý xong.' },
+    ],
+  },
+  {
     id: '2026-07-01g', date: '01/07/2026', title: 'Link tiến độ tour cho khách',
     items: [
       { icon: '🔗', title: 'Chia sẻ tiến độ tour cho khách (cần duyệt)', desc: 'Trong Quy trình điều hành, nút "Chia sẻ khách" tạo link công khai để khách theo dõi tiến độ tour theo thời gian thực — chỉ hiện mốc + trạng thái + % + ngày, ẩn hết thông tin nội bộ. Link chỉ hoạt động sau khi CEO/BGĐ/Trưởng Phòng duyệt; khách có nút VI/EN.' },

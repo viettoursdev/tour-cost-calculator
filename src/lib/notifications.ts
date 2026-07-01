@@ -43,7 +43,8 @@ import { useTourProfileStore } from '@/stores/tourProfileStore';
 import { useContractStore } from '@/stores/contractStore';
 import { useTrainingStore } from '@/stores/trainingStore';
 import { useAuthStore } from '@/stores/authStore';
-import { ROLE_RANK, canReceivePush } from '@/auth/ROLES';
+import { ROLE_RANK, canReceivePush, isBoard } from '@/auth/ROLES';
+import { escalationLevel, nudgeBucket } from '@/lib/workflowEscalate';
 import { contractFlags, dealStage, effectiveStage, stageMeta, type DealStage } from '@/components/quote/dealStage';
 import { tourProfileRisks } from '@/lib/tourProfile';
 import { daysUntil } from '@/lib/dateUtils';
@@ -54,6 +55,10 @@ import type { User, TrainingPhase } from '@/types';
 
 /** Số ngày quá hạn để tự báo lên quản lý (Trưởng Phòng trở lên). */
 const WF_ESCALATE_AFTER = 3;
+/** Quá hạn RẤT LÂU → leo thang lên Ban Giám Đốc. */
+const WF_ESCALATE_L2_AFTER = 7;
+/** Nhắc LẶP người phụ trách mỗi N ngày khi vẫn còn quá hạn (thay vì chỉ 1 lần). */
+const WF_RENUDGE_DAYS = 3;
 
 /**
  * Check contracts for payments due within 7 days and send reminder notifications.
@@ -152,7 +157,11 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
         if (target !== user.u) continue;
         const d = daysUntil(w.dueDate);
         if (d == null || d > 7) continue; // gồm cả quá hạn (d < 0)
-        const key = `${q.cloudId}:${w.label}:${w.dueDate}`;
+        // Quá hạn → nhắc LẶP mỗi WF_RENUDGE_DAYS ngày (khoá đổi theo "ngăn"); sắp
+        // đến hạn → chỉ 1 lần.
+        const key = d < 0
+          ? `${q.cloudId}:${w.label}:${w.dueDate}:n${nudgeBucket(-d, WF_RENUDGE_DAYS)}`
+          : `${q.cloudId}:${w.label}:${w.dueDate}`;
         if (set.has(key)) continue;
         set.add(key);
         const when = d < 0 ? `QUÁ HẠN ${Math.abs(d)} ngày` : d === 0 ? 'hôm nay' : `còn ${d} ngày`;
@@ -165,9 +174,12 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
         });
       }
     }
-    // Escalation: quản lý (Trưởng Phòng trở lên) được báo các bước quá hạn LÂU của
-    // người khác — để đốc thúc. Mỗi (báo giá, bước, hạn) escalate 1 lần.
-    if (ROLE_RANK[user.role] >= ROLE_RANK['Trưởng Phòng']) {
+    // Escalation ĐA CẤP: quản lý được báo bước quá hạn LÂU của người khác để đốc
+    // thúc. Cấp 1 (≥3 ngày) → Trưởng Phòng+; cấp 2 (≥7 ngày) → Ban Giám Đốc. Board
+    // chỉ nhận cấp 2 cho bước rất-quá-hạn (tránh trùng). Nhắc lặp theo "ngăn".
+    const board = isBoard(user.role);
+    const isManager = ROLE_RANK[user.role] >= ROLE_RANK['Trưởng Phòng'];
+    if (isManager) {
       const nameOf = (u?: string) => useAuthStore.getState().users.find((x) => x.u === u)?.name ?? u ?? '';
       for (const q of quotes) {
         for (const w of q.workflowDue ?? []) {
@@ -175,12 +187,17 @@ export async function checkWorkflowDeadlines(user: User): Promise<void> {
           if (d == null || d >= -WF_ESCALATE_AFTER) continue; // chỉ quá hạn > N ngày
           const owner = w.assignee || q.createdByUsername;
           if (owner === user.u) continue; // việc của chính mình đã nhắc ở trên
-          const key = `esc:${q.cloudId}:${w.label}:${w.dueDate}`;
+          const lvl = escalationLevel(-d, WF_ESCALATE_AFTER, WF_ESCALATE_L2_AFTER);
+          // Board: bỏ cấp 1, chỉ nhận cấp 2. Không-board: chỉ nhận cấp 1.
+          if (board && lvl < 2) continue;
+          if (!board && lvl >= 2) continue;
+          const bucket = nudgeBucket(-d, WF_RENUDGE_DAYS);
+          const key = `esc${lvl}:${q.cloudId}:${w.label}:${w.dueDate}:n${bucket}`;
           if (set.has(key)) continue;
           set.add(key);
           await sbSendNotification(user.u, {
             type: 'task',
-            title: '🚩 Bước quy trình quá hạn lâu — cần đốc thúc',
+            title: lvl >= 2 ? '⛔ Bước quy trình quá hạn RẤT LÂU — cần BGĐ can thiệp' : '🚩 Bước quy trình quá hạn lâu — cần đốc thúc',
             message: `Báo giá "${q.name}" — ${w.label}: QUÁ HẠN ${Math.abs(d)} ngày · phụ trách ${nameOf(owner)}`,
             createdBy: 'Hệ thống',
             data: { cloudId: q.cloudId },
