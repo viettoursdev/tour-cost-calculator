@@ -323,6 +323,36 @@ export function appendLog(step: WorkflowStep, actions: string[], by: string): Wo
   return { ...step, log: [...(step.log ?? []), ...entries].slice(-50) };
 }
 
+/** Bước KẾ TIẾP cần làm sau `afterId` = bước đầu tiên phía sau đang todo/doing. */
+export function nextActionableStep(steps: WorkflowStep[], afterId: string): WorkflowStep | undefined {
+  const i = steps.findIndex((s) => s.id === afterId);
+  if (i < 0) return undefined;
+  return steps.slice(i + 1).find((s) => s.status === 'todo' || s.status === 'doing');
+}
+
+/** 1 thông báo tự động (playbook). Nơi gọi tự gửi qua sbSendNotification. */
+export type PlaybookNotice = { to: string; title: string; message: string };
+
+/**
+ * Playbook "chuyền gậy": khi 1 bước HOÀN TẤT → nhắc người phụ trách bước kế tiếp
+ * "đến lượt bạn". Thuần (không side-effect) để test được. Chỉ nhắc khi bước kế có
+ * người phụ trách khác người vừa thao tác (tránh tự nhắc mình & spam).
+ */
+export function playbookNotices(
+  steps: WorkflowStep[], changedId: string, newStatus: WorkflowStatus, actorUsername: string, tourName: string,
+): PlaybookNotice[] {
+  if (newStatus !== 'done') return [];
+  const done = steps.find((s) => s.id === changedId);
+  const next = nextActionableStep(steps, changedId);
+  if (!done || !next || !next.assignee || next.assignee === actorUsername) return [];
+  const due = next.dueDate ? ` (hạn ${new Date(next.dueDate).toLocaleDateString('vi-VN')})` : '';
+  return [{
+    to: next.assignee,
+    title: '▶ Đến lượt bạn trong quy trình',
+    message: `"${done.label}" đã xong${tourName ? ` — tour ${tourName}` : ''}. Đến bước của bạn: ${next.label}${due}.`,
+  }];
+}
+
 /** Đổi trạng thái một bước (set/clear doneDate). Thuần — dùng cho kéo-thả Kanban. */
 export function setStepStatus(steps: WorkflowStep[], id: string, status: WorkflowStatus): WorkflowStep[] {
   const today = new Date().toISOString().slice(0, 10);

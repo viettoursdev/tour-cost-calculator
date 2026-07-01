@@ -4,6 +4,7 @@ import {
   workflowSignals, applySignals, fillDueDates, parseDueRuleOffset, keyByLabel, keyOf, suggestionFor, workflowDueSummary,
   appendLog, roleOfStep, workflowBoardSummary, cycleTimeMs,
   isGate, gateStatus, approvalOf, unmetDeps, APPROVE_ACTION,
+  nextActionableStep, playbookNotices,
   WORKFLOW_DEFAULT_STEPS, WORKFLOW_STATUS_ORDER, WORKFLOW_STATUS_META,
 } from './workflowConstants';
 import type { WorkflowStep } from '@/types';
@@ -191,6 +192,39 @@ describe('dependencies + approval gate', () => {
     expect(labels.length).toBeGreaterThan(0);
     // bước tự thêm (không khoá) → không ràng buộc
     expect(unmetDeps({ id: 'x', label: 'Tự thêm', status: 'todo' }, dom)).toEqual([]);
+  });
+});
+
+describe('playbook (chuyền gậy)', () => {
+  const mk = (): WorkflowStep[] => [
+    { id: 'a', label: 'Bước A', status: 'done' },
+    { id: 'b', label: 'Bước B', status: 'todo', assignee: 'bob' },
+    { id: 'c', label: 'Bước C', status: 'todo', assignee: 'carol' },
+  ];
+
+  it('nextActionableStep = bước todo/doing đầu tiên phía sau', () => {
+    const s = mk();
+    expect(nextActionableStep(s, 'a')?.id).toBe('b');
+    // bỏ qua skipped
+    s[1].status = 'skipped';
+    expect(nextActionableStep(s, 'a')?.id).toBe('c');
+    expect(nextActionableStep(s, 'c')).toBeUndefined();
+  });
+
+  it('nhắc người phụ trách bước kế khi hoàn tất', () => {
+    const notices = playbookNotices(mk(), 'a', 'done', 'alice', 'Đà Nẵng 3N2Đ');
+    expect(notices).toHaveLength(1);
+    expect(notices[0].to).toBe('bob');
+    expect(notices[0].message).toContain('Bước B');
+    expect(notices[0].message).toContain('Đà Nẵng 3N2Đ');
+  });
+
+  it('không nhắc khi: không phải done · không có người phụ trách · tự mình', () => {
+    expect(playbookNotices(mk(), 'a', 'doing', 'alice', 'T')).toEqual([]);
+    const noAssignee = mk(); noAssignee[1].assignee = undefined;
+    expect(playbookNotices(noAssignee, 'a', 'done', 'alice', 'T')).toEqual([]);
+    // người vừa thao tác chính là người phụ trách bước kế → khỏi tự nhắc
+    expect(playbookNotices(mk(), 'a', 'done', 'bob', 'T')).toEqual([]);
   });
 });
 

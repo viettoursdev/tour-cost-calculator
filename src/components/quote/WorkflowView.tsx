@@ -23,9 +23,10 @@ import { getCATS } from './constants';
 import {
   appendLog, applySignals, defaultWorkflow, fillDueDates, newWorkflowStep, setStepStatus, suggestionFor,
   workflowProgress, workflowSignals, WORKFLOW_STATUS_META, WORKFLOW_PRESET_META, type WorkflowPreset,
-  isGate, approvalOf, unmetDeps, APPROVE_ACTION,
+  isGate, approvalOf, unmetDeps, APPROVE_ACTION, playbookNotices,
 } from './workflowConstants';
 import { isApprover } from '@/auth/ROLES';
+import { sbSendNotification } from '@/lib/supabase';
 import { WorkflowKanban } from './WorkflowKanban';
 import { WorkflowList } from './WorkflowList';
 import { WorkflowChecklist } from './WorkflowChecklist';
@@ -97,6 +98,15 @@ export function WorkflowView() {
   }, [steps, signals]);
   const suggCount = Object.keys(suggestions).length;
 
+  // Playbook "chuyền gậy": khi 1 bước hoàn tất → nhắc người phụ trách bước kế.
+  const firePlaybook = (updated: WorkflowStep[], id: string, status: WorkflowStatus) => {
+    const notices = playbookNotices(updated, id, status, currentUser?.u ?? '', tourName);
+    if (!notices.length) return;
+    void Promise.all(notices.map((n) =>
+      sbSendNotification(n.to, { type: 'task', title: n.title, message: n.message, createdBy: 'Hệ thống' }),
+    )).catch(() => { /* best-effort, không chặn UI */ });
+  };
+
   const update = (id: string, patch: Partial<WorkflowStep>) => {
     const before = steps.find((s) => s.id === id);
     let next = steps.map((s) => (s.id === id ? { ...s, ...patch } : s));
@@ -113,6 +123,7 @@ export function WorkflowView() {
     }
     next = next.map((s) => (s.id === id ? appendLog(s, acts, byName) : s));
     setWorkflow(next);
+    if (patch.status) firePlaybook(next, id, patch.status);
   };
   const setStatus = (id: string, status: WorkflowStatus) => {
     const before = steps.find((s) => s.id === id);
@@ -146,6 +157,7 @@ export function WorkflowView() {
     const actions = approve ? [APPROVE_ACTION, label] : [label];
     next = next.map((s) => (s.id === id ? appendLog(s, actions, byName) : s));
     setWorkflow(next);
+    firePlaybook(next, id, status);
   };
   const del = (id: string) => { if (window.confirm('Xoá bước này khỏi quy trình?')) setWorkflow(steps.filter((s) => s.id !== id)); };
   const add = () => setWorkflow([...steps, newWorkflowStep()]);

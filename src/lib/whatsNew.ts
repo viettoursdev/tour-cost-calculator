@@ -9,6 +9,12 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-01c', date: '01/07/2026', title: 'Quy trình tự "chuyền gậy"',
+    items: [
+      { icon: '▶️', title: 'Tự nhắc người phụ trách bước kế', desc: 'Khi một bước quy trình điều hành được đánh dấu Hoàn tất, người phụ trách bước tiếp theo tự nhận thông báo "đến lượt bạn" (kèm hạn nếu có) — không cần nhắc tay.' },
+    ],
+  },
+  {
     id: '2026-07-01b', date: '01/07/2026', title: 'Cổng phê duyệt & phụ thuộc bước',
     items: [
       { icon: '🛡️', title: 'Cổng phê duyệt tại mốc tiền', desc: 'Bước cọc NCC · ký hợp đồng · cọc trước đi · thanh toán cuối · nghiệm thu chỉ được đánh dấu Hoàn tất sau khi CEO/BGĐ/Trưởng Phòng bấm "Phê duyệt" (ghi rõ người & thời điểm).' },
