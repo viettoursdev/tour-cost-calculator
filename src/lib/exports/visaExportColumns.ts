@@ -6,6 +6,8 @@ import { fmtDate } from '@/lib/dateUtils';
 import {
   DEFAULT_APPLICANT_TIMELINE, VISA_APPLICANT_STATUS_META, deriveVisaStatus, isApplicantOverdue,
 } from '@/components/visa/constants';
+import { RELATION_LABEL, minorGuardianStatus } from '@/components/visa/guestRelations';
+import { passportIssues } from '@/components/visa/passportChecks';
 import type { Passenger, VisaProjectDoc } from '@/types';
 
 /** Một cột có thể xuất: khoá ổn định + nhãn + bề rộng + cách lấy giá trị. */
@@ -32,6 +34,23 @@ const stdMilestone = (p: Passenger, key: string) => {
   const m = (p.visaTimeline ?? []).find((x) => x.key === key);
   return m?.date ? fmtDate(m.date) : '';
 };
+const relationSummary = (p: Passenger, project: VisaProjectDoc) => {
+  const group = project.applicants ?? [];
+  const nameOf = (id: string) => group.find((g) => g.id === id)?.name || '';
+  return (p.relations ?? []).map((r) => `${RELATION_LABEL[r.type]}: ${nameOf(r.toId)}`.trim()).filter(Boolean).join('; ');
+};
+const minorGuardianLabel = (p: Passenger, project: VisaProjectDoc) => {
+  const s = minorGuardianStatus(
+    { id: p.id, dob: p.dob, relations: p.relations, guardianAuthReady: p.guardianAuthReady },
+    project.applicants ?? [], project.departureDate,
+  );
+  if (!s.isMinor) return '';
+  if (s.withParent) return `Đi cùng cha/mẹ (${s.age}t)`;
+  return s.needsAuth ? `CẦN GIẤY UỶ QUYỀN (${s.age}t)` : `Có giấy uỷ quyền (${s.age}t)`;
+};
+const passportWarnLabel = (p: Passenger, project: VisaProjectDoc) =>
+  passportIssues({ passport: p.idNo, passportIssue: p.passportIssue, passportExpiry: p.passportExpiry }, project.departureDate)
+    .map((x) => x.text).join('; ');
 
 /** Danh mục TẤT CẢ cột có thể xuất — nguồn duy nhất cho cả picker lẫn file. */
 export const VISA_EXPORT_COLUMNS: VisaExportColumn[] = [
@@ -58,6 +77,9 @@ export const VISA_EXPORT_COLUMNS: VisaExportColumn[] = [
   { key: 'dietary', label: 'Ăn kiêng / Dị ứng', width: 18, value: (p) => orEmpty(p.dietary) },
   { key: 'emergency', label: 'Liên hệ khẩn cấp', width: 22, value: (p) => orEmpty(p.emergency) },
   { key: 'note', label: 'Ghi chú', width: 28, value: (p) => orEmpty(p.note) },
+  { key: 'relations', label: 'Quan hệ trong đoàn', width: 26, value: (p, _i, project) => relationSummary(p, project) },
+  { key: 'minorGuardian', label: 'Trẻ <14 / Giấy uỷ quyền', width: 24, value: (p, _i, project) => minorGuardianLabel(p, project) },
+  { key: 'passportWarn', label: 'Cảnh báo hộ chiếu', width: 30, value: (p, _i, project) => passportWarnLabel(p, project) },
   { key: 'overdue', label: 'Quá hạn', width: 10, align: 'center', value: (p) => (isApplicantOverdue(p) ? 'Quá hạn' : '') },
   // Các mốc timeline chuẩn
   ...DEFAULT_APPLICANT_TIMELINE.map((m) => ({
@@ -77,6 +99,10 @@ export const VISA_EXPORT_PRESETS: { id: string; label: string; keys: string[] }[
   {
     id: 'timeline', label: 'Tình trạng & timeline',
     keys: ['stt', 'name', 'visaStatus', ...DEFAULT_APPLICANT_TIMELINE.map((m) => `ms_${m.key}`), 'overdue'],
+  },
+  {
+    id: 'ops', label: 'Điều hành (quan hệ · hộ chiếu)',
+    keys: ['stt', 'name', 'dob', 'idNo', 'passportExpiry', 'relations', 'minorGuardian', 'passportWarn', 'visaStatus'],
   },
   { id: 'full', label: 'Đầy đủ', keys: VISA_EXPORT_COLUMNS.map((c) => c.key) },
 ];
