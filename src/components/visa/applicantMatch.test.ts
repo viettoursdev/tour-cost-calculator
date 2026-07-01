@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   sameGuest, matchesGuestQuery, normPassport, mergeApplicant, dedupeApplicants, mergeIncoming,
+  withConcurrentAdditions, mergeEditorApplicants,
 } from './applicantMatch';
 import type { VisaApplicant } from '@/types';
 
@@ -112,5 +113,33 @@ describe('mergeIncoming', () => {
     expect(r.merged).toBe(1);
     expect(r.list).toHaveLength(2);
     expect(r.list[0].gender).toBe('Nam');
+  });
+});
+
+describe('withConcurrentAdditions', () => {
+  it('keeps applicants added elsewhere (id not in local) and preserves local edits', () => {
+    const local = [mk({ id: 'a', name: 'A đã sửa' })];
+    const fresh = [mk({ id: 'a', name: 'A cũ' }), mk({ id: 'b', name: 'B (người khác thêm)' })];
+    const r = withConcurrentAdditions(local, fresh);
+    expect(r.map((x) => x.id)).toEqual(['a', 'b']);
+    expect(r.find((x) => x.id === 'a')!.name).toBe('A đã sửa'); // local thắng cho id chung
+  });
+});
+
+describe('mergeEditorApplicants', () => {
+  it('overlays only editor fields, preserving richer fields on the fresh copy', () => {
+    const fresh = [mk({ id: 'a', name: 'A', result: 'pending', timeline: [{ id: 'm', label: 'x', date: '2030-01-01' }], customerId: 'c1' })];
+    const edited = [mk({ id: 'a', name: 'A mới', result: 'passed' })];
+    const [m] = mergeEditorApplicants(fresh, edited);
+    expect(m.name).toBe('A mới');       // trường editor được ghi đè
+    expect(m.result).toBe('passed');
+    expect(m.timeline).toHaveLength(1);  // timeline của bản mới nhất được giữ
+    expect(m.customerId).toBe('c1');     // liên kết KH được giữ
+  });
+  it('keeps applicants added on either side', () => {
+    const fresh = [mk({ id: 'a', name: 'A' }), mk({ id: 'b', name: 'B thêm nơi khác' })];
+    const edited = [mk({ id: 'a', name: 'A' }), mk({ id: 'c', name: 'C thêm trong editor' })];
+    const ids = mergeEditorApplicants(fresh, edited).map((x) => x.id).sort();
+    expect(ids).toEqual(['a', 'b', 'c']);
   });
 });

@@ -105,6 +105,40 @@ export function dedupeApplicants(list: VisaApplicant[]): { list: VisaApplicant[]
 }
 
 /**
+ * Giữ lại các applicant được THÊM ở nơi khác (id không có trong danh sách `local`)
+ * khi lưu — tránh mất khách người/editor khác vừa thêm song song sau khi màn này nạp.
+ */
+export function withConcurrentAdditions(local: VisaApplicant[], fresh: VisaApplicant[]): VisaApplicant[] {
+  const ids = new Set(local.map((a) => a.id));
+  return [...local, ...fresh.filter((a) => !ids.has(a.id))];
+}
+
+/** Các trường mà trình sửa DỰ ÁN (checklist nhanh) được phép ghi đè lên applicant. */
+const EDITOR_FIELDS: (keyof VisaApplicant)[] = ['name', 'nameNoAccent', 'passport', 'gender', 'docStatus', 'result'];
+
+/**
+ * Gộp sửa từ trình sửa dự án (chỉ các trường trong {@link EDITOR_FIELDS}) lên bản
+ * applicant MỚI NHẤT từ store — giữ nguyên timeline/docs/hộ chiếu/quan hệ/liên kết KH
+ * do trình quản lý khách sửa. Applicant chỉ có ở `edited` (mới thêm) được giữ; chỉ có
+ * ở `fresh` (thêm nơi khác) cũng được giữ (không xoá nhầm).
+ */
+export function mergeEditorApplicants(fresh: VisaApplicant[], edited: VisaApplicant[]): VisaApplicant[] {
+  const byId = new Map(fresh.map((a) => [a.id, a]));
+  const seen = new Set<string>();
+  const out: VisaApplicant[] = [];
+  for (const e of edited) {
+    seen.add(e.id);
+    const f = byId.get(e.id);
+    if (!f) { out.push(e); continue; }
+    const m: VisaApplicant = { ...f };
+    for (const k of EDITOR_FIELDS) (m as unknown as Record<string, unknown>)[k] = e[k];
+    out.push(m);
+  }
+  for (const f of fresh) if (!seen.has(f.id)) out.push(f);
+  return out;
+}
+
+/**
  * Gộp danh sách `incoming` (vd từ Excel) vào `current`: bản trùng được gộp vào
  * bản hiện có, bản mới được thêm. Trả về danh sách + số thêm mới & số gộp.
  */

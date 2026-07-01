@@ -30,6 +30,7 @@ import {
 } from './constants';
 import { GuestDashboard } from '../quote/GuestListTable';
 import { applicantsToPassengers } from './guestAdapters';
+import { mergeEditorApplicants } from './applicantMatch';
 import type {
   User, VisaApplicant, VisaMilestone, VisaProcIndexEntry, VisaProjectDoc, VisaProjectStatus,
 } from '@/types';
@@ -141,7 +142,13 @@ export function VisaProjectEditor({ initial, onClose }: Props) {
     if (!doc.name.trim()) { window.alert('⚠ Nhập tên chương trình.'); return; }
     setBusy(true);
     try {
-      await save(doc);
+      // Gộp sửa applicant lên bản MỚI NHẤT từ store — chỉ ghi đè các trường trình sửa
+      // dự án quản (tên/hộ chiếu/giới tính/docStatus/result), GIỮ timeline/docs/quan hệ/
+      // liên kết KH do trình quản lý khách sửa (tránh 2 editor đè nhau). Costing cũng
+      // lấy bản mới nhất (do VisaCostDialog ghi riêng).
+      const fresh = useVisaProjectStore.getState().projects.find((p) => p.id === doc.id);
+      const applicants = fresh ? mergeEditorApplicants(fresh.applicants ?? [], doc.applicants ?? []) : (doc.applicants ?? []);
+      await save({ ...doc, costing: fresh?.costing ?? doc.costing, applicants, ...countsFromApplicants(applicants) });
       onClose();
     } finally {
       setBusy(false);

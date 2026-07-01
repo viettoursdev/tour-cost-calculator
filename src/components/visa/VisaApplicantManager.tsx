@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useCallback, useState, type ChangeEvent } from 'react';
 import {
   Alert, AppBar, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogTitle, Divider, FormControlLabel,
   IconButton, ListItemIcon, ListItemText, ListSubheader, Menu, MenuItem, Stack, TextField,
@@ -51,7 +51,7 @@ import { hasPassportIssue, passportIssues } from './passportChecks';
 import { GuestRelationsPanel } from './GuestRelationsPanel';
 import { addRelation, minorGuardianStatus, removeRelation } from './guestRelations';
 import { useCustomerStore } from '@/stores/customerStore';
-import { dedupeApplicants, guestKeyOf, mergeIncoming, type GuestKey } from './applicantMatch';
+import { dedupeApplicants, guestKeyOf, mergeIncoming, withConcurrentAdditions, type GuestKey } from './applicantMatch';
 // importVisaApplicants nạp động khi bấm (thư viện Excel nặng).
 import type { ApplicantDoc, Passenger, VisaApplicantMilestone, VisaProjectDoc } from '@/types';
 
@@ -183,7 +183,10 @@ function fmtDt(s?: string): string {
 /** Màn quản lý danh sách khách theo từng dự án — dùng template khách của báo giá. */
 export function VisaApplicantManager({ project, onClose }: Props) {
   const save = useVisaProjectStore((s) => s.save);
-  const [list, setList] = useState<Passenger[]>(() => applicantsToPassengers(project.applicants ?? []));
+  const [list, setListRaw] = useState<Passenger[]>(() => applicantsToPassengers(project.applicants ?? []));
+  const [dirty, setDirty] = useState(false);
+  // Mọi thay đổi danh sách đều qua setList → đánh dấu "chưa lưu" để cảnh báo khi đóng.
+  const setList = useCallback((v: Parameters<typeof setListRaw>[0]) => { setDirty(true); setListRaw(v); }, []);
   const [busy, setBusy] = useState(false);
   const [guestSeed, setGuestSeed] = useState<GuestKey | null>(null);
   const [view, setView] = useState<'list' | 'timeline'>('list');
@@ -334,21 +337,24 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     if (!d) { toast('Mở báo giá liên kết (làm báo giá hiện hành) rồi thử lại.', 'warning'); return; }
     const r = mergeIncoming(passengersToApplicants(d.passengers ?? []), passengersToApplicants(list));
     useQuoteStore.getState().setPassengers(applicantsToPassengers(r.list));
-    toast(`✅ Đẩy sang báo giá: thêm ${r.added}, gộp ${r.merged}.`);
+    // Chỉ ghi vào DRAFT báo giá đang mở — nhắc rõ phải Lưu báo giá để không mất.
+    toast(`✅ Đã đưa vào báo giá đang mở (thêm ${r.added}, gộp ${r.merged}). Hãy bấm Lưu ở báo giá để lưu vĩnh viễn.`, 'info');
   };
 
   const handleSave = async () => {
     setBusy(true);
     try {
-      const applicants = passengersToApplicants(list);
-      // Merge từ bản MỚI NHẤT trong store để không đè chi phí visa (costing) vừa lưu nơi khác.
+      // Merge từ bản MỚI NHẤT trong store để không đè costing vừa lưu nơi khác, và
+      // GIỮ các applicant người/editor khác vừa thêm song song (không có trong list này).
       const cur = useVisaProjectStore.getState().projects.find((p) => p.id === project.id) ?? project;
+      const applicants = withConcurrentAdditions(passengersToApplicants(list), cur.applicants ?? []);
       await save({
         ...cur,
         applicants,
         ...countsFromApplicants(applicants),
         updatedAt: new Date().toISOString(),
       });
+      setDirty(false);
       onClose();
     } catch (e) {
       window.alert('Lỗi lưu danh sách khách: ' + (e as Error).message);
@@ -357,11 +363,17 @@ export function VisaApplicantManager({ project, onClose }: Props) {
     }
   };
 
+  // Đóng có bảo vệ: cảnh báo nếu còn thay đổi chưa lưu.
+  const guardedClose = () => {
+    if (dirty && !window.confirm('Danh sách khách có thay đổi CHƯA LƯU. Đóng và bỏ các thay đổi?')) return;
+    onClose();
+  };
+
   return (
-    <Dialog open fullScreen onClose={busy ? undefined : onClose}>
+    <Dialog open fullScreen onClose={busy ? undefined : guardedClose}>
       <AppBar position="sticky" elevation={0} sx={{ background: 'linear-gradient(135deg,#0a5c50,#0d7a6a 45%,#14a08c)', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
         <Toolbar sx={{ gap: 1.25, flexWrap: 'wrap', minHeight: { xs: 56, sm: 60 }, py: 0.75 }}>
-          <IconButton edge="start" color="inherit" onClick={onClose} disabled={busy} sx={{ mr: 0.25 }}>
+          <IconButton edge="start" color="inherit" onClick={guardedClose} disabled={busy} sx={{ mr: 0.25 }}>
             <ArrowBackIcon />
           </IconButton>
           <Box sx={{ flex: 1, minWidth: 0 }}>
