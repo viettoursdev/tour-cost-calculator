@@ -235,6 +235,20 @@ describe('playbook (chuyền gậy)', () => {
     // người vừa thao tác chính là người phụ trách bước kế → khỏi tự nhắc
     expect(playbookNotices(mk(), 'a', 'done', 'bob', 'T')).toEqual([]);
   });
+
+  it('RACI: nhắc thêm người rà soát (A) & người cần thông báo (I), dedup + bỏ actor', () => {
+    const s = mk();
+    s[0].reviewer = 'dave';
+    s[0].informed = ['erin', 'bob', 'alice']; // bob trùng người bước kế; alice là actor
+    const notices = playbookNotices(s, 'a', 'done', 'alice', 'T');
+    const to = notices.map((n) => n.to);
+    expect(to).toContain('bob');   // R (bước kế)
+    expect(to).toContain('dave');  // A (rà soát)
+    expect(to).toContain('erin');  // I
+    expect(to).not.toContain('alice');        // là actor
+    expect(to.filter((x) => x === 'bob')).toHaveLength(1); // dedup
+    expect(notices.find((n) => n.to === 'dave')!.title).toContain('rà soát');
+  });
 });
 
 describe('parseDueRuleOffset', () => {

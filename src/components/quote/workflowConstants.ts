@@ -349,14 +349,26 @@ export function playbookNotices(
 ): PlaybookNotice[] {
   if (newStatus !== 'done') return [];
   const done = steps.find((s) => s.id === changedId);
+  if (!done) return [];
+  const tn = tourName ? ` — tour ${tourName}` : '';
+  const out: PlaybookNotice[] = [];
+  const seen = new Set<string>([actorUsername]); // không tự nhắc mình; mỗi người 1 lần
+  const push = (to: string | undefined, title: string, message: string) => {
+    if (!to || seen.has(to)) return;
+    seen.add(to);
+    out.push({ to, title, message });
+  };
+  // R — chuyền gậy cho người phụ trách bước kế.
   const next = nextActionableStep(steps, changedId);
-  if (!done || !next || !next.assignee || next.assignee === actorUsername) return [];
-  const due = next.dueDate ? ` (hạn ${new Date(next.dueDate).toLocaleDateString('vi-VN')})` : '';
-  return [{
-    to: next.assignee,
-    title: '▶ Đến lượt bạn trong quy trình',
-    message: `"${done.label}" đã xong${tourName ? ` — tour ${tourName}` : ''}. Đến bước của bạn: ${next.label}${due}.`,
-  }];
+  if (next?.assignee) {
+    const due = next.dueDate ? ` (hạn ${new Date(next.dueDate).toLocaleDateString('vi-VN')})` : '';
+    push(next.assignee, '▶ Đến lượt bạn trong quy trình', `"${done.label}" đã xong${tn}. Đến bước của bạn: ${next.label}${due}.`);
+  }
+  // A — người rà soát bước vừa xong.
+  push(done.reviewer, '👁 Nhờ bạn rà soát bước', `"${done.label}"${tn} vừa được đánh dấu hoàn tất — nhờ bạn rà soát.`);
+  // I — người cần thông báo.
+  for (const u of done.informed ?? []) push(u, 'ℹ Cập nhật quy trình', `"${done.label}"${tn} đã hoàn tất.`);
+  return out;
 }
 
 /** Đổi trạng thái một bước (set/clear doneDate). Thuần — dùng cho kéo-thả Kanban. */

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
+  Autocomplete, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton,
   LinearProgress, ListSubheader, MenuItem, Stack, TextField, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -123,6 +123,20 @@ export function WorkflowStepDialog({ step, users, onClose, onSave }: Props) {
               <Chip size="small" color="primary" variant="outlined" label={`Gán ${suggested.name} (${suggested.role})`} onClick={() => set({ assignee: suggested.u })} />
             </Stack>
           )}
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <TextField select label="Người rà soát (A)" value={s.reviewer ?? ''} onChange={(e) => set({ reviewer: e.target.value || undefined })}
+              helperText="Được nhắc rà soát khi bước hoàn tất">
+              <MenuItem value="">—</MenuItem>
+              {[...users].sort((a, b) => a.name.localeCompare(b.name, 'vi')).map((u) => <MenuItem key={u.u} value={u.u}>{u.name}</MenuItem>)}
+            </TextField>
+            <Autocomplete multiple size="small" options={[...users].sort((a, b) => a.name.localeCompare(b.name, 'vi'))}
+              getOptionLabel={(u) => u.name} isOptionEqualToValue={(a, b) => a.u === b.u}
+              value={users.filter((u) => (s.informed ?? []).includes(u.u))}
+              onChange={(_, val) => set({ informed: val.length ? val.map((u) => u.u) : undefined })}
+              renderInput={(params) => <TextField {...params} label="Thông báo cho (I)" helperText="Được thông báo khi bước hoàn tất" />} />
+          </Box>
+          <Typography variant="caption" color="text.disabled">RACI: Phụ trách (R) làm · Rà soát (A) kiểm · Thông báo (I) nắm tin — tự nhắc qua thông báo khi bước hoàn tất.</Typography>
           {gate && (
             <Box sx={{ p: 1.25, borderRadius: 1.5, border: '1px solid', borderColor: approval ? 'success.light' : '#f5a623', bgcolor: approval ? 'rgba(39,174,96,0.06)' : 'rgba(245,166,35,0.08)' }}>
               <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>

@@ -88,9 +88,10 @@ export function WorkflowKanban({ steps, users, suggestions = {}, onMove, onOpen 
                         )}
                       </Stack>
                     )}
-                    {(s.assignee || dept || dl) && (
+                    {(s.assignee || s.reviewer || dept || dl) && (
                       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 0.75 }}>
                         {s.assignee && <Chip size="small" variant="outlined" label={`👤 ${nameOf(s.assignee)}`} />}
+                        {s.reviewer && <Chip size="small" variant="outlined" label={`👁 ${nameOf(s.reviewer)}`} sx={{ color: 'text.secondary' }} />}
                         {dept && <Chip size="small" variant="outlined" label={`🏢 ${dept}`} sx={{ color: 'text.secondary', borderStyle: 'dashed' }} />}
                         {dl && <Typography variant="caption" sx={{ color: dl.color, fontWeight: 700 }}>⏱ {dl.text}</Typography>}
                       </Stack>

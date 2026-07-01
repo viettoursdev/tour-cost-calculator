@@ -9,6 +9,12 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-01e', date: '01/07/2026', title: 'Phân vai RACI cho từng bước',
+    items: [
+      { icon: '👥', title: 'Người rà soát (A) & người cần thông báo (I)', desc: 'Mỗi bước quy trình giờ gán được thêm Người rà soát và nhiều Người cần thông báo, bên cạnh Người phụ trách. Khi bước hoàn tất, họ tự nhận thông báo tương ứng (nhờ rà soát / nắm tin).' },
+    ],
+  },
+  {
     id: '2026-07-01d', date: '01/07/2026', title: 'Việc con (checklist) trong mỗi bước',
     items: [
       { icon: '☑️', title: 'Chia nhỏ mỗi bước thành việc con', desc: 'Mở chi tiết một bước quy trình để thêm các việc con và tick hoàn tất từng việc; thẻ Kanban/Checklist hiện tiến độ ☑ x/y. Áp cho cả Quy trình điều hành lẫn Quy trình phòng ban.' },

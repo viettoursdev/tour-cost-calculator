@@ -253,7 +253,9 @@ export type WorkflowStep = {
   startDate?: string | null;  // ISO yyyy-mm-dd (cho Gantt)
   dueDate?: string | null;
   doneDate?: string | null;
-  assignee?: string;          // username người phụ trách
+  assignee?: string;          // username người phụ trách (R — Responsible)
+  reviewer?: string;          // username người rà soát/kiểm (A — Accountable)
+  informed?: string[];        // username người cần thông báo (I — Informed)
   note?: string;
   log?: WorkflowLogEntry[];   // nhật ký thay đổi (giữ tối đa 50 dòng gần nhất)
   attachments?: FileAttachment[]; // file đính kèm theo bước (R2 qua AI Worker)
