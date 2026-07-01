@@ -7,11 +7,14 @@ import DownloadIcon from '@mui/icons-material/Download';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import LockIcon from '@mui/icons-material/Lock';
+import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import { useAttendanceStore } from '@/stores/attendanceStore';
+import { useHrLeaveStore } from '@/stores/hrLeaveStore';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { callAIWorker } from '@/lib/aiWorker';
 import { notifyAttendancePublished } from '@/lib/attendanceNotify';
+import { daysFromApprovedLeaves, annualLeaveUsedInYear, leaveBalance } from '@/lib/attendance/leaveIntegration';
 import { toast } from '@/stores/toastStore';
 import {
   periodDays, weekdayLabelVN, isWeekend, periodLabelVN, isValidPeriod,
@@ -44,6 +47,8 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
   const attendances = useAttendanceStore((s) => s.attendances);
   const setCell = useAttendanceStore((s) => s.setCell);
   const setStatus = useAttendanceStore((s) => s.setStatus);
+  const mergeDays = useAttendanceStore((s) => s.mergeDays);
+  const leaves = useHrLeaveStore((s) => s.leaves);
 
   const empIds = useMemo(() => new Set(employees.map((e) => e.id)), [employees]);
   const empById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
@@ -121,6 +126,28 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
     toast(`🔒 Đã khoá ${periodLabelVN(period)}.`, 'success');
   };
 
+  // Quỹ phép năm còn lại theo từng nhân viên (năm của kỳ đang xem).
+  const year = period.slice(0, 4);
+  const balanceByEmp = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof leaveBalance>>();
+    for (const e of employees) m.set(e.id, leaveBalance(annualLeaveUsedInYear(attendances, e.id, year)));
+    return m;
+  }, [employees, attendances, year]);
+
+  const fillFromLeaves = async () => {
+    const entries = employees
+      .map((emp) => ({ emp, add: daysFromApprovedLeaves(leaves, emp.id, period) }))
+      .filter((x) => Object.keys(x.add).length > 0);
+    if (!entries.length) { toast('Không có đơn nghỉ phép đã duyệt nào trong kỳ này.', 'info'); return; }
+    const totalCells = entries.reduce((s, x) => s + Object.keys(x.add).length, 0);
+    if (!window.confirm(
+      `Điền nghỉ phép đã duyệt vào bảng công ${periodLabelVN(period)}?\n`
+      + `${entries.length} nhân viên · ${totalCells} ngày. Chỉ điền vào ô đang TRỐNG (không đè mã đã có).`,
+    )) return;
+    const filled = await mergeDays(period, entries);
+    toast(filled ? `✅ Đã điền ${filled} ngày nghỉ phép vào bảng công.` : 'Các ngày nghỉ phép đã có mã sẵn — không thay đổi.', filled ? 'success' : 'info');
+  };
+
   const exportXlsx = async () => {
     if (!periodRows.length) { toast('Chưa có bảng công nào trong kỳ để xuất.', 'warning'); return; }
     const { exportAttendanceExcel } = await import('@/lib/exports/exportAttendanceExcel');
@@ -167,6 +194,7 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
           {ai.loading ? 'Đang phân tích…' : 'Nhận xét AI'}
         </Button>
         <Button size="small" startIcon={<DownloadIcon />} onClick={exportXlsx} disabled={!periodRows.length}>Xuất Excel</Button>
+        {canEdit && <Tooltip title="Điền các ngày nghỉ phép ĐÃ DUYỆT vào ô trống của kỳ này"><Button size="small" startIcon={<EventAvailableIcon />} onClick={fillFromLeaves}>Điền nghỉ phép</Button></Tooltip>}
         {canEdit && <Button size="small" variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)}>Nhập Excel</Button>}
         {canEdit && <Button size="small" variant="contained" startIcon={<CampaignIcon />} onClick={publish}>Công bố</Button>}
         {canEdit && <Tooltip title="Khoá kỳ"><span><IconButton size="small" onClick={lockPeriod} disabled={!periodRows.length}><LockIcon fontSize="small" /></IconButton></span></Tooltip>}
@@ -238,10 +266,18 @@ export function AttendancePanel({ employees }: { employees: HrEmployee[] }) {
               const rowEditable = canEdit && a?.status !== 'locked'; // kỳ đã khoá → không sửa
               return (
                 <Box key={e.id} sx={{ display: 'flex', '&:hover': { bgcolor: 'action.hover' } }}>
-                  <Box sx={{ width: NAME_W, flexShrink: 0, p: 0.5, position: 'sticky', left: 0, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', minWidth: 0 }}>
-                    <Typography noWrap sx={{ fontSize: 12, fontWeight: 600 }}>{e.fullName}</Typography>
-                    <Typography noWrap sx={{ fontSize: 10, color: 'text.disabled' }}>{e.employeeCode}</Typography>
-                  </Box>
+                  <Tooltip
+                    disableInteractive placement="right"
+                    title={(() => { const b = balanceByEmp.get(e.id); return b ? `Phép năm ${year}: còn ${b.remaining}/${b.quota} ngày (đã dùng ${b.used})` : ''; })()}
+                  >
+                    <Box sx={{ width: NAME_W, flexShrink: 0, p: 0.5, position: 'sticky', left: 0, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider', minWidth: 0 }}>
+                      <Typography noWrap sx={{ fontSize: 12, fontWeight: 600 }}>{e.fullName}</Typography>
+                      <Typography noWrap sx={{ fontSize: 10, color: 'text.disabled' }}>
+                        {e.employeeCode}
+                        {(() => { const b = balanceByEmp.get(e.id); return b && b.used > 0 ? ` · phép còn ${b.remaining}` : ''; })()}
+                      </Typography>
+                    </Box>
+                  </Tooltip>
                   {days.map((iso) => {
                     const cell = a?.days[iso];
                     const def = cell ? lookupCode(cell.code) : undefined;

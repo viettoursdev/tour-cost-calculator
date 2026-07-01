@@ -12,6 +12,7 @@ import { toast } from '@/stores/toastStore';
 import {
   periodDays, weekdayLabelVN, isWeekend, periodLabelVN,
 } from '@/lib/attendance/attendanceCalc';
+import { annualLeaveUsedInYear, leaveBalance } from '@/lib/attendance/leaveIntegration';
 import { lookupCode, EMPTY_CELL_COLOR, UNKNOWN_CODE_COLOR } from '@/lib/attendance/attendanceCodes';
 import {
   ATTENDANCE_STATUS_LABEL, ATTENDANCE_CONFIRM_LABEL,
@@ -45,6 +46,13 @@ export function AttendanceSelfDialog({
   const row: HrAttendance | undefined = myRows[periodIdx];
 
   const days = useMemo(() => (row ? periodDays(row.period) : []), [row]);
+
+  // Quỹ phép năm còn lại (năm của kỳ đang xem).
+  const balance = useMemo(() => {
+    if (!row) return null;
+    const yr = row.period.slice(0, 4);
+    return { yr, ...leaveBalance(annualLeaveUsedInYear(attendances, employee.id, yr)) };
+  }, [attendances, employee.id, row]);
 
   const act = async (accepted: boolean) => {
     if (!row || !currentUser) return;
@@ -88,6 +96,12 @@ export function AttendanceSelfDialog({
                   <Chip size="small" variant="outlined" label={`Số công (HC): ${row.summary.totalHC}`} />
                   {row.summary.paidLeave > 0 && <Chip size="small" variant="outlined" label={`Phép: ${row.summary.paidLeave}`} />}
                   {row.summary.unpaidLeave > 0 && <Chip size="small" color="warning" variant="outlined" label={`Không lương: ${row.summary.unpaidLeave}`} />}
+                  {balance && (
+                    <Tooltip title={`Đã dùng ${balance.used}/${balance.quota} ngày phép năm ${balance.yr}`}>
+                      <Chip size="small" color={balance.remaining <= 0 ? 'warning' : 'success'} variant="outlined"
+                        label={`Phép năm còn: ${balance.remaining}/${balance.quota}`} />
+                    </Tooltip>
+                  )}
                 </Stack>
 
                 {/* Timeline tháng */}

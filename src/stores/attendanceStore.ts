@@ -6,7 +6,7 @@ import {
 import { summarizeAttendance } from '@/lib/attendance/attendanceCalc';
 import { useAuthStore } from './authStore';
 import type {
-  HrAttendance, HrEmployee, AttendanceCell, AttendanceStatus, AttendanceFeedback,
+  HrAttendance, HrEmployee, AttendanceCell, AttendanceDays, AttendanceStatus, AttendanceFeedback,
 } from '@/types';
 import type { Unsubscribe } from '@/lib/supabase/helpers';
 
@@ -26,6 +26,11 @@ type State = {
   upsertMany: (list: HrAttendance[]) => Promise<boolean>;
   /** Quản lý sửa 1 ô (chủ động điều chỉnh Gantt). `cell=null` = xoá ô. Tự tính lại tổng. */
   setCell: (emp: HrEmployee, period: string, isoDate: string, cell: AttendanceCell | null) => Promise<void>;
+  /**
+   * Trộn thêm mã vào nhiều bảng công của một kỳ — CHỈ điền ô đang TRỐNG (không đè mã
+   * đã có). Dùng cho "điền từ đơn nghỉ phép đã duyệt". Trả về tổng số ô đã điền.
+   */
+  mergeDays: (period: string, entries: { emp: HrEmployee; add: AttendanceDays }[]) => Promise<number>;
   /** Đổi trạng thái kỳ công (draft→published→locked). */
   setStatus: (id: string, status: AttendanceStatus) => Promise<void>;
   /** Nhân viên xác nhận / báo sai sót bảng công của mình. */
@@ -106,6 +111,52 @@ export const useAttendanceStore = create<State>()(
       const next = existing ? prev.map((x) => (x.id === id ? updated : x)) : [updated, ...prev];
       set({ attendances: next });
       await save(() => sbUpsertHrAttendance(updated), prev);
+    },
+
+    mergeDays: async (period, entries) => {
+      const u = useAuthStore.getState().currentUser;
+      if (!u) return 0;
+      const prev = get().attendances;
+      const now = new Date().toISOString();
+      const toUpsert: HrAttendance[] = [];
+      let filled = 0;
+      for (const { emp, add } of entries) {
+        if (!add || !Object.keys(add).length) continue;
+        const id = attendanceId(emp.id, period);
+        const existing = prev.find((x) => x.id === id);
+        const days = { ...(existing?.days ?? {}) };
+        let changed = false;
+        for (const [iso, cell] of Object.entries(add)) {
+          if (!days[iso] || !days[iso].code?.trim()) { days[iso] = cell; changed = true; filled++; }
+        }
+        if (!changed) continue;
+        const base: HrAttendance = existing ?? {
+          id, employeeLegacyId: emp.id, employeeCode: emp.employeeCode, fullName: emp.fullName,
+          department: emp.department || '', period, days: {}, summary: summarizeAttendance({}),
+          status: 'draft', confirmation: { status: 'pending' }, feedback: [], source: 'manual',
+          createdAt: now, createdBy: u.name,
+        };
+        // Nếu dòng đã xác nhận mà số liệu đổi → về "chờ xác nhận" + ghi vết (như setCell).
+        const resetConfirm = !!existing && existing.confirmation.status !== 'pending';
+        const feedback = resetConfirm
+          ? [...(existing!.feedback ?? []), {
+              id: fbId(), at: now, byName: u.name, type: 'dispute' as const,
+              note: `${u.name} (nhân sự) đã điền nghỉ phép vào bảng công sau xác nhận — cần xác nhận lại.`,
+            }]
+          : (existing?.feedback ?? []);
+        toUpsert.push({
+          ...base, days, summary: summarizeAttendance(days),
+          confirmation: resetConfirm ? { status: 'pending' } : base.confirmation,
+          feedback, updatedAt: now, updatedBy: u.name,
+        });
+      }
+      if (!toUpsert.length) return 0;
+      const byId = new Map(toUpsert.map((a) => [a.id, a]));
+      const merged = prev.map((x) => byId.get(x.id) ?? x);
+      for (const a of toUpsert) if (!prev.some((x) => x.id === a.id)) merged.unshift(a);
+      set({ attendances: merged });
+      const ok = await save(() => sbUpsertHrAttendances(toUpsert), prev);
+      return ok ? filled : 0;
     },
 
     setStatus: async (id, status) => {
