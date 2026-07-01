@@ -9,6 +9,14 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-01a', date: '01/07/2026', title: 'Phân tích SLA & nút thắt vận hành',
+    items: [
+      { icon: '📊', title: 'SLA & nút thắt trong Điều phối', desc: 'Trong view "Điều phối" có nút chuyển "📊 SLA & nút thắt": xem tức thì tour đang kẹt ở bước nào, bước nào hay quá hạn nhất trên toàn hệ thống.' },
+      { icon: '⏱', title: 'Thời gian xử lý mỗi bước', desc: 'Nút "Quét sâu" tính thời gian xử lý trung bình/median và tỷ lệ đúng hạn của từng bước quy trình — biết bước nào đang làm chậm cả tour.' },
+      { icon: '🚦', title: 'Quy trình điều hành gọn hơn', desc: 'Đổi icon 🚦 để khỏi nhầm với "Quy trình phòng ban"; checklist phân biệt rõ bước Đang làm/Tạm hoãn; nhắc hạn Quy trình phòng ban chạy đúng.' },
+    ],
+  },
+  {
     id: '2026-06-26c', date: '26/06/2026', title: 'Hồ sơ tour — bản nâng cấp lớn',
     items: [
       { icon: '🗂️', title: 'Phân loại & 3 mốc giá trị', desc: 'Hồ sơ tour chia 5 loại (tour/sự kiện/dịch vụ…) có tiền tố mã riêng; theo dõi 3 mốc giá trị: hiện tại (báo giá) · hợp đồng · nghiệm thu để nhìn chênh lệch thật.' },

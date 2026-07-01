@@ -13,10 +13,12 @@ import { filterRank } from '@/lib/search';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { sbGetQuoteProject, sbBackfillWorkflowIndex } from '@/lib/supabase';
 import { workflowBoardSummary, workflowDueSummary } from './workflowConstants';
+import { WorkflowSLAPanel } from './WorkflowSLAPanel';
 import { QUOTE_STATUS_META } from './constants';
 import type { CloudQuoteEntry } from '@/types';
 
 type Scope = 'all' | 'mine';
+type BoardMode = 'board' | 'sla';
 
 /** Bước sắp/đã đến hạn gần nhất (chưa xong) của 1 báo giá. */
 const nextDue = (q: CloudQuoteEntry) =>
@@ -33,6 +35,7 @@ export function WorkflowBoard() {
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [mode, setMode] = useState<BoardMode>('board');
   const [scope, setScope] = useState<Scope>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -103,6 +106,13 @@ export function WorkflowBoard() {
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 }, maxWidth: 1280, mx: 'auto' }}>
+      <ToggleButtonGroup size="small" exclusive value={mode} onChange={(_, v: BoardMode | null) => v && setMode(v)} sx={{ mb: 2 }}>
+        <ToggleButton value="board">🧭 Điều phối</ToggleButton>
+        <ToggleButton value="sla">📊 SLA &amp; nút thắt</ToggleButton>
+      </ToggleButtonGroup>
+
+      {mode === 'sla' ? <WorkflowSLAPanel /> : (
+      <>
       <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1.5} sx={{ mb: 2 }}>
         <Box>
           <Typography fontWeight={900} fontSize={16}>🧭 Bảng điều phối — tiến độ vận hành toàn hệ thống</Typography>
@@ -223,6 +233,8 @@ export function WorkflowBoard() {
             </TableBody>
           </Table>
         </Paper>
+      )}
+      </>
       )}
     </Box>
   );
