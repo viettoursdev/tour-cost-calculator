@@ -111,7 +111,8 @@ export function CustomerView() {
     const dup = customers.find((c) => c.id !== form.id && normalizeVN(c.name) === norm);
     if (dup && !window.confirm(`⚠ Đã có khách hàng trùng tên "${dup.name}". Vẫn lưu?`)) return;
     const isNew = !form.id;
-    await save(form);
+    const ok = await save(form);
+    if (!ok) return;   // push lỗi → store đã rollback + báo lỗi; giữ modal để thử lại
     setModal(null);
     toast(isNew ? `✅ Đã lưu khách hàng mới "${form.name}".` : `✅ Đã cập nhật khách hàng "${form.name}".`);
   };

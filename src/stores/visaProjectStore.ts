@@ -47,8 +47,11 @@ export const useVisaProjectStore = create<State>()(
         : projects.map((p) => (p.id === proj.id ? stamped : p));
       set({ projects: next, syncing: true });
       try {
-        await sbPushVisaProjects(next, { name: u.name, role: u.role });
+        // Chỉ đẩy dự án VỪA đổi — KHÔNG re-upsert cả mảng (tránh ghi đè dự án anh
+        // em bằng bản có thể đã cũ khi 2 người sửa song song). Như chuẩn per-row.
+        await sbPushVisaProjects([stamped], { name: u.name, role: u.role });
       } catch (e) {
+        set({ projects }); // rollback state lạc quan khi push lỗi
         window.alert('❌ Lỗi đồng bộ dự án visa: ' + (e as Error).message);
       } finally {
         set({ syncing: false });
@@ -85,11 +88,13 @@ export const useVisaProjectStore = create<State>()(
     remove: async (id) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      const next = get().projects.filter((p) => p.id !== id);
+      const prev = get().projects;
+      const next = prev.filter((p) => p.id !== id);
       set({ projects: next, syncing: true });
       try {
         await sbDeleteVisaProject(id); // targeted — KHÔNG full-overwrite (chống wipe song song)
       } catch (e) {
+        set({ projects: prev }); // rollback
         window.alert('❌ Lỗi xoá dự án visa: ' + (e as Error).message);
       } finally {
         set({ syncing: false });

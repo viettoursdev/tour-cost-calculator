@@ -515,7 +515,18 @@ const rowToCustomer = (
   tags: (r.tags as string[]) ?? [],
   interactions: interactions?.length ? interactions : undefined,
   nextFollowUp: (r.next_follow_up as Customer['nextFollowUp']) ?? undefined,
+  travelers: (r.travelers as Customer['travelers']) ?? undefined,
+  ownerU: (r.owner_username as string) ?? undefined,
+  ownerName: (r.owner_name as string) ?? undefined,
+  preferredChannel: (r.preferred_channel as string) ?? undefined,
+  birthday: (r.birthday as string) ?? undefined,
+  paymentTerms: (r.payment_terms as string) ?? undefined,
+  creditLimit: (r.credit_limit as number) ?? undefined,
+  refundBank: (r.refund_bank as Customer['refundBank']) ?? undefined,
+  files: (r.files as Customer['files']) ?? undefined,
+  collaborators: (r.collaborators as Customer['collaborators']) ?? undefined,
   createdAt: r.created_at as string, createdBy: (r.created_by_name as string) ?? '',
+  createdByU: (r.created_by_username as string) ?? undefined,
   updatedAt: (r.updated_at as string) ?? undefined, updatedBy: (r.updated_by_name as string) ?? undefined,
 });
 
@@ -533,7 +544,7 @@ export function sbSubscribeCustomers(cb: (list: Customer[]) => void, client: Sup
     const byParent = new Map<string, Customer['contacts']>();
     for (const ct of contacts ?? []) {
       const arr = byParent.get(ct.customer_id as string) ?? [];
-      arr.push({ name: ct.name as string, phone: ct.phone as string, email: ct.email as string, position: ct.position as string });
+      arr.push({ name: ct.name as string, phone: ct.phone as string, email: ct.email as string, position: ct.position as string, birthday: (ct.birthday as string) ?? undefined });
       byParent.set(ct.customer_id as string, arr);
     }
     const interactionsByParent = new Map<string, CustomerInteraction[]>();
@@ -571,11 +582,22 @@ export function sbPushCustomers(
       source: cust.source ?? null,
       tags: cust.tags ?? [],
       next_follow_up: cust.nextFollowUp ?? null,
+      travelers: cust.travelers ?? null,
+      owner_username: cust.ownerU ?? null,
+      owner_name: cust.ownerName ?? null,
+      preferred_channel: cust.preferredChannel ?? null,
+      birthday: cust.birthday ?? null,
+      payment_terms: cust.paymentTerms ?? null,
+      credit_limit: cust.creditLimit ?? null,
+      refund_bank: cust.refundBank ?? null,
+      files: cust.files ?? null,
+      collaborators: cust.collaborators ?? null,
+      created_by_username: cust.createdByU ?? null,
       created_by_name: cust.createdBy, created_at: cust.createdAt, ...stamp,
     }, { onConflict: 'legacy_id' }).select('id').single();
     if (upErr) throw new Error('sbPushCustomers upsert: ' + upErr.message);
     await replaceChildren(client, 'customer_contacts', 'customer_id', up!.id, cust.contacts.map((ct, i) => ({
-      customer_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, sort_order: i,
+      customer_id: up!.id, name: ct.name, phone: ct.phone, email: ct.email, position: ct.position, birthday: ct.birthday ?? null, sort_order: i,
     })));
     await replaceChildren(client, 'customer_interactions', 'customer_id', up!.id, (cust.interactions ?? []).map((ia, i) => ({
       customer_id: up!.id, legacy_id: ia.id, at: ia.at,

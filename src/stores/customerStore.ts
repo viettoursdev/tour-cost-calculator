@@ -10,7 +10,8 @@ type CustomerState = {
   loading: boolean;
   syncing: boolean;
   init: () => Unsubscribe;
-  save: (form: Customer) => Promise<void>;
+  /** Lưu 1 khách. Trả `true` nếu đồng bộ thành công, `false` nếu lỗi (đã rollback). */
+  save: (form: Customer) => Promise<boolean>;
   importMany: (rows: Customer[]) => Promise<number>;
   delete: (customer: Customer) => Promise<void>;
   /** Ghi 1 lần chăm sóc khách (CRM timeline). */
@@ -43,13 +44,13 @@ export const useCustomerStore = create<CustomerState>()(
 
     save: async (form) => {
       const u = useAuthStore.getState().currentUser;
-      if (!u) return;
-      const { customers } = get();
-      const isNew = !customers.find((c) => c.id === form.id);
+      if (!u) return false;
+      const prev = get().customers;
+      const isNew = !prev.find((c) => c.id === form.id);
       const now = new Date().toISOString();
       const next = isNew
         ? [
-            ...customers,
+            ...prev,
             {
               ...form,
               id: form.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
@@ -57,14 +58,17 @@ export const useCustomerStore = create<CustomerState>()(
               createdBy: u.name, createdByU: u.u,
             },
           ]
-        : customers.map((c) =>
+        : prev.map((c) =>
             c.id === form.id ? { ...form, updatedAt: now, updatedBy: u.name } : c,
           );
       set({ customers: next, syncing: true });
       try {
         await sbPushCustomers(next, { name: u.name, role: u.role });
+        return true;
       } catch (e) {
+        set({ customers: prev });   // rollback state lạc quan khi push lỗi
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
+        return false;
       } finally {
         set({ syncing: false });
       }
@@ -94,7 +98,9 @@ export const useCustomerStore = create<CustomerState>()(
       try {
         await sbPushCustomers(next, { name: u.name, role: u.role });
       } catch (e) {
+        set({ customers }); // rollback
         window.alert('❌ Lỗi đồng bộ: ' + (e as Error).message);
+        return 0;
       } finally {
         set({ syncing: false });
       }
@@ -106,12 +112,14 @@ export const useCustomerStore = create<CustomerState>()(
       if (!u) return;
       // Xoá theo `dbId` (UUID) khi có — chắc chắn ngay cả khi `legacy_id` null,
       // và phân biệt được dòng trùng id rỗng. Không còn rebuild cả danh sách.
-      const next = get().customers.filter((c) =>
+      const prev = get().customers;
+      const next = prev.filter((c) =>
         customer.dbId ? c.dbId !== customer.dbId : c !== customer);
       set({ customers: next, syncing: true });
       try {
         await sbDeleteCustomers([customer]);
       } catch (e) {
+        set({ customers: prev }); // rollback
         window.alert('❌ Lỗi xoá: ' + (e as Error).message);
       } finally {
         set({ syncing: false });
@@ -122,22 +130,24 @@ export const useCustomerStore = create<CustomerState>()(
       const u = useAuthStore.getState().currentUser;
       if (!u || !text.trim()) return;
       const entry: CustomerInteraction = { id: newInteractionId(), at: new Date().toISOString(), byU: u.u, byName: u.name, type, text: text.trim() };
-      const next = get().customers.map((c) =>
+      const prev = get().customers;
+      const next = prev.map((c) =>
         c.id === customerId ? { ...c, interactions: [...(c.interactions ?? []), entry], updatedAt: entry.at, updatedBy: u.name } : c);
       set({ customers: next, syncing: true });
       try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
-      catch (e) { window.alert('❌ Lỗi ghi chăm sóc: ' + (e as Error).message); }
+      catch (e) { set({ customers: prev }); window.alert('❌ Lỗi ghi chăm sóc: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
 
     deleteInteraction: async (customerId, interactionId) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      const next = get().customers.map((c) =>
+      const prev = get().customers;
+      const next = prev.map((c) =>
         c.id === customerId ? { ...c, interactions: (c.interactions ?? []).filter((i) => i.id !== interactionId) } : c);
       set({ customers: next, syncing: true });
       try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
-      catch (e) { window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
+      catch (e) { set({ customers: prev }); window.alert('❌ Lỗi xoá: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
 
@@ -145,22 +155,24 @@ export const useCustomerStore = create<CustomerState>()(
       const u = useAuthStore.getState().currentUser;
       if (!u || !date) return;
       const log: CustomerInteraction = { id: newInteractionId(), at: new Date().toISOString(), byU: u.u, byName: u.name, type: 'note', text: `📅 Hẹn liên hệ lại ${date}${note.trim() ? ` — ${note.trim()}` : ''}` };
-      const next = get().customers.map((c) =>
+      const prev = get().customers;
+      const next = prev.map((c) =>
         c.id === customerId ? { ...c, nextFollowUp: { date, note: note.trim(), byU: u.u, byName: u.name }, interactions: [...(c.interactions ?? []), log], updatedAt: log.at, updatedBy: u.name } : c);
       set({ customers: next, syncing: true });
       try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
-      catch (e) { window.alert('❌ Lỗi đặt lịch: ' + (e as Error).message); }
+      catch (e) { set({ customers: prev }); window.alert('❌ Lỗi đặt lịch: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
 
     clearFollowUp: async (customerId) => {
       const u = useAuthStore.getState().currentUser;
       if (!u) return;
-      const next = get().customers.map((c) =>
+      const prev = get().customers;
+      const next = prev.map((c) =>
         c.id === customerId ? { ...c, nextFollowUp: undefined } : c);
       set({ customers: next, syncing: true });
       try { await sbPushCustomers(next, { name: u.name, role: u.role }); }
-      catch (e) { window.alert('❌ Lỗi: ' + (e as Error).message); }
+      catch (e) { set({ customers: prev }); window.alert('❌ Lỗi: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
 
@@ -185,6 +197,20 @@ export const useCustomerStore = create<CustomerState>()(
         seen.add(key);
         contacts.push(ct);
       }
+      // Gộp travelers / files / collaborators (khử trùng theo id) để KHÔNG mất PII
+      // hộ chiếu hay file của bản phụ khi gộp.
+      const dedupById = <T extends { id: string }>(arr: T[]): T[] => {
+        const m = new Map<string, T>();
+        for (const it of arr) if (it?.id && !m.has(it.id)) m.set(it.id, it);
+        return [...m.values()];
+      };
+      const travelers = dedupById(all.flatMap((c) => c.travelers ?? []));
+      const fileSeen = new Set<string>();
+      const files = all.flatMap((c) => c.files ?? [])
+        .filter((f) => f?.key && !fileSeen.has(f.key) && (fileSeen.add(f.key), true));
+      const collabSeen = new Set<string>();
+      const collaborators = all.flatMap((c) => c.collaborators ?? [])
+        .filter((cb) => cb?.u && !collabSeen.has(cb.u) && (collabSeen.add(cb.u), true));
       const merged: Customer = {
         ...primary,
         address: fill(primary.address, ...rest.map((c) => c.address)),
@@ -195,6 +221,16 @@ export const useCustomerStore = create<CustomerState>()(
         note: all.map((c) => c.note?.trim()).filter(Boolean).join('\n— '),
         interactions: all.flatMap((c) => c.interactions ?? []).sort((a, b) => a.at.localeCompare(b.at)),
         nextFollowUp: primary.nextFollowUp ?? rest.map((c) => c.nextFollowUp).find(Boolean),
+        travelers: travelers.length ? travelers : undefined,
+        files: files.length ? files : undefined,
+        collaborators: collaborators.length ? collaborators : undefined,
+        ownerU: primary.ownerU ?? rest.map((c) => c.ownerU).find(Boolean),
+        ownerName: primary.ownerName ?? rest.map((c) => c.ownerName).find(Boolean),
+        preferredChannel: primary.preferredChannel ?? rest.map((c) => c.preferredChannel).find(Boolean),
+        birthday: primary.birthday ?? rest.map((c) => c.birthday).find(Boolean),
+        paymentTerms: primary.paymentTerms ?? rest.map((c) => c.paymentTerms).find(Boolean),
+        creditLimit: primary.creditLimit ?? rest.map((c) => c.creditLimit).find((v) => v != null),
+        refundBank: primary.refundBank ?? rest.map((c) => c.refundBank).find(Boolean),
         updatedAt: now,
         updatedBy: u.name,
       };
@@ -209,7 +245,7 @@ export const useCustomerStore = create<CustomerState>()(
         // delete-diff theo legacy_id của sbPushCustomers bỏ sót).
         await sbDeleteCustomers(rest);
       }
-      catch (e) { window.alert('❌ Lỗi gộp: ' + (e as Error).message); }
+      catch (e) { set({ customers }); window.alert('❌ Lỗi gộp: ' + (e as Error).message); }
       finally { set({ syncing: false }); }
     },
   })),
