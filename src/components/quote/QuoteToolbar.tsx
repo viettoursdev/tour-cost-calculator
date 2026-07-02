@@ -38,6 +38,7 @@ import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined';
+import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
@@ -388,6 +389,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       cat('opsboard', 'grp:ops', 'Điều phối', { v: 'opsboard' }),
       cat('departures', 'grp:ops', 'Lịch khởi hành', { v: 'departures' }),
       cat('flights', 'grp:ops', 'Chuyến bay', { v: 'flights' }),
+      cat('flightsearch', 'grp:ops', 'Tìm chuyến bay', { v: 'flightsearch', icon: <TravelExploreOutlinedIcon /> }),
       // Visa của tour: chỉ báo giá nước ngoài.
       ...(template === 'intl' ? [cat('tourvisa', 'grp:ops', 'Visa của tour', { v: 'tourvisa', icon: <BadgeOutlinedIcon /> })] : []),
       ...(isMgr ? [cat('audit', 'grp:ops', 'Nhật ký', { v: 'audit' })] : []),

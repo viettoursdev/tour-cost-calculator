@@ -25,6 +25,41 @@ const MODEL_KB = 'claude-sonnet-4-6'; // Thư viện Viettours: trả lời RAG 
 const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 
+// Tra cứu chuyến bay (/flights/search): dùng web_search tổng hợp từ nhiều nguồn (Google
+// Flights, Skyscanner, Kayak, trang hãng) rồi trả CHỈ một JSON object theo schema cố định.
+// GIÁ MANG TÍNH THAM KHẢO — không phải giá đặt vé real-time.
+const FLIGHT_SEARCH_PROMPT = [
+  'Bạn là chuyên gia đặt vé máy bay cho công ty du lịch Việt Nam. Người dùng cung cấp yêu',
+  'cầu chuyến bay. Hãy DÙNG web_search tra trên NHIỀU nguồn (Google Flights, Skyscanner,',
+  'Kayak, momondo, và website hãng bay) để tổng hợp các phương án bay tốt nhất, rồi trả về',
+  'CHỈ một JSON OBJECT — KHÔNG kèm giải thích, KHÔNG markdown, KHÔNG rào ```.',
+  'Cấu trúc: {"options":[Option...]} với tối đa 6 Option đa dạng (rẻ nhất, nhanh nhất, ít',
+  'chặng nhất, hãng uy tín).',
+  'Mỗi Option = {',
+  '"airlines":[tên hãng vận hành, vd "Vietnam Airlines"],',
+  '"stops":số điểm dừng (0 = bay thẳng),',
+  '"totalDurationMin":tổng thời gian hành trình tính bằng PHÚT,',
+  '"legs":[Leg theo thứ tự], "layovers":[Layover giữa các chặng theo thứ tự],',
+  '"priceVnd":giá 1 khách người lớn quy ĐỔI ra VND (số nguyên, gồm thuế/phí nếu có),',
+  '"priceOrig":giá gốc nếu nguồn niêm yết ngoại tệ (số), "priceCur":mã tiền gốc (vd "USD"),',
+  '"priceNote":ghi chú giá (vd "gồm thuế phí, 1 kiện ký gửi"),',
+  '"bookingSources":[{"name":tên nguồn,"url":link đặt nếu có}],',
+  '"tags":[nhãn ngắn: "cheapest"|"fastest"|"nonstop"|"overnight-layover"|"long-layover"|"self-transfer"|"visa-transit"|"redeye" khi phù hợp],',
+  '"note":cảnh báo/khuyến nghị ngắn cho điều hành (tiếng Việt)}.',
+  'Leg = {"flightNo":"vd VN310","airline":tên hãng,"depAirport":"IATA 3 ký tự",',
+  '"depCity":tên TP,"depTime":"HH:MM" 24h,"depDate":"DDMMM" viết HOA vd 20NOV,',
+  '"arrAirport":"IATA","arrCity":tên TP,"arrTime":"HH:MM","arrDate":"DDMMM",',
+  '"durationMin":thời gian chặng (phút),"cabin":hạng ghế,"aircraft":loại máy bay nếu biết}.',
+  'Layover = {"airport":"IATA nơi transit","city":tên TP,"durationMin":thời gian chờ nối',
+  'chuyến (PHÚT),"overnight":true nếu qua đêm,"changeAirport":true nếu phải đổi sân bay,',
+  '"note":cảnh báo (vd "cần visa quá cảnh cho hộ chiếu VN","tự làm thủ tục lại","chờ lâu")}.',
+  'QUAN TRỌNG: đánh cờ cảnh báo transit khi thời gian chờ >180 phút (long-layover), qua đêm',
+  '(overnight-layover), đổi sân bay/tự nối chuyến (self-transfer), hoặc nơi transit YÊU CẦU',
+  'visa quá cảnh cho hộ chiếu Việt Nam (visa-transit) — nêu rõ trong layover.note.',
+  'Quy giá về VND theo tỷ giá thị trường gần đúng. Nếu KHÔNG tra được dữ liệu, trả',
+  '{"options":[]}. TUYỆT ĐỐI không bịa số hiệu/giờ bay; ưu tiên dữ liệu tra được trên web.',
+].join(' ');
+
 // Embedding cho Thư viện (kho kiến thức RAG) — chạy NGAY trong worker qua Cloudflare
 // Workers AI (binding `AI` trong wrangler.toml). KHÔNG cần API key ngoài (không Voyage).
 // bge-m3: đa ngôn ngữ, mạnh tiếng Việt, vector 1024 chiều → khớp cột vector(1024) ở
@@ -853,6 +888,70 @@ export default {
         const data = await r.json();
         if (!r.ok) return json({ error: data?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
         return json(data);
+      }
+
+      // ── POST /flights/search — tra cứu chuyến bay (AI + web_search) → JSON options ──
+      if (path.endsWith('/flights/search')) {
+        if (!env.ANTHROPIC_API_KEY) return json({ error: 'Worker chưa cấu hình ANTHROPIC_API_KEY' }, 500);
+        const origin = String(body.origin || '').trim();
+        const destination = String(body.destination || '').trim();
+        const departDate = String(body.departDate || '').trim();
+        if (!origin || !destination || !departDate) {
+          return json({ error: 'Thiếu điểm đi / điểm đến / ngày đi' }, 400);
+        }
+        const pax = body.pax && typeof body.pax === 'object' ? body.pax : { adults: 1, children: 0, infants: 0 };
+        const req = [
+          `Điểm đi: ${origin}`,
+          `Điểm đến: ${destination}`,
+          `Ngày đi: ${departDate}`,
+          body.returnDate ? `Ngày về: ${String(body.returnDate).trim()} (khứ hồi)` : 'Một chiều',
+          `Số khách: ${pax.adults || 1} người lớn, ${pax.children || 0} trẻ em, ${pax.infants || 0} em bé`,
+          `Hạng ghế: ${String(body.cabin || 'economy')}`,
+          body.maxStops != null ? `Số điểm dừng tối đa: ${body.maxStops}` : '',
+          Array.isArray(body.airlines) && body.airlines.length ? `Hãng ưu tiên: ${body.airlines.join(', ')}` : '',
+          `Đơn vị tiền hiển thị: ${String(body.currency || 'VND')}`,
+        ].filter(Boolean).join('\n');
+
+        const payload = {
+          model: MODEL_ASSISTANT,
+          max_tokens: 8000,
+          system: FLIGHT_SEARCH_PROMPT,
+          tools: [WEB_SEARCH_TOOL],
+          messages: [{ role: 'user', content: 'Tra cứu chuyến bay cho yêu cầu sau:\n' + req }],
+        };
+        const r = await fetch(ANTHROPIC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!r.ok) return json({ error: data?.error?.message || `Anthropic ${r.status}` }, r.status >= 500 ? 502 : 400);
+        // Gộp text blocks + thu thập citations của web_search.
+        const blocks = Array.isArray(data.content) ? data.content : [];
+        const text = blocks.filter((b) => b.type === 'text').map((b) => b.text || '').join('').trim();
+        const citations = [];
+        for (const b of blocks) {
+          for (const c of (b.citations || [])) {
+            if (c && c.url) citations.push({ url: c.url, title: c.title || '' });
+          }
+        }
+        // Bóc JSON object từ text (gỡ rào ``` nếu có).
+        let options = [];
+        let parseErr = null;
+        try {
+          const s = text.replace(/```json|```/gi, '').trim();
+          const lo = s.indexOf('{'); const ro = s.lastIndexOf('}');
+          const obj = lo >= 0 && ro > lo ? JSON.parse(s.slice(lo, ro + 1)) : {};
+          options = Array.isArray(obj.options) ? obj.options : [];
+        } catch (e) { parseErr = e.message || String(e); }
+        return json({
+          options,
+          citations,
+          model: MODEL_ASSISTANT,
+          generatedAt: new Date().toISOString(),
+          // parseErr KHÔNG dùng khoá `error` để client không ném lỗi — chỉ cảnh báo mềm + raw.
+          ...(parseErr ? { warning: 'Không đọc được kết quả AI', raw: text.slice(0, 4000) } : {}),
+        });
       }
 
       return json({ error: 'Endpoint không hỗ trợ: ' + path }, 404);

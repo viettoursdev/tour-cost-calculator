@@ -22,6 +22,7 @@ const PaymentView = lazy(() => import('./PaymentView').then((m) => ({ default: m
 const SettlementView = lazy(() => import('./SettlementView').then((m) => ({ default: m.SettlementView })));
 const QuoteHistoryView = lazy(() => import('./QuoteHistoryView').then((m) => ({ default: m.QuoteHistoryView })));
 const FlightView = lazy(() => import('./FlightView').then((m) => ({ default: m.FlightView })));
+const FlightSearchView = lazy(() => import('@/components/flightsearch/FlightSearchView').then((m) => ({ default: m.FlightSearchView })));
 const WorkflowView = lazy(() => import('./WorkflowView').then((m) => ({ default: m.WorkflowView })));
 const TourProfilesView = lazy(() => import('./TourProfilesView').then((m) => ({ default: m.TourProfilesView })));
 const PassengerView = lazy(() => import('./PassengerView').then((m) => ({ default: m.PassengerView })));
@@ -135,6 +136,7 @@ export function QuoteView() {
             {view === 'payment' && <PaymentView />}
             {view === 'settlement' && <SettlementView />}
             {view === 'flights' && <FlightView />}
+            {view === 'flightsearch' && <FlightSearchView />}
             {view === 'cockpit' && <TourProfilesView />}
             {view === 'workflow' && <WorkflowView />}
             {view === 'passengers' && <PassengerView />}
