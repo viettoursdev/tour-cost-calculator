@@ -38,7 +38,6 @@ import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import FlightTakeoffOutlinedIcon from '@mui/icons-material/FlightTakeoffOutlined';
-import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import TodayOutlinedIcon from '@mui/icons-material/TodayOutlined';
 import RequestQuoteOutlinedIcon from '@mui/icons-material/RequestQuoteOutlined';
 import StorefrontOutlinedIcon from '@mui/icons-material/StorefrontOutlined';
@@ -61,6 +60,8 @@ import { ContractInfoModal } from './ContractInfoModal';
 import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { ROLE_RANK } from '@/auth/ROLES';
+import { DEPT_LABEL } from '@/auth/departments';
+import { navPresetKey, setOrgPref } from '@/lib/orgPrefs';
 import { canSeePrices } from '@/auth/quotePerms';
 import { fmtOutput } from '@/lib/currency';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -185,13 +186,16 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   const setStatus = useQuoteStore((s) => s.setStatus);
   const currentUser = useAuthStore((s) => s.currentUser);
 
-  // Tùy biến thanh điều hướng theo từng user (lưu localStorage).
+  // Tùy biến thanh điều hướng theo từng user (cache local + đồng bộ cloud);
+  // user chưa tự chỉnh → dùng bố cục mặc định của phòng (Trưởng/Phó Phòng đặt).
   const navRaw = useNavPrefStore((s) => s.raw);
+  const navDeptPreset = useNavPrefStore((s) => s.deptPreset);
   const loadNavPref = useNavPrefStore((s) => s.load);
   const navCustomizeOpen = useNavPrefStore((s) => s.customizeOpen);
   const setNavCustomizeOpen = useNavPrefStore((s) => s.setCustomizeOpen);
   const username = currentUser?.u;
-  useEffect(() => { loadNavPref(username); }, [username, loadNavPref]);
+  const userDept = currentUser?.department;
+  useEffect(() => { loadNavPref(username, userDept); }, [username, userDept, loadNavPref]);
 
   const isDMC = template === 'dmc';
   const canExport = !!(template && template !== 'dmc' && currentUser);
@@ -389,7 +393,6 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       cat('opsboard', 'grp:ops', 'Điều phối', { v: 'opsboard' }),
       cat('departures', 'grp:ops', 'Lịch khởi hành', { v: 'departures' }),
       cat('flights', 'grp:ops', 'Chuyến bay', { v: 'flights' }),
-      cat('flightsearch', 'grp:ops', 'Tìm chuyến bay', { v: 'flightsearch', icon: <TravelExploreOutlinedIcon /> }),
       // Visa của tour: chỉ báo giá nước ngoài.
       ...(template === 'intl' ? [cat('tourvisa', 'grp:ops', 'Visa của tour', { v: 'tourvisa', icon: <BadgeOutlinedIcon /> })] : []),
       ...(isMgr ? [cat('audit', 'grp:ops', 'Nhật ký', { v: 'audit' })] : []),
@@ -404,7 +407,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
     return hidePrice ? c.filter((it) => !(it.v && PRICE_ONLY_VIEWS.has(it.v))) : c;
   })();
 
-  const navLayout: NavLayout = reconcileLayout(navCatalog, navRaw);
+  const navLayout: NavLayout = reconcileLayout(navCatalog, navRaw ?? navDeptPreset);
   const navLabels: Record<string, string> = Object.fromEntries(navCatalog.map((c) => [c.id, c.label] as const));
 
   // Dựng NavNode[] từ layout: tab phẳng (top) trước, rồi các nhóm theo thứ tự cố định.
@@ -855,6 +858,22 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
           layout={navLayout}
           onChange={(l) => useNavPrefStore.getState().save(username, l)}
           onReset={() => useNavPrefStore.getState().reset(username)}
+          deptLabel={userDept ? DEPT_LABEL[userDept] : undefined}
+          usingDeptDefault={navRaw === null && !!navDeptPreset}
+          onApplyDeptPreset={navDeptPreset
+            ? () => useNavPrefStore.getState().save(username, reconcileLayout(navCatalog, navDeptPreset))
+            : undefined}
+          onSaveDeptPreset={userDept && currentUser && ROLE_RANK[currentUser.role] >= ROLE_RANK['Phó Phòng']
+            ? async () => {
+                try {
+                  await setOrgPref(navPresetKey(userDept), JSON.stringify(navLayout));
+                  useNavPrefStore.getState().setDeptPreset(navLayout);
+                  toast(`✅ Đã lưu làm bố cục mặc định phòng ${DEPT_LABEL[userDept]}.`);
+                } catch (e) {
+                  toast('❌ ' + (e as Error).message, 'error');
+                }
+              }
+            : undefined}
         />
       )}
     </AppBar>

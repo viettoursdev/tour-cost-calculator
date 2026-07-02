@@ -4,7 +4,6 @@ import type { WorkflowStep, QuoteValueRole } from '@/types/quote';
 import type { VisaProduct, VisaProductsDoc, VisaProductVersion, VisaProcDoc, VisaProcIndexEntry, VisaProjectDoc } from '@/types/visa';
 import type { PoiEntry, Itinerary, ItineraryIndexEntry, Day, Flight } from '@/types/itinerary';
 import type { AuditEntry } from '@/types/audit';
-import type { SavedFlightSearch } from '@/lib/flightSearch';
 import type { CloudQuoteEntry, Template, Collaborator } from '@/types/quote';
 import type { TourProfile, TourKind, TourCategory } from '@/types/tour';
 import type { ExportRequest, ExportScope } from '@/types/exportRequest';
@@ -402,47 +401,6 @@ export async function sbUpsertTodos(list: Todo[], client: SupabaseClient = sb): 
 export async function sbDeleteTodo(id: string, client: SupabaseClient = sb): Promise<void> {
   const { error } = await client.from('todos').delete().eq('id', id);
   if (error) throw new Error('sbDeleteTodo: ' + error.message);
-}
-
-// ── Tra cứu chuyến bay (lịch sử, xem 0095) ──
-const rowToFlightSearch = (r: Record<string, unknown>): SavedFlightSearch => ({
-  id: r.id as string,
-  createdBy: (r.created_by as string) ?? '',
-  createdAt: iso(r.created_at) ?? new Date().toISOString(),
-  label: (r.label as string) ?? '',
-  params: (r.params as SavedFlightSearch['params']),
-  result: (r.results as SavedFlightSearch['result']),
-});
-
-/** Danh sách tra cứu gần đây (mặc định của chính user, mới nhất trước). */
-export async function sbListFlightSearches(
-  createdBy?: string,
-  limit = 50,
-  client: SupabaseClient = sb,
-): Promise<SavedFlightSearch[]> {
-  let q = client.from('flight_searches').select('*').order('created_at', { ascending: false }).limit(limit);
-  if (createdBy) q = q.eq('created_by', createdBy);
-  const { data, error } = await q;
-  if (error) throw new Error('sbListFlightSearches: ' + error.message);
-  return (data ?? []).map(rowToFlightSearch);
-}
-
-/** Lưu/cập nhật 1 lần tra cứu (chỉ đụng đúng dòng đó). */
-export async function sbUpsertFlightSearch(s: SavedFlightSearch, client: SupabaseClient = sb): Promise<void> {
-  const { error } = await client.from('flight_searches').upsert({
-    id: s.id,
-    created_by: s.createdBy,
-    created_at: s.createdAt,
-    label: s.label,
-    params: s.params,
-    results: s.result,
-  }, { onConflict: 'id' });
-  if (error) throw new Error('sbUpsertFlightSearch: ' + error.message);
-}
-
-export async function sbDeleteFlightSearch(id: string, client: SupabaseClient = sb): Promise<void> {
-  const { error } = await client.from('flight_searches').delete().eq('id', id);
-  if (error) throw new Error('sbDeleteFlightSearch: ' + error.message);
 }
 
 // ── POIs ──────────────────────────────────────────────────────────────────────

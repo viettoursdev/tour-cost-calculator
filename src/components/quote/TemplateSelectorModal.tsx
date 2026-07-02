@@ -10,7 +10,6 @@ import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import SchoolOutlinedIcon from '@mui/icons-material/SchoolOutlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
-import TravelExploreOutlinedIcon from '@mui/icons-material/TravelExploreOutlined';
 import { TEMPLATES } from './constants';
 import { TPL_ACCENT } from './templateStyle';
 import { useQuoteStore } from '@/stores/quoteStore';
@@ -21,7 +20,7 @@ import { DEPT_LABEL } from '@/auth/departments';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Template } from '@/types';
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 type Props = { open: boolean; onClose?: () => void; canCancel?: boolean };
 
@@ -99,7 +98,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const canTraining = hasPerm(currentUser, 'viewTraining');
   // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC / Nhân sự / Kho / Đào tạo). Cần
   // có draft để render — chưa có thì tạo nháp báo giá nội địa (dữ liệu này độc lập).
-  const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory' | 'training' | 'library' | 'flightsearch') => {
+  const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory' | 'training' | 'library') => {
     if (!hasDraft) newDraft('domestic');
     setView(v);
     onClose?.();
@@ -216,8 +215,8 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => {
             const ac = TPL_ACCENT[tpl.key];
             return (
-              <Fragment key={tpl.key}>
               <Card
+                key={tpl.key}
                 elevation={0}
                 sx={{
                   position: 'relative', borderRadius: 3, overflow: 'hidden',
@@ -263,19 +262,6 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
                   </CardContent>
                 </CardActionArea>
               </Card>
-
-              {/* Thẻ "Tìm chuyến bay" đặt NGAY CẠNH "Báo giá tour nước ngoài" (toàn bộ NV). */}
-              {tpl.key === 'intl' && (
-                <ManageCard
-                  grad="linear-gradient(135deg, #0e7490, #06b6d4)"
-                  accent="#0e7490"
-                  icon={<TravelExploreOutlinedIcon />}
-                  title="Tìm chuyến bay"
-                  desc="Tra cứu chuyến bay, transit & giá tham khảo từ nhiều nguồn"
-                  onClick={() => gotoManage('flightsearch')}
-                />
-              )}
-              </Fragment>
             );
           })}
 

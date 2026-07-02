@@ -100,14 +100,6 @@ export interface AIWorkerBody {
   url?: string;
   // /kb/related
   answer?: string;
-  // /flights/search
-  departDate?: string;
-  returnDate?: string;
-  pax?: { adults: number; children: number; infants: number };
-  cabin?: string;
-  maxStops?: number;
-  airlines?: string[];
-  currency?: string;
 }
 
 export interface AIWorkerResponse {
@@ -128,19 +120,11 @@ export interface AIWorkerResponse {
   tags?: string[];
   // /kb/related
   questions?: string[];
-  // /flights/search
-  options?: unknown[];
-  citations?: Citation[];
-  generatedAt?: string;
-  model?: string;
-  warning?: string;
-  raw?: string;
 }
 
 export type AIWorkerPath =
   | '/ai' | '/distance' | '/ocr' | '/translate' | '/chat'
-  | '/kb/embed' | '/kb/ask' | '/kb/fetch' | '/kb/suggest' | '/kb/related'
-  | '/flights/search';
+  | '/kb/embed' | '/kb/ask' | '/kb/fetch' | '/kb/suggest' | '/kb/related';
 
 /** Lỗi upload có cờ `retriable` = nên thử lại với worker mặc định (lỗi hạ tầng, không phải lỗi file). */
 class UploadError extends Error {

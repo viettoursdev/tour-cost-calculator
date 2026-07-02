@@ -113,11 +113,6 @@ export const sbSubscribeTodos = vi.fn(() => () => {});
 export const sbUpsertTodo = vi.fn(async () => {});
 export const sbUpsertTodos = vi.fn(async () => {});
 export const sbDeleteTodo = vi.fn(async () => {});
-
-// ── Tra cứu chuyến bay ──
-export const sbListFlightSearches = vi.fn(async (): Promise<unknown[]> => []);
-export const sbUpsertFlightSearch = vi.fn(async () => {});
-export const sbDeleteFlightSearch = vi.fn(async () => {});
 export const sbPublishQuote = vi.fn(async () => {});
 export const sbGetPublicQuote = vi.fn(async () => null);
 export const sbAcceptPublicQuote = vi.fn(async () => {});

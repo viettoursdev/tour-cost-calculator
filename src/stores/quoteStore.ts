@@ -52,7 +52,7 @@ const EMPTY_DRAFT: QuoteDraft = {
 
 export type QuoteViewKey =
   | 'home' | 'cost' | 'cockpit' | 'summary' | 'history' | 'dashboard' | 'payment' | 'settlement'
-  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'flightsearch' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics' | 'execboard' | 'advance' | 'advsettle' | 'process' | 'hr' | 'todo' | 'tourvisa' | 'inventory' | 'training' | 'library';
+  | 'contract' | 'customer' | 'ncc' | 'nccProducts' | 'flights' | 'workflow' | 'passengers' | 'opsboard' | 'departures' | 'payboard' | 'audit' | 'pipeline' | 'salesanalytics' | 'execboard' | 'advance' | 'advsettle' | 'process' | 'hr' | 'todo' | 'tourvisa' | 'inventory' | 'training' | 'library';
 
 /** Bảng điều hành cấp cao — chỉ CEO mới xem (chốt chặn ở setView, song song với
  *  việc ẩn mục trong menu điều hướng). */
