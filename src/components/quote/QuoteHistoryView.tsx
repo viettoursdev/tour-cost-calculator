@@ -31,6 +31,10 @@ import { filterRank } from '@/lib/search';
 import { inDateRange, type DateRangeKey } from '@/lib/listFilters';
 import { ListFilterBar } from '@/components/common/ListFilterBar';
 import { filterFieldSx, filterSelectSx } from '@/components/common/filterStyles';
+import { ColumnChooserDialog } from '@/components/common/ColumnChooserDialog';
+import { useTableColPrefStore } from '@/stores/tableColPrefStore';
+import { reconcileColumns } from '@/lib/tableColumnPrefs';
+import ViewColumnOutlinedIcon from '@mui/icons-material/ViewColumnOutlined';
 import { iconValue } from '@/components/common/iconValue';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
 
@@ -159,6 +163,7 @@ export function QuoteHistoryView() {
   const visibleQuotes = useQuoteHistoryStore((s) => s.visibleQuotes);
   const currentUserU = useAuthStore((s) => s.currentUser?.u);
   const users = useAuthStore((s) => s.users);
+  const [colChooserOpen, setColChooserOpen] = useState(false);
   const customers = useCustomerStore((s) => s.customers);
   const custById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
@@ -489,6 +494,21 @@ export function QuoteHistoryView() {
     },
   ];
 
+  // Ẩn/hiện + sắp cột theo user (nút "Cột hiển thị"). Mã + Tên khoá đầu (đang
+  // sticky với offset cứng), cột thao tác khoá cuối — không ẩn/di chuyển được.
+  const colTableId = isDMC ? 'quoteHistory_dmc' : 'quoteHistory';
+  const colPref = useTableColPrefStore((s) => s.prefs[colTableId]);
+  const { order: colOrder, hidden: colHidden } = reconcileColumns(
+    columns.map((c) => c.field),
+    colPref,
+    { start: ['quoteCode', 'name'], end: ['actions'] },
+  );
+  const colByField = new Map(columns.map((c) => [c.field, c]));
+  const shownColumns = colOrder
+    .filter((k) => !colHidden.has(k))
+    .map((k) => colByField.get(k))
+    .filter((c): c is GridColDef<CloudQuoteEntry> => !!c);
+
   return (
     <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h6" sx={{ mb: 2 }}>
@@ -529,6 +549,11 @@ export function QuoteHistoryView() {
         <Typography variant="body2" color="text.secondary">
           Hiển thị <strong>{filtered.length}</strong> / {allQuotes.length}
         </Typography>
+        <Tooltip title="Cột hiển thị (ẩn/hiện, đổi thứ tự — lưu cho riêng bạn)">
+          <IconButton size="small" onClick={() => setColChooserOpen(true)}>
+            <ViewColumnOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -536,7 +561,7 @@ export function QuoteHistoryView() {
       <Box sx={{ flex: 1, minHeight: 0 }}>
         <DataGrid
           rows={filtered}
-          columns={columns}
+          columns={shownColumns}
           loading={loading}
           getRowId={(r) => r.id}
           disableRowSelectionOnClick
@@ -567,6 +592,21 @@ export function QuoteHistoryView() {
           }}
         />
       </Box>
+
+      {colChooserOpen && (
+        <ColumnChooserDialog
+          open
+          onClose={() => setColChooserOpen(false)}
+          title={isDMC ? 'Cột hiển thị — Lịch sử DMC' : 'Cột hiển thị — Lịch sử báo giá'}
+          columns={colOrder
+            .filter((k) => k !== 'quoteCode' && k !== 'name' && k !== 'actions')
+            .map((k) => ({ key: k, label: colByField.get(k)?.headerName || k }))}
+          lockedLabels={['Mã', 'Tên báo giá', 'Thao tác']}
+          hidden={colHidden}
+          onChange={(pref) => useTableColPrefStore.getState().save(currentUserU, colTableId, pref)}
+          onReset={() => useTableColPrefStore.getState().reset(currentUserU, colTableId)}
+        />
+      )}
 
       {collabAnchor && (
         <CollaboratorPopover

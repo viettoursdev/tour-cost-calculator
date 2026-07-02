@@ -37,6 +37,7 @@ import { usePoiStore } from '@/stores/poiStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useTrainingStore } from '@/stores/trainingStore';
 import { useUiPrefStore } from '@/stores/uiPrefStore';
+import { useTableColPrefStore } from '@/stores/tableColPrefStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers, checkTrainingDeadlines } from '@/lib/notifications';
 import { checkHrExpiry } from '@/lib/hrNotifications';
 import { autoBackfillWorkflowIndex } from '@/lib/workflowBackfill';
@@ -65,10 +66,11 @@ export function MainApp() {
     return stop;
   }, [currentUser]);
 
-  // Tùy chọn giao diện cá nhân (sáng/tối + mật độ): nạp local ngay + đồng bộ cloud.
-  // Đăng xuất → về mặc định (guest = light) để không lộ theme của user trước.
+  // Tùy chọn giao diện cá nhân (sáng/tối + mật độ) + cột bảng: nạp local ngay
+  // + đồng bộ cloud. Đăng xuất → về mặc định để không lộ tùy chọn của user trước.
   useEffect(() => {
     useUiPrefStore.getState().load(currentUser?.u ?? null);
+    useTableColPrefStore.getState().load(currentUser?.u ?? null);
   }, [currentUser?.u]);
 
   useEffect(() => {

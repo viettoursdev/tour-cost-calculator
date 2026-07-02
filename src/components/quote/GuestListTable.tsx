@@ -6,11 +6,16 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import ViewColumnOutlinedIcon from '@mui/icons-material/ViewColumnOutlined';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   VISA_APPLICANT_STATUS_META, VISA_APPLICANT_STATUS_ORDER, deriveVisaStatus, legacyFromVisaStatus,
 } from '../visa/constants';
 import { ROOM_KEYS, ROOM_LABELS, summarizeGuests } from './guestStats';
+import { ColumnChooserDialog } from '@/components/common/ColumnChooserDialog';
+import { reconcileColumns } from '@/lib/tableColumnPrefs';
+import { useTableColPrefStore } from '@/stores/tableColPrefStore';
+import { useAuthStore } from '@/stores/authStore';
 import type { Passenger, VisaApplicantStatus } from '@/types';
 
 /** Tình trạng visa hiển thị của khách (suy từ dữ liệu cũ nếu chưa đặt). */
@@ -53,6 +58,157 @@ export function GuestDashboard({ pax }: { pax: Passenger[] }) {
   );
 }
 
+/** Ngữ cảnh render 1 ô (helper cập nhật hàng). */
+type CellCtx = {
+  isVisa: boolean;
+  upd: (id: string, patch: Partial<Passenger>) => void;
+  updName: (p: Passenger, name: string) => void;
+};
+
+/** Cấu hình 1 cột — config-driven để ẩn/hiện + sắp xếp theo user. */
+type GuestCol = {
+  key: string;
+  label: string;
+  visaOnly?: boolean;
+  tourOnly?: boolean;
+  sx?: Record<string, unknown>;
+  render: (p: Passenger, i: number, ctx: CellCtx) => ReactNode;
+};
+
+const GUEST_COLS: GuestCol[] = [
+  {
+    key: 'stt', label: '#', sx: { width: 28 },
+    render: (_p, i) => <Typography variant="caption" fontWeight={700}>{i + 1}</Typography>,
+  },
+  {
+    key: 'name', label: 'Họ và tên', sx: { minWidth: 150 },
+    render: (p, _i, { isVisa, upd, updName }) => (
+      <Inp fullWidth value={p.name}
+        onChange={(e) => (isVisa ? updName(p, e.target.value) : upd(p.id, { name: e.target.value }))}
+        placeholder="Nguyễn Văn A" />
+    ),
+  },
+  {
+    key: 'nameNoAccent', label: 'Họ tên (không dấu)', visaOnly: true, sx: { minWidth: 140 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.nameNoAccent ?? ''} placeholder="Khong dau"
+        onChange={(e) => upd(p.id, { nameNoAccent: e.target.value })} />
+    ),
+  },
+  {
+    key: 'gender', label: 'Giới tính', sx: { width: 70 },
+    render: (p, _i, { upd }) => (
+      <Inp select fullWidth value={p.gender ?? ''} onChange={(e) => upd(p.id, { gender: e.target.value as Passenger['gender'] })}>
+        <MenuItem value="">—</MenuItem><MenuItem value="M">Nam</MenuItem><MenuItem value="F">Nữ</MenuItem></Inp>
+    ),
+  },
+  {
+    key: 'dob', label: 'Ngày sinh', sx: { width: 110 },
+    render: (p, _i, { isVisa, upd }) => (
+      <Inp fullWidth type={isVisa ? 'date' : 'text'} value={p.dob ?? ''}
+        onChange={(e) => upd(p.id, { dob: e.target.value })} placeholder={isVisa ? undefined : '01/01/1990'} />
+    ),
+  },
+  {
+    key: 'idNo', label: 'Số hộ chiếu', visaOnly: true, sx: { minWidth: 110 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.idNo ?? ''} placeholder="Số HC"
+        onChange={(e) => upd(p.id, { idNo: e.target.value, idType: 'passport' })} />
+    ),
+  },
+  {
+    key: 'passportIssue', label: 'Ngày cấp', visaOnly: true, sx: { width: 120 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth type="date" value={p.passportIssue ?? ''}
+        onChange={(e) => upd(p.id, { passportIssue: e.target.value })} />
+    ),
+  },
+  {
+    key: 'passportExpiry', label: 'Hết hạn', visaOnly: true, sx: { width: 120 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth type="date" value={p.passportExpiry ?? ''}
+        onChange={(e) => upd(p.id, { passportExpiry: e.target.value })} />
+    ),
+  },
+  {
+    key: 'visaStatus', label: 'Tình trạng visa', visaOnly: true, sx: { width: 150 },
+    render: (p, _i, { upd }) => (
+      <Inp select fullWidth value={visaStatusOf(p)}
+        onChange={(e) => upd(p.id, patchVisaStatus(e.target.value as VisaApplicantStatus))}
+        sx={{ '& .MuiInputBase-input': { color: VISA_APPLICANT_STATUS_META[visaStatusOf(p)].color, fontWeight: 700 } }}>
+        {VISA_APPLICANT_STATUS_ORDER.map((k) => (
+          <MenuItem key={k} value={k} sx={{ color: VISA_APPLICANT_STATUS_META[k].color }}>{VISA_APPLICANT_STATUS_META[k].label}</MenuItem>))}
+      </Inp>
+    ),
+  },
+  {
+    key: 'nationality', label: 'Quốc tịch', tourOnly: true, sx: { width: 100 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.nationality ?? ''} placeholder="Việt Nam"
+        onChange={(e) => upd(p.id, { nationality: e.target.value })} />
+    ),
+  },
+  {
+    key: 'company', label: 'Công ty', sx: { minWidth: 120 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.company ?? ''} placeholder="Công ty"
+        onChange={(e) => upd(p.id, { company: e.target.value })} />
+    ),
+  },
+  {
+    key: 'phone', label: 'Điện thoại', sx: { width: 110 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.phone ?? ''} onChange={(e) => upd(p.id, { phone: e.target.value })} />
+    ),
+  },
+  {
+    key: 'departurePoint', label: 'Khởi hành', sx: { minWidth: 110 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.departurePoint ?? ''} placeholder="Hà Nội…"
+        onChange={(e) => upd(p.id, { departurePoint: e.target.value })} />
+    ),
+  },
+  {
+    key: 'roomType', label: 'Phòng', sx: { width: 90 },
+    render: (p, _i, { upd }) => (
+      <Inp select fullWidth value={p.roomType ?? ''}
+        onChange={(e) => upd(p.id, { roomType: e.target.value as Passenger['roomType'] })}>
+        {ROOM_OPTIONS.map((r) => <MenuItem key={r.v} value={r.v}>{r.label}</MenuItem>)}</Inp>
+    ),
+  },
+  {
+    key: 'roomNo', label: 'Ghép', sx: { width: 70 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.roomNo ?? ''} placeholder="P1"
+        onChange={(e) => upd(p.id, { roomNo: e.target.value })} />
+    ),
+  },
+  {
+    key: 'otherFlight', label: 'Chuyến bay khác', sx: { minWidth: 120 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.otherFlight ?? ''} placeholder="VN123 25/11…"
+        onChange={(e) => upd(p.id, { otherFlight: e.target.value })} />
+    ),
+  },
+  {
+    key: 'dietary', label: 'Ăn kiêng/Dị ứng', tourOnly: true, sx: { minWidth: 120 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.dietary ?? ''} placeholder="Chay / dị ứng…"
+        onChange={(e) => upd(p.id, { dietary: e.target.value })} />
+    ),
+  },
+  {
+    key: 'emergency', label: 'Liên hệ khẩn', tourOnly: true, sx: { minWidth: 120 },
+    render: (p, _i, { upd }) => (
+      <Inp fullWidth value={p.emergency ?? ''} placeholder="Tên + SĐT"
+        onChange={(e) => upd(p.id, { emergency: e.target.value })} />
+    ),
+  },
+];
+
+/** Cột khoá đầu bảng — luôn hiển thị, không đổi chỗ. */
+const GUEST_LOCKED_START = ['stt', 'name'];
+
 type Props = {
   rows: Passenger[];
   onChange: (rows: Passenger[]) => void;
@@ -64,6 +220,7 @@ type Props = {
 /** Bảng danh sách khách dùng chung cho báo giá & hồ sơ visa (template đẹp của báo giá). */
 export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [colChooserOpen, setColChooserOpen] = useState(false);
   const isVisa = mode === 'visa';
   const hasExpand = !!renderExpanded;
 
@@ -77,39 +234,35 @@ export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) 
     upd(p.id, !p.nameNoAccent || p.nameNoAccent === stripAccentsKeepCase(p.name)
       ? { name, nameNoAccent: stripAccentsKeepCase(name) }
       : { name });
+  const ctx: CellCtx = { isVisa, upd, updName };
 
-  const colCount = (hasExpand ? 1 : 0) + 1 + (isVisa ? 10 : 12) + 1;
+  // Ẩn/hiện + sắp cột theo user (nút cột ở góc phải header) — lưu riêng theo mode.
+  const username = useAuthStore((s) => s.currentUser?.u);
+  const colTableId = isVisa ? 'guestlist_visa' : 'guestlist_tour';
+  const colPref = useTableColPrefStore((s) => s.prefs[colTableId]);
+  const modeCols = GUEST_COLS.filter((c) => (isVisa ? !c.tourOnly : !c.visaOnly));
+  const colByKey = new Map(modeCols.map((c) => [c.key, c]));
+  const { order: colOrder, hidden: colHidden } = reconcileColumns(
+    modeCols.map((c) => c.key), colPref, { start: GUEST_LOCKED_START },
+  );
+  const visibleCols = colOrder.filter((k) => !colHidden.has(k)).map((k) => colByKey.get(k)!).filter(Boolean);
+
+  const colCount = (hasExpand ? 1 : 0) + visibleCols.length + 1;
 
   return (
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
-      <Table size="small" sx={{ minWidth: isVisa ? 1500 : 1300, '& td, & th': { borderColor: 'rgba(0,0,0,0.06)', ...cell } }}>
+      <Table size="small" sx={{ minWidth: Math.max(700, visibleCols.length * 95), '& td, & th': { borderColor: 'rgba(0,0,0,0.06)', ...cell } }}>
         <TableHead>
           <TableRow sx={{ '& th': { fontWeight: 800, bgcolor: 'rgba(20,150,140,0.06)', fontSize: 12, whiteSpace: 'nowrap' } }}>
             {hasExpand && <TableCell sx={{ width: 30 }} />}
-            <TableCell sx={{ width: 28 }}>#</TableCell>
-            <TableCell sx={{ minWidth: 150 }}>Họ và tên</TableCell>
-            {isVisa && <TableCell sx={{ minWidth: 140 }}>Họ tên (không dấu)</TableCell>}
-            <TableCell sx={{ width: 70 }}>Giới tính</TableCell>
-            <TableCell sx={{ width: 110 }}>Ngày sinh</TableCell>
-            {isVisa ? (
-              <>
-                <TableCell sx={{ minWidth: 110 }}>Số hộ chiếu</TableCell>
-                <TableCell sx={{ width: 120 }}>Ngày cấp</TableCell>
-                <TableCell sx={{ width: 120 }}>Hết hạn</TableCell>
-                <TableCell sx={{ width: 150 }}>Tình trạng visa</TableCell>
-              </>
-            ) : (
-              <TableCell sx={{ width: 100 }}>Quốc tịch</TableCell>
-            )}
-            <TableCell sx={{ minWidth: 120 }}>Công ty</TableCell>
-            <TableCell sx={{ width: 110 }}>Điện thoại</TableCell>
-            <TableCell sx={{ minWidth: 110 }}>Khởi hành</TableCell>
-            <TableCell sx={{ width: 90 }}>Phòng</TableCell>
-            <TableCell sx={{ width: 70 }}>Ghép</TableCell>
-            <TableCell sx={{ minWidth: 120 }}>Chuyến bay khác</TableCell>
-            {!isVisa && <TableCell sx={{ minWidth: 120 }}>Ăn kiêng/Dị ứng</TableCell>}
-            {!isVisa && <TableCell sx={{ minWidth: 120 }}>Liên hệ khẩn</TableCell>}
-            <TableCell sx={{ width: 36 }} />
+            {visibleCols.map((c) => <TableCell key={c.key} sx={c.sx}>{c.label}</TableCell>)}
+            <TableCell sx={{ width: 36, textAlign: 'right' }}>
+              <Tooltip title="Cột hiển thị (ẩn/hiện, đổi thứ tự — lưu cho riêng bạn)">
+                <IconButton size="small" onClick={() => setColChooserOpen(true)}>
+                  <ViewColumnOutlinedIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -125,53 +278,7 @@ export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) 
                       </IconButton>
                     </TableCell>
                   )}
-                  <TableCell><Typography variant="caption" fontWeight={700}>{i + 1}</Typography></TableCell>
-                  <TableCell><Inp fullWidth value={p.name}
-                    onChange={(e) => (isVisa ? updName(p, e.target.value) : upd(p.id, { name: e.target.value }))}
-                    placeholder="Nguyễn Văn A" /></TableCell>
-                  {isVisa && (
-                    <TableCell><Inp fullWidth value={p.nameNoAccent ?? ''} placeholder="Khong dau"
-                      onChange={(e) => upd(p.id, { nameNoAccent: e.target.value })} /></TableCell>
-                  )}
-                  <TableCell><Inp select fullWidth value={p.gender ?? ''} onChange={(e) => upd(p.id, { gender: e.target.value as Passenger['gender'] })}>
-                    <MenuItem value="">—</MenuItem><MenuItem value="M">Nam</MenuItem><MenuItem value="F">Nữ</MenuItem></Inp></TableCell>
-                  <TableCell><Inp fullWidth type={isVisa ? 'date' : 'text'} value={p.dob ?? ''}
-                    onChange={(e) => upd(p.id, { dob: e.target.value })} placeholder={isVisa ? undefined : '01/01/1990'} /></TableCell>
-                  {isVisa ? (
-                    <>
-                      <TableCell><Inp fullWidth value={p.idNo ?? ''} placeholder="Số HC"
-                        onChange={(e) => upd(p.id, { idNo: e.target.value, idType: 'passport' })} /></TableCell>
-                      <TableCell><Inp fullWidth type="date" value={p.passportIssue ?? ''}
-                        onChange={(e) => upd(p.id, { passportIssue: e.target.value })} /></TableCell>
-                      <TableCell><Inp fullWidth type="date" value={p.passportExpiry ?? ''}
-                        onChange={(e) => upd(p.id, { passportExpiry: e.target.value })} /></TableCell>
-                      <TableCell><Inp select fullWidth value={visaStatusOf(p)}
-                        onChange={(e) => upd(p.id, patchVisaStatus(e.target.value as VisaApplicantStatus))}
-                        sx={{ '& .MuiInputBase-input': { color: VISA_APPLICANT_STATUS_META[visaStatusOf(p)].color, fontWeight: 700 } }}>
-                        {VISA_APPLICANT_STATUS_ORDER.map((k) => (
-                          <MenuItem key={k} value={k} sx={{ color: VISA_APPLICANT_STATUS_META[k].color }}>{VISA_APPLICANT_STATUS_META[k].label}</MenuItem>))}
-                      </Inp></TableCell>
-                    </>
-                  ) : (
-                    <TableCell><Inp fullWidth value={p.nationality ?? ''} placeholder="Việt Nam"
-                      onChange={(e) => upd(p.id, { nationality: e.target.value })} /></TableCell>
-                  )}
-                  <TableCell><Inp fullWidth value={p.company ?? ''} placeholder="Công ty"
-                    onChange={(e) => upd(p.id, { company: e.target.value })} /></TableCell>
-                  <TableCell><Inp fullWidth value={p.phone ?? ''} onChange={(e) => upd(p.id, { phone: e.target.value })} /></TableCell>
-                  <TableCell><Inp fullWidth value={p.departurePoint ?? ''} placeholder="Hà Nội…"
-                    onChange={(e) => upd(p.id, { departurePoint: e.target.value })} /></TableCell>
-                  <TableCell><Inp select fullWidth value={p.roomType ?? ''}
-                    onChange={(e) => upd(p.id, { roomType: e.target.value as Passenger['roomType'] })}>
-                    {ROOM_OPTIONS.map((r) => <MenuItem key={r.v} value={r.v}>{r.label}</MenuItem>)}</Inp></TableCell>
-                  <TableCell><Inp fullWidth value={p.roomNo ?? ''} placeholder="P1"
-                    onChange={(e) => upd(p.id, { roomNo: e.target.value })} /></TableCell>
-                  <TableCell><Inp fullWidth value={p.otherFlight ?? ''} placeholder="VN123 25/11…"
-                    onChange={(e) => upd(p.id, { otherFlight: e.target.value })} /></TableCell>
-                  {!isVisa && <TableCell><Inp fullWidth value={p.dietary ?? ''} placeholder="Chay / dị ứng…"
-                    onChange={(e) => upd(p.id, { dietary: e.target.value })} /></TableCell>}
-                  {!isVisa && <TableCell><Inp fullWidth value={p.emergency ?? ''} placeholder="Tên + SĐT"
-                    onChange={(e) => upd(p.id, { emergency: e.target.value })} /></TableCell>}
+                  {visibleCols.map((c) => <TableCell key={c.key}>{c.render(p, i, ctx)}</TableCell>)}
                   <TableCell><Tooltip title="Xoá khách"><IconButton size="small" color="error" onClick={() => del(p.id)}>
                     <DeleteOutlineIcon fontSize="small" /></IconButton></Tooltip></TableCell>
                 </TableRow>
@@ -191,6 +298,20 @@ export function GuestListTable({ rows, onChange, mode, renderExpanded }: Props) 
           })}
         </TableBody>
       </Table>
+      {colChooserOpen && (
+        <ColumnChooserDialog
+          open
+          onClose={() => setColChooserOpen(false)}
+          title="Cột hiển thị — Danh sách khách"
+          columns={colOrder
+            .filter((k) => !GUEST_LOCKED_START.includes(k))
+            .map((k) => ({ key: k, label: colByKey.get(k)?.label ?? k }))}
+          lockedLabels={['#', 'Họ và tên']}
+          hidden={colHidden}
+          onChange={(pref) => useTableColPrefStore.getState().save(username, colTableId, pref)}
+          onReset={() => useTableColPrefStore.getState().reset(username, colTableId)}
+        />
+      )}
     </Paper>
   );
 }
