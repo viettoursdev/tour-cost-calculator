@@ -65,7 +65,7 @@ export function NccProductEditor({ product, onClose }: { product: NccProduct; on
   const updRow = (id: string, patch: Partial<NccPrice>) => setPrices((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const onAttach = async () => {
-    const list = await pickFiles({ accept: '.pdf,.doc,.docx,.xls,.xlsx,image/*', multiple: true });
+    const list = await pickFiles({ accept: '.pdf,.doc,.docx,.xls,.xlsx,.eml,.msg,image/*', multiple: true });
     if (!list.length) return;
     setUploading(true);
     setUploadErr(null);
