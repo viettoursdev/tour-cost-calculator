@@ -38,6 +38,7 @@ import { useInventoryStore } from '@/stores/inventoryStore';
 import { useTrainingStore } from '@/stores/trainingStore';
 import { useUiPrefStore } from '@/stores/uiPrefStore';
 import { useTableColPrefStore } from '@/stores/tableColPrefStore';
+import { useFeatureFlagStore } from '@/stores/featureFlagStore';
 import { checkContractDeadlines, checkVisaDeadlines, checkWorkflowDeadlines, checkProcessDeadlines, checkQuoteDeadlines, checkNccPayments, checkQuoteAcceptances, checkSalesFollowups, checkCustomerFollowups, checkDormantCustomers, checkDocExpiry, checkTodoReminders, checkTourProfileFollowers, checkTrainingDeadlines } from '@/lib/notifications';
 import { checkHrExpiry } from '@/lib/hrNotifications';
 import { autoBackfillWorkflowIndex } from '@/lib/workflowBackfill';
@@ -71,7 +72,9 @@ export function MainApp() {
   useEffect(() => {
     useUiPrefStore.getState().load(currentUser?.u ?? null);
     useTableColPrefStore.getState().load(currentUser?.u ?? null);
-  }, [currentUser?.u]);
+    // Feature flag cấp tổ chức (module bật/tắt theo phòng) — cần đăng nhập mới đọc được.
+    if (currentUser) useFeatureFlagStore.getState().load();
+  }, [currentUser?.u]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!currentUser) {

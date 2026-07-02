@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, IconButton, Stack,
   ToggleButton, ToggleButtonGroup, Tooltip, Typography,
@@ -9,7 +10,10 @@ import DashboardCustomizeOutlinedIcon from '@mui/icons-material/DashboardCustomi
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import SettingsBrightnessOutlinedIcon from '@mui/icons-material/SettingsBrightnessOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
+import WidgetsOutlinedIcon from '@mui/icons-material/WidgetsOutlined';
+import { isBoard } from '@/auth/ROLES';
 import type { Density, ThemeMode } from '@/lib/uiPrefs';
+import { ModuleFlagsDialog } from './ModuleFlagsDialog';
 import { useAuthStore } from '@/stores/authStore';
 import { useHomePrefStore } from '@/stores/homePrefStore';
 import { useNavPrefStore } from '@/stores/navPrefStore';
@@ -37,6 +41,7 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
  */
 export function SettingsDialog({ open, onClose }: Props) {
   const me = useAuthStore((s) => s.currentUser);
+  const [moduleFlagsOpen, setModuleFlagsOpen] = useState(false);
   const prefs = useUiPrefStore((s) => s.prefs);
   const savePrefs = (patch: Partial<typeof prefs>) =>
     useUiPrefStore.getState().save(me?.u, { ...prefs, ...patch });
@@ -142,6 +147,25 @@ export function SettingsDialog({ open, onClose }: Props) {
           </span>
         </Tooltip>
 
+        {me && isBoard(me.role) && (
+          <>
+            <Divider sx={{ my: 1.5 }} />
+            {/* ── Quản trị (BGĐ+) — cấu hình CHUNG toàn công ty, không phải cá nhân ── */}
+            <SectionTitle icon={<WidgetsOutlinedIcon fontSize="small" />}>
+              Quản trị hệ thống (Ban Giám Đốc)
+            </SectionTitle>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Tắt module các phòng không dùng cho gọn giao diện — áp dụng CHUNG, chỉ ẩn điểm vào.
+            </Typography>
+            <Button
+              variant="outlined" size="small" startIcon={<WidgetsOutlinedIcon />}
+              onClick={() => setModuleFlagsOpen(true)}
+            >
+              Bật/tắt module theo phòng ban…
+            </Button>
+          </>
+        )}
+
         <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mt: 2 }}>
           <CloudDoneOutlinedIcon sx={{ fontSize: 16, color: LEGACY.teal }} />
           <Typography variant="caption" color="text.secondary">
@@ -149,6 +173,7 @@ export function SettingsDialog({ open, onClose }: Props) {
           </Typography>
         </Stack>
       </DialogContent>
+      {moduleFlagsOpen && <ModuleFlagsDialog open onClose={() => setModuleFlagsOpen(false)} />}
     </Dialog>
   );
 }

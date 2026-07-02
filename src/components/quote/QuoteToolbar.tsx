@@ -62,6 +62,8 @@ import { hasPerm } from '@/auth/PERMISSIONS';
 import { ROLE_RANK } from '@/auth/ROLES';
 import { DEPT_LABEL } from '@/auth/departments';
 import { navPresetKey, setOrgPref } from '@/lib/orgPrefs';
+import { isModuleEnabled } from '@/lib/featureFlags';
+import { useFeatureFlagStore } from '@/stores/featureFlagStore';
 import { canSeePrices } from '@/auth/quotePerms';
 import { fmtOutput } from '@/lib/currency';
 import { useUndoRedoShortcuts } from '@/lib/useUndoRedoShortcuts';
@@ -190,6 +192,7 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
   // user chưa tự chỉnh → dùng bố cục mặc định của phòng (Trưởng/Phó Phòng đặt).
   const navRaw = useNavPrefStore((s) => s.raw);
   const navDeptPreset = useNavPrefStore((s) => s.deptPreset);
+  const moduleFlags = useFeatureFlagStore((s) => s.flags);
   const loadNavPref = useNavPrefStore((s) => s.load);
   const navCustomizeOpen = useNavPrefStore((s) => s.customizeOpen);
   const setNavCustomizeOpen = useNavPrefStore((s) => s.setCustomizeOpen);
@@ -398,7 +401,9 @@ export function QuoteToolbar({ onOpenSelector, onOpenNewQuote, onOpenSaveCloud }
       ...(isMgr ? [cat('audit', 'grp:ops', 'Nhật ký', { v: 'audit' })] : []),
       cat('app:itinerary', 'grp:ops', 'Chương trình tour', { icon: <RouteOutlinedIcon />, action: () => gotoApp('itinerary') }),
       cat('app:menu', 'grp:ops', 'Thực đơn', { icon: <RestaurantMenuOutlinedIcon />, action: () => gotoApp('menu') }),
-      cat('app:guideschedule', 'grp:ops', 'Lịch đi tour HDV', { icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') }),
+      ...(isModuleEnabled(moduleFlags, 'guideschedule', currentUser)
+        ? [cat('app:guideschedule', 'grp:ops', 'Lịch đi tour HDV', { icon: <ConnectingAirportsOutlinedIcon />, action: () => gotoApp('guideschedule') })]
+        : []),
       cat('advsettle', 'grp:catalog', 'Tạm ứng - Quyết toán', { v: 'advsettle' }),
       ...(canContract ? [cat('contract', 'grp:catalog', 'Hợp đồng', { v: 'contract' })] : []),
       ...(canNcc ? [cat('nccProducts', 'grp:catalog', 'Sản phẩm NCC', { v: 'nccProducts' })] : []),

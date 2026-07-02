@@ -33,6 +33,8 @@ import { useQuoteStore } from '@/stores/quoteStore';
 import { tagForContext } from '@/components/shell/guideSteps';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewStaffRole } from '@/auth/ROLES';
+import { isModuleEnabled } from '@/lib/featureFlags';
+import { useFeatureFlagStore } from '@/stores/featureFlagStore';
 import { DEPT_LABEL } from '@/auth/departments';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import { LEGACY } from '@/theme';
@@ -68,6 +70,9 @@ export function AppShell() {
   const viewForGuide = useQuoteStore((s) => s.view);
   // ⚙️ Cài đặt cá nhân — gom theme/mật độ + tùy biến nav + trang Hôm nay về một chỗ.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Feature flag cấp tổ chức: ẩn nút module đã tắt cho phòng/công ty (BGĐ luôn thấy).
+  const moduleFlags = useFeatureFlagStore((s) => s.flags);
+  const modOn = (key: string) => isModuleEnabled(moduleFlags, key, currentUser);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [whatsNewEntries, setWhatsNewEntries] = useState<WhatsNewEntry[] | undefined>(undefined);
   const [unseenNew, setUnseenNew] = useState(0);
@@ -164,19 +169,25 @@ export function AppShell() {
               <Tooltip title="Tìm kiếm (Ctrl/⌘ + K)">
                 <IconButton sx={headBtnSx} onClick={() => setSearchOpen(true)}><SearchIcon fontSize="small" /></IconButton>
               </Tooltip>
-              <Tooltip title="Thư viện kiến thức nội bộ">
-                <IconButton sx={headBtnSx} onClick={goLibrary}><MenuBookOutlinedIcon fontSize="small" /></IconButton>
-              </Tooltip>
-              <Tooltip title="Trợ lý ảo">
-                <IconButton sx={headBtnSx} onClick={() => setAssistantOpen(true)}>
-                  <SupportAgentIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Tin nhắn nội bộ">
-                <IconButton sx={headBtnSx} onClick={() => setChatOpen(true)}>
-                  <Badge badgeContent={chatUnreadCount} color="error"><ChatBubbleOutlineIcon fontSize="small" /></Badge>
-                </IconButton>
-              </Tooltip>
+              {modOn('library') && (
+                <Tooltip title="Thư viện kiến thức nội bộ">
+                  <IconButton sx={headBtnSx} onClick={goLibrary}><MenuBookOutlinedIcon fontSize="small" /></IconButton>
+                </Tooltip>
+              )}
+              {modOn('assistant') && (
+                <Tooltip title="Trợ lý ảo">
+                  <IconButton sx={headBtnSx} onClick={() => setAssistantOpen(true)}>
+                    <SupportAgentIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {modOn('chat') && (
+                <Tooltip title="Tin nhắn nội bộ">
+                  <IconButton sx={headBtnSx} onClick={() => setChatOpen(true)}>
+                    <Badge badgeContent={chatUnreadCount} color="error"><ChatBubbleOutlineIcon fontSize="small" /></Badge>
+                  </IconButton>
+                </Tooltip>
+              )}
               <NotificationBell sx={headBtnSx} />
 
               {headDivider}

@@ -17,6 +17,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewStaffRole } from '@/auth/ROLES';
 import { DEPT_LABEL } from '@/auth/departments';
+import { isModuleEnabled } from '@/lib/featureFlags';
+import { useFeatureFlagStore } from '@/stores/featureFlagStore';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { VTE_LOGO } from '@/lib/exports/vteLogo';
 import type { Template } from '@/types';
@@ -91,11 +93,14 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
   const currentUser = useAuthStore((s) => s.currentUser);
   const signOut = useAuthStore((s) => s.signOut);
 
+  // Quyền cá nhân × feature flag tổ chức (module tắt cho phòng thì ẩn thẻ).
+  const moduleFlags = useFeatureFlagStore((s) => s.flags);
+  const modOn = (key: string) => isModuleEnabled(moduleFlags, key, currentUser);
   const canCust = hasPerm(currentUser, 'manageCustomers');
   const canNcc = hasPerm(currentUser, 'manageNCC');
   const canHR = hasPerm(currentUser, 'viewHR');
-  const canInv = hasPerm(currentUser, 'manageInventory');
-  const canTraining = hasPerm(currentUser, 'viewTraining');
+  const canInv = hasPerm(currentUser, 'manageInventory') && modOn('inventory');
+  const canTraining = hasPerm(currentUser, 'viewTraining') && modOn('training');
   // Vào thẳng màn quản lý dùng chung (Khách hàng / NCC / Nhân sự / Kho / Đào tạo). Cần
   // có draft để render — chưa có thì tạo nháp báo giá nội địa (dữ liệu này độc lập).
   const gotoManage = (v: 'customer' | 'ncc' | 'hr' | 'inventory' | 'training' | 'library') => {
@@ -212,7 +217,9 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
             mx: 'auto',
           }}
         >
-          {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>).map((tpl) => {
+          {(Object.values(TEMPLATES) as Array<typeof TEMPLATES[Template]>)
+            .filter((tpl) => modOn(tpl.key))
+            .map((tpl) => {
             const ac = TPL_ACCENT[tpl.key];
             return (
               <Card
@@ -302,14 +309,14 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
           )}
 
           {/* Thẻ Thư viện kiến thức (view, không phải template) — đẩy lên lưới chính. */}
-          <ManageCard
+          {modOn('library') && <ManageCard
             grad="linear-gradient(135deg, #4338ca, #6366f1)"
             accent="#4338ca"
             icon={<MenuBookOutlinedIcon />}
             title="Thư viện"
             desc="Kho kiến thức nội bộ — hỏi đáp AI có trích dẫn"
             onClick={() => gotoManage('library')}
-          />
+          />}
         </Box>
 
         {(canCust || canNcc) && (
