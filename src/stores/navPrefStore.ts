@@ -2,12 +2,17 @@ import { create } from 'zustand';
 import type { NavLayout } from '@/components/quote/navLayout';
 import { CONTAINER_IDS } from '@/components/quote/navLayout';
 import { fetchUserPref, pushUserPref } from '@/lib/userPrefSync';
+import { fetchOrgPref, navPresetKey } from '@/lib/orgPrefs';
+import type { Department } from '@/types';
 
 /**
  * Tùy biến thanh điều hướng theo TỪNG user — mẫu y hệt `homePrefStore`:
  * - Cache nhanh ở localStorage `vte_nav_layout_{username}` (tải tức thì, chạy offline).
  * - Đồng bộ đa thiết bị qua Supabase `user_prefs` (key `nav`) — xem `userPrefSync`.
  *   Khi đăng nhập: bản cloud làm chuẩn (nếu có); chưa có thì đẩy bản local lên.
+ * - `deptPreset`: bố cục MẶC ĐỊNH của phòng ban (app_config `nav_preset_{dept}`,
+ *   Trưởng/Phó Phòng đặt) — dùng làm điểm xuất phát khi user CHƯA tự tùy chỉnh
+ *   (`raw` null); user chỉnh gì đó thì bản cá nhân đè lên.
  * Chỉ là sở thích cá nhân, không đụng dữ liệu báo giá.
  */
 const keyFor = (username?: string | null) => `vte_nav_layout_${username || 'guest'}`;
@@ -37,21 +42,26 @@ function writeLocal(username: string | null | undefined, layout: NavLayout | nul
 }
 
 interface NavPrefState {
-  /** Layout thô đã lưu của user hiện tại (null = dùng mặc định). */
+  /** Layout thô đã lưu của user hiện tại (null = dùng preset phòng/mặc định). */
   raw: NavLayout | null;
+  /** Bố cục mặc định của PHÒNG user (null = phòng chưa đặt). */
+  deptPreset: NavLayout | null;
   /** Mở hộp thoại tùy chỉnh (nút ở Cài đặt cá nhân, modal render trong QuoteToolbar). */
   customizeOpen: boolean;
   setCustomizeOpen: (open: boolean) => void;
-  load: (username?: string | null) => void;
+  setDeptPreset: (layout: NavLayout | null) => void;
+  load: (username?: string | null, department?: Department | null) => void;
   save: (username: string | null | undefined, layout: NavLayout) => void;
   reset: (username?: string | null) => void;
 }
 
 export const useNavPrefStore = create<NavPrefState>((set) => ({
   raw: null,
+  deptPreset: null,
   customizeOpen: false,
   setCustomizeOpen: (open) => set({ customizeOpen: open }),
-  load: (username) => {
+  setDeptPreset: (layout) => set({ deptPreset: layout }),
+  load: (username, department) => {
     // 1) Local trước cho tức thì.
     set({ raw: readLocal(username) });
     // 2) Đồng bộ cloud (không chặn UI). Cloud có → làm chuẩn; chưa có → đẩy local lên.
@@ -67,6 +77,14 @@ export const useNavPrefStore = create<NavPrefState>((set) => ({
           if (local) await pushUserPref(username, 'nav', local);
         }
       } catch { /* offline → giữ local */ }
+    })();
+    // 3) Preset phòng ban (độc lập bản cá nhân — chỉ dùng khi raw null).
+    if (!department) { set({ deptPreset: null }); return; }
+    void (async () => {
+      try {
+        const v = await fetchOrgPref(navPresetKey(department));
+        set({ deptPreset: v ? validLayout(JSON.parse(v)) : null });
+      } catch { /* offline → bỏ qua */ }
     })();
   },
   save: (username, layout) => {

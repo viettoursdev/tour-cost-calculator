@@ -19,6 +19,14 @@ type Props = {
   layout: NavLayout;
   onChange: (layout: NavLayout) => void;
   onReset: () => void;
+  /** Tên phòng ban của user (hiện các nút preset phòng). */
+  deptLabel?: string;
+  /** User chưa tự chỉnh → đang hiển thị theo bố cục mặc định của phòng. */
+  usingDeptDefault?: boolean;
+  /** Chép bố cục phòng thành bản cá nhân (undefined = phòng chưa đặt preset). */
+  onApplyDeptPreset?: () => void;
+  /** Lưu bố cục hiện tại làm MẶC ĐỊNH của phòng (chỉ Trưởng/Phó Phòng). */
+  onSaveDeptPreset?: () => void | Promise<void>;
 };
 
 const SECTIONS: { id: ContainerId; title: string; hint?: string }[] = [
@@ -29,7 +37,10 @@ const SECTIONS: { id: ContainerId; title: string; hint?: string }[] = [
   { id: 'hidden', title: 'Đã ẩn', hint: 'Không hiển thị trên thanh điều hướng' },
 ];
 
-export function NavCustomizeModal({ open, onClose, catalog, labels, layout, onChange, onReset }: Props) {
+export function NavCustomizeModal({
+  open, onClose, catalog, labels, layout, onChange, onReset,
+  deptLabel, usingDeptDefault, onApplyDeptPreset, onSaveDeptPreset,
+}: Props) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ pb: 0.5 }}>
@@ -37,6 +48,11 @@ export function NavCustomizeModal({ open, onClose, catalog, labels, layout, onCh
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           Kéo-thả để đổi thứ tự, dồn vào nhóm hoặc tách ra tab chính. Bấm 👁 để ẩn/hiện. Thay đổi tự lưu cho riêng bạn.
         </Typography>
+        {usingDeptDefault && deptLabel && (
+          <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: '#0d7a6a', fontWeight: 600 }}>
+            🏢 Đang dùng bố cục mặc định của phòng {deptLabel} — chỉnh bất kỳ mục nào sẽ tạo bản riêng của bạn.
+          </Typography>
+        )}
       </DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 1 }}>
@@ -112,10 +128,24 @@ export function NavCustomizeModal({ open, onClose, catalog, labels, layout, onCh
           {' '}{GROUP_IDS.map((g) => GROUP_LABELS[g]).join(' · ')}.
         </Typography>
       </DialogContent>
-      <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-        <Button onClick={onReset} startIcon={<RestartAltIcon />} color="inherit">
-          Khôi phục mặc định
-        </Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2, flexWrap: 'wrap', gap: 0.5 }}>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+          <Button onClick={onReset} startIcon={<RestartAltIcon />} color="inherit">
+            Khôi phục mặc định
+          </Button>
+          {onApplyDeptPreset && deptLabel && (
+            <Tooltip title={`Chép bố cục mặc định của phòng ${deptLabel} thành bản riêng của bạn (rồi chỉnh tiếp tuỳ ý).`}>
+              <Button onClick={onApplyDeptPreset} color="inherit">🏢 Áp bố cục phòng</Button>
+            </Tooltip>
+          )}
+          {onSaveDeptPreset && deptLabel && (
+            <Tooltip title={`Đặt bố cục đang hiển thị làm MẶC ĐỊNH cho mọi người phòng ${deptLabel} (ai đã tự tùy chỉnh sẽ giữ bản riêng).`}>
+              <Button onClick={() => void onSaveDeptPreset()} sx={{ color: '#0d7a6a', fontWeight: 700 }}>
+                💾 Lưu làm mặc định phòng
+              </Button>
+            </Tooltip>
+          )}
+        </Stack>
         <Button onClick={onClose} variant="contained">Xong</Button>
       </DialogActions>
     </Dialog>
