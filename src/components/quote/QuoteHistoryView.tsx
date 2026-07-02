@@ -543,9 +543,9 @@ export function QuoteHistoryView() {
           disableVirtualization
           sx={{
             // Ghim 2 cột đầu (Mã + Tên báo giá) khi cuộn ngang.
-            '& [data-field="quoteCode"]': { position: 'sticky', left: 0, zIndex: 2, bgcolor: '#fff' },
+            '& [data-field="quoteCode"]': { position: 'sticky', left: 0, zIndex: 2, bgcolor: 'var(--vte-surface)' },
             '& [data-field="name"]': {
-              position: 'sticky', left: 140, zIndex: 2, bgcolor: '#fff',
+              position: 'sticky', left: 140, zIndex: 2, bgcolor: 'var(--vte-surface)',
               boxShadow: '6px 0 6px -6px rgba(15,58,74,0.25)',
             },
             '& .MuiDataGrid-columnHeader[data-field="quoteCode"], & .MuiDataGrid-columnHeader[data-field="name"]': {

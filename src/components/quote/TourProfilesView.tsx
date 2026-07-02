@@ -2339,7 +2339,7 @@ function AttentionPanel({ items, metaOf, onOpen }: {
           const c = RISK_COLOR[risk.level];
           return (
             <Stack key={profile.id + risk.key} direction="row" spacing={1} alignItems="center"
-              sx={{ p: 0.75, borderRadius: 1.5, bgcolor: '#fff', border: '1px solid rgba(15,58,74,0.08)' }}>
+              sx={{ p: 0.75, borderRadius: 1.5, bgcolor: 'var(--vte-surface)', border: '1px solid rgba(15,58,74,0.08)' }}>
               <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: c, flexShrink: 0 }} />
               <Chip size="small" label={profile.code} sx={{ height: 19, fontWeight: 700, bgcolor: 'rgba(13,122,106,0.1)', color: '#0d7a6a' }} />
               <Typography fontSize={13} fontWeight={600} noWrap sx={{ maxWidth: { xs: 110, sm: 200 } }}>{profile.name || cm.short}</Typography>
@@ -3750,7 +3750,7 @@ function ShareControl({ profile, users, currentUser, canShare }: {
                     avatar={<Avatar sx={{ bgcolor: g.color, color: '#fff', fontSize: 10, fontWeight: 700 }}>{c.name.charAt(0)}</Avatar>}
                     label={c.name}
                     onDelete={onRemove ? () => onRemove(c.u) : undefined}
-                    sx={{ height: 24, bgcolor: '#fff', border: `1px solid ${g.color}40`, color: g.color, fontWeight: 600 }} />
+                    sx={{ height: 24, bgcolor: 'var(--vte-surface)', border: `1px solid ${g.color}40`, color: g.color, fontWeight: 600 }} />
                 ))}
               </Stack>
             </Box>

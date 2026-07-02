@@ -154,7 +154,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
               {SUGGESTIONS.map((s) => (
                 <Box key={s} onClick={() => void send(s)}
                   sx={{ cursor: 'pointer', border: '1px solid rgba(20,150,140,0.3)', borderRadius: 2, px: 1.5, py: 1,
-                    bgcolor: '#fff', fontSize: 13, '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
+                    bgcolor: 'var(--vte-surface)', fontSize: 13, '&:hover': { bgcolor: 'rgba(20,150,140,0.06)' } }}>
                   💬 {s}
                 </Box>
               ))}

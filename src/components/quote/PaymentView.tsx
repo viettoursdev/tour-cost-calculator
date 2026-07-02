@@ -332,7 +332,7 @@ export function PaymentView() {
                 <Box
                   key={ci.key}
                   sx={{
-                    bgcolor: '#fff',
+                    bgcolor: 'var(--vte-surface)',
                     border: '1px solid',
                     borderColor: isOpen ? grp.color : 'rgba(20,150,140,0.15)',
                     borderRadius: 1.5,
@@ -455,7 +455,7 @@ export function PaymentView() {
                       }}
                     >
                       <Box sx={{
-                        width: 32, height: 32, borderRadius: '50%', bgcolor: '#fff',
+                        width: 32, height: 32, borderRadius: '50%', bgcolor: 'var(--vte-surface)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 10, fontWeight: 800, color: grp.color,
                       }}>{pct}%</Box>

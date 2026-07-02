@@ -37,7 +37,7 @@ type Props = {
 
 /** Compact bordered <select> matching legacy `.sel`. */
 const Sel = styled('select')({
-  background: '#fff',
+  background: 'var(--vte-surface)',
   border: '1px solid rgba(20,150,140,0.25)',
   borderRadius: 7,
   color: LEGACY.navy,
@@ -81,7 +81,7 @@ function EditNum({
             else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
           }}
           sx={{
-            width, textAlign: align, background: '#fff', border: '1.5px solid #14a08c',
+            width, textAlign: align, background: 'var(--vte-surface)', border: '1.5px solid #14a08c',
             borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
             fontFamily: 'inherit', fontSize: 14, fontWeight: bold ? 700 : 400,
           }}
@@ -148,7 +148,7 @@ function EditText({
             else if (e.key === 'Tab') { e.preventDefault(); commit(); navFrom(e.currentTarget, e.shiftKey ? 'prev' : 'next'); }
           }}
           sx={{
-            width: '100%', background: '#fff', border: '1.5px solid #14a08c',
+            width: '100%', background: 'var(--vte-surface)', border: '1.5px solid #14a08c',
             borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '3px 8px',
             fontFamily: 'inherit', fontSize: bold ? 13 : 12, fontWeight: bold ? 600 : 400,
           }}
@@ -156,7 +156,7 @@ function EditText({
         {matches.length > 0 && (
           <Box sx={{
             position: 'absolute', top: '100%', left: 0, mt: 0.5, zIndex: 40, minWidth: 220, maxWidth: 340,
-            background: '#fff', border: '1px solid rgba(20,150,140,0.3)', borderRadius: '8px',
+            background: 'var(--vte-surface)', border: '1px solid rgba(20,150,140,0.3)', borderRadius: '8px',
             boxShadow: '0 8px 24px rgba(15,58,74,0.18)', overflow: 'hidden',
           }}>
             {matches.map((s, i) => (
@@ -237,7 +237,7 @@ function EditNote({
           else if (e.key === 'Escape') setEditing(false);
         }}
         sx={{
-          width: '100%', minHeight: 64, resize: 'vertical', background: '#fff',
+          width: '100%', minHeight: 64, resize: 'vertical', background: 'var(--vte-surface)',
           border: '1.5px solid #14a08c', borderRadius: '6px', color: LEGACY.navy,
           outline: 'none', padding: '6px 8px', fontFamily: 'inherit', fontSize: 12.5,
           lineHeight: 1.5, boxSizing: 'border-box',

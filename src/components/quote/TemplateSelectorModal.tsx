@@ -37,7 +37,7 @@ function ManageCard({ grad, accent, icon, title, desc, onClick }: {
       elevation={0}
       sx={{
         position: 'relative', borderRadius: 3, overflow: 'hidden',
-        border: '1px solid rgba(15,58,74,0.08)', background: '#fff',
+        border: '1px solid rgba(15,58,74,0.08)', background: 'var(--vte-surface)',
         transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s, border-color .28s',
         boxShadow: '0 2px 10px rgba(15,58,74,0.05)',
         '&:hover': {
@@ -222,7 +222,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
                 sx={{
                   position: 'relative', borderRadius: 3, overflow: 'hidden',
                   border: '1px solid rgba(15,58,74,0.08)',
-                  background: '#fff',
+                  background: 'var(--vte-surface)',
                   transition: 'transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s, border-color .28s',
                   boxShadow: '0 2px 10px rgba(15,58,74,0.05)',
                   '&:hover': {
@@ -335,7 +335,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
               {canCust && (
                 <Button onClick={() => gotoManage('customer')} startIcon={<PeopleAltOutlinedIcon />}
                   sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
-                    color: '#0d7a6a', border: '1.5px solid rgba(13,122,106,0.35)', bgcolor: '#fff',
+                    color: '#0d7a6a', border: '1.5px solid rgba(13,122,106,0.35)', bgcolor: 'var(--vte-surface)',
                     '&:hover': { bgcolor: 'rgba(13,122,106,0.06)', borderColor: '#0d7a6a' } }}>
                   Thông tin khách hàng
                 </Button>
@@ -343,7 +343,7 @@ export function TemplateSelectorModal({ open, onClose, canCancel = false }: Prop
               {canNcc && (
                 <Button onClick={() => gotoManage('ncc')} startIcon={<StorefrontOutlinedIcon />}
                   sx={{ textTransform: 'none', fontWeight: 800, fontSize: 14.5, px: 3, py: 1.25, borderRadius: 2.5,
-                    color: '#7c3aed', border: '1.5px solid rgba(124,58,237,0.35)', bgcolor: '#fff',
+                    color: '#7c3aed', border: '1.5px solid rgba(124,58,237,0.35)', bgcolor: 'var(--vte-surface)',
                     '&:hover': { bgcolor: 'rgba(124,58,237,0.06)', borderColor: '#7c3aed' } }}>
                   Quản lý NCC
                 </Button>

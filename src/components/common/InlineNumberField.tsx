@@ -45,7 +45,7 @@ export function InlineNumberField({
           else if (e.key === 'Escape') setEditing(false);
         }}
         sx={{
-          width, textAlign: align, background: '#fff', border: '1.5px solid #14a08c',
+          width, textAlign: align, background: 'var(--vte-surface)', border: '1.5px solid #14a08c',
           borderRadius: '6px', color: LEGACY.navy, outline: 'none', padding: '2px 6px',
           fontFamily: 'inherit', fontSize: 13, fontWeight: bold ? 700 : 400,
         }}

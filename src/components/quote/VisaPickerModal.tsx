@@ -118,7 +118,7 @@ export function VisaPickerModal({ open, onClose, onPick }: Props) {
             const { unit, grp } = calcUnit(p, rates);
             return (
               <Stack key={p.id} direction="row" alignItems="center" spacing={1.5}
-                sx={{ p: 1.25, bgcolor: '#fff', border: '1px solid rgba(20,150,140,0.18)', borderRadius: 1.5 }}>
+                sx={{ p: 1.25, bgcolor: 'var(--vte-surface)', border: '1px solid rgba(20,150,140,0.18)', borderRadius: 1.5 }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography fontWeight={800} fontSize={14}>
                     {p.country || '(Chưa đặt QG)'}

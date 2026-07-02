@@ -1,3 +1,29 @@
+/* ─── Design tokens (LEGACY palette trong src/theme.ts trỏ vào đây) ───────────
+   Dark mode đổi TOÀN BỘ điểm dùng chỉ bằng data-theme trên <html> — set sớm bởi
+   inline script ở index.html (chống chớp trắng), sau đó App.tsx đồng bộ theo
+   Cài đặt cá nhân của user (uiPrefStore). */
+:root {
+  --vte-header-gradient: linear-gradient(135deg, #0d7a6a, #14a08c);
+  --vte-page-bg: linear-gradient(135deg, #e0fbf7 0%, #ffffff 35%, #a8e6dd 100%);
+  --vte-glass-bg: rgba(255, 255, 255, 0.92);
+  --vte-surface: #ffffff;
+  --vte-navy: #0f3a4a;
+  --vte-teal: #0d7a6a;
+  --vte-teal-light: #14a08c;
+  --vte-gold: #ffe082;
+}
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --vte-header-gradient: linear-gradient(135deg, #0b4a40, #0e6e5c);
+  --vte-page-bg: linear-gradient(135deg, #0d1a17 0%, #101c19 45%, #0a1512 100%);
+  --vte-glass-bg: rgba(23, 33, 30, 0.92);
+  --vte-surface: #17211e;
+  --vte-navy: #dfeae7;
+  --vte-teal: #1cb59d;
+  --vte-teal-light: #22c4ab;
+  --vte-gold: #ffd54f;
+}
+
 html, body, #root { height: 100%; margin: 0; }
 /* Chặn "rubber-band" toàn trang: khi cuộn hết nội dung bên trong rồi kéo tiếp,
    body không bị nảy lộ khoảng trắng (lỗi "kéo khoảng trắng ở dưới lên trên"). */

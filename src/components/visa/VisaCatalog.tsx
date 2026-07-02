@@ -139,7 +139,7 @@ export function VisaCatalog() {
           placeholder="🔍 Tìm quốc gia, loại, nơi nộp..."
           sx={{ maxWidth: 340, flex: 1 }} />
         <Stack direction="row" spacing={0.5} alignItems="center"
-          sx={{ bgcolor: '#fff', border: '1.5px solid rgba(20,150,140,0.25)', borderRadius: 1.5, px: 1 }}>
+          sx={{ bgcolor: 'var(--vte-surface)', border: '1.5px solid rgba(20,150,140,0.25)', borderRadius: 1.5, px: 1 }}>
           <Typography variant="caption" color="text.secondary">Hiển thị giá:</Typography>
           <Select size="small" value={outCur} variant="standard" disableUnderline
             onChange={(e) => setOutCur(e.target.value)}

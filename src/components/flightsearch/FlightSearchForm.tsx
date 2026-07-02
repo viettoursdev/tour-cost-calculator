@@ -53,7 +53,7 @@ export function FlightSearchForm({ params, onChange, onSearch, loading }: Props)
   const swap = () => onChange({ origin: params.destination, destination: params.origin });
 
   return (
-    <Box sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.1)', bgcolor: '#fff' }}>
+    <Box sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.1)', bgcolor: 'var(--vte-surface)' }}>
       <Stack spacing={1.5}>
         {/* Tuyến */}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="center">

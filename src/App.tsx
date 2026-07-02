@@ -1,6 +1,8 @@
-import { Suspense, lazy } from 'react';
-import { Box, CircularProgress, CssBaseline, ThemeProvider } from '@mui/material';
-import { theme } from './theme';
+import { Suspense, lazy, useEffect, useMemo } from 'react';
+import { Box, CircularProgress, CssBaseline, ThemeProvider, useMediaQuery } from '@mui/material';
+import { buildTheme } from './theme';
+import { resolveThemeMode } from './lib/uiPrefs';
+import { useUiPrefStore } from './stores/uiPrefStore';
 import { MainApp } from './components/shell/MainApp';
 
 const PublicQuoteView = lazy(() => import('./components/public/PublicQuoteView').then((m) => ({ default: m.PublicQuoteView })));
@@ -18,6 +20,23 @@ export default function App() {
   const shareToken = params.get('share');
   const visaToken = params.get('visa');
   const wfToken = params.get('wf');
+  const isPublic = !!(shareToken || visaToken || wfToken);
+
+  // Giao diện theo Cài đặt cá nhân (uiPrefStore nạp theo user ở MainApp).
+  // Trang công khai LUÔN sáng + mật độ chuẩn — khách hàng không có tùy chọn.
+  const prefs = useUiPrefStore((s) => s.prefs);
+  const systemDark = useMediaQuery('(prefers-color-scheme: dark)');
+  const mode = isPublic ? 'light' : resolveThemeMode(prefs.mode, systemDark);
+  const density = isPublic ? 'comfortable' : prefs.density;
+  const theme = useMemo(() => buildTheme(mode, density), [mode, density]);
+
+  // data-theme trên <html> lái toàn bộ CSS variables (LEGACY tokens) sang dark.
+  // `vte_theme_last` cho inline script ở index.html paint đúng màu ngay khi reload.
+  useEffect(() => {
+    document.documentElement.dataset.theme = mode;
+    try { localStorage.setItem('vte_theme_last', mode); } catch { /* quota */ }
+  }, [mode]);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />

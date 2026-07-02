@@ -7,7 +7,7 @@ import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import PeopleIcon from '@mui/icons-material/People';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
-import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
@@ -26,10 +26,10 @@ import { NotificationCenter } from '@/components/notifications/NotificationCente
 import { NotificationToaster } from '@/components/notifications/NotificationToaster';
 import { UserManagementModal } from '@/components/admin/UserManagementModal';
 import { RateCardSyncModal } from '@/components/admin/RateCardSyncModal';
+import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useQuoteStore } from '@/stores/quoteStore';
-import { useNavPrefStore } from '@/stores/navPrefStore';
 import { tagForContext } from '@/components/shell/guideSteps';
 import { hasPerm } from '@/auth/PERMISSIONS';
 import { canViewStaffRole } from '@/auth/ROLES';
@@ -66,9 +66,8 @@ export function AppShell() {
   const [onboardContext, setOnboardContext] = useState<string | undefined>(undefined);
   const tplForGuide = useQuoteStore((s) => s.draft.template);
   const viewForGuide = useQuoteStore((s) => s.view);
-  // Nút tùy chỉnh thanh điều hướng — chỉ hiện với báo giá thường (nav tùy biến nằm ở QuoteToolbar).
-  const openNavCustomize = useNavPrefStore((s) => s.setCustomizeOpen);
-  const canCustomizeNav = tplForGuide === 'domestic' || tplForGuide === 'intl';
+  // ⚙️ Cài đặt cá nhân — gom theme/mật độ + tùy biến nav + trang Hôm nay về một chỗ.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const [whatsNewEntries, setWhatsNewEntries] = useState<WhatsNewEntry[] | undefined>(undefined);
   const [unseenNew, setUnseenNew] = useState(0);
@@ -206,13 +205,11 @@ export function AppShell() {
                   ✨ Có gì mới{unseenNew > 0 ? ` (${unseenNew})` : ''}
                 </MenuItem>
               </Menu>
-              {canCustomizeNav && (
-                <Tooltip title="Tùy chỉnh thanh điều hướng">
-                  <IconButton sx={headBtnSx} onClick={() => openNavCustomize(true)}>
-                    <TuneOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
+              <Tooltip title="Cài đặt cá nhân">
+                <IconButton sx={headBtnSx} onClick={() => setSettingsOpen(true)}>
+                  <SettingsOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               <Tooltip title="Đăng xuất">
                 <IconButton
                   onClick={() => { void signOut(); }}
@@ -249,6 +246,7 @@ export function AppShell() {
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} />
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <OnboardingDialog open={onboardOpen} onClose={closeOnboard} contextTag={onboardContext} />
       <WhatsNewDialog open={whatsNewOpen} onClose={closeWhatsNew} entries={whatsNewEntries} />
       <FilePreviewHost />

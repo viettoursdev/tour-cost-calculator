@@ -714,7 +714,7 @@ export function ChatPanel({ open, onClose }: { open: boolean; onClose: () => voi
           )}
           <Box sx={{ position: 'relative' }}>
             {mentionCandidates.length > 0 && (
-              <Box sx={{ position: 'absolute', bottom: '100%', left: 8, right: 8, mb: 0.5, bgcolor: '#fff', borderRadius: 2, boxShadow: 4, border: '1px solid rgba(15,58,74,0.12)', overflow: 'hidden', zIndex: 4 }}>
+              <Box sx={{ position: 'absolute', bottom: '100%', left: 8, right: 8, mb: 0.5, bgcolor: 'var(--vte-surface)', borderRadius: 2, boxShadow: 4, border: '1px solid rgba(15,58,74,0.12)', overflow: 'hidden', zIndex: 4 }}>
                 {mentionCandidates.map(({ u, name }) => (
                   <Box key={u} onMouseDown={(e) => { e.preventDefault(); pickMention(u); }}
                     sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, py: 0.75, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(20,150,140,0.08)' } }}>

@@ -341,7 +341,7 @@ export function GuideScheduleApp({ onExit }: { onExit: () => void }) {
 
       {/* Toolbar (filters) — không áp dụng cho tab pool HDV */}
       {tab !== 'pool' && (
-      <Box sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1, borderBottom: '1px solid rgba(0,0,0,0.08)', bgcolor: '#fff' }}>
+      <Box sx={{ px: { xs: 1.5, sm: 2.5 }, py: 1, borderBottom: '1px solid rgba(0,0,0,0.08)', bgcolor: 'var(--vte-surface)' }}>
         <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
           {tab === 'gantt' && (
             <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mr: 1 }}>

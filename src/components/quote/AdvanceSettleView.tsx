@@ -131,7 +131,7 @@ export function AdvanceSettleView() {
                 <TableCell>
                   <Box component="select" value={e.method} disabled={!editable}
                     onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => updEntry(e.id, { method: ev.target.value as AdvancePayMethod })}
-                    sx={{ fontSize: 12, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '4px', width: '100%', background: '#fff', color: LEGACY.navy }}>
+                    sx={{ fontSize: 12, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '4px', width: '100%', background: 'var(--vte-surface)', color: LEGACY.navy }}>
                     {PAY_METHODS.map((m) => <option key={m.key} value={m.key}>{m.icon} {m.label}</option>)}
                   </Box>
                 </TableCell>
@@ -139,7 +139,7 @@ export function AdvanceSettleView() {
                   <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
                     <Box component="select" value={e.cur ?? 'VND'} disabled={!editable}
                       onChange={(ev: React.ChangeEvent<HTMLSelectElement>) => updEntry(e.id, { cur: ev.target.value })}
-                      sx={{ fontSize: 11, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '2px', background: '#fff', color: LEGACY.navy }}>
+                      sx={{ fontSize: 11, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '2px', background: 'var(--vte-surface)', color: LEGACY.navy }}>
                       {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
                     </Box>
                     <InlineNumberField value={e.amount} width={96} disabled={!editable}

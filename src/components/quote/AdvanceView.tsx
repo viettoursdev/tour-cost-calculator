@@ -318,7 +318,7 @@ function CostSection({
                 <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="flex-end">
                   <Box component="select" value={l.cur ?? 'VND'} disabled={!editable}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updLine(k, l.id, { cur: e.target.value })}
-                    sx={{ fontSize: 11, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '2px', background: '#fff', color: LEGACY.navy }}>
+                    sx={{ fontSize: 11, fontFamily: 'inherit', border: '1px solid rgba(20,150,140,0.25)', borderRadius: 1, py: '2px', background: 'var(--vte-surface)', color: LEGACY.navy }}>
                     {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
                   </Box>
                   <InlineNumberField value={l.price} width={84} disabled={!editable}

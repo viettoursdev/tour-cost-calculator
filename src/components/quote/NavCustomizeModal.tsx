@@ -81,7 +81,7 @@ export function NavCustomizeModal({ open, onClose, catalog, labels, layout, onCh
                       alignItems="center"
                       spacing={0.75}
                       sx={{
-                        px: 0.75, py: 0.5, borderRadius: 1.5, bgcolor: '#fff',
+                        px: 0.75, py: 0.5, borderRadius: 1.5, bgcolor: 'var(--vte-surface)',
                         border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                       }}
                     >

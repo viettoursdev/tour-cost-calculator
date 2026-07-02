@@ -88,7 +88,7 @@ export function QuoteWarningsBanner({ cats, items, catEnabled, rates, pricing }:
               </Box>
             }
             sx={{
-              background: '#fff', border: `1px solid ${r.cat.color}55`,
+              background: 'var(--vte-surface)', border: `1px solid ${r.cat.color}55`,
               '& .MuiChip-label': { px: 1 },
               '&:hover': { background: 'rgba(255,255,255,0.7)' },
             }}

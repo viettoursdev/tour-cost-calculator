@@ -9,6 +9,14 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-02a', date: '02/07/2026', title: 'Cài đặt cá nhân: chế độ tối & tùy chỉnh gọn theo bạn',
+    items: [
+      { icon: '⚙️', title: 'Trang Cài đặt cá nhân', desc: 'Nút ⚙️ trên header gom mọi tùy chỉnh về một chỗ: giao diện, thanh điều hướng, trang Hôm nay — chỉ áp dụng cho tài khoản của bạn.' },
+      { icon: '🌙', title: 'Chế độ tối (beta) & mật độ hiển thị', desc: 'Chọn Sáng/Tối/Theo hệ thống và chế độ "Gọn" (chữ nhỏ + bảng sít hơn, xem được nhiều dòng hơn). Vài góc màn hình sẽ tiếp tục được tinh chỉnh cho chế độ tối.' },
+      { icon: '☁️', title: 'Tùy chỉnh đi theo tài khoản', desc: 'Bố cục thanh điều hướng và cột Excel visa giờ đồng bộ qua cloud như trang Hôm nay — đổi máy/trình duyệt vẫn giữ nguyên thiết lập.' },
+    ],
+  },
+  {
     id: '2026-07-01h', date: '01/07/2026', title: 'Nhắc quá hạn leo thang & lặp lại',
     items: [
       { icon: '⛔', title: 'Escalation đa cấp', desc: 'Bước quy trình quá hạn được đốc thúc theo cấp: quá 3 ngày báo Trưởng Phòng, quá 7 ngày leo thẳng lên Ban Giám Đốc.' },

@@ -13,6 +13,7 @@ import { toast } from '@/stores/toastStore';
 import { useAuthStore } from '@/stores/authStore';
 import { isApprover } from '@/auth/ROLES';
 import { sbSetVisaExportPassword, sbVerifyVisaExportPassword, sbVisaExportPasswordIsSet } from '@/lib/supabase';
+import { fetchUserPref, pushUserPref } from '@/lib/userPrefSync';
 import { DEFAULT_VISA_EXPORT_COLS, VISA_EXPORT_COLUMNS, VISA_EXPORT_PRESETS } from '@/lib/exports/visaExportColumns';
 import type { Passenger, VisaProjectDoc } from '@/types';
 
@@ -22,16 +23,28 @@ const LABEL_BY_KEY = new Map(VISA_EXPORT_COLUMNS.map((c) => [c.key, c.label]));
 
 type Pref = { order: string[]; enabled: string[] };
 
-/** Đọc tuỳ chọn cột đã lưu, reconcile với danh mục cột hiện tại (thêm/bỏ cột). */
+/** Blob thô (localStorage/cloud) đúng hình dạng Pref? */
+function validPref(raw: unknown): Pref | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Pref;
+  return Array.isArray(p.order) && Array.isArray(p.enabled) ? p : null;
+}
+
+/** Reconcile tuỳ chọn với danh mục cột hiện tại (bỏ cột không còn, thêm cột mới vào cuối). */
+function reconcilePref(p: Pref): { order: string[]; enabled: Set<string> } {
+  const known = p.order.filter((k) => ALL_KEYS.includes(k));
+  const order = [...known, ...ALL_KEYS.filter((k) => !known.includes(k))];
+  const enabled = new Set(p.enabled.filter((k) => ALL_KEYS.includes(k)));
+  return { order, enabled };
+}
+
+/** Đọc tuỳ chọn cột đã lưu ở máy này (cache nhanh; bản cloud đè sau nếu có). */
 function loadPref(): { order: string[]; enabled: Set<string> } {
   try {
     const raw = localStorage.getItem(PREF_KEY);
     if (raw) {
-      const p = JSON.parse(raw) as Pref;
-      const known = p.order.filter((k) => ALL_KEYS.includes(k));
-      const order = [...known, ...ALL_KEYS.filter((k) => !known.includes(k))];
-      const enabled = new Set(p.enabled.filter((k) => ALL_KEYS.includes(k)));
-      return { order, enabled };
+      const p = validPref(JSON.parse(raw));
+      if (p) return reconcilePref(p);
     }
   } catch { /* fallback mặc định */ }
   return { order: [...ALL_KEYS], enabled: new Set(DEFAULT_VISA_EXPORT_COLS) };
@@ -66,6 +79,23 @@ export function VisaExportDialog({ project, applicants, onClose }: Props) {
     return () => { alive = false; };
   }, []);
 
+  // Tuỳ chọn cột đồng bộ theo tài khoản (user_prefs key `visaExportCols`) —
+  // bản cloud (nếu có) đè cache localStorage; offline giữ nguyên local.
+  useEffect(() => {
+    if (!me?.u) return;
+    let alive = true;
+    fetchUserPref(me.u, 'visaExportCols')
+      .then((raw) => {
+        const p = validPref(raw);
+        if (!alive || !p) return;
+        const r = reconcilePref(p);
+        setOrder(r.order);
+        setEnabled(r.enabled);
+      })
+      .catch(() => { /* offline → giữ local */ });
+    return () => { alive = false; };
+  }, [me?.u]);
+
   const selectedCount = order.filter((k) => enabled.has(k)).length;
 
   const toggle = (k: string) =>
@@ -93,9 +123,11 @@ export function VisaExportDialog({ project, applicants, onClose }: Props) {
   };
 
   const persistPref = () => {
+    const pref: Pref = { order, enabled: [...enabled] };
     try {
-      localStorage.setItem(PREF_KEY, JSON.stringify({ order, enabled: [...enabled] } satisfies Pref));
+      localStorage.setItem(PREF_KEY, JSON.stringify(pref));
     } catch { /* bỏ qua nếu localStorage đầy */ }
+    if (me?.u) void pushUserPref(me.u, 'visaExportCols', pref).catch(() => { /* offline */ });
   };
 
   const savePassword = async () => {
