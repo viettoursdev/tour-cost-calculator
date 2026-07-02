@@ -9,6 +9,14 @@ export type WhatsNewEntry = { id: string; date: string; title: string; items: Wh
 /** Nhật ký — MỚI NHẤT lên đầu. `id` là mốc cố định (dùng ngày). */
 export const WHATS_NEW: WhatsNewEntry[] = [
   {
+    id: '2026-07-02b', date: '02/07/2026', title: 'Bố cục theo phòng ban, chọn cột bảng & bật/tắt module',
+    items: [
+      { icon: '🏢', title: 'Bố cục thanh điều hướng mặc định của phòng', desc: 'Trưởng/Phó Phòng sắp thanh điều hướng rồi bấm "Lưu làm mặc định phòng" — nhân viên chưa tự tùy chỉnh sẽ nhận bố cục đó làm điểm xuất phát (ai đã chỉnh riêng vẫn giữ nguyên).' },
+      { icon: '📊', title: 'Chọn cột hiển thị cho bảng lớn', desc: 'Lịch sử báo giá và Danh sách khách (khách đoàn + visa) có nút cột — ẩn bớt/đổi thứ tự cột cho gọn, lưu riêng cho bạn và đồng bộ mọi thiết bị.' },
+      { icon: '🎛', title: 'BGĐ bật/tắt module theo phòng', desc: 'Trong Cài đặt cá nhân, Ban Giám Đốc tắt được các module phòng không dùng (Kho, Đào tạo, Chat, Trợ lý ảo, Thư viện, Lịch HDV) — chỉ ẩn điểm vào cho gọn, không đụng dữ liệu.' },
+    ],
+  },
+  {
     id: '2026-07-02a', date: '02/07/2026', title: 'Cài đặt cá nhân: chế độ tối & tùy chỉnh gọn theo bạn',
     items: [
       { icon: '⚙️', title: 'Trang Cài đặt cá nhân', desc: 'Nút ⚙️ trên header gom mọi tùy chỉnh về một chỗ: giao diện, thanh điều hướng, trang Hôm nay — chỉ áp dụng cho tài khoản của bạn.' },
